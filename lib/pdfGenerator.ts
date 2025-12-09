@@ -6,7 +6,19 @@
  */
 
 import { jsPDF } from "jspdf";
-import { UserProfile, TaxInputs, TaxResult, TaxOptimizationResult, WHTResult } from "./types";
+import {
+    UserProfile,
+    TaxInputs,
+    TaxResult,
+    TaxOptimizationResult,
+    WHTResult,
+    CGTResult,
+    TETResult,
+    StampDutyResult,
+    CompanyLeviesResult
+} from "./types";
+import { CGT_RATE } from "./taxRules/cgt";
+import { TET_RATE } from "./taxRules/tet";
 
 /**
  * Format number as Nigerian Naira currency
@@ -30,7 +42,11 @@ export function generatePDF(
     inputs: TaxInputs,
     result: TaxResult,
     optimizations?: TaxOptimizationResult,
-    whtResult?: WHTResult
+    whtResult?: WHTResult,
+    cgtResult?: { totalGain: number; totalCGT: number },
+    tetResult?: TETResult,
+    stampDutyResult?: { documents: StampDutyResult[]; totalDuty: number },
+    leviesResult?: CompanyLeviesResult
 ): void {
     const doc = new jsPDF({
         orientation: "portrait",
@@ -294,6 +310,193 @@ export function generatePDF(
         doc.setFontSize(10);
         doc.text("TOTAL WHT DEDUCTED:", whtCol1, y);
         doc.text(formatCurrency(whtResult.totalWHTDeducted), whtCol4, y);
+        y += sectionGap;
+    }
+
+    // ========== CGT SUMMARY ==========
+    if (cgtResult && cgtResult.totalGain > 0) {
+        checkNewPage(40);
+        doc.setFont("times", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.text("CAPITAL GAINS TAX (CGT) SUMMARY", margin, y);
+        y += 3;
+
+        doc.setDrawColor(...accentColor);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+
+        doc.setFontSize(10);
+        doc.setTextColor(...black);
+
+        const cgtDetails: [string, string][] = [
+            ["Total Chargeable Gains", formatCurrency(cgtResult.totalGain)],
+            ["CGT Rate", formatPercent(CGT_RATE)],
+            ["CGT Payable", formatCurrency(cgtResult.totalCGT)],
+        ];
+
+        for (const [label, value] of cgtDetails) {
+            doc.setFont("times", "bold");
+            doc.text(`${label}:`, margin, y);
+            doc.setFont("times", "normal");
+            doc.text(value, margin + 50, y);
+            y += lineHeight;
+        }
+        y += sectionGap - lineHeight;
+    }
+
+    // ========== TET SUMMARY ==========
+    if (tetResult && tetResult.isApplicable) {
+        checkNewPage(40);
+        doc.setFont("times", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.text("TERTIARY EDUCATION TAX (TET) SUMMARY", margin, y);
+        y += 3;
+
+        doc.setDrawColor(...accentColor);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+
+        doc.setFontSize(10);
+        doc.setTextColor(...black);
+
+        const tetDetails: [string, string][] = [
+            ["Assessable Profit", formatCurrency(tetResult.assessableProfit)],
+            ["TET Rate", formatPercent(TET_RATE)],
+            ["TET Payable", formatCurrency(tetResult.tetPayable)],
+        ];
+
+        for (const [label, value] of tetDetails) {
+            doc.setFont("times", "bold");
+            doc.text(`${label}:`, margin, y);
+            doc.setFont("times", "normal");
+            doc.text(value, margin + 50, y);
+            y += lineHeight;
+        }
+        y += sectionGap - lineHeight;
+    }
+
+    // ========== STAMP DUTY SUMMARY ==========
+    if (stampDutyResult && stampDutyResult.totalDuty > 0) {
+        checkNewPage(50);
+        doc.setFont("times", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.text("STAMP DUTIES SUMMARY", margin, y);
+        y += 3;
+
+        doc.setDrawColor(...accentColor);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+
+        // Table columns
+        const sdCol1 = margin;
+        const sdCol2 = margin + 80;
+        const sdCol3 = margin + 120;
+        const sdCol4 = margin + 145;
+
+        // Header
+        doc.setFont("times", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(...grayColor);
+        doc.text("Document Type", sdCol1, y);
+        doc.text("Value", sdCol2, y);
+        doc.text("Rate", sdCol3, y);
+        doc.text("Duty", sdCol4, y);
+        y += lineHeight;
+
+        // Rows
+        doc.setTextColor(...black);
+        doc.setFont("times", "normal");
+
+        for (const docItem of stampDutyResult.documents) {
+            checkNewPage();
+            doc.text(docItem.documentDescription.substring(0, 35), sdCol1, y);
+            doc.text(formatCurrency(docItem.transactionValue), sdCol2, y);
+            doc.text(docItem.rate, sdCol3, y);
+            doc.text(formatCurrency(docItem.stampDuty), sdCol4, y);
+            y += lineHeight;
+        }
+
+        // Total
+        y += 2;
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
+
+        doc.setFont("times", "bold");
+        doc.setFontSize(10);
+        doc.text("TOTAL STAMP DUTIES:", sdCol1, y);
+        doc.text(formatCurrency(stampDutyResult.totalDuty), sdCol4, y);
+        y += sectionGap;
+    }
+
+    // ========== COMPANY LEVIES SUMMARY ==========
+    if (leviesResult && leviesResult.totalLevies > 0) {
+        checkNewPage(60);
+        doc.setFont("times", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.text("COMPANY LEVIES SUMMARY", margin, y);
+        y += 3;
+
+        doc.setDrawColor(...accentColor);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 8;
+
+        // Table columns
+        const lvyCol1 = margin;
+        const lvyCol2 = margin + 70;
+        const lvyCol3 = margin + 95;
+        const lvyCol4 = margin + 130;
+
+        // Header
+        doc.setFont("times", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(...grayColor);
+        doc.text("Levy Type", lvyCol1, y);
+        doc.text("Rate", lvyCol2, y);
+        doc.text("Amount Payable", lvyCol3, y);
+        doc.text("Status", lvyCol4, y);
+        y += lineHeight;
+
+        // Rows
+        doc.setTextColor(...black);
+        doc.setFont("times", "normal");
+
+        const levies = [
+            { name: "Police Trust Fund", data: leviesResult.policeLevy },
+            { name: "NASENI Levy", data: leviesResult.naseniLevy },
+            { name: "NSITF Contribution", data: leviesResult.nsitf }, // NSITF/ITF structure slightly different but fields match enough for display
+            { name: "ITF Levy", data: leviesResult.itf },
+        ];
+
+        for (const levy of levies) {
+            // Check if applicable - NSITF always applicable if calculated, others implement check
+            // For NSITFResult, we treat it as applicable if contribution > 0
+            const isApplicable = 'isApplicable' in levy.data ? levy.data.isApplicable : (levy.data as any).contributionPayable > 0;
+            const amount = 'levyPayable' in levy.data ? levy.data.levyPayable : (levy.data as any).contributionPayable;
+
+            doc.text(levy.name, lvyCol1, y);
+            doc.text(formatPercent(levy.data.rate), lvyCol2, y);
+            doc.text(formatCurrency(amount), lvyCol3, y);
+            doc.text(isApplicable ? "Applicable" : "Not Applicable", lvyCol4, y);
+            y += lineHeight;
+        }
+
+        // Total
+        y += 2;
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
+
+        doc.setFont("times", "bold");
+        doc.setFontSize(10);
+        doc.text("TOTAL LEVIES:", lvyCol1, y);
+        doc.text(formatCurrency(leviesResult.totalLevies), lvyCol3, y);
         y += sectionGap;
     }
 

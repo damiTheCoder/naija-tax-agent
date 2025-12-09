@@ -93,3 +93,30 @@ export interface TaxOptimizationResult {
 // Re-export WHT types for convenience
 export type { WHTInput, WHTCalculation, WHTResult } from "./taxRules/wht";
 export type { WHTRate } from "./taxRules/whtConfig";
+
+// Re-export CGT types
+export type { CGTInput, CGTResult } from "./taxRules/cgt";
+
+// Re-export TET types
+export type { TETInput, TETResult } from "./taxRules/tet";
+
+// Re-export Stamp Duty types
+export type {
+    StampDutyDocumentType,
+    StampDutyInput,
+    StampDutyResult
+} from "./taxRules/stampDuty";
+
+// Re-export Levies types
+export type {
+    PoliceLevy,
+    PoliceLevyResult,
+    NASENILevy,
+    NASENILevyResult,
+    NSITFInput,
+    NSITFResult,
+    ITFInput,
+    ITFResult,
+    CompanyLeviesInput,
+    CompanyLeviesResult
+} from "./taxRules/levies";

@@ -327,7 +327,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // Return PDF response
         const filename = `naijatagent-tax-computation-${result.taxYear}.pdf`;
 
-        return new NextResponse(pdfBuffer, {
+        return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,
             headers: {
                 "Content-Type": "application/pdf",

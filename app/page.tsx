@@ -9,10 +9,17 @@ import {
   TaxOptimizationResult,
   WHTInput,
   WHTResult,
-  WHTRate,
+  CGTInput,
+  TETResult,
+  StampDutyInput,
+  StampDutyResult,
+  CompanyLeviesResult,
 } from "@/lib/types";
 import { NIGERIAN_STATES, DEFAULT_TAX_YEAR } from "@/lib/taxRules/config";
 import { WHT_RATES } from "@/lib/taxRules/whtConfig";
+import { STAMP_DUTY_RATES } from "@/lib/taxRules/stampDuty";
+import { CGT_RATE } from "@/lib/taxRules/cgt";
+import { TET_RATE } from "@/lib/taxRules/tet";
 import { generatePDF } from "@/lib/pdfGenerator";
 
 type Step = 1 | 2 | 3;
@@ -61,6 +68,43 @@ export default function HomePage() {
     amount: "",
     isResident: true,
   });
+
+  // CGT state
+  const [cgtDisposals, setCgtDisposals] = useState<CGTInput[]>([]);
+  const [cgtResult, setCgtResult] = useState<{ totalGain: number; totalCGT: number } | null>(null);
+  const [newCgtDisposal, setNewCgtDisposal] = useState<{
+    assetType: 'real_estate' | 'shares' | 'business_assets' | 'other';
+    assetDescription: string;
+    acquisitionCost: string;
+    disposalProceeds: string;
+  }>({
+    assetType: "real_estate",
+    assetDescription: "",
+    acquisitionCost: "",
+    disposalProceeds: "",
+  });
+
+  // TET state (for companies only)
+  const [tetResult, setTetResult] = useState<TETResult | null>(null);
+
+  // Stamp Duty state
+  const [stampDutyDocs, setStampDutyDocs] = useState<StampDutyInput[]>([]);
+  const [stampDutyResult, setStampDutyResult] = useState<{ documents: StampDutyResult[]; totalDuty: number } | null>(null);
+  const [newStampDuty, setNewStampDuty] = useState<{
+    documentType: StampDutyInput['documentType'];
+    transactionValue: string;
+  }>({
+    documentType: "deed",
+    transactionValue: "",
+  });
+
+  // Levies state (for companies only)
+  const [leviesInput, setLeviesInput] = useState({
+    industry: "other",
+    monthlyPayroll: "",
+    numberOfEmployees: "",
+  });
+  const [leviesResult, setLeviesResult] = useState<CompanyLeviesResult | null>(null);
 
   const formatCurrency = (amount: number): string => {
     return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -120,8 +164,59 @@ export default function HomePage() {
     setWhtPayments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const getWhtRateInfo = (paymentType: string): WHTRate | undefined => {
+  const getWhtRateInfo = (paymentType: string) => {
     return WHT_RATES.find((r) => r.paymentType === paymentType);
+  };
+
+  // CGT handlers
+  const handleAddCgtDisposal = () => {
+    const acquisitionCost = parseFloat(newCgtDisposal.acquisitionCost.replace(/,/g, "")) || 0;
+    const disposalProceeds = parseFloat(newCgtDisposal.disposalProceeds.replace(/,/g, "")) || 0;
+
+    if (acquisitionCost <= 0 || disposalProceeds <= 0) {
+      setError("Please enter valid acquisition cost and disposal proceeds");
+      return;
+    }
+
+    const disposal: CGTInput = {
+      assetType: newCgtDisposal.assetType,
+      assetDescription: newCgtDisposal.assetDescription || "Asset disposal",
+      acquisitionDate: "2020-01-01",
+      acquisitionCost,
+      disposalDate: new Date().toISOString().split('T')[0],
+      disposalProceeds,
+    };
+
+    setCgtDisposals((prev) => [...prev, disposal]);
+    setNewCgtDisposal({ assetType: "real_estate", assetDescription: "", acquisitionCost: "", disposalProceeds: "" });
+    setError(null);
+  };
+
+  const handleRemoveCgtDisposal = (index: number) => {
+    setCgtDisposals((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Stamp Duty handlers
+  const handleAddStampDuty = () => {
+    const transactionValue = parseFloat(newStampDuty.transactionValue.replace(/,/g, "")) || 0;
+
+    if (transactionValue <= 0) {
+      setError("Please enter a valid transaction value");
+      return;
+    }
+
+    const doc: StampDutyInput = {
+      documentType: newStampDuty.documentType as StampDutyInput['documentType'],
+      transactionValue,
+    };
+
+    setStampDutyDocs((prev) => [...prev, doc]);
+    setNewStampDuty({ documentType: "deed", transactionValue: "" });
+    setError(null);
+  };
+
+  const handleRemoveStampDuty = (index: number) => {
+    setStampDutyDocs((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleNext = () => {
@@ -193,6 +288,93 @@ export default function HomePage() {
       } else {
         setWhtResult(null);
       }
+
+      // Calculate CGT if there are disposals
+      if (cgtDisposals.length > 0) {
+        try {
+          const cgtResponse = await fetch("/api/cgt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ disposals: cgtDisposals }),
+          });
+
+          if (cgtResponse.ok) {
+            const cgtData = await cgtResponse.json();
+            setCgtResult({ totalGain: cgtData.totalGain, totalCGT: cgtData.totalCGT });
+          }
+        } catch {
+          console.warn("Could not calculate CGT");
+        }
+      } else {
+        setCgtResult(null);
+      }
+
+      // Calculate TET for companies
+      if (profile.taxpayerType === "company" && taxResult.taxableIncome > 0) {
+        try {
+          const tetResponse = await fetch("/api/tet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assessableProfit: taxResult.taxableIncome, isCompany: true }),
+          });
+
+          if (tetResponse.ok) {
+            const tetData: TETResult = await tetResponse.json();
+            setTetResult(tetData);
+          }
+        } catch {
+          console.warn("Could not calculate TET");
+        }
+      } else {
+        setTetResult(null);
+      }
+
+      // Calculate Stamp Duties if there are documents
+      if (stampDutyDocs.length > 0) {
+        try {
+          const stampResponse = await fetch("/api/stamp-duty", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documents: stampDutyDocs }),
+          });
+
+          if (stampResponse.ok) {
+            const stampData = await stampResponse.json();
+            setStampDutyResult(stampData);
+          }
+        } catch {
+          console.warn("Could not calculate Stamp Duty");
+        }
+      } else {
+        setStampDutyResult(null);
+      }
+
+      // Calculate Company Levies for companies
+      if (profile.taxpayerType === "company" && taxResult.taxableIncome > 0) {
+        try {
+          const leviesResponse = await fetch("/api/levies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              netProfit: taxResult.taxableIncome,
+              profitBeforeTax: taxResult.taxableIncome,
+              industry: leviesInput.industry,
+              monthlyPayroll: parseFloat(leviesInput.monthlyPayroll.replace(/,/g, "")) || 0,
+              numberOfEmployees: parseInt(leviesInput.numberOfEmployees) || 0,
+              annualTurnover: inputs.grossRevenue,
+            }),
+          });
+
+          if (leviesResponse.ok) {
+            const leviesData: CompanyLeviesResult = await leviesResponse.json();
+            setLeviesResult(leviesData);
+          }
+        } catch {
+          console.warn("Could not calculate levies");
+        }
+      } else {
+        setLeviesResult(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to compute tax right now. Please try again.");
     } finally {
@@ -207,7 +389,17 @@ export default function HomePage() {
     setError(null);
 
     try {
-      generatePDF(profile, inputs, result, optimizations || undefined, whtResult || undefined);
+      generatePDF(
+        profile,
+        inputs,
+        result,
+        optimizations || undefined,
+        whtResult || undefined,
+        cgtResult || undefined,
+        tetResult || undefined,
+        stampDutyResult || undefined,
+        leviesResult || undefined
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to generate PDF. Please try again.");
     } finally {
@@ -221,9 +413,23 @@ export default function HomePage() {
     setInputs(initialInputs);
     setResult(null);
     setOptimizations(null);
+    // Reset WHT
     setWhtPayments([]);
     setWhtResult(null);
     setNewWhtPayment({ paymentType: "dividends", amount: "", isResident: true });
+    // Reset CGT
+    setCgtDisposals([]);
+    setCgtResult(null);
+    setNewCgtDisposal({ assetType: "real_estate", assetDescription: "", acquisitionCost: "", disposalProceeds: "" });
+    // Reset TET
+    setTetResult(null);
+    // Reset Stamp Duty
+    setStampDutyDocs([]);
+    setStampDutyResult(null);
+    setNewStampDuty({ documentType: "deed", transactionValue: "" });
+    // Reset Levies
+    setLeviesInput({ industry: "other", monthlyPayroll: "", numberOfEmployees: "" });
+    setLeviesResult(null);
     setError(null);
   };
 
@@ -678,6 +884,266 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {/* CGT Section */}
+              <div className="mt-8 pt-6 border-t border-[var(--border)]">
+                <h3 className="text-lg font-semibold">Capital Gains Tax (CGT)</h3>
+                <p className="text-sm text-[var(--muted)] mb-4">
+                  Optional — add asset disposals subject to CGT (10% rate)
+                </p>
+
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Asset Type</label>
+                      <select
+                        value={newCgtDisposal.assetType}
+                        onChange={(e) =>
+                          setNewCgtDisposal((prev) => ({ ...prev, assetType: e.target.value as CGTInput['assetType'] }))
+                        }
+                      >
+                        <option value="real_estate">Real Estate</option>
+                        <option value="shares">Shares/Securities</option>
+                        <option value="business_assets">Business Assets</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Acquisition Cost</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={newCgtDisposal.acquisitionCost}
+                          onChange={(e) =>
+                            setNewCgtDisposal((prev) => ({ ...prev, acquisitionCost: e.target.value }))
+                          }
+                          className="pl-8"
+                          placeholder="0.00"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Disposal Proceeds</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={newCgtDisposal.disposalProceeds}
+                          onChange={(e) =>
+                            setNewCgtDisposal((prev) => ({ ...prev, disposalProceeds: e.target.value }))
+                          }
+                          className="pl-8"
+                          placeholder="0.00"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleAddCgtDisposal}
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  {/* List of CGT disposals */}
+                  {cgtDisposals.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <div className="text-sm font-medium text-[var(--muted)]">
+                        Asset Disposals ({cgtDisposals.length})
+                      </div>
+                      {cgtDisposals.map((disposal, index) => {
+                        const gain = disposal.disposalProceeds - disposal.acquisitionCost;
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between bg-white p-3 rounded-lg border"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium capitalize">
+                                {disposal.assetType.replace('_', ' ')}
+                              </div>
+                              <div className="text-sm text-[var(--muted)]">
+                                Cost: {formatCurrency(disposal.acquisitionCost)} → Proceeds: {formatCurrency(disposal.disposalProceeds)} •{" "}
+                                <span className={gain > 0 ? "text-green-600" : "text-red-600"}>
+                                  {gain > 0 ? "Gain" : "Loss"}: {formatCurrency(Math.abs(gain))}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="text-red-500 hover:text-red-700 text-sm font-medium ml-4"
+                              onClick={() => handleRemoveCgtDisposal(index)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stamp Duty Section */}
+              <div className="mt-8 pt-6 border-t border-[var(--border)]">
+                <h3 className="text-lg font-semibold">Stamp Duties</h3>
+                <p className="text-sm text-[var(--muted)] mb-4">
+                  Optional — add documents requiring stamp duties
+                </p>
+
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Document Type</label>
+                      <select
+                        value={newStampDuty.documentType}
+                        onChange={(e) =>
+                          setNewStampDuty((prev) => ({ ...prev, documentType: e.target.value as StampDutyInput['documentType'] }))
+                        }
+                      >
+                        {STAMP_DUTY_RATES.map((rate) => (
+                          <option key={rate.documentType} value={rate.documentType}>
+                            {rate.description}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Transaction Value</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={newStampDuty.transactionValue}
+                          onChange={(e) =>
+                            setNewStampDuty((prev) => ({ ...prev, transactionValue: e.target.value }))
+                          }
+                          className="pl-8"
+                          placeholder="0.00"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleAddStampDuty}
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  {/* List of stamp duty documents */}
+                  {stampDutyDocs.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <div className="text-sm font-medium text-[var(--muted)]">
+                        Documents ({stampDutyDocs.length})
+                      </div>
+                      {stampDutyDocs.map((doc, index) => {
+                        const rateInfo = STAMP_DUTY_RATES.find(r => r.documentType === doc.documentType);
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between bg-white p-3 rounded-lg border"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium">
+                                {rateInfo?.description || doc.documentType}
+                              </div>
+                              <div className="text-sm text-[var(--muted)]">
+                                Transaction Value: {formatCurrency(doc.transactionValue)}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="text-red-500 hover:text-red-700 text-sm font-medium ml-4"
+                              onClick={() => handleRemoveStampDuty(index)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Company Levies Section - Only for Companies */}
+              {profile.taxpayerType === "company" && (
+                <div className="mt-8 pt-6 border-t border-[var(--border)]">
+                  <h3 className="text-lg font-semibold">Company Levies</h3>
+                  <p className="text-sm text-[var(--muted)] mb-4">
+                    Additional statutory levies for companies (Police, NASENI, NSITF, ITF)
+                  </p>
+
+                  <div className="bg-[var(--background)] p-4 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Industry</label>
+                        <select
+                          value={leviesInput.industry}
+                          onChange={(e) =>
+                            setLeviesInput((prev) => ({ ...prev, industry: e.target.value }))
+                          }
+                        >
+                          <option value="other">Other</option>
+                          <option value="banking">Banking</option>
+                          <option value="mobile_telecom">Mobile Telecom</option>
+                          <option value="ict">ICT</option>
+                          <option value="aviation">Aviation</option>
+                          <option value="maritime">Maritime</option>
+                          <option value="oil_gas">Oil & Gas</option>
+                        </select>
+                        <p className="text-xs text-[var(--muted)] mt-1">
+                          NASENI levy (0.25%) applies to banking, telecom, ICT, aviation, maritime, oil & gas
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Monthly Payroll</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                          <input
+                            type="number"
+                            value={leviesInput.monthlyPayroll}
+                            onChange={(e) =>
+                              setLeviesInput((prev) => ({ ...prev, monthlyPayroll: e.target.value }))
+                            }
+                            className="pl-8"
+                            placeholder="0.00"
+                            min={0}
+                          />
+                        </div>
+                        <p className="text-xs text-[var(--muted)] mt-1">For NSITF (1%) and ITF (1%)</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Number of Employees</label>
+                        <input
+                          type="number"
+                          value={leviesInput.numberOfEmployees}
+                          onChange={(e) =>
+                            setLeviesInput((prev) => ({ ...prev, numberOfEmployees: e.target.value }))
+                          }
+                          placeholder="0"
+                          min={0}
+                        />
+                        <p className="text-xs text-[var(--muted)] mt-1">ITF applies if 5+ employees</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between mt-6">
                 <button className="btn btn-secondary" onClick={handleBack}>
                   ← Back
@@ -903,6 +1369,131 @@ export default function HomePage() {
               </>
             )}
 
+            {/* CGT Summary */}
+            {cgtResult && cgtResult.totalGain > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Capital Gains Tax (CGT) Summary</h3>
+                <div className="summary-box mb-6">
+                  <div className="summary-item">
+                    <span className="summary-label">Total Chargeable Gains</span>
+                    <span className="summary-value">{formatCurrency(cgtResult.totalGain)}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">CGT Rate</span>
+                    <span className="summary-value">{formatPercent(CGT_RATE)}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">CGT Payable</span>
+                    <span className="summary-value text-red-600 font-bold">{formatCurrency(cgtResult.totalCGT)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* TET Summary - Companies only */}
+            {tetResult && tetResult.isApplicable && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Tertiary Education Tax (TET)</h3>
+                <div className="summary-box mb-6">
+                  <div className="summary-item">
+                    <span className="summary-label">Assessable Profit</span>
+                    <span className="summary-value">{formatCurrency(tetResult.assessableProfit)}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">TET Rate</span>
+                    <span className="summary-value">{formatPercent(TET_RATE)}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">TET Payable</span>
+                    <span className="summary-value text-red-600 font-bold">{formatCurrency(tetResult.tetPayable)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Stamp Duty Summary */}
+            {stampDutyResult && stampDutyResult.totalDuty > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Stamp Duties Summary</h3>
+                <div className="table-container mb-6">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Document Type</th>
+                        <th>Transaction Value</th>
+                        <th>Rate</th>
+                        <th>Duty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stampDutyResult.documents.map((doc, index) => (
+                        <tr key={index}>
+                          <td>{doc.documentDescription}</td>
+                          <td>{formatCurrency(doc.transactionValue)}</td>
+                          <td>{doc.rate}</td>
+                          <td className="font-medium">{formatCurrency(doc.stampDuty)}</td>
+                        </tr>
+                      ))}
+                      <tr className="font-bold bg-[var(--background)]">
+                        <td colSpan={3}>Total Stamp Duties</td>
+                        <td className="text-red-600">{formatCurrency(stampDutyResult.totalDuty)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {/* Company Levies Summary */}
+            {leviesResult && leviesResult.totalLevies > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Company Levies Summary</h3>
+                <div className="table-container mb-6">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Levy Type</th>
+                        <th>Rate</th>
+                        <th>Amount Payable</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Police Trust Fund</td>
+                        <td>{formatPercent(leviesResult.policeLevy.rate)}</td>
+                        <td>{formatCurrency(leviesResult.policeLevy.levyPayable)}</td>
+                        <td>{leviesResult.policeLevy.isApplicable ? "✓ Applicable" : "—"}</td>
+                      </tr>
+                      <tr>
+                        <td>NASENI Levy</td>
+                        <td>{formatPercent(leviesResult.naseniLevy.rate)}</td>
+                        <td>{formatCurrency(leviesResult.naseniLevy.levyPayable)}</td>
+                        <td>{leviesResult.naseniLevy.isApplicable ? "✓ Applicable" : "— Not applicable"}</td>
+                      </tr>
+                      <tr>
+                        <td>NSITF Contribution</td>
+                        <td>{formatPercent(leviesResult.nsitf.rate)}</td>
+                        <td>{formatCurrency(leviesResult.nsitf.contributionPayable)}</td>
+                        <td>✓ Applicable</td>
+                      </tr>
+                      <tr>
+                        <td>ITF Levy</td>
+                        <td>{formatPercent(leviesResult.itf.rate)}</td>
+                        <td>{formatCurrency(leviesResult.itf.levyPayable)}</td>
+                        <td>{leviesResult.itf.isApplicable ? "✓ Applicable" : "— Not applicable"}</td>
+                      </tr>
+                      <tr className="font-bold bg-[var(--background)]">
+                        <td colSpan={2}>Total Levies</td>
+                        <td className="text-red-600">{formatCurrency(leviesResult.totalLevies)}</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
             {/* Notes */}
             {result.notes.length > 0 && (
               <>
@@ -935,7 +1526,7 @@ export default function HomePage() {
                       className={`p-4 rounded-lg border-l-4 ${suggestion.priority === "high"
                         ? "bg-green-50 border-green-500"
                         : suggestion.priority === "medium"
-                          ? "bg-blue-50 border-blue-500"
+                          ? "bg-yellow-50 border-yellow-500"
                           : "bg-gray-50 border-gray-400"
                         }`}
                     >

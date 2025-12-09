@@ -3,10 +3,13 @@
 :root {
   --background: #f8fafc;
   --foreground: #1e293b;
-  --primary: #1a365d;
-  --primary-light: #2c5282;
-  --accent: #059669;
-  --accent-light: #10b981;
+  --primary: #faff00;
+  /* User specified neon yellow */
+  --primary-light: #e6eb00;
+  /* Slightly darker for hover */
+  --accent: #171717;
+  /* Neutral dark accent (Black/Dark Gray) */
+  --accent-light: #404040;
   --card-bg: #ffffff;
   --border: #e2e8f0;
   --muted: #64748b;
@@ -64,7 +67,8 @@ input[type="number"]:focus,
 select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.2);
+  /* Adjusted to yellow */
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -93,7 +97,7 @@ input[type="number"] {
 
 .btn-primary {
   background: var(--primary);
-  color: white;
+  color: black;
 }
 
 .btn-primary:hover {
@@ -103,6 +107,7 @@ input[type="number"] {
 .btn-primary:disabled {
   background: var(--muted);
   cursor: not-allowed;
+  color: white;
 }
 
 .btn-secondary {
@@ -142,7 +147,8 @@ table {
   border-collapse: collapse;
 }
 
-th, td {
+th,
+td {
   padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
@@ -180,7 +186,8 @@ th {
 
 .radio-option.selected {
   border-color: var(--primary);
-  background: rgba(26, 54, 93, 0.05);
+  background: rgba(250, 204, 21, 0.1);
+  /* Yellow tint */
 }
 
 .radio-option input[type="radio"] {
@@ -246,7 +253,7 @@ th {
 .step.active .step-number,
 .step.completed .step-number {
   background: var(--primary);
-  color: white;
+  color: black;
 }
 
 .step-label {
@@ -265,7 +272,7 @@ th {
   background: var(--border);
 }
 
-.step.completed + .step-connector,
+.step.completed+.step-connector,
 .step-connector.completed {
   background: var(--primary);
 }
