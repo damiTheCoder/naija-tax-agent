@@ -26,6 +26,14 @@ interface LeviesInfo {
     itf: { rate: number; description: string };
 }
 
+const toNumber = (value: unknown): number => {
+    if (value === null || value === undefined || value === "") {
+        return 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 // GET - Return levy rates info
 export async function GET(): Promise<NextResponse<LeviesInfo>> {
     return NextResponse.json({
@@ -63,6 +71,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<CompanyLe
         }
 
         // Set defaults for optional fields
+        const payrollEntries = Array.isArray(body.payrollEntries)
+            ? body.payrollEntries
+                .map((entry) => {
+                    if (!entry || typeof entry !== "object") return undefined;
+                    const month = typeof entry.month === "string" ? entry.month : "";
+                    const grossPayroll = toNumber((entry as { grossPayroll?: number }).grossPayroll);
+                    const employeeCount = toNumber((entry as { employeeCount?: number }).employeeCount);
+                    if (!month || (grossPayroll <= 0 && employeeCount <= 0)) {
+                        return undefined;
+                    }
+                    return { month, grossPayroll, employeeCount };
+                })
+                .filter((entry): entry is { month: string; grossPayroll: number; employeeCount: number } => Boolean(entry))
+            : undefined;
+
         const input: CompanyLeviesInput = {
             netProfit: body.netProfit,
             profitBeforeTax: body.profitBeforeTax ?? body.netProfit,
@@ -70,6 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CompanyLe
             monthlyPayroll: body.monthlyPayroll ?? 0,
             numberOfEmployees: body.numberOfEmployees ?? 0,
             annualTurnover: body.annualTurnover ?? 0,
+            payrollEntries,
         };
 
         const result = calculateAllCompanyLevies(input);

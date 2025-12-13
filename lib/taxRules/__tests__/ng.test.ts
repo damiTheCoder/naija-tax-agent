@@ -110,6 +110,78 @@ describe("calculateTaxForNigeria", () => {
             expect(resultWith.taxableIncome).toBeLessThan(resultWithout.taxableIncome);
             expect(resultWith.totalTaxDue).toBeLessThan(resultWithout.totalTaxDue);
         });
+
+        it("should aggregate detailed income entries when provided", () => {
+            const profile: UserProfile = {
+                fullName: "Entry Test",
+                taxpayerType: "freelancer",
+                taxYear: 2024,
+                stateOfResidence: "Kaduna",
+                isVATRegistered: false,
+                currency: "NGN",
+            };
+
+            const inputs: TaxInputs = {
+                grossRevenue: 0,
+                allowableExpenses: 0,
+                incomeEntries: [
+                    { periodLabel: "Jan", revenue: 1000000, expenses: 200000 },
+                    { periodLabel: "Feb", revenue: 800000, expenses: 150000 },
+                ],
+            };
+
+            const result = calculateTaxForNigeria(profile, inputs);
+
+            expect(result.taxableIncome).toBeGreaterThan(0);
+            expect(result.notes.some((note) => note.includes("detailed income entries"))).toBe(true);
+        });
+
+        it("should apply withholding tax credits to reduce payable tax", () => {
+            const profile: UserProfile = {
+                fullName: "Credit Test",
+                taxpayerType: "freelancer",
+                taxYear: 2024,
+                stateOfResidence: "Oyo",
+                isVATRegistered: false,
+                currency: "NGN",
+            };
+
+            const inputs: TaxInputs = {
+                grossRevenue: 6000000,
+                allowableExpenses: 500000,
+                withholdingTaxCredits: 200000,
+            };
+
+            const result = calculateTaxForNigeria(profile, inputs);
+
+            expect(result.taxCreditsApplied).toBe(200000);
+            expect(result.totalTaxDue).toBeCloseTo(result.taxBeforeCredits - 200000, 1);
+            expect(result.taxRuleMetadata.version).toBeDefined();
+            expect(result.taxRuleMetadata.source).toBeDefined();
+        });
+
+        it("should net VAT using input credits derived from purchases", () => {
+            const profile: UserProfile = {
+                fullName: "VAT Credits",
+                taxpayerType: "freelancer",
+                taxYear: 2024,
+                stateOfResidence: "Kano",
+                isVATRegistered: true,
+                currency: "NGN",
+            };
+
+            const inputs: TaxInputs = {
+                grossRevenue: 4000000,
+                allowableExpenses: 500000,
+                vatTaxablePurchases: 1000000,
+            };
+
+            const result = calculateTaxForNigeria(profile, inputs);
+
+            expect(result.vat).toBeDefined();
+            expect(result.vat?.inputVAT).toBeCloseTo(1000000 * 0.075, 2);
+            expect(result.vat?.netVATPayable).toBeCloseTo(result.vat!.outputVAT - result.vat!.inputVAT!, 2);
+        });
     });
 
     describe("Company (CIT)", () => {
@@ -216,6 +288,29 @@ describe("calculateTaxForNigeria", () => {
             expect(result.taxableIncome).toBe(0);
             expect(result.totalTaxDue).toBe(0);
             expect(result.effectiveRate).toBe(0);
+            expect(result.validationIssues.length).toBeGreaterThan(0);
+        });
+
+        it("should warn when WHT credits do not have backing certificates", () => {
+            const profile: UserProfile = {
+                fullName: "Certificate Gap",
+                taxpayerType: "freelancer",
+                taxYear: 2024,
+                stateOfResidence: "Lagos",
+                isVATRegistered: false,
+                currency: "NGN",
+            };
+
+            const inputs: TaxInputs = {
+                grossRevenue: 2500000,
+                allowableExpenses: 500000,
+                withholdingTaxCredits: 120000,
+                withholdingCertificates: [],
+            };
+
+            const result = calculateTaxForNigeria(profile, inputs);
+
+            expect(result.validationIssues.some((issue) => issue.field === "inputs.withholdingCertificates")).toBe(true);
         });
 
         it("should not produce negative taxable income", () => {

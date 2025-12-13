@@ -4,6 +4,8 @@
  * Various statutory levies applicable to businesses in Nigeria
  */
 
+import { PayrollEntry } from "../types";
+
 // ============================================
 // NIGERIA POLICE TRUST FUND LEVY
 // Finance Act 2021 - 0.005% of net profit
@@ -203,6 +205,7 @@ export interface CompanyLeviesInput {
     monthlyPayroll: number;
     numberOfEmployees: number;
     annualTurnover: number;
+    payrollEntries?: PayrollEntry[];
 }
 
 export interface CompanyLeviesResult {
@@ -211,6 +214,27 @@ export interface CompanyLeviesResult {
     nsitf: NSITFResult;
     itf: ITFResult;
     totalLevies: number;
+}
+
+function derivePayrollMetrics(entries?: PayrollEntry[]): { monthlyPayroll: number; employeeCount: number } | null {
+    if (!entries || entries.length === 0) {
+        return null;
+    }
+
+    const filtered = entries.filter((entry) =>
+        entry && (entry.grossPayroll || entry.employeeCount)
+    );
+
+    if (filtered.length === 0) {
+        return null;
+    }
+
+    const totalPayroll = filtered.reduce((sum, entry) => sum + Math.max(0, entry.grossPayroll || 0), 0);
+    const monthlyPayroll = totalPayroll / filtered.length;
+    const totalEmployees = filtered.reduce((sum, entry) => sum + Math.max(0, entry.employeeCount || 0), 0);
+    const employeeCount = filtered.length > 0 ? Math.round(totalEmployees / filtered.length) : 0;
+
+    return { monthlyPayroll, employeeCount };
 }
 
 export function calculateAllCompanyLevies(input: CompanyLeviesInput): CompanyLeviesResult {
@@ -225,14 +249,18 @@ export function calculateAllCompanyLevies(input: CompanyLeviesInput): CompanyLev
         isCompany: true,
     });
 
+    const derivedPayroll = derivePayrollMetrics(input.payrollEntries);
+    const payrollForLevies = derivedPayroll?.monthlyPayroll ?? input.monthlyPayroll;
+    const employeeCountForLevies = derivedPayroll?.employeeCount ?? input.numberOfEmployees;
+
     const nsitf = calculateNSITF({
-        monthlyPayroll: input.monthlyPayroll,
+        monthlyPayroll: payrollForLevies,
         numberOfMonths: 12,
     });
 
     const itf = calculateITF({
-        annualPayroll: input.monthlyPayroll * 12,
-        numberOfEmployees: input.numberOfEmployees,
+        annualPayroll: payrollForLevies * 12,
+        numberOfEmployees: employeeCountForLevies,
         annualTurnover: input.annualTurnover,
     });
 

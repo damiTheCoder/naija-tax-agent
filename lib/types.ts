@@ -15,6 +15,28 @@ export interface UserProfile {
     currency: "NGN";
 }
 
+export interface IncomeEntry {
+    periodLabel: string;           // e.g. "Jan 2024" or "Q1"
+    revenue: number;
+    expenses: number;
+}
+
+export interface PayrollEntry {
+    month: string;                 // ISO month label
+    grossPayroll: number;
+    employeeCount: number;
+}
+
+export interface WithholdingCertificate {
+    id: string;
+    payerName: string;
+    certificateNumber: string;
+    issueDate: string;
+    amount: number;
+    fileName?: string;
+    fileData?: string;             // base64 for quick reference (client-side usage)
+}
+
 export interface TaxInputs {
     grossRevenue: number;          // total business income for the year
     allowableExpenses: number;     // deductible business expenses
@@ -22,6 +44,16 @@ export interface TaxInputs {
     nhfContributions?: number;
     lifeInsurancePremiums?: number;
     otherReliefs?: number;
+    incomeEntries?: IncomeEntry[]; // optional detailed income log
+    payrollEntries?: PayrollEntry[]; // optional detailed payroll log
+    vatTaxablePurchases?: number;  // purchases on which VAT was paid
+    inputVATPaid?: number;         // manually supplied input VAT
+    withholdingTaxCredits?: number;
+    withholdingCertificates?: WithholdingCertificate[];
+    priorYearLosses?: number;
+    investmentAllowance?: number;
+    ruralInvestmentAllowance?: number;
+    pioneerStatusRelief?: number;
     // For companies/SMEs, we also allow:
     turnover?: number;
     costOfSales?: number;
@@ -39,8 +71,8 @@ export interface TaxBandBreakdown {
 export interface VATSummary {
     vatRate: number;           // e.g. 0.075
     outputVAT: number;         // VAT collected on sales
-    inputVAT?: number;         // VAT paid on purchases (optional for V1)
-    netVATPayable: number;
+    inputVAT?: number;         // VAT paid on purchases
+    netVATPayable: number;     // positive = payable, negative = refundable
 }
 
 export interface TaxResult {
@@ -52,6 +84,12 @@ export interface TaxResult {
     bands: TaxBandBreakdown[];
     vat?: VATSummary;
     notes: string[];              // extra textual notes
+    taxBeforeCredits: number;
+    taxCreditsApplied: number;
+    validationIssues: ValidationIssue[];
+    statutoryReferences: StatutoryReference[];
+    calculationTrace: CalculationTraceEntry[];
+    taxRuleMetadata: TaxRuleMetadata;
 }
 
 // API request/response types
@@ -88,6 +126,34 @@ export interface TaxOptimizationSuggestion {
 export interface TaxOptimizationResult {
     suggestions: TaxOptimizationSuggestion[];
     totalPotentialSavings: number;
+}
+
+export type ValidationSeverity = "info" | "warning" | "error";
+
+export interface ValidationIssue {
+    id: string;
+    field: string;
+    severity: ValidationSeverity;
+    message: string;
+}
+
+export interface StatutoryReference {
+    title: string;
+    citation: string;
+    description: string;
+}
+
+export interface CalculationTraceEntry {
+    step: string;
+    detail: string;
+    amount?: number;
+}
+
+export interface TaxRuleMetadata {
+    version: string;
+    source: string;
+    lastUpdated?: string | null;
+    remoteUrl?: string;
 }
 
 // Re-export WHT types for convenience

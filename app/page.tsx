@@ -14,13 +14,17 @@ import {
   StampDutyInput,
   StampDutyResult,
   CompanyLeviesResult,
+  WithholdingCertificate,
 } from "@/lib/types";
-import { NIGERIAN_STATES, DEFAULT_TAX_YEAR } from "@/lib/taxRules/config";
+import { NIGERIAN_STATES, DEFAULT_TAX_YEAR, VAT_RATE } from "@/lib/taxRules/config";
 import { WHT_RATES } from "@/lib/taxRules/whtConfig";
 import { STAMP_DUTY_RATES } from "@/lib/taxRules/stampDuty";
 import { CGT_RATE } from "@/lib/taxRules/cgt";
 import { TET_RATE } from "@/lib/taxRules/tet";
 import { generatePDF } from "@/lib/pdfGenerator";
+import dynamic from "next/dynamic";
+
+const TaxAgentChat = dynamic(() => import("@/components/TaxAgentChat"), { ssr: false });
 
 type Step = 1 | 2 | 3;
 
@@ -41,6 +45,16 @@ const initialInputs: TaxInputs = {
   nhfContributions: 0,
   lifeInsurancePremiums: 0,
   otherReliefs: 0,
+  incomeEntries: [],
+  payrollEntries: [],
+  vatTaxablePurchases: 0,
+  inputVATPaid: 0,
+  withholdingTaxCredits: 0,
+  withholdingCertificates: [],
+  priorYearLosses: 0,
+  investmentAllowance: 0,
+  ruralInvestmentAllowance: 0,
+  pioneerStatusRelief: 0,
   turnover: 0,
   costOfSales: 0,
   operatingExpenses: 0,
@@ -105,6 +119,32 @@ export default function HomePage() {
     numberOfEmployees: "",
   });
   const [leviesResult, setLeviesResult] = useState<CompanyLeviesResult | null>(null);
+  const [newIncomeEntry, setNewIncomeEntry] = useState({
+    periodLabel: "",
+    revenue: "",
+    expenses: "",
+  });
+  const [newPayrollEntry, setNewPayrollEntry] = useState({
+    month: "",
+    payroll: "",
+    employees: "",
+  });
+  const [withholdingCertificates, setWithholdingCertificates] = useState<WithholdingCertificate[]>([]);
+  const [newCertificate, setNewCertificate] = useState({
+    payerName: "",
+    certificateNumber: "",
+    issueDate: "",
+    amount: "",
+    fileName: "",
+    fileData: "",
+  });
+
+  const SHOW_AUX_CALCULATORS = false;
+  const validationSeverityClasses: Record<"info" | "warning" | "error", string> = {
+    error: "border-red-200 bg-red-50 text-red-800",
+    warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
+    info: "border-blue-200 bg-blue-50 text-blue-800",
+  };
 
   const formatCurrency = (amount: number): string => {
     return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -121,6 +161,171 @@ export default function HomePage() {
   const handleInputChange = (field: keyof TaxInputs, value: string) => {
     const numValue = value === "" ? 0 : parseFloat(value.replace(/,/g, "")) || 0;
     setInputs((prev) => ({ ...prev, [field]: numValue }));
+  };
+
+  const parseCurrencyInput = (value: string): number => {
+    if (!value) return 0;
+    const numeric = parseFloat(value.replace(/,/g, ""));
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
+  const parseIntegerInput = (value: string): number => {
+    if (!value) return 0;
+    const numeric = parseInt(value, 10);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
+  const syncIncomeEntries = (entries: TaxInputs["incomeEntries"]) => {
+    const safeEntries = entries || [];
+    const totalRevenue = safeEntries.reduce((sum, entry) => sum + (entry?.revenue || 0), 0);
+    const totalExpenses = safeEntries.reduce((sum, entry) => sum + (entry?.expenses || 0), 0);
+
+    setInputs((prev) => ({
+      ...prev,
+      incomeEntries: safeEntries,
+      grossRevenue: totalRevenue,
+      allowableExpenses: totalExpenses,
+    }));
+  };
+
+  const handleAddIncomeEntry = () => {
+    if (!newIncomeEntry.periodLabel.trim()) {
+      setError("Please provide a period label for the income entry");
+      return;
+    }
+
+    const revenue = parseCurrencyInput(newIncomeEntry.revenue);
+    const expenses = parseCurrencyInput(newIncomeEntry.expenses);
+    if (revenue <= 0 && expenses <= 0) {
+      setError("Please enter revenue or expenses for the period");
+      return;
+    }
+
+    const entry = {
+      periodLabel: newIncomeEntry.periodLabel.trim(),
+      revenue,
+      expenses,
+    };
+
+    const updatedEntries = [...(inputs.incomeEntries || []), entry];
+    syncIncomeEntries(updatedEntries);
+    setNewIncomeEntry({ periodLabel: "", revenue: "", expenses: "" });
+    setError(null);
+  };
+
+  const handleRemoveIncomeEntry = (index: number) => {
+    const updatedEntries = (inputs.incomeEntries || []).filter((_, i) => i !== index);
+    syncIncomeEntries(updatedEntries);
+  };
+
+  const syncPayrollEntries = (entries: TaxInputs["payrollEntries"]) => {
+    const safeEntries = entries || [];
+    setInputs((prev) => ({
+      ...prev,
+      payrollEntries: safeEntries,
+    }));
+
+    if (safeEntries.length === 0) {
+      setLeviesInput((prev) => ({ ...prev, monthlyPayroll: "", numberOfEmployees: "" }));
+      return;
+    }
+
+    const totalPayroll = safeEntries.reduce((sum, entry) => sum + (entry?.grossPayroll || 0), 0);
+    const monthlyAverage = totalPayroll / safeEntries.length;
+    const totalEmployees = safeEntries.reduce((sum, entry) => sum + (entry?.employeeCount || 0), 0);
+    const averageEmployees = safeEntries.length > 0 ? Math.round(totalEmployees / safeEntries.length) : 0;
+
+    setLeviesInput((prev) => ({
+      ...prev,
+      monthlyPayroll: monthlyAverage ? monthlyAverage.toFixed(2) : "",
+      numberOfEmployees: averageEmployees ? String(averageEmployees) : "",
+    }));
+  };
+
+  const handleAddPayrollEntry = () => {
+    if (!newPayrollEntry.month) {
+      setError("Please select the month for this payroll entry");
+      return;
+    }
+
+    const payrollAmount = parseCurrencyInput(newPayrollEntry.payroll);
+    if (payrollAmount <= 0) {
+      setError("Please enter a valid payroll amount");
+      return;
+    }
+
+    const employees = Math.max(0, parseIntegerInput(newPayrollEntry.employees));
+    const entry = {
+      month: newPayrollEntry.month,
+      grossPayroll: payrollAmount,
+      employeeCount: employees,
+    };
+
+    const updatedEntries = [...(inputs.payrollEntries || []), entry];
+    syncPayrollEntries(updatedEntries);
+    setNewPayrollEntry({ month: "", payroll: "", employees: "" });
+    setError(null);
+  };
+
+  const handleRemovePayrollEntry = (index: number) => {
+    const updatedEntries = (inputs.payrollEntries || []).filter((_, i) => i !== index);
+    syncPayrollEntries(updatedEntries);
+  };
+
+  const syncCertificates = (certs: WithholdingCertificate[]) => {
+    setWithholdingCertificates(certs);
+    const total = certs.reduce((sum, cert) => sum + (cert.amount || 0), 0);
+    setInputs((prev) => ({
+      ...prev,
+      withholdingCertificates: certs,
+      withholdingTaxCredits: total,
+    }));
+  };
+
+  const handleCertificateFileChange = (file: File | null) => {
+    if (!file) {
+      setNewCertificate((prev) => ({ ...prev, fileName: "", fileData: "" }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const fileData = typeof event.target?.result === "string" ? event.target.result : "";
+      setNewCertificate((prev) => ({ ...prev, fileName: file.name, fileData }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddCertificate = () => {
+    if (!newCertificate.payerName.trim() || !newCertificate.certificateNumber.trim()) {
+      setError("Please enter payer name and certificate number");
+      return;
+    }
+
+    const amount = parseCurrencyInput(newCertificate.amount);
+    if (amount <= 0) {
+      setError("Certificate amount must be greater than zero");
+      return;
+    }
+
+    const certificate: WithholdingCertificate = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
+      payerName: newCertificate.payerName.trim(),
+      certificateNumber: newCertificate.certificateNumber.trim(),
+      issueDate: newCertificate.issueDate || new Date().toISOString().split('T')[0],
+      amount,
+      fileName: newCertificate.fileName || undefined,
+      fileData: newCertificate.fileData || undefined,
+    };
+
+    syncCertificates([...withholdingCertificates, certificate]);
+    setNewCertificate({ payerName: "", certificateNumber: "", issueDate: "", amount: "", fileName: "", fileData: "" });
+    setError(null);
+  };
+
+  const handleRemoveCertificate = (id: string) => {
+    const updated = withholdingCertificates.filter((cert) => cert.id !== id);
+    syncCertificates(updated);
   };
 
   const validateStep1 = (): boolean => {
@@ -355,15 +560,16 @@ export default function HomePage() {
           const leviesResponse = await fetch("/api/levies", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              netProfit: taxResult.taxableIncome,
-              profitBeforeTax: taxResult.taxableIncome,
-              industry: leviesInput.industry,
-              monthlyPayroll: parseFloat(leviesInput.monthlyPayroll.replace(/,/g, "")) || 0,
-              numberOfEmployees: parseInt(leviesInput.numberOfEmployees) || 0,
-              annualTurnover: inputs.grossRevenue,
-            }),
-          });
+              body: JSON.stringify({
+                netProfit: taxResult.taxableIncome,
+                profitBeforeTax: taxResult.taxableIncome,
+                industry: leviesInput.industry,
+                monthlyPayroll: parseFloat(leviesInput.monthlyPayroll.replace(/,/g, "")) || 0,
+                numberOfEmployees: parseInt(leviesInput.numberOfEmployees) || 0,
+              annualTurnover: inputs.turnover || inputs.grossRevenue,
+                payrollEntries: inputs.payrollEntries || [],
+              }),
+            });
 
           if (leviesResponse.ok) {
             const leviesData: CompanyLeviesResult = await leviesResponse.json();
@@ -398,7 +604,8 @@ export default function HomePage() {
         cgtResult || undefined,
         tetResult || undefined,
         stampDutyResult || undefined,
-        leviesResult || undefined
+        leviesResult || undefined,
+        withholdingCertificates || undefined
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to generate PDF. Please try again.");
@@ -430,18 +637,16 @@ export default function HomePage() {
     // Reset Levies
     setLeviesInput({ industry: "other", monthlyPayroll: "", numberOfEmployees: "" });
     setLeviesResult(null);
+    setNewIncomeEntry({ periodLabel: "", revenue: "", expenses: "" });
+    setNewPayrollEntry({ month: "", payroll: "", employees: "" });
+    setWithholdingCertificates([]);
+    setNewCertificate({ payerName: "", certificateNumber: "", issueDate: "", amount: "", fileName: "", fileData: "" });
     setError(null);
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Intro text */}
-      <div className="text-center mb-8">
-        <p className="text-[var(--muted)] text-lg">
-          NaijaTaxAgent helps Nigerian freelancers and small businesses estimate their annual tax
-          and generate a printable computation sheet for FIRS or your State Board of Internal Revenue (SBIRS).
-        </p>
-      </div>
+    <>
+    <section id="main-calculator" className="max-w-4xl mx-auto w-full">
 
       {/* Step indicator */}
       {!result && (
@@ -641,6 +846,102 @@ export default function HomePage() {
                 </div>
               </div>
 
+              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                  <div>
+                    <h3 className="text-lg font-semibold">Detailed Periodic Income (optional)</h3>
+                    <p className="text-sm text-[var(--muted)]">
+                      Add monthly or project-based figures. We will keep the totals above in sync with these entries.
+                    </p>
+                  </div>
+                  {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
+                    <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                      Auto totals active
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Period Label</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jan 2024"
+                      value={newIncomeEntry.periodLabel}
+                      onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, periodLabel: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Revenue (₦)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newIncomeEntry.revenue}
+                        onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, revenue: e.target.value }))}
+                        className="pl-8"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Expenses (₦)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newIncomeEntry.expenses}
+                        onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, expenses: e.target.value }))}
+                        className="pl-8"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleAddIncomeEntry}
+                  >
+                    + Add Entry
+                  </button>
+                </div>
+
+                {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          <th>Revenue</th>
+                          <th>Expenses</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inputs.incomeEntries.map((entry, index) => (
+                          <tr key={`${entry.periodLabel}-${index}`}>
+                            <td>{entry.periodLabel}</td>
+                            <td>{formatCurrency(entry.revenue)}</td>
+                            <td>{formatCurrency(entry.expenses)}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="text-red-500 text-sm"
+                                onClick={() => handleRemoveIncomeEntry(index)}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <h3 className="text-lg font-semibold mt-6">Tax Reliefs & Deductions</h3>
               <p className="text-sm text-[var(--muted)]">Optional — enter if applicable to reduce your taxable income</p>
 
@@ -706,6 +1007,255 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {profile.isVATRegistered && (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">VAT Inputs & Credits</h3>
+                    <p className="text-sm text-[var(--muted)]">
+                      Supply purchases or the actual input VAT you intend to claim. Leave the second field blank to let us infer it from purchases.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Vatable Purchases (₦)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={inputs.vatTaxablePurchases || ""}
+                          onChange={(e) => handleInputChange("vatTaxablePurchases", e.target.value)}
+                          className="pl-8"
+                          placeholder="0.00"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Input VAT Claimed (₦)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={inputs.inputVATPaid || ""}
+                          onChange={(e) => handleInputChange("inputVATPaid", e.target.value)}
+                          className="pl-8"
+                          placeholder="Leave blank to derive"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Tax Credits & Adjustments</h3>
+                  <p className="text-sm text-[var(--muted)]">
+                    Capture withholding tax credits, carried-forward losses, and statutory incentives that reduce your eventual tax bill.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Withholding Tax Credits</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <input
+                        type="number"
+                        value={inputs.withholdingTaxCredits || ""}
+                        onChange={(e) => handleInputChange("withholdingTaxCredits", e.target.value)}
+                        className="pl-8"
+                        placeholder="Total WHT evidenced"
+                        min={0}
+                      />
+                    </div>
+                  </div>
+                  {profile.taxpayerType === "company" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Carried-Forward Losses</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          value={inputs.priorYearLosses || ""}
+                          onChange={(e) => handleInputChange("priorYearLosses", e.target.value)}
+                          className="pl-8"
+                          placeholder="0.00"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {profile.taxpayerType === "company" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Investment Allowances</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                          <input
+                            type="number"
+                            value={inputs.investmentAllowance || ""}
+                            onChange={(e) => handleInputChange("investmentAllowance", e.target.value)}
+                            className="pl-8"
+                            placeholder="0.00"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Rural Investment Allowance</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                          <input
+                            type="number"
+                            value={inputs.ruralInvestmentAllowance || ""}
+                            onChange={(e) => handleInputChange("ruralInvestmentAllowance", e.target.value)}
+                            className="pl-8"
+                            placeholder="0.00"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Pioneer Status Relief</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                          <input
+                            type="number"
+                            value={inputs.pioneerStatusRelief || ""}
+                            onChange={(e) => handleInputChange("pioneerStatusRelief", e.target.value)}
+                            className="pl-8"
+                            placeholder="0.00"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {profile.taxpayerType === "company" && (
+                  <p className="text-xs text-[var(--muted)]">
+                    Carried-forward losses are capped at 4 assessment years for most companies under the Companies Income Tax Act.
+                  </p>
+                )}
+
+                <div className="pt-4 border-t border-dashed border-[var(--border)] space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div>
+                      <h4 className="text-md font-semibold">Withholding Tax Certificates</h4>
+                      <p className="text-sm text-[var(--muted)]">
+                        Upload or log tax credit certificates so every ₦ claimed has a matching document.
+                      </p>
+                    </div>
+                    <span className="text-xs text-[var(--muted)]">{withholdingCertificates.length} certificate(s)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium mb-2">Payer Name</label>
+                      <input
+                        type="text"
+                        value={newCertificate.payerName}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, payerName: e.target.value }))}
+                        placeholder="Client or withholding agent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Certificate No.</label>
+                      <input
+                        type="text"
+                        value={newCertificate.certificateNumber}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, certificateNumber: e.target.value }))}
+                        placeholder="e.g. WHT/123"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Issue Date</label>
+                      <input
+                        type="date"
+                        value={newCertificate.issueDate}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, issueDate: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Amount (₦)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={newCertificate.amount}
+                          onChange={(e) => setNewCertificate((prev) => ({ ...prev, amount: e.target.value }))}
+                          className="pl-8"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium mb-2">Attach Certificate (PDF/Image)</label>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        onChange={(e) => handleCertificateFileChange(e.target.files?.[0] || null)}
+                      />
+                      {newCertificate.fileName && (
+                        <p className="text-xs text-[var(--muted)] mt-1">Attached: {newCertificate.fileName}</p>
+                      )}
+                    </div>
+                    <div className="md:col-span-1">
+                      <button type="button" className="btn btn-secondary w-full" onClick={handleAddCertificate}>
+                        + Save Certificate
+                      </button>
+                    </div>
+                  </div>
+
+                  {withholdingCertificates.length > 0 && (
+                    <div className="table-container">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Payer</th>
+                            <th>Certificate No.</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Attachment</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {withholdingCertificates.map((cert) => (
+                            <tr key={cert.id}>
+                              <td>{cert.payerName}</td>
+                              <td>{cert.certificateNumber}</td>
+                              <td>{cert.issueDate}</td>
+                              <td>{formatCurrency(cert.amount)}</td>
+                              <td>
+                                {cert.fileData ? (
+                                  <a
+                                    href={cert.fileData}
+                                    download={cert.fileName || `${cert.certificateNumber}.pdf`}
+                                    className="text-[var(--accent)] text-sm"
+                                  >
+                                    Download
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-[var(--muted)]">Not attached</span>
+                                )}
+                              </td>
+                              <td>
+                                <button className="text-red-500 text-sm" onClick={() => handleRemoveCertificate(cert.id)}>
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Company-specific fields */}
               {profile.taxpayerType === "company" && (
                 <>
@@ -758,26 +1308,109 @@ export default function HomePage() {
                       </div>
                     </div>
 
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Capital Allowance</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <input
+                        type="number"
+                        value={inputs.capitalAllowance || ""}
+                        onChange={(e) => handleInputChange("capitalAllowance", e.target.value)}
+                        className="pl-8"
+                        placeholder="0.00"
+                        min={0}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+                  <div>
+                    <h4 className="text-lg font-semibold">Payroll History (optional)</h4>
+                    <p className="text-sm text-[var(--muted)]">
+                      Log monthly payroll to auto-fill NSITF/ITF assumptions. We average the entries for levy calculations.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Capital Allowance</label>
+                      <label className="block text-sm font-medium mb-2">Month</label>
+                      <input
+                        type="month"
+                        value={newPayrollEntry.month}
+                        onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, month: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Payroll (₦)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
                         <input
                           type="number"
-                          value={inputs.capitalAllowance || ""}
-                          onChange={(e) => handleInputChange("capitalAllowance", e.target.value)}
+                          min={0}
+                          value={newPayrollEntry.payroll}
+                          onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, payroll: e.target.value }))}
                           className="pl-8"
                           placeholder="0.00"
-                          min={0}
                         />
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Employees</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={newPayrollEntry.employees}
+                        onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, employees: e.target.value }))}
+                        placeholder="0"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleAddPayrollEntry}
+                    >
+                      + Add Month
+                    </button>
                   </div>
+
+                  {inputs.payrollEntries && inputs.payrollEntries.length > 0 && (
+                    <div className="table-container">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Month</th>
+                            <th>Payroll</th>
+                            <th>Employees</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inputs.payrollEntries.map((entry, index) => (
+                            <tr key={`${entry.month}-${index}`}>
+                              <td>{entry.month}</td>
+                              <td>{formatCurrency(entry.grossPayroll)}</td>
+                              <td>{entry.employeeCount}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="text-red-500 text-sm"
+                                  onClick={() => handleRemovePayrollEntry(index)}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
                 </>
               )}
 
-              {/* WHT Payments Section */}
-              <div className="mt-8 pt-6 border-t border-[var(--border)]">
+              {SHOW_AUX_CALCULATORS && (
+              <section id="wht-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
                 <h3 className="text-lg font-semibold">Withholding Tax (WHT) Payments</h3>
                 <p className="text-sm text-[var(--muted)] mb-4">
                   Optional — add payments you&apos;ve made/received that are subject to WHT
@@ -882,10 +1515,59 @@ export default function HomePage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </section>
+              )}
 
-              {/* CGT Section */}
-              <div className="mt-8 pt-6 border-t border-[var(--border)]">
+              {SHOW_AUX_CALCULATORS && (
+              <section id="vat-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
+                <h3 className="text-lg font-semibold">Value Added Tax (VAT) Quick Calculator</h3>
+                <p className="text-sm text-[var(--muted)] mb-4">
+                  Estimate output VAT on your taxable sales and offset with eligible input VAT credits.
+                </p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Taxable Sales (₦)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={vatSalesInput}
+                      onChange={(e) => setVatSalesInput(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Input VAT Credits (₦)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={vatInputCredit}
+                      onChange={(e) => setVatInputCredit(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-3 gap-4 mt-4">
+                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
+                    <div className="text-sm text-[var(--muted)]">Output VAT ({(VAT_RATE * 100).toFixed(1)}%)</div>
+                    <div className="text-2xl font-semibold mt-2">{formatCurrency(computedOutputVAT)}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
+                    <div className="text-sm text-[var(--muted)]">Input VAT Claimed</div>
+                    <div className="text-2xl font-semibold mt-2">{formatCurrency(vatInputAmount)}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
+                    <div className="text-sm text-[var(--muted)]">Net VAT Position</div>
+                    <div className={`text-2xl font-semibold mt-2 ${computedNetVAT < 0 ? "text-red-500" : "text-[var(--foreground)]"}`}>
+                      {formatCurrency(Math.abs(computedNetVAT))}
+                      {computedNetVAT < 0 ? " (Refund)" : ""}
+                    </div>
+                  </div>
+                </div>
+              </section>
+              )}
+
+              {SHOW_AUX_CALCULATORS && (
+              <section id="cgt-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
                 <h3 className="text-lg font-semibold">Capital Gains Tax (CGT)</h3>
                 <p className="text-sm text-[var(--muted)] mb-4">
                   Optional — add asset disposals subject to CGT (10% rate)
@@ -988,7 +1670,8 @@ export default function HomePage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </section>
+              )}
 
               {/* Stamp Duty Section */}
               <div className="mt-8 pt-6 border-t border-[var(--border)]">
@@ -1217,6 +1900,137 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
+                  <h3 className="font-semibold">Detailed Income Entries ({inputs.incomeEntries.length})</h3>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          <th>Revenue</th>
+                          <th>Expenses</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inputs.incomeEntries.map((entry, index) => (
+                          <tr key={`${entry.periodLabel}-${index}`}>
+                            <td>{entry.periodLabel}</td>
+                            <td>{formatCurrency(entry.revenue)}</td>
+                            <td>{formatCurrency(entry.expenses)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {profile.taxpayerType === "company" && inputs.payrollEntries && inputs.payrollEntries.length > 0 && (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
+                  <h3 className="font-semibold">Payroll Snapshot</h3>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Month</th>
+                          <th>Payroll</th>
+                          <th>Employees</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inputs.payrollEntries.map((entry, index) => (
+                          <tr key={`${entry.month}-${index}`}>
+                            <td>{entry.month}</td>
+                            <td>{formatCurrency(entry.grossPayroll)}</td>
+                            <td>{entry.employeeCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {profile.isVATRegistered && (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-2">
+                  <h3 className="font-semibold">VAT Inputs</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-[var(--muted)]">Vatable Purchases:</div>
+                    <div>{formatCurrency(inputs.vatTaxablePurchases || 0)}</div>
+                    <div className="text-[var(--muted)]">Input VAT Claimed:</div>
+                    <div>{formatCurrency(typeof inputs.inputVATPaid === "number" ? inputs.inputVATPaid : (inputs.vatTaxablePurchases || 0) * VAT_RATE)}</div>
+                  </div>
+                </div>
+              )}
+
+              {(inputs.withholdingTaxCredits ?? 0) > 0 ||
+                (profile.taxpayerType === "company" && ((inputs.priorYearLosses ?? 0) > 0 || (inputs.investmentAllowance ?? 0) > 0 || (inputs.ruralInvestmentAllowance ?? 0) > 0 || (inputs.pioneerStatusRelief ?? 0) > 0)) ? (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-2">
+                  <h3 className="font-semibold">Credits & Adjustments</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {(inputs.withholdingTaxCredits ?? 0) > 0 && (
+                      <>
+                        <div className="text-[var(--muted)]">WHT Credits:</div>
+                        <div>{formatCurrency(inputs.withholdingTaxCredits ?? 0)}</div>
+                      </>
+                    )}
+                    {profile.taxpayerType === "company" && (inputs.priorYearLosses ?? 0) > 0 && (
+                      <>
+                        <div className="text-[var(--muted)]">Carried-Forward Losses:</div>
+                        <div>{formatCurrency(inputs.priorYearLosses ?? 0)}</div>
+                      </>
+                    )}
+                    {profile.taxpayerType === "company" && (inputs.investmentAllowance ?? 0) > 0 && (
+                      <>
+                        <div className="text-[var(--muted)]">Investment Allowance:</div>
+                        <div>{formatCurrency(inputs.investmentAllowance ?? 0)}</div>
+                      </>
+                    )}
+                    {profile.taxpayerType === "company" && (inputs.ruralInvestmentAllowance ?? 0) > 0 && (
+                      <>
+                        <div className="text-[var(--muted)]">Rural Investment Allowance:</div>
+                        <div>{formatCurrency(inputs.ruralInvestmentAllowance ?? 0)}</div>
+                      </>
+                    )}
+                    {profile.taxpayerType === "company" && (inputs.pioneerStatusRelief ?? 0) > 0 && (
+                      <>
+                        <div className="text-[var(--muted)]">Pioneer Relief:</div>
+                        <div>{formatCurrency(inputs.pioneerStatusRelief ?? 0)}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {withholdingCertificates.length > 0 && (
+                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
+                  <h3 className="font-semibold">WHT Certificates</h3>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Payer</th>
+                          <th>Certificate No.</th>
+                          <th>Date</th>
+                          <th>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {withholdingCertificates.map((cert) => (
+                          <tr key={cert.id}>
+                            <td>{cert.payerName}</td>
+                            <td>{cert.certificateNumber}</td>
+                            <td>{cert.issueDate}</td>
+                            <td>{formatCurrency(cert.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between mt-6">
                 <button className="btn btn-secondary" onClick={handleBack}>
                   ← Back
@@ -1274,6 +2088,53 @@ export default function HomePage() {
               </div>
             </div>
 
+            <div className="bg-[var(--background)] p-4 rounded-lg mb-6">
+              <div className="text-sm text-[var(--muted)]">Rule Set</div>
+              <div className="font-semibold">{result.taxRuleMetadata.version}</div>
+              <div className="text-sm text-[var(--muted)]">
+                Source: {result.taxRuleMetadata.source}
+                {result.taxRuleMetadata.lastUpdated && ` • Updated ${new Date(result.taxRuleMetadata.lastUpdated).toLocaleDateString()}`}
+              </div>
+              {result.taxRuleMetadata.remoteUrl && (
+                <div className="text-xs text-[var(--muted)] break-words">Remote: {result.taxRuleMetadata.remoteUrl}</div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
+                <div className="text-sm text-[var(--muted)]">Tax Before Credits</div>
+                <div className="text-2xl font-bold text-[var(--primary)]">
+                  {formatCurrency(result.taxBeforeCredits)}
+                </div>
+              </div>
+              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
+                <div className="text-sm text-[var(--muted)]">Credits Applied</div>
+                <div className="text-2xl font-bold text-[var(--primary)]">
+                  {formatCurrency(result.taxCreditsApplied)}
+                </div>
+              </div>
+            </div>
+
+            {result.validationIssues.length > 0 && (
+              <div className="space-y-3 mb-6">
+                <h3 className="text-lg font-semibold">Data Quality Checks</h3>
+                {result.validationIssues.map((issue) => (
+                  <div
+                    key={issue.id}
+                    className={`p-3 rounded-lg border ${validationSeverityClasses[issue.severity]}`}
+                  >
+                    <div className="text-xs uppercase tracking-wide font-semibold">
+                      {issue.severity.toUpperCase()} • {issue.field}
+                    </div>
+                    <div className="text-sm">{issue.message}</div>
+                  </div>
+                ))}
+                <p className="text-xs text-[var(--muted)]">
+                  Resolve critical errors before relying on this computation for statutory filings.
+                </p>
+              </div>
+            )}
+
             {/* Tax breakdown table */}
             <h3 className="text-lg font-semibold mb-3">Tax Breakdown by Band</h3>
             <div className="table-container mb-6">
@@ -1303,6 +2164,32 @@ export default function HomePage() {
               </table>
             </div>
 
+            {result.calculationTrace.length > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Calculation Trace</h3>
+                <div className="table-container mb-6">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Step</th>
+                        <th>Detail</th>
+                        <th>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.calculationTrace.map((entry, index) => (
+                        <tr key={`${entry.step}-${index}`}>
+                          <td>{entry.step}</td>
+                          <td>{entry.detail}</td>
+                          <td>{entry.amount !== undefined ? formatCurrency(entry.amount) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
             {/* VAT Summary */}
             {result.vat && (
               <>
@@ -1327,7 +2214,7 @@ export default function HomePage() {
             )}
 
             {/* WHT Summary */}
-            {whtResult && whtResult.calculations.length > 0 && (
+            {SHOW_AUX_CALCULATORS && whtResult && whtResult.calculations.length > 0 && (
               <>
                 <h3 className="text-lg font-semibold mb-3">Withholding Tax (WHT) Summary</h3>
                 <div className="table-container mb-6">
@@ -1369,8 +2256,38 @@ export default function HomePage() {
               </>
             )}
 
+            {withholdingCertificates.length > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">WHT Certificates on File</h3>
+                <div className="table-container mb-6">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Payer</th>
+                        <th>Certificate No.</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {withholdingCertificates.map((cert) => (
+                        <tr key={cert.id}>
+                          <td>{cert.payerName}</td>
+                          <td>{cert.certificateNumber}</td>
+                          <td>{cert.issueDate}</td>
+                          <td>{formatCurrency(cert.amount)}</td>
+                          <td>{cert.fileData ? "Attachment" : "No attachment"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
             {/* CGT Summary */}
-            {cgtResult && cgtResult.totalGain > 0 && (
+            {SHOW_AUX_CALCULATORS && cgtResult && cgtResult.totalGain > 0 && (
               <>
                 <h3 className="text-lg font-semibold mb-3">Capital Gains Tax (CGT) Summary</h3>
                 <div className="summary-box mb-6">
@@ -1494,6 +2411,19 @@ export default function HomePage() {
               </>
             )}
 
+            {result.statutoryReferences.length > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mb-3">Statutory References</h3>
+                <ul className="list-disc list-inside text-sm text-[var(--muted)] mb-6 space-y-1">
+                  {result.statutoryReferences.map((ref, index) => (
+                    <li key={`${ref.citation}-${index}`}>
+                      <span className="font-semibold text-[var(--foreground)]">{ref.title}</span> — {ref.citation}. {ref.description}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
             {/* Notes */}
             {result.notes.length > 0 && (
               <>
@@ -1579,6 +2509,12 @@ export default function HomePage() {
           </div>
         </div>
       )}
-    </div>
+      <p className="text-center text-[var(--muted)] mt-10 text-base">
+        NaijaTaxAgent helps Nigerian freelancers and small businesses estimate their annual tax and
+        generate a printable computation sheet for FIRS or your State Board of Internal Revenue (SBIRS).
+      </p>
+    </section>
+    <TaxAgentChat />
+    </>
   );
 }
