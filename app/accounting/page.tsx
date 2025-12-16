@@ -314,22 +314,47 @@ export default function AccountingPage() {
   return (
     <>
       <div className="space-y-6 pb-32">
+        {/* Show/Hide Workspace Button - Always visible at top */}
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => setIsWorkspaceCollapsed((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#1a1a1a] to-[#0a0a0a] px-6 py-2.5 text-sm font-semibold text-white shadow-lg border border-white/10"
+            aria-expanded={!isWorkspaceCollapsed}
+          >
+            <span>{isWorkspaceCollapsed ? "Show workspace" : "Hide workspace"}</span>
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className={`transition-transform ${isWorkspaceCollapsed ? "" : "rotate-180"}`}
+            >
+              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
         {!isWorkspaceCollapsed && (
           <>
-            <section className="rounded-[32px] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-6 py-8">
-              <div className="flex flex-col gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/70">Accounting Studio</p>
+            <section className="rounded-[32px] bg-gradient-to-br from-[#0a0a0a] via-[#1a1a1a] to-[#0a0a0a] text-white px-6 py-8 relative overflow-hidden">
+              {/* Yellow glow effect like hero */}
+              <div className="absolute -top-1/2 -right-1/4 w-3/4 h-full bg-gradient-to-l from-[#faff00]/15 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+              <div className="relative z-10 flex flex-col gap-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-[#faff00]">Accounting Studio</p>
                 <h1 className="text-3xl md:text-4xl font-black leading-tight max-w-3xl">
                   Go from messy ledgers to audited statements, then straight into tax computations.
                 </h1>
-                <p className="text-white/80 max-w-3xl">
+                <p className="text-white/75 max-w-3xl">
                   Upload raw evidence (bank exports, invoices, payroll sheets). Taxy autogenerates draft financial statements,
                   you upload the signed-off audit pack, and we queue the approved figures for the main tax engine.
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   {["Connect bank feed", "Upload evidence", "Generate drafts", "Push to tax"].map((step, index) => (
-                    <div key={step} className="rounded-2xl bg-white/10 backdrop-blur px-4 py-3 flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-lg font-semibold">
+                    <div key={step} className="rounded-2xl bg-white/10 backdrop-blur px-4 py-3 flex items-center gap-3 border border-white/10">
+                      <span className="w-8 h-8 rounded-full bg-[#faff00]/20 flex items-center justify-center text-lg font-semibold text-[#faff00]">
                         {index + 1}
                       </span>
                       <span className="tracking-wide">{step}</span>
@@ -457,27 +482,6 @@ export default function AccountingPage() {
 
         <section className="relative min-h-[75vh]">
           <div className="flex flex-col gap-3 px-6 py-4">
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => setIsWorkspaceCollapsed((prev) => !prev)}
-                className="inline-flex items-center gap-2 rounded-full bg-[#faff00] px-4 py-1 text-xs font-semibold text-black shadow-sm"
-                aria-expanded={!isWorkspaceCollapsed}
-              >
-                <span>{isWorkspaceCollapsed ? "Show workspace" : "Hide workspace"}</span>
-                <svg
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.8}
-                  className={`${isWorkspaceCollapsed ? "" : "rotate-180"}`}
-                >
-                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Accounting chat</p>

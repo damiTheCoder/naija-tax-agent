@@ -9,16 +9,16 @@ export interface TaxNavItem {
 
 export const TAX_NAV_ITEMS: TaxNavItem[] = [
   {
-    label: "Main Tax Computation",
-    href: "/main",
-    icon: "home",
-    description: "Overview and core tax form",
-  },
-  {
     label: "Accounting Studio",
     href: "/accounting",
     icon: "ledger",
     description: "Generate financial statements before tax",
+  },
+  {
+    label: "Main Tax Computation",
+    href: "/main",
+    icon: "home",
+    description: "Overview and core tax form",
   },
   {
     label: "Files Workspace",
