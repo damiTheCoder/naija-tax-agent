@@ -17,7 +17,7 @@ export default function TaxToolsLanding() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-4">
-        {TAX_NAV_ITEMS.filter((item) => item.href !== "/").map((item) => (
+        {TAX_NAV_ITEMS.filter((item) => item.href.startsWith("/tax-tools")).map((item) => (
           <Link
             key={item.href}
             href={item.href}

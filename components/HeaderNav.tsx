@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { TAX_NAV_ITEMS } from "@/lib/navigation";
 import { NavIconBadge } from "./NavIconBadge";
@@ -25,21 +26,21 @@ export default function HeaderNav() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow ring-1 ring-gray-100">
+    <header className="sticky top-0 z-50 bg-[#fafafa]/90 backdrop-blur-xl">
+      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="relative w-11 h-11 overflow-hidden rounded-xl">
             <Image src="/logo.png" alt="Taxy Logo" fill className="object-cover" priority />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight text-gray-900">Taxy</h1>
-            <p className="text-xs text-gray-500 hidden sm:block">Smart Nigerian Tax Manager</p>
+            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Taxy</h1>
+            <p className="hidden text-xs text-[#666666] sm:block">Smart Nigerian Tax Manager</p>
           </div>
-        </div>
+        </Link>
 
         <div className="relative">
           <button
-            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-600"
+            className="w-11 h-11 rounded-2xl flex items-center justify-center text-[#0a0a0a] hover:bg-[#faff00]/30 transition-colors"
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label="Toggle navigation menu"
             aria-expanded={isMenuOpen}
@@ -50,18 +51,24 @@ export default function HeaderNav() {
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 mt-3 w-60 rounded-2xl border border-gray-200 bg-white shadow-xl p-3 space-y-2">
-              {TAX_NAV_ITEMS.map((item) => (
-                <button
-                  key={item.href}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
-                  onClick={() => handleNavSelect(item.href)}
-                >
-                  <NavIconBadge icon={item.icon} />
-                  <div>{item.label}</div>
-                </button>
-              ))}
-            </div>
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsMenuOpen(false)}
+              />
+              <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-[#e0e0e0] bg-white shadow-xl p-2 space-y-1 z-50">
+                {TAX_NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.href}
+                    className="w-full text-left px-4 py-3 rounded-xl hover:bg-[#faff00]/20 text-sm font-medium flex items-center gap-3 text-[#0a0a0a] transition-colors"
+                    onClick={() => handleNavSelect(item.href)}
+                  >
+                    <NavIconBadge icon={item.icon} />
+                    <div>{item.label}</div>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -72,7 +72,14 @@ export default function TaxAgentChat() {
   return (
     <div className="tax-agent-chat">
       <button className="tax-agent-toggle" onClick={togglePanel}>
-        🤖 Tax Assistant
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" className="mr-2">
+          <rect x="5" y="7" width="14" height="10" rx="3" strokeLinecap="round" />
+          <path d="M9 7V5a3 3 0 016 0v2" strokeLinecap="round" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <path d="M12 15v2" strokeLinecap="round" />
+        </svg>
+        Tax Assistant
       </button>
       {isOpen && (
         <div className="tax-agent-panel">
@@ -120,14 +127,17 @@ export default function TaxAgentChat() {
           z-index: 50;
         }
         .tax-agent-toggle {
-          background: #1a365d;
-          color: #fff;
+          background: #fef102;
+          color: #1a1a1a;
           border: none;
           border-radius: 9999px;
           padding: 0.75rem 1.5rem;
           box-shadow: 0 10px 25px rgba(0,0,0,0.15);
           cursor: pointer;
           font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
         }
         .tax-agent-panel {
           width: min(360px, 90vw);
