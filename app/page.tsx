@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -168,6 +171,31 @@ const getFeatureIcon = (iconName: string) => {
 };
 
 export default function LandingPage() {
+  // Scroll animation effect
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1,
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('animate-visible');
+        }
+      });
+    }, observerOptions);
+
+    // Observe all elements with animation classes
+    const animatedElements = document.querySelectorAll('.animate-on-scroll, .animate-fade-up, .animate-fade-left, .animate-fade-right, .animate-scale');
+    animatedElements.forEach((el) => observer.observe(el));
+
+    return () => {
+      animatedElements.forEach((el) => observer.unobserve(el));
+    };
+  }, []);
+
   return (
     <div className="landing-container">
       {/* Navigation */}
@@ -191,7 +219,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="hero-section">
+      <section className="hero-section animate-fade-up animate-visible">
         <div className="hero-card-main">
           <div className="hero-content">
             <p className="hero-eyebrow">Accounting, Explained by AI. In Plain English.</p>
@@ -345,7 +373,7 @@ export default function LandingPage() {
       </section>
 
       {/* About Section */}
-      <section className="about-section" id="about">
+      <section className="about-section animate-on-scroll" id="about">
         <div className="about-label">About Taxy</div>
         <p className="about-text">
           At Taxy, we don&apos;t just track numbers — we make them make sense. Since 2024,
@@ -355,7 +383,7 @@ export default function LandingPage() {
       </section>
 
       {/* Bento Grid Features */}
-      <section className="bento-section">
+      <section className="bento-section animate-on-scroll">
         <div className="bento-grid">
           {/* Feature 1 - Black Card */}
           <div className="bento-card bento-dark">
@@ -435,7 +463,7 @@ export default function LandingPage() {
       </section>
 
       {/* Problem Section */}
-      <section className="problem-section" id="problem">
+      <section className="problem-section animate-on-scroll" id="problem">
         <div className="section-header">
           <span className="section-label">The Problem</span>
           <h2 className="section-title">Most small businesses are flying blind.</h2>
@@ -452,7 +480,7 @@ export default function LandingPage() {
       </section>
 
       {/* Solution Section */}
-      <section className="solution-section" id="solution">
+      <section className="solution-section animate-on-scroll" id="solution">
         <div className="section-header">
           <span className="section-label">The Solution</span>
           <h2 className="section-title">We turned accounting into a conversation.</h2>
@@ -472,7 +500,7 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works Section */}
-      <section className="how-it-works-section" id="how-it-works">
+      <section className="how-it-works-section animate-on-scroll" id="how-it-works">
         <div className="section-header">
           <span className="section-label">How It Works</span>
           <h2 className="section-title">Simple. Secure. Real-time.</h2>
@@ -489,7 +517,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className="features-section" id="features">
+      <section className="features-section animate-on-scroll" id="features">
         <div className="section-header">
           <span className="section-label">Core Features</span>
           <h2 className="section-title">Everything you need to know your numbers.</h2>
@@ -506,7 +534,7 @@ export default function LandingPage() {
       </section>
 
       {/* Comparison Section */}
-      <section className="comparison-section">
+      <section className="comparison-section animate-on-scroll">
         <div className="section-header">
           <span className="section-label">Why This Is Revolutionary</span>
           <h2 className="section-title">From burden to business advantage.</h2>
@@ -534,7 +562,7 @@ export default function LandingPage() {
       </section>
 
       {/* Who It's For Section */}
-      <section className="audience-section">
+      <section className="audience-section animate-on-scroll">
         <div className="section-header">
           <span className="section-label">Who It&apos;s For</span>
           <h2 className="section-title">Built for operators, not accountants.</h2>
@@ -550,7 +578,7 @@ export default function LandingPage() {
       </section>
 
       {/* Outcome Section */}
-      <section className="outcome-section">
+      <section className="outcome-section animate-scale">
         <div className="outcome-content">
           <h2>Know your numbers.<br />Control your business.<br />Make decisions with confidence.</h2>
           <div className="outcome-points">
@@ -562,7 +590,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="cta-section" id="contact">
+      <section className="cta-section animate-fade-up" id="contact">
         <div className="cta-card">
           <h2>Your AI Finance Partner Starts Here</h2>
           <p>Join the next generation of businesses running on clarity — not guesswork.</p>
