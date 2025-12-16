@@ -1642,6 +1642,24 @@ body {
     display: none;
   }
   
+  .nav-content {
+    padding: 0 1.75rem;
+  }
+  
+  .nav-cta {
+    font-size: 0.8rem;
+    padding: 0.6rem 1rem;
+  }
+  
+  .logo-text {
+    font-size: 1.1rem;
+  }
+  
+  .logo-image {
+    width: 32px;
+    height: 32px;
+  }
+  
   .hero-section {
     padding: 1rem 0.75rem;
   }
@@ -1713,7 +1731,21 @@ body {
 
 @media (max-width: 480px) {
   .nav-content {
-    padding: 0 0.75rem;
+    padding: 0 1.5rem;
+  }
+  
+  .nav-cta {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.85rem;
+  }
+  
+  .logo-text {
+    font-size: 1rem;
+  }
+  
+  .logo-image {
+    width: 28px;
+    height: 28px;
   }
   
   .hero-section {
@@ -1725,7 +1757,15 @@ body {
   }
   
   .hero-title {
-    font-size: 2rem;
+    font-size: 1.75rem;
+  }
+  
+  .hero-eyebrow {
+    font-size: 0.7rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 0.85rem;
   }
   
   .stat-value {
