@@ -21,7 +21,7 @@ export default function TaxToolsLanding() {
           <Link
             key={item.href}
             href={item.href}
-            className="rounded-2xl border border-[var(--border)] bg-white shadow-sm p-5 flex flex-col gap-3 hover:border-[var(--primary)] transition"
+            className="rounded-2xl border border-[var(--border)] bg-white p-5 flex flex-col gap-3 hover:border-[var(--primary)] transition"
           >
             <div className="flex items-center gap-3 text-lg font-semibold">
               <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[var(--background)] text-gray-700">

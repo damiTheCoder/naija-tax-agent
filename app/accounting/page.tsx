@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   RawTransaction,
@@ -12,6 +12,8 @@ import {
 import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory } from "@/lib/accounting/statementEngine";
 import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
 import { AutomationStatus, BANK_PROVIDERS, deriveWorkspaceFiles, mockAutomationClient } from "@/lib/accounting/automationAgent";
+import { accountingEngine, parseTransactionFromChat, AccountingState } from "@/lib/accounting/transactionBridge";
+import { JournalEntry } from "@/lib/accounting/doubleEntry";
 
 type ManualTransactionDraft = {
   date: string;
@@ -78,15 +80,35 @@ export default function AccountingPage() {
     },
   ]);
   const [isAutomationBusy, setIsAutomationBusy] = useState(false);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [accountingState, setAccountingState] = useState<AccountingState | null>(null);
   const fileUploadRef = useRef<HTMLInputElement | null>(null);
   const auditUploadRef = useRef<HTMLInputElement | null>(null);
   const manualFormRef = useRef<HTMLDivElement | null>(null);
 
   const workspaceFiles = useMemo(() => deriveWorkspaceFiles(transactions), [transactions]);
   const automationConfidencePercent = useMemo(() => Math.round(automationConfidence * 100), [automationConfidence]);
+
+  // Subscribe to accounting engine and load persisted state
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedTransactions = window.localStorage.getItem("taxy::accounting-transactions");
+    // Load persisted engine state
+    accountingEngine.load();
+    setAccountingState(accountingEngine.getState());
+    setJournalEntries(accountingEngine.getState().journalEntries);
+    
+    // Subscribe to updates
+    const unsubscribe = accountingEngine.subscribe((state) => {
+      setAccountingState(state);
+      setJournalEntries(state.journalEntries);
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
     if (savedTransactions) {
       try {
         const parsed = JSON.parse(savedTransactions);
@@ -97,7 +119,7 @@ export default function AccountingPage() {
         // ignore malformed cache
       }
     }
-    const savedConfidence = window.localStorage.getItem("taxy::automation-confidence");
+    const savedConfidence = window.localStorage.getItem("insight::automation-confidence");
     if (savedConfidence) {
       const numeric = parseFloat(savedConfidence);
       if (!Number.isNaN(numeric)) {
@@ -108,12 +130,12 @@ export default function AccountingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("taxy::accounting-transactions", JSON.stringify(transactions));
+    window.localStorage.setItem("insight::accounting-transactions", JSON.stringify(transactions));
   }, [transactions]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("taxy::automation-confidence", automationConfidence.toString());
+    window.localStorage.setItem("insight::automation-confidence", automationConfidence.toString());
   }, [automationConfidence]);
 
   useEffect(() => {
@@ -187,10 +209,43 @@ export default function AccountingPage() {
     appendMessage("user", trimmed);
     setComposerInput("");
     setIsWorkspaceCollapsed(true);
-    appendMessage(
-      "assistant",
-      "Noted. Use the + menu to upload evidence or trigger automations while I prepare the books.",
-    );
+
+    // Try to parse transaction from natural language
+    const parsedTx = parseTransactionFromChat(trimmed);
+    
+    if (parsedTx && parsedTx.amount && parsedTx.amount > 0) {
+      // User entered a transaction-like message
+      const newTransaction: RawTransaction = {
+        id: `chat-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        description: parsedTx.description || trimmed.substring(0, 100),
+        category: parsedTx.category || "other",
+        amount: parsedTx.amount,
+        type: parsedTx.category === "sales" ? "income" : "expense",
+      };
+
+      try {
+        const result = accountingEngine.processTransaction(newTransaction);
+        setTransactions((prev) => [...prev, newTransaction]);
+        appendMessage("assistant", result.chatResponse);
+        pushAutomationActivity("Chat journal", `Parsed and posted: ${result.journalEntry.id}`);
+        
+        // Auto-update statements
+        const engineStatements = accountingEngine.generateStatements();
+        setGeneratedStatements(engineStatements);
+      } catch {
+        appendMessage(
+          "assistant",
+          `I detected a transaction (₦${parsedTx.amount.toLocaleString()}). Use the manual form above for full control, or I can journal it with assumptions.`,
+        );
+      }
+    } else {
+      // General chat message
+      appendMessage(
+        "assistant",
+        "Noted. Use the + menu to upload evidence or trigger automations while I prepare the books.",
+      );
+    }
   };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,13 +290,35 @@ export default function AccountingPage() {
       type: manualTx.type,
     };
 
-    setTransactions((prev) => [...prev, newTransaction]);
-    setManualTx(initialTransaction);
-    setError(null);
-    appendMessage(
-      "assistant",
-      `Journaled ${newTransaction.description} (${newTransaction.category}) for ₦${Math.abs(amount).toLocaleString()}.`,
-    );
+    // Process through the accounting engine for proper double-entry
+    try {
+      const result = accountingEngine.processTransaction(newTransaction);
+      setTransactions((prev) => [...prev, newTransaction]);
+      setManualTx(initialTransaction);
+      setError(null);
+      
+      // Show the journal entry in chat
+      appendMessage("assistant", result.chatResponse);
+      
+      // Update automation activity
+      pushAutomationActivity(
+        "Journal posted", 
+        `${result.journalEntry.id}: ${newTransaction.description}`
+      );
+      
+      // Auto-update statements from engine
+      const engineStatements = accountingEngine.generateStatements();
+      setGeneratedStatements(engineStatements);
+    } catch (err) {
+      // Fallback to simple recording if engine fails
+      setTransactions((prev) => [...prev, newTransaction]);
+      setManualTx(initialTransaction);
+      setError(null);
+      appendMessage(
+        "assistant",
+        `Journaled ${newTransaction.description} (${newTransaction.category}) for ₦${Math.abs(amount).toLocaleString()}.`,
+      );
+    }
   };
 
   const handleGenerateStatements = () => {
@@ -284,7 +361,7 @@ export default function AccountingPage() {
     }
     const payload = statementToTaxDraft(auditedPacket.figures);
     if (typeof window !== "undefined") {
-      localStorage.setItem("taxy::accounting-draft", JSON.stringify(payload));
+      localStorage.setItem("insight::accounting-draft", JSON.stringify(payload));
     }
     setStatus("Audited figures queued. Open the main calculator to import draft values.");
     setError(null);
@@ -314,187 +391,21 @@ export default function AccountingPage() {
   return (
     <>
       <div className="space-y-6 pb-32">
-        {/* Show/Hide Workspace Button - Always visible at top */}
-        <div className="flex justify-center pt-2">
-          <button
-            type="button"
-            onClick={() => setIsWorkspaceCollapsed((prev) => !prev)}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#0a0a0a] via-[#1a1a1a] to-[#0a0a0a] px-6 py-2.5 text-sm font-semibold text-white shadow-lg border border-white/10"
-            aria-expanded={!isWorkspaceCollapsed}
-          >
-            <span>{isWorkspaceCollapsed ? "Show workspace" : "Hide workspace"}</span>
-            <svg
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              className={`transition-transform ${isWorkspaceCollapsed ? "" : "rotate-180"}`}
-            >
-              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-
-        {!isWorkspaceCollapsed && (
-          <>
-            <section className="rounded-[32px] bg-gradient-to-br from-[#0a0a0a] via-[#1a1a1a] to-[#0a0a0a] text-white px-6 py-8 relative overflow-hidden">
-              {/* Yellow glow effect like hero */}
-              <div className="absolute -top-1/2 -right-1/4 w-3/4 h-full bg-gradient-to-l from-[#faff00]/15 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-              <div className="relative z-10 flex flex-col gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-[#faff00]">Accounting Studio</p>
-                <h1 className="text-3xl md:text-4xl font-black leading-tight max-w-3xl">
-                  Go from messy ledgers to audited statements, then straight into tax computations.
-                </h1>
-                <p className="text-white/75 max-w-3xl">
-                  Upload raw evidence (bank exports, invoices, payroll sheets). Taxy autogenerates draft financial statements,
-                  you upload the signed-off audit pack, and we queue the approved figures for the main tax engine.
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  {["Connect bank feed", "Upload evidence", "Generate drafts", "Push to tax"].map((step, index) => (
-                    <div key={step} className="rounded-2xl bg-white/10 backdrop-blur px-4 py-3 flex items-center gap-3 border border-white/10">
-                      <span className="w-8 h-8 rounded-full bg-[#faff00]/20 flex items-center justify-center text-lg font-semibold text-[#faff00]">
-                        {index + 1}
-                      </span>
-                      <span className="tracking-wide">{step}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="grid gap-6 lg:grid-cols-[0.65fr_0.35fr]">
-              <div className="rounded-[32px] border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.4em] text-gray-400">AI agentic automation</p>
-                    <h2 className="mt-2 text-2xl font-black leading-tight text-gray-900">
-                      Bank-fed journals, still editable in chat.
-                    </h2>
-                    <p className="mt-2 text-sm text-gray-600">
-                      Connect your bank feed once and let the agent classify transactions, build ledgers, and refresh financials in the
-                      background. You can override any entry directly from the conversation stream.
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${automationStatusThemes[automationStatus]}`}>
-                    {automationStatus}
-                  </span>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-gray-100 bg-slate-50 p-4 text-sm text-gray-700">
-                    <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Selected bank</p>
-                    <select
-                      value={selectedBank}
-                      onChange={(event) => setSelectedBank(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                      disabled={isAutomationBusy}
-                    >
-                      {BANK_PROVIDERS.map((bank) => (
-                        <option key={bank} value={bank}>
-                          {bank}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="rounded-2xl border border-gray-100 bg-slate-50 p-4 text-sm text-gray-700">
-                    <p className="text-xs uppercase tracking-[0.3em] text-gray-500">AI confidence</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">{automationConfidencePercent}%</p>
-                    <p className="text-xs text-gray-500">Adjusts as you review or edit entries.</p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-100 bg-slate-50 p-4 text-sm text-gray-700">
-                    <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Workspace coverage</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">{transactions.length ? "Live" : "0%"}</p>
-                    <p className="text-xs text-gray-500">Journals, ledgers, statements update together.</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <button
-                    className="rounded-full bg-gray-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                    onClick={automationPrimaryAction}
-                    disabled={isAutomationBusy}
-                  >
-                    {isAutomationBusy ? "Working..." : automationPrimaryLabel}
-                  </button>
-                  <Link
-                    href="/accounting/workspace"
-                    className="rounded-full border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-slate-50"
-                  >
-                    Open files workspace
-                  </Link>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  {automationActivity.map((entry) => (
-                    <div key={`${entry.title}-${entry.timestamp}`} className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-slate-50/70 px-4 py-3">
-                      <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900">{entry.title}</p>
-                        <p className="text-xs text-gray-500">{entry.detail}</p>
-                      </div>
-                      <span className="text-xs text-gray-400">{entry.timestamp}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6">
-                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Agent quick prompts</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {automationPrompts.map((prompt) => (
-                      <button
-                        key={prompt}
-                        className="rounded-full border border-gray-200 px-4 py-1.5 text-sm text-gray-700 hover:bg-slate-50 disabled:opacity-60"
-                        onClick={() => handleAutomationPrompt(prompt)}
-                        disabled={isAutomationBusy}
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-[32px] border border-gray-200 bg-white p-6 shadow-sm">
-                <p className="text-xs uppercase tracking-[0.4em] text-gray-400">Files snapshot</p>
-                <h3 className="mt-2 text-xl font-semibold text-gray-900">Real-time workspace</h3>
-                <p className="text-sm text-gray-500">Preview of what the file room will show once the agent syncs.</p>
-                <div className="mt-6 space-y-4">
-                  {workspaceFiles.slice(0, 2).map((file) => (
-                    <div key={file.slug} className="rounded-2xl border border-gray-100 bg-slate-50/80 p-4">
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{file.badge}</span>
-                        <span>{file.meta}</span>
-                      </div>
-                      <p className="mt-1 text-lg font-semibold text-gray-900">{file.title}</p>
-                      <p className="text-sm text-gray-600">{file.subtitle}</p>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/accounting/workspace" className="mt-6 block w-full rounded-xl bg-[#faff00] px-4 py-2 text-sm font-semibold text-gray-900 text-center">
-                  View all files
-                </Link>
-              </div>
-        </section>
-          </>
-        )}
-
-        <section className="relative min-h-[75vh]">
-          <div className="flex flex-col gap-3 px-6 py-4">
+        <section className="relative min-h-[75vh] bg-gray-50/80 rounded-lg">
+          <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Accounting chat</p>
                 <p className="text-sm text-gray-500">One stream for uploads, journals, audit attachments, and final handoff.</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <span className={`px-3 py-1 rounded-full border ${documents.length ? "border-emerald-200 text-emerald-600" : "border-gray-200"}`}>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={`px-3 py-1 rounded-md ${documents.length ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
                   Docs {documents.length}
                 </span>
-                <span className={`px-3 py-1 rounded-full border ${generatedStatements ? "border-emerald-200 text-emerald-600" : "border-gray-200"}`}>
+                <span className={`px-3 py-1 rounded-md ${generatedStatements ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
                   Draft {generatedStatements ? "ready" : "pending"}
                 </span>
-                <span className={`px-3 py-1 rounded-full border ${auditedPacket ? "border-emerald-200 text-emerald-600" : "border-gray-200"}`}>
+                <span className={`px-3 py-1 rounded-md ${auditedPacket ? "bg-purple-50 text-purple-600" : "bg-rose-50 text-rose-500"}`}>
                   Audit {auditedPacket ? "attached" : "waiting"}
                 </span>
               </div>
@@ -502,55 +413,92 @@ export default function AccountingPage() {
           </div>
 
           <div className="chat-feed flex flex-col min-h-[60vh]">
-            <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 space-y-5">
-              {!isWorkspaceCollapsed && (
-                <>
-                  {documents.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-300 bg-slate-50/70 p-4 text-sm text-gray-500">
-                      Use the + button to attach spreadsheets, invoices, or PDFs. I’ll read them and extract transactions.
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
-                      <div className="text-xs uppercase tracking-[0.3em] text-gray-400">Uploaded evidence</div>
-                      <div className="flex flex-wrap gap-2 text-xs text-gray-700">
-                        {documents.map((doc) => (
-                          <span key={`${doc.name}-${doc.uploadedAt}`} className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200">
-                            {doc.name}
-                          </span>
-                        ))}
+            <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
+              <div className="space-y-4">
+                  {/* Documents Section */}
+                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                    <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900">Uploaded Documents</h3>
+                            <p className="text-xs text-gray-500">{documents.length} file{documents.length !== 1 ? 's' : ''} attached</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-
-                  {transactions.length > 0 && (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Transactions parsed</p>
-                          <p className="text-sm text-gray-500">{transactions.length.toLocaleString()} entries in the workspace</p>
+                    <div className="p-3 md:p-5">
+                      {documents.length === 0 ? (
+                        <div className="text-center py-6">
+                          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                            <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                          </div>
+                          <p className="text-sm text-gray-500">No documents yet</p>
+                          <p className="text-xs text-gray-400 mt-1">Use the + button to attach files</p>
                         </div>
-                        <button className="text-xs text-rose-500" onClick={() => setTransactions([])}>
-                          Clear
-                        </button>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {documents.map((doc) => (
+                            <div key={`${doc.name}-${doc.uploadedAt}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100">
+                              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-xs text-gray-700 truncate">{doc.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Transactions Section */}
+                  {transactions.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                      <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-semibold text-gray-900">Journal Entries</h3>
+                              <p className="text-xs text-gray-500">{transactions.length.toLocaleString()} transaction{transactions.length !== 1 ? 's' : ''} recorded</p>
+                            </div>
+                          </div>
+                          <button className="text-xs text-rose-500 hover:text-rose-600 font-medium" onClick={() => setTransactions([])}>
+                            Clear all
+                          </button>
+                        </div>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead className="text-gray-400 uppercase">
-                            <tr>
-                              <th className="text-left py-1">Date</th>
-                              <th className="text-left py-1">Description</th>
-                              <th className="text-left py-1">Category</th>
-                              <th className="text-right py-1">Amount (₦)</th>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-100 bg-gray-50/30">
+                              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Date</th>
+                              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Description</th>
+                              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Category</th>
+                              <th className="text-right text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Amount (₦)</th>
                             </tr>
                           </thead>
-                          <tbody>
+                          <tbody className="divide-y divide-gray-100">
                             {transactions.slice(-6).map((tx) => (
-                              <tr key={tx.id} className="border-t border-gray-100">
-                                <td className="py-1 text-gray-500">{tx.date}</td>
-                                <td className="py-1 text-gray-700">{tx.description}</td>
-                                <td className="py-1 text-gray-500 capitalize">{tx.category}</td>
-                                <td className={`py-1 text-right font-semibold ${tx.amount >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                                  {tx.amount.toLocaleString()}
+                              <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-5 py-3 text-sm text-gray-500 font-mono">{tx.date}</td>
+                                <td className="px-5 py-3 text-sm text-gray-900">{tx.description}</td>
+                                <td className="px-5 py-3">
+                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 capitalize">{tx.category}</span>
+                                </td>
+                                <td className={`px-5 py-3 text-sm text-right font-mono font-semibold ${tx.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                  {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString()}
                                 </td>
                               </tr>
                             ))}
@@ -560,83 +508,205 @@ export default function AccountingPage() {
                     </div>
                   )}
 
+                  {/* Journal Entries Section - Double Entry View */}
+                  {journalEntries.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                      <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-semibold text-gray-900">Journal Entries</h3>
+                              <p className="text-xs text-gray-500">{journalEntries.length} entries • Double-entry ledger</p>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Balanced
+                          </span>
+                        </div>
+                      </div>
+                      <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                        {journalEntries.slice(-5).reverse().map((entry) => (
+                          <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div>
+                                <span className="text-xs font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{entry.id}</span>
+                                <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
+                              </div>
+                              <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
+                            </div>
+                            <table className="w-full text-xs mt-2">
+                              <thead>
+                                <tr className="border-b border-gray-100">
+                                  <th className="py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                  <th className="py-1.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Debit</th>
+                                  <th className="py-1.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Credit</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-50">
+                                {entry.lines.map((line, idx) => (
+                                  <tr key={idx}>
+                                    <td className={`py-1.5 text-gray-700 ${line.credit > 0 ? "pl-4" : ""}`}>
+                                      {line.accountName}
+                                    </td>
+                                    <td className="py-1.5 text-right font-mono text-gray-600 w-24">
+                                      {line.debit > 0 ? `₦${line.debit.toLocaleString()}` : "-"}
+                                    </td>
+                                    <td className="py-1.5 text-right font-mono text-gray-600 w-24">
+                                      {line.credit > 0 ? `₦${line.credit.toLocaleString()}` : "-"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Financial Statements Section */}
                   {statementCards && (
-                    <div className="rounded-2xl border border-gray-200 bg-slate-900 text-white p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-white/50">Draft financials</p>
-                          <p className="text-sm text-white/70">Income Statement • Balance Sheet • Cash Flow</p>
+                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                      <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-semibold text-gray-900">Draft Financial Statements</h3>
+                              <p className="text-xs text-gray-500">Income Statement • Balance Sheet • Cash Flow</p>
+                            </div>
+                          </div>
+                          {!auditedPacket && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              Awaiting audit
+                            </span>
+                          )}
                         </div>
-                        {!auditedPacket && <span className="text-xs font-semibold bg-yellow-300 text-slate-900 px-3 py-1 rounded-full">Awaiting audit</span>}
                       </div>
-                      <div className="grid md:grid-cols-3 gap-3 text-sm">
-                        <div className="bg-white/10 rounded-xl p-3">
-                          <p className="text-white/70 text-xs">Revenue</p>
-                          <p className="text-lg font-semibold">₦ {statementCards.revenue.toLocaleString()}</p>
-                          <p className="text-white/60 text-xs">Net income ₦ {statementCards.netIncome.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3">
-                          <p className="text-white/70 text-xs">Operating expenses</p>
-                          <p className="text-lg font-semibold">₦ {statementCards.operatingExpenses.toLocaleString()}</p>
-                          <p className="text-white/60 text-xs">Cost of sales ₦ {statementCards.costOfSales.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3">
-                          <p className="text-white/70 text-xs">Balance sheet</p>
-                          <p className="text-sm">Assets ₦ {statementCards.assets.toLocaleString()}</p>
-                          <p className="text-sm">Liabilities ₦ {statementCards.liabilities.toLocaleString()}</p>
-                          <p className="text-sm">Equity ₦ {statementCards.equity.toLocaleString()}</p>
+                      <div className="p-3 md:p-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
+                          <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200/50 p-4">
+                            <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Income Statement</p>
+                            <p className="mt-2 text-2xl font-bold text-gray-900 font-mono">₦{statementCards.revenue.toLocaleString()}</p>
+                            <p className="text-xs text-gray-500 mt-1">Revenue</p>
+                            <div className="mt-3 pt-3 border-t border-emerald-200/50">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-500">Net Income</span>
+                                <span className="font-mono font-semibold text-emerald-700">₦{statementCards.netIncome.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-xl bg-gradient-to-br from-rose-50 to-rose-100/50 border border-rose-200/50 p-4">
+                            <p className="text-xs font-medium text-rose-600 uppercase tracking-wider">Expenses</p>
+                            <p className="mt-2 text-2xl font-bold text-gray-900 font-mono">₦{statementCards.operatingExpenses.toLocaleString()}</p>
+                            <p className="text-xs text-gray-500 mt-1">Operating Expenses</p>
+                            <div className="mt-3 pt-3 border-t border-rose-200/50">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-500">Cost of Sales</span>
+                                <span className="font-mono font-semibold text-rose-700">₦{statementCards.costOfSales.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 p-4">
+                            <p className="text-xs font-medium text-blue-600 uppercase tracking-wider">Balance Sheet</p>
+                            <div className="mt-2 space-y-1.5">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Assets</span>
+                                <span className="font-mono font-semibold text-gray-900">₦{statementCards.assets.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Liabilities</span>
+                                <span className="font-mono font-semibold text-gray-900">₦{statementCards.liabilities.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between text-sm pt-1.5 border-t border-blue-200/50">
+                                <span className="text-gray-600">Equity</span>
+                                <span className="font-mono font-semibold text-blue-700">₦{statementCards.equity.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
 
+                  {/* Audited Pack Section */}
                   {auditedPacket && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                      <p className="font-semibold">Audited pack: {auditedPacket.fileName}</p>
-                      <p>Uploaded {new Date(auditedPacket.uploadedAt).toLocaleString()} • {auditedPacket.auditorName}</p>
-                      <p>{auditedPacket.notes}</p>
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white overflow-hidden">
+                      <div className="px-5 py-4 border-b border-emerald-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-emerald-900">Audited Statement Pack</h3>
+                            <p className="text-xs text-emerald-600">Ready for tax computation handoff</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1 space-y-2">
+                            <p className="text-sm font-medium text-gray-900">{auditedPacket.fileName}</p>
+                            <p className="text-xs text-gray-500">
+                              Uploaded {new Date(auditedPacket.uploadedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-xs text-gray-500">Auditor: {auditedPacket.auditorName}</p>
+                            {auditedPacket.notes && <p className="text-xs text-gray-400 italic">{auditedPacket.notes}</p>}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </>
-              )}
+                </div>
 
-              <div ref={manualFormRef} id="manual-journal" className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+              <div ref={manualFormRef} id="manual-journal" className="rounded-lg border border-gray-200 bg-white p-4 md:p-5 space-y-3 md:space-y-4">
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Manual journal entry</p>
-                {error && <div className="rounded-xl border border-red-200 bg-red-50 text-xs text-red-600 px-3 py-2">{error}</div>}
-                <div className="grid md:grid-cols-4 gap-2 text-sm">
-                  <input type="date" value={manualTx.date} onChange={(e) => setManualTx((prev) => ({ ...prev, date: e.target.value }))} className="rounded-xl border border-gray-200 px-3 py-2" />
+                {error && <div className="rounded-md border border-red-200 bg-red-50 text-xs text-red-600 px-3 py-2">{error}</div>}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                  <input type="date" value={manualTx.date} onChange={(e) => setManualTx((prev) => ({ ...prev, date: e.target.value }))} className="rounded-md border border-gray-200 px-3 py-2" />
                   <input
                     type="text"
                     placeholder="Description"
                     value={manualTx.description}
                     onChange={(e) => setManualTx((prev) => ({ ...prev, description: e.target.value }))}
-                    className="rounded-xl border border-gray-200 px-3 py-2"
+                    className="rounded-md border border-gray-200 px-3 py-2"
                   />
                   <input
                     type="text"
                     placeholder="Category"
                     value={manualTx.category}
                     onChange={(e) => setManualTx((prev) => ({ ...prev, category: e.target.value, type: normaliseCategory(e.target.value) }))}
-                    className="rounded-xl border border-gray-200 px-3 py-2"
+                    className="rounded-md border border-gray-200 px-3 py-2"
                   />
                   <input
                     type="number"
                     placeholder="Amount"
                     value={manualTx.amount}
                     onChange={(e) => setManualTx((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="rounded-xl border border-gray-200 px-3 py-2"
+                    className="rounded-md border border-gray-200 px-3 py-2"
                   />
                 </div>
-                <button className="w-full rounded-full bg-gray-900 text-white text-sm font-semibold py-2" onClick={handleManualTransactionAdd}>
+                <button className="w-full rounded-md bg-gray-900 text-white text-sm font-semibold py-2.5" onClick={handleManualTransactionAdd}>
                   Save entry
                 </button>
               </div>
 
-              {!isWorkspaceCollapsed && (
-                <p className="text-xs text-gray-400 text-center">
-                  Accounting outputs are auto-generated summaries. Always rely on audited statements for statutory filings.
-                </p>
-              )}
+              <p className="text-xs text-gray-400 text-center">
+                Accounting outputs are auto-generated summaries. Always rely on audited statements for statutory filings.
+              </p>
 
               <div className="space-y-4">
                 {messages.map((msg, index) => (
@@ -660,8 +730,8 @@ export default function AccountingPage() {
         </section>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 z-40 px-4 sm:px-6 pointer-events-none">
-        <div className="mx-auto w-full max-w-4xl">
+      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none">
+        <div className="mx-auto w-full max-w-3xl">
           {isActionMenuOpen && (
             <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
               <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => fileUploadRef.current?.click()}>

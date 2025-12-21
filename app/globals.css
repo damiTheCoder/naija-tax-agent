@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  /* Brand Colors - Neon Yellow & Black */
+  /* Brand Colors - Light Blue & Black */
   --background: #f8f9fa;
   --foreground: #0a0a0a;
-  --primary: #faff00;
-  --primary-dark: #e6eb00;
+  --primary: #64B5F6;
+  --primary-dark: #4A9FD9;
   --accent: #0a0a0a;
   --accent-light: #1a1a1a;
   --card-bg: #ffffff;
@@ -250,7 +250,7 @@ body {
   right: -20%;
   width: 80%;
   height: 150%;
-  background: radial-gradient(ellipse, rgba(250, 255, 0, 0.15) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(100, 181, 246, 0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -291,12 +291,12 @@ body {
   text-decoration: none;
   transition: all 0.25s ease;
   width: fit-content;
-  box-shadow: 0 8px 32px rgba(250, 255, 0, 0.35);
+  box-shadow: 0 8px 32px rgba(100, 181, 246, 0.35);
 }
 
 .hero-cta:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(250, 255, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(100, 181, 246, 0.5);
 }
 
 .hero-avatars {
@@ -1022,7 +1022,7 @@ body {
 
 .cta-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(250, 255, 0, 0.5);
+  box-shadow: 0 8px 32px rgba(100, 181, 246, 0.5);
 }
 
 .cta-secondary {
@@ -1548,7 +1548,7 @@ body {
   max-width: 1200px;
   margin: 4rem auto;
   padding: 4rem 2rem;
-  background: linear-gradient(135deg, var(--primary) 0%, #e6eb00 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #4A9FD9 100%);
   border-radius: 40px;
   text-align: center;
 }

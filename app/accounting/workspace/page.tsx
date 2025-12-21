@@ -5,37 +5,58 @@ import Link from "next/link";
 import {
   AutomationStatus,
   BANK_PROVIDERS,
-  deriveTrialBalancePreview,
-  deriveWorkspaceFiles,
   mockAutomationClient,
 } from "@/lib/accounting/automationAgent";
-import { RawTransaction } from "@/lib/accounting/types";
+import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
+import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
+import { JournalEntry, LedgerAccount } from "@/lib/accounting/doubleEntry";
+
+type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements";
 
 export default function WorkspacePage() {
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState<Map<string, LedgerAccount>>(new Map());
+  const [financialStatements, setFinancialStatements] = useState<StatementDraft | null>(null);
   const [automationStatus, setAutomationStatus] = useState<AutomationStatus>("idle");
   const [automationConfidence, setAutomationConfidence] = useState(0.82);
   const [isSyncing, setIsSyncing] = useState(false);
-  const workspaceFiles = useMemo(() => deriveWorkspaceFiles(transactions), [transactions]);
-  const trialBalancePreview = useMemo(() => deriveTrialBalancePreview(transactions), [transactions]);
-  const trialBalanceTotals = useMemo(
-    () =>
-      trialBalancePreview.reduce(
-        (acc, row) => {
-          acc.debit += row.debit;
-          acc.credit += row.credit;
-          return acc;
-        },
-        { debit: 0, credit: 0 },
-      ),
-    [trialBalancePreview],
-  );
-  const automationConfidencePercent = Math.round(automationConfidence * 100);
-  const coverageLabel = transactions.length ? `${transactions.length.toLocaleString()} journals live` : "Waiting for sync";
+  const [activeTab, setActiveTab] = useState<ActiveTab>("journal");
+  
+  // Get trial balance from accounting engine
+  const trialBalance = useMemo(() => {
+    return accountingEngine.generateTrialBalance();
+  }, [journalEntries]);
+  
+  // Filter ledger accounts with activity
+  const activeLedgerAccounts = useMemo(() => {
+    return Array.from(ledgerAccounts.entries())
+      .filter(([_, account]) => account.entries.length > 0 || account.closingBalance !== 0)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  }, [ledgerAccounts]);
 
+  const automationConfidencePercent = Math.round(automationConfidence * 100);
+
+  // Load data from accounting engine
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const cachedTransactions = window.localStorage.getItem("taxy::accounting-transactions");
+    
+    // Load accounting engine state
+    accountingEngine.load();
+    const state = accountingEngine.getState();
+    setJournalEntries(state.journalEntries);
+    setLedgerAccounts(state.ledgerAccounts);
+    setFinancialStatements(accountingEngine.generateStatements());
+    
+    // Subscribe to updates
+    const unsubscribe = accountingEngine.subscribe((newState) => {
+      setJournalEntries(newState.journalEntries);
+      setLedgerAccounts(newState.ledgerAccounts);
+      setFinancialStatements(accountingEngine.generateStatements());
+    });
+    
+    // Also load raw transactions for display
+    const cachedTransactions = window.localStorage.getItem("insight::accounting-transactions");
     if (cachedTransactions) {
       try {
         const parsed = JSON.parse(cachedTransactions);
@@ -46,30 +67,28 @@ export default function WorkspacePage() {
         // ignore malformed cache
       }
     }
-    const storedConfidence = window.localStorage.getItem("taxy::automation-confidence");
+    
+    const storedConfidence = window.localStorage.getItem("insight::automation-confidence");
     if (storedConfidence) {
       const numeric = parseFloat(storedConfidence);
       if (!Number.isNaN(numeric)) {
         setAutomationConfidence(numeric);
       }
     }
+    
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("taxy::accounting-transactions", JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("taxy::automation-confidence", automationConfidence.toString());
+    window.localStorage.setItem("insight::automation-confidence", automationConfidence.toString());
   }, [automationConfidence]);
 
   useEffect(() => {
-    if (transactions.length > 0 && automationStatus === "idle") {
+    if (journalEntries.length > 0 && automationStatus === "idle") {
       setAutomationStatus("live");
     }
-  }, [transactions.length, automationStatus]);
+  }, [journalEntries.length, automationStatus]);
 
   const handleRefresh = async () => {
     if (isSyncing) return;
@@ -87,131 +106,424 @@ export default function WorkspacePage() {
     }
   };
 
+  const formatCurrency = (value: number) => {
+    const absValue = Math.abs(value);
+    return `₦${absValue.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-NG", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
+    {
+      id: "journal",
+      label: "General Journal",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+        </svg>
+      ),
+    },
+    {
+      id: "ledger",
+      label: "General Ledger",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125" />
+        </svg>
+      ),
+    },
+    {
+      id: "trial-balance",
+      label: "Trial Balance",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
+        </svg>
+      ),
+    },
+    {
+      id: "statements",
+      label: "Financial Statements",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-10">
-      <header className="rounded-[32px] border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-gray-400">Files workspace</p>
-            <h1 className="text-3xl font-black text-gray-900">All your journals, ledgers, and statements in one room.</h1>
-            <p className="text-sm text-gray-600">
-              This view mirrors what the AI streams from your bank feeds. Tweak entries back in the Accounting Studio chat — updates land here instantly.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 text-sm text-gray-600">
-            <span className="rounded-full border border-gray-200 px-4 py-1 text-xs font-semibold text-gray-700">
-              Status: {automationStatus}
-            </span>
-            <span className="text-xs uppercase tracking-[0.3em] text-gray-400">Confidence {automationConfidencePercent}%</span>
-            <span className="text-xs text-gray-500">{coverageLabel}</span>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Accounting Records</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {transactions.length > 0 
+              ? `${transactions.length} entries • Last synced ${formatDate(transactions[transactions.length - 1]?.date || new Date().toISOString())}`
+              : "Connect your bank to start syncing transactions"
+            }
+          </p>
         </div>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-xs">
+            <span className={`w-2 h-2 rounded-full ${automationStatus === "live" ? "bg-green-500" : automationStatus === "syncing" ? "bg-amber-500 animate-pulse" : "bg-gray-400"}`}></span>
+            <span className="text-gray-600 capitalize">{automationStatus}</span>
+            <span className="text-gray-400">•</span>
+            <span className="text-gray-600">{automationConfidencePercent}% confidence</span>
+          </div>
           <button
-            className="rounded-full bg-gray-900 px-5 py-2 text-white disabled:opacity-60"
             onClick={handleRefresh}
             disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2 bg-[#0a0a0a] text-white text-sm font-medium rounded-lg hover:bg-[#1a1a1a] disabled:opacity-50 transition-colors"
           >
-            {isSyncing ? "Refreshing..." : "Refresh from automation"}
+            <svg className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isSyncing ? "Syncing..." : "Sync"}
           </button>
-          <Link href="/accounting" className="rounded-full border border-gray-300 px-5 py-2 text-gray-800 hover:bg-slate-50">
-            Back to Accounting Studio
-          </Link>
         </div>
-      </header>
+      </div>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        {workspaceFiles.map((file) => (
-          <div
-            key={file.slug}
-            id={file.slug}
-            className="rounded-3xl bg-[#f3f4f6] p-5 shadow-sm"
-            data-intent="workspace-file-card"
-          >
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-gray-400">
-              <span className="rounded-full border border-gray-200 px-3 py-1 text-[10px] font-semibold">{file.badge}</span>
-              <span className="text-[11px] text-gray-500">{file.meta}</span>
-            </div>
-            <p className="mt-2 text-xl font-semibold text-gray-900">{file.title}</p>
-            <p className="text-sm text-gray-600">{file.subtitle}</p>
-            <p className="mt-3 text-xs text-gray-500">
-              Hook up the backend to stream the actual doc into this slot. For now, it mirrors the AI-prepared preview.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <Link href="/accounting#manual-journal" className="rounded-full bg-[#faff00] px-3 py-1 text-black shadow-sm hover:opacity-90">
-                Edit via chat
-              </Link>
-              <button className="rounded-full bg-[#faff00] px-3 py-1 text-black shadow-sm" type="button">
-                Download (coming soon)
-              </button>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[0.6fr_0.4fr]">
-        <div className="rounded-3xl border border-gray-100 bg-slate-50/80 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Trial balance preview</p>
-              <p className="text-sm text-gray-600">Debits and credits from the latest sync.</p>
-            </div>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-1 -mb-px overflow-x-auto">
+          {tabs.map((tab) => (
             <button
-              className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-white disabled:opacity-50"
-              onClick={handleRefresh}
-              disabled={isSyncing}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "border-[#64B5F6] text-[#64B5F6]"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
             >
-              Refresh
+              {tab.icon}
+              {tab.label}
             </button>
-          </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm text-gray-700">
-              <thead className="text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="text-left py-2">Account</th>
-                  <th className="text-right py-2">Debit</th>
-                  <th className="text-right py-2">Credit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trialBalancePreview.map((row) => (
-                  <tr key={row.account} className="border-t border-gray-100">
-                    <td className="py-2 capitalize">{row.account.replace(/_/g, " ")}</td>
-                    <td className="py-2 text-right text-emerald-600">₦{row.debit.toLocaleString()}</td>
-                    <td className="py-2 text-right text-rose-500">₦{row.credit.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t border-gray-200 text-xs font-semibold text-gray-600">
-                <tr>
-                  <td className="py-2">Totals</td>
-                  <td className="py-2 text-right">₦{trialBalanceTotals.debit.toLocaleString()}</td>
-                  <td className="py-2 text-right">₦{trialBalanceTotals.credit.toLocaleString()}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
+          ))}
+        </nav>
+      </div>
 
-        <div className="rounded-3xl border border-gray-100 bg-white/80 p-5">
-          <p className="text-xs uppercase tracking-[0.4em] text-gray-400">Next steps</p>
-          <p className="mt-2 text-lg font-semibold text-gray-900">Keep humans in the loop</p>
-          <p className="text-sm text-gray-600">
-            Every automated journal stays editable. Use the chat to annotate context, upload supporting docs, or trigger exports to the tax engine.
-          </p>
-          <div className="mt-4 space-y-2">
-            <Link href="/accounting#manual-journal" className="block rounded-full bg-gray-900 px-4 py-2 text-center text-sm font-semibold text-white">
-              Post a manual adjustment
-            </Link>
-            <button className="w-full rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800" type="button">
-              Export workspace (coming soon)
-            </button>
+      {/* Tab Content */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* General Journal - Now showing real double-entry journal entries */}
+        {activeTab === "journal" && (
+          <div>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="font-semibold text-gray-900">General Journal</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{journalEntries.length} journal entries • Double-entry format</p>
+            </div>
+            <div className="overflow-x-auto">
+              {journalEntries.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-400">
+                  <div className="flex flex-col items-center gap-2">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>No journal entries yet</p>
+                    <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
+                    <Link href="/accounting" className="mt-2 text-[#64B5F6] text-sm font-medium hover:underline">
+                      Go to Accounting Studio →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {journalEntries.map((entry) => (
+                    <div key={entry.id} className="p-4 hover:bg-gray-50/50">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{entry.id}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${entry.isBalanced ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                              {entry.isBalanced ? '✓ Balanced' : '✗ Unbalanced'}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
+                        </div>
+                        <span className="text-xs text-gray-400">{formatDate(entry.date)}</span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs text-gray-400 uppercase">
+                            <th className="text-left py-1 font-medium">Account</th>
+                            <th className="text-right py-1 font-medium w-28">Debit</th>
+                            <th className="text-right py-1 font-medium w-28">Credit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entry.lines.map((line, idx) => (
+                            <tr key={idx} className="border-t border-gray-50">
+                              <td className={`py-2 text-gray-700 ${line.credit > 0 ? 'pl-6' : ''}`}>
+                                <span className="text-xs text-gray-400 mr-2">{line.accountCode}</span>
+                                {line.accountName}
+                              </td>
+                              <td className="py-2 text-right font-mono text-gray-900">
+                                {line.debit > 0 ? formatCurrency(line.debit) : '—'}
+                              </td>
+                              <td className="py-2 text-right font-mono text-gray-900">
+                                {line.credit > 0 ? formatCurrency(line.credit) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t border-gray-200 font-semibold">
+                            <td className="py-2 text-gray-600">Total</td>
+                            <td className="py-2 text-right font-mono">{formatCurrency(entry.totalDebits)}</td>
+                            <td className="py-2 text-right font-mono">{formatCurrency(entry.totalCredits)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <p className="mt-4 text-xs text-gray-500">
-            When you plug in the backend automation, swap the mock client in <code>automationAgent.ts</code> with your API calls and this room becomes live.
-          </p>
-        </div>
-      </section>
+        )}
+
+        {/* General Ledger - Now showing real ledger accounts */}
+        {activeTab === "ledger" && (
+          <div>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="font-semibold text-gray-900">General Ledger</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{activeLedgerAccounts.length} accounts with activity</p>
+            </div>
+            {activeLedgerAccounts.length === 0 ? (
+              <div className="px-6 py-12 text-center text-gray-400">
+                <p>No ledger accounts with activity</p>
+                <p className="text-xs mt-1">Post journal entries to see ledger activity</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {activeLedgerAccounts.map(([code, account]) => (
+                  <div key={code} className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-gray-400">{account.accountCode}</span>
+                          <h3 className="font-semibold text-gray-900">{account.accountName}</h3>
+                          <span className={`text-xs px-2 py-0.5 rounded capitalize ${
+                            account.accountType === 'asset' ? 'bg-blue-50 text-blue-600' :
+                            account.accountType === 'liability' ? 'bg-orange-50 text-orange-600' :
+                            account.accountType === 'equity' ? 'bg-purple-50 text-purple-600' :
+                            account.accountType === 'income' ? 'bg-green-50 text-green-600' :
+                            'bg-red-50 text-red-600'
+                          }`}>{account.accountType}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{account.entries.length} entries</p>
+                      </div>
+                      <div className={`text-lg font-semibold ${
+                        account.accountType === 'asset' || account.accountType === 'expense' 
+                          ? (account.closingBalance >= 0 ? 'text-gray-900' : 'text-red-600')
+                          : (account.closingBalance >= 0 ? 'text-green-600' : 'text-red-600')
+                      }`}>
+                        {formatCurrency(account.closingBalance)}
+                      </div>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                          <th className="text-left py-2 font-medium">Date</th>
+                          <th className="text-left py-2 font-medium">Description</th>
+                          <th className="text-right py-2 font-medium">Debit</th>
+                          <th className="text-right py-2 font-medium">Credit</th>
+                          <th className="text-right py-2 font-medium">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {account.entries.slice(-5).map((entry, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="py-2 text-gray-600">{formatDate(entry.date)}</td>
+                            <td className="py-2 text-gray-900">{entry.narration}</td>
+                            <td className="py-2 text-right font-mono text-gray-700">
+                              {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
+                            </td>
+                            <td className="py-2 text-right font-mono text-gray-700">
+                              {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
+                            </td>
+                            <td className="py-2 text-right font-mono font-semibold text-gray-900">
+                              {formatCurrency(entry.balance)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {account.entries.length > 5 && (
+                      <p className="text-xs text-gray-400 mt-2 text-center">
+                        Showing last 5 of {account.entries.length} entries
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Trial Balance - Using real accounting engine data */}
+        {activeTab === "trial-balance" && (
+          <div>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Trial Balance</h2>
+                <p className="text-xs text-gray-500 mt-0.5">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+              </div>
+              <div className={`text-xs font-medium px-2 py-1 rounded ${Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                {Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "✓ Balanced" : "⚠ Unbalanced"}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              {trialBalance.accounts.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-400">
+                  <p>No trial balance data</p>
+                  <p className="text-xs mt-1">Post journal entries to generate trial balance</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                      <th className="px-6 py-3 text-left font-medium">Account Code</th>
+                      <th className="px-6 py-3 text-left font-medium">Account Name</th>
+                      <th className="px-6 py-3 text-right font-medium">Debit (₦)</th>
+                      <th className="px-6 py-3 text-right font-medium">Credit (₦)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {trialBalance.accounts.map((row) => (
+                      <tr key={row.code} className="hover:bg-gray-50">
+                        <td className="px-6 py-3 text-sm text-gray-400 font-mono">{row.code}</td>
+                        <td className="px-6 py-3 text-sm text-gray-900">{row.name}</td>
+                        <td className="px-6 py-3 text-sm text-right font-mono text-gray-900">
+                          {row.debit > 0 ? formatCurrency(row.debit) : "—"}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-right font-mono text-gray-900">
+                          {row.credit > 0 ? formatCurrency(row.credit) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-900 text-white">
+                      <td colSpan={2} className="px-6 py-3 text-sm font-semibold">Total</td>
+                      <td className="px-6 py-3 text-sm text-right font-mono font-semibold">{formatCurrency(trialBalance.totals.debit)}</td>
+                      <td className="px-6 py-3 text-sm text-right font-mono font-semibold">{formatCurrency(trialBalance.totals.credit)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Financial Statements - Using real accounting engine data */}
+        {activeTab === "statements" && financialStatements && (
+          <div className="divide-y divide-gray-200">
+            {/* Income Statement */}
+            <div className="p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">Income Statement</h3>
+              <p className="text-xs text-gray-500 mb-4">For the period ended {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+              <div className="space-y-3 max-w-md">
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Revenue</span>
+                  <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.revenue)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                  <span className="text-sm text-gray-500">Less: Cost of Sales</span>
+                  <span className="text-sm font-mono text-gray-700">({formatCurrency(financialStatements.costOfSales)})</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-700">Gross Profit</span>
+                  <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(financialStatements.grossProfit)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                  <span className="text-sm text-gray-500">Less: Operating Expenses</span>
+                  <span className="text-sm font-mono text-gray-700">({formatCurrency(financialStatements.operatingExpenses)})</span>
+                </div>
+                <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
+                  <span className="text-sm font-semibold text-gray-900">Net Income</span>
+                  <span className={`text-sm font-mono font-bold ${financialStatements.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatCurrency(financialStatements.netIncome)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Balance Sheet */}
+            <div className="p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">Balance Sheet</h3>
+              <p className="text-xs text-gray-500 mb-4">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Assets</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Total Assets</span>
+                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.assets)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Liabilities & Equity</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Total Liabilities</span>
+                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.liabilities)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Equity</span>
+                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.equity)}</span>
+                    </div>
+                    <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
+                      <span className="text-sm font-semibold text-gray-700">Total Liabilities & Equity</span>
+                      <span className="text-sm font-mono font-semibold text-gray-900">
+                        {formatCurrency(financialStatements.liabilities + financialStatements.equity)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/accounting"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Back to Accounting Studio
+        </Link>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Export to PDF
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Export to Excel
+        </button>
+      </div>
     </div>
   );
 }

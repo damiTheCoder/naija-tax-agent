@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 
 const navLinks = [
   { label: "Problem", href: "#problem" },
@@ -207,8 +208,8 @@ export default function LandingPage() {
       <nav className="landing-nav">
         <div className="nav-content">
           <Link href="/" className="nav-logo">
-            <Image src="/logo.png" alt="Taxy Logo" width={40} height={40} className="logo-image" />
-            <span className="logo-text">Taxy</span>
+            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} className="logo-image" />
+            <span className="logo-text">Insight</span>
           </Link>
           <div className="nav-links">
             {navLinks.map((link) => (
@@ -293,10 +294,10 @@ export default function LandingPage() {
                 {/* Profile card */}
                 <div className="hero-badge hero-badge-profile">
                   <div className="profile-avatar">
-                    <Image src="/logo.png" alt="Profile" width={40} height={40} className="rounded-full" />
+                    <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} className="rounded-full" />
                   </div>
                   <div className="profile-info">
-                    <div className="profile-name">Taxy AI</div>
+                    <div className="profile-name">Insight AI</div>
                     <div className="profile-role">Your Accountant</div>
                   </div>
                   <div className="profile-actions">
@@ -334,7 +335,7 @@ export default function LandingPage() {
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Taxy partners with major Nigerian banks
+              Insight partners with major Nigerian banks
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -359,7 +360,7 @@ export default function LandingPage() {
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Taxy partners with major Nigerian banks
+              Insight partners with major Nigerian banks
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -379,9 +380,9 @@ export default function LandingPage() {
 
       {/* About Section */}
       <section className="about-section animate-on-scroll" id="about">
-        <div className="about-label">About Taxy</div>
+        <div className="about-label">About Insight</div>
         <p className="about-text">
-          At Taxy, we don&apos;t just track numbers — we make them make sense. Since 2024,
+          At Insight, we don&apos;t just track numbers — we make them make sense. Since 2024,
           our platform has been a home for business owners of all types, from eager
           freelancers to seasoned enterprises.
         </p>
@@ -614,8 +615,8 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <div className="footer-content">
           <div className="footer-brand">
-            <Image src="/logo.png" alt="Taxy Logo" width={36} height={36} className="logo-image" />
-            <span className="logo-text">Taxy</span>
+            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={36} height={36} className="logo-image" />
+            <span className="logo-text">Insight</span>
           </div>
           <p className="footer-tagline">AI Accounting for Real Businesses</p>
           <div className="footer-links">
@@ -623,7 +624,7 @@ export default function LandingPage() {
             <Link href="/accounting">Get Started</Link>
             <Link href="#how-it-works">How It Works</Link>
           </div>
-          <p className="footer-copy">© 2024 Taxy. Built for Nigerian businesses.</p>
+          <p className="footer-copy">© 2024 Insight. Built for Nigerian businesses.</p>
         </div>
       </footer>
     </div>

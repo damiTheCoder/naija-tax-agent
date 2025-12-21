@@ -96,14 +96,30 @@ export function deriveWorkspaceFiles(transactions: RawTransaction[]): WorkspaceF
     : "Accounts auto-create once the feed runs";
 
   const badge: "Live" | "Draft" = totals ? "Live" : "Draft";
+  
+  // Try to get journal count from localStorage (accounting engine persists here)
+  let journalCount = 0;
+  if (typeof window !== "undefined") {
+    try {
+      const engineData = window.localStorage.getItem("insight::accounting-engine");
+      if (engineData) {
+        const parsed = JSON.parse(engineData);
+        journalCount = parsed.journalEntries?.length || 0;
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
 
   return [
     {
       slug: "journals",
-      title: "Journals",
-      subtitle: totals ? `${totals.toLocaleString()} AI-tagged entries` : "No entries yet",
+      title: "Journal Entries",
+      subtitle: journalCount > 0 
+        ? `${journalCount} double-entry journals` 
+        : (totals ? `${totals.toLocaleString()} transactions (pending journal)` : "No entries yet"),
       meta: `Last update ${lastUpdatedLabel}`,
-      badge,
+      badge: journalCount > 0 ? "Live" : badge,
     },
     {
       slug: "chart",
@@ -121,10 +137,12 @@ export function deriveWorkspaceFiles(transactions: RawTransaction[]): WorkspaceF
     },
     {
       slug: "ledgers",
-      title: "Ledgers & schedules",
-      subtitle: totals ? "Ledgers ready for audit trace" : "Auto-build once feed streams",
+      title: "General Ledger",
+      subtitle: journalCount > 0 
+        ? `Posted to ${accountSet.size || 5}+ ledger accounts` 
+        : "Auto-build once journals post",
       meta: ledgerPreview,
-      badge,
+      badge: journalCount > 0 ? "Live" : badge,
     },
   ];
 }
