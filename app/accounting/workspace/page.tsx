@@ -23,6 +23,89 @@ export default function WorkspacePage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("journal");
   
+  // Date filtering state
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  
+  // Get available years from journal entries
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    journalEntries.forEach((entry) => {
+      const year = new Date(entry.date).getFullYear();
+      years.add(year);
+    });
+    // Always include current year
+    years.add(new Date().getFullYear());
+    return Array.from(years).sort((a, b) => b - a);
+  }, [journalEntries]);
+
+  // Filter entries by selected year and date range
+  const filteredJournalEntries = useMemo(() => {
+    return journalEntries.filter((entry) => {
+      const entryDate = new Date(entry.date);
+      const entryYear = entryDate.getFullYear();
+      
+      // Filter by year
+      if (entryYear !== selectedYear) return false;
+      
+      // Filter by date range if set
+      if (dateFrom && entryDate < new Date(dateFrom)) return false;
+      if (dateTo && entryDate > new Date(dateTo)) return false;
+      
+      return true;
+    });
+  }, [journalEntries, selectedYear, dateFrom, dateTo]);
+
+  // Group entries by year for yearly statements
+  const entriesByYear = useMemo(() => {
+    const grouped: Record<number, JournalEntry[]> = {};
+    journalEntries.forEach((entry) => {
+      const year = new Date(entry.date).getFullYear();
+      if (!grouped[year]) grouped[year] = [];
+      grouped[year].push(entry);
+    });
+    return grouped;
+  }, [journalEntries]);
+
+  // Calculate yearly statements
+  const yearlyStatements = useMemo(() => {
+    const statements: Record<number, { revenue: number; costOfSales: number; operatingExpenses: number; grossProfit: number; netIncome: number; assets: number; liabilities: number; equity: number }> = {};
+    
+    Object.entries(entriesByYear).forEach(([yearStr, entries]) => {
+      const year = parseInt(yearStr);
+      let revenue = 0, costOfSales = 0, operatingExpenses = 0, assets = 0, liabilities = 0, equity = 0;
+      
+      entries.forEach((entry) => {
+        entry.lines.forEach((line) => {
+          const code = line.accountCode;
+          const amount = line.credit - line.debit;
+          
+          if (code.startsWith("4")) {
+            revenue += line.credit;
+          } else if (code.startsWith("50")) {
+            costOfSales += line.debit;
+          } else if (code.startsWith("5") || code.startsWith("6")) {
+            operatingExpenses += line.debit;
+          } else if (code.startsWith("1")) {
+            assets += line.debit - line.credit;
+          } else if (code.startsWith("2")) {
+            liabilities += line.credit - line.debit;
+          } else if (code.startsWith("3")) {
+            equity += line.credit - line.debit;
+          }
+        });
+      });
+      
+      const grossProfit = revenue - costOfSales;
+      const netIncome = grossProfit - operatingExpenses;
+      
+      statements[year] = { revenue, costOfSales, operatingExpenses, grossProfit, netIncome, assets, liabilities, equity };
+    });
+    
+    return statements;
+  }, [entriesByYear]);
+  
   // Get trial balance from accounting engine
   const trialBalance = useMemo(() => {
     return accountingEngine.generateTrialBalance();
@@ -36,6 +119,79 @@ export default function WorkspacePage() {
   }, [ledgerAccounts]);
 
   const automationConfidencePercent = Math.round(automationConfidence * 100);
+
+  // Download yearly statement as PDF (stub - would need actual PDF generation)
+  const handleDownloadYearlyStatement = (year: number) => {
+    const statement = yearlyStatements[year];
+    if (!statement) return;
+    
+    // Create a simple text representation for now
+    const content = `
+FINANCIAL STATEMENTS FOR YEAR ${year}
+=====================================
+
+INCOME STATEMENT
+----------------
+Revenue:                    ₦${statement.revenue.toLocaleString()}
+Less: Cost of Sales:       (₦${statement.costOfSales.toLocaleString()})
+                           ----------------
+Gross Profit:               ₦${statement.grossProfit.toLocaleString()}
+Less: Operating Expenses:  (₦${statement.operatingExpenses.toLocaleString()})
+                           ----------------
+Net Income:                 ₦${statement.netIncome.toLocaleString()}
+
+
+BALANCE SHEET
+-------------
+Assets:                     ₦${statement.assets.toLocaleString()}
+Liabilities:                ₦${statement.liabilities.toLocaleString()}
+Equity:                     ₦${statement.equity.toLocaleString()}
+
+Generated on: ${new Date().toLocaleDateString('en-NG')}
+    `;
+    
+    // Download as text file
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `financial-statements-${year}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download journal entries for a year
+  const handleDownloadJournals = (year: number) => {
+    const entries = entriesByYear[year];
+    if (!entries || entries.length === 0) return;
+    
+    let content = `GENERAL JOURNAL FOR YEAR ${year}\n${'='.repeat(50)}\n\n`;
+    
+    entries.forEach((entry) => {
+      content += `Date: ${entry.date}\n`;
+      content += `Entry ID: ${entry.id}\n`;
+      content += `Narration: ${entry.narration}\n`;
+      content += `${'─'.repeat(40)}\n`;
+      content += `Account                          Debit         Credit\n`;
+      entry.lines.forEach((line) => {
+        const indent = line.credit > 0 ? '  ' : '';
+        content += `${indent}${line.accountCode} ${line.accountName.padEnd(25)} ${line.debit > 0 ? '₦' + line.debit.toLocaleString().padStart(10) : ''.padStart(11)} ${line.credit > 0 ? '₦' + line.credit.toLocaleString().padStart(10) : ''}\n`;
+      });
+      content += `\n`;
+    });
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `journal-entries-${year}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Load data from accounting engine
   useEffect(() => {
@@ -165,9 +321,9 @@ export default function WorkspacePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accounting Records</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {transactions.length > 0 
-              ? `${transactions.length} entries • Last synced ${formatDate(transactions[transactions.length - 1]?.date || new Date().toISOString())}`
-              : "Connect your bank to start syncing transactions"
+            {journalEntries.length > 0 
+              ? `${journalEntries.length} journal entries • ${availableYears.length} year(s) of records`
+              : "Start adding transactions to build your accounting records"
             }
           </p>
         </div>
@@ -188,6 +344,93 @@ export default function WorkspacePage() {
             </svg>
             {isSyncing ? "Syncing..." : "Sync"}
           </button>
+        </div>
+      </div>
+
+      {/* Date Search & Year Filter */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            <span className="text-sm font-medium text-gray-700">Filter by:</span>
+          </div>
+          
+          {/* Year Selector */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">Year:</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+            >
+              {availableYears.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Date Range */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">From:</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-500">To:</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+            />
+          </div>
+          
+          {/* Clear Filters */}
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+        
+        {/* Year Summary Cards */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-xs uppercase tracking-wider text-gray-400 mb-3">Yearly Records Summary</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {availableYears.map((year) => {
+              const yearEntries = entriesByYear[year] || [];
+              const yearStatement = yearlyStatements[year];
+              const isSelected = year === selectedYear;
+              return (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    isSelected 
+                      ? 'border-[#64B5F6] bg-blue-50 ring-2 ring-[#64B5F6]/20' 
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <p className={`text-lg font-bold ${isSelected ? 'text-[#64B5F6]' : 'text-gray-900'}`}>{year}</p>
+                  <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
+                  {yearStatement && (
+                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₦{Math.abs(yearStatement.netIncome).toLocaleString()}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -216,18 +459,31 @@ export default function WorkspacePage() {
         {/* General Journal - Now showing real double-entry journal entries */}
         {activeTab === "journal" && (
           <div>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="font-semibold text-gray-900">General Journal</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{journalEntries.length} journal entries • Double-entry format</p>
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">General Journal - {selectedYear}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{filteredJournalEntries.length} entries {dateFrom || dateTo ? '(filtered)' : ''} • Double-entry format</p>
+              </div>
+              {filteredJournalEntries.length > 0 && (
+                <button
+                  onClick={() => handleDownloadJournals(selectedYear)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Download {selectedYear}
+                </button>
+              )}
             </div>
             <div className="overflow-x-auto">
-              {journalEntries.length === 0 ? (
+              {filteredJournalEntries.length === 0 ? (
                 <div className="px-6 py-12 text-center text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p>No journal entries yet</p>
+                    <p>No journal entries for {selectedYear}</p>
                     <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
                     <Link href="/accounting" className="mt-2 text-[#64B5F6] text-sm font-medium hover:underline">
                       Go to Accounting Studio →
@@ -236,7 +492,7 @@ export default function WorkspacePage() {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {journalEntries.map((entry) => (
+                  {filteredJournalEntries.map((entry) => (
                     <div key={entry.id} className="p-4 hover:bg-gray-50/50">
                       <div className="flex items-start justify-between mb-3">
                         <div>
@@ -422,74 +678,127 @@ export default function WorkspacePage() {
           </div>
         )}
 
-        {/* Financial Statements - Using real accounting engine data */}
-        {activeTab === "statements" && financialStatements && (
+        {/* Financial Statements - Yearly statements with download */}
+        {activeTab === "statements" && (
           <div className="divide-y divide-gray-200">
-            {/* Income Statement */}
-            <div className="p-6">
-              <h3 className="font-semibold text-gray-900 mb-1">Income Statement</h3>
-              <p className="text-xs text-gray-500 mb-4">For the period ended {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
-              <div className="space-y-3 max-w-md">
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">Revenue</span>
-                  <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.revenue)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
-                  <span className="text-sm text-gray-500">Less: Cost of Sales</span>
-                  <span className="text-sm font-mono text-gray-700">({formatCurrency(financialStatements.costOfSales)})</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                  <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(financialStatements.grossProfit)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
-                  <span className="text-sm text-gray-500">Less: Operating Expenses</span>
-                  <span className="text-sm font-mono text-gray-700">({formatCurrency(financialStatements.operatingExpenses)})</span>
-                </div>
-                <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
-                  <span className="text-sm font-semibold text-gray-900">Net Income</span>
-                  <span className={`text-sm font-mono font-bold ${financialStatements.netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {formatCurrency(financialStatements.netIncome)}
-                  </span>
-                </div>
+            {/* Year selector header */}
+            <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Financial Statements - {selectedYear}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {entriesByYear[selectedYear]?.length || 0} journal entries for this year
+                </p>
               </div>
+              {yearlyStatements[selectedYear] && (
+                <button
+                  onClick={() => handleDownloadYearlyStatement(selectedYear)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#64B5F6] rounded-lg hover:bg-[#4A9FD9] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Download {selectedYear} Statements
+                </button>
+              )}
             </div>
 
-            {/* Balance Sheet */}
-            <div className="p-6">
-              <h3 className="font-semibold text-gray-900 mb-1">Balance Sheet</h3>
-              <p className="text-xs text-gray-500 mb-4">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Assets</h4>
-                  <div className="space-y-2">
+            {yearlyStatements[selectedYear] ? (
+              <>
+                {/* Income Statement */}
+                <div className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-1">Income Statement</h3>
+                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="space-y-3 max-w-md">
                     <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-sm text-gray-600">Total Assets</span>
-                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.assets)}</span>
+                      <span className="text-sm text-gray-600">Revenue</span>
+                      <span className="text-sm font-mono text-gray-900">{formatCurrency(yearlyStatements[selectedYear].revenue)}</span>
                     </div>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Liabilities & Equity</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-sm text-gray-600">Total Liabilities</span>
-                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.liabilities)}</span>
+                    <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                      <span className="text-sm text-gray-500">Less: Cost of Sales</span>
+                      <span className="text-sm font-mono text-gray-700">({formatCurrency(yearlyStatements[selectedYear].costOfSales)})</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-sm text-gray-600">Equity</span>
-                      <span className="text-sm font-mono text-gray-900">{formatCurrency(financialStatements.equity)}</span>
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-sm font-medium text-gray-700">Gross Profit</span>
+                      <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(yearlyStatements[selectedYear].grossProfit)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                      <span className="text-sm text-gray-500">Less: Operating Expenses</span>
+                      <span className="text-sm font-mono text-gray-700">({formatCurrency(yearlyStatements[selectedYear].operatingExpenses)})</span>
                     </div>
                     <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
-                      <span className="text-sm font-semibold text-gray-700">Total Liabilities & Equity</span>
-                      <span className="text-sm font-mono font-semibold text-gray-900">
-                        {formatCurrency(financialStatements.liabilities + financialStatements.equity)}
+                      <span className="text-sm font-semibold text-gray-900">Net Income</span>
+                      <span className={`text-sm font-mono font-bold ${yearlyStatements[selectedYear].netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatCurrency(yearlyStatements[selectedYear].netIncome)}
                       </span>
                     </div>
                   </div>
                 </div>
+
+                {/* Balance Sheet */}
+                <div className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-1">Balance Sheet</h3>
+                  <p className="text-xs text-gray-500 mb-4">As at 31 December {selectedYear}</p>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Assets</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-600">Total Assets</span>
+                          <span className="text-sm font-mono text-gray-900">{formatCurrency(yearlyStatements[selectedYear].assets)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Liabilities & Equity</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-600">Total Liabilities</span>
+                          <span className="text-sm font-mono text-gray-900">{formatCurrency(yearlyStatements[selectedYear].liabilities)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-600">Equity</span>
+                          <span className="text-sm font-mono text-gray-900">{formatCurrency(yearlyStatements[selectedYear].equity)}</span>
+                        </div>
+                        <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
+                          <span className="text-sm font-semibold text-gray-700">Total Liabilities & Equity</span>
+                          <span className="text-sm font-mono font-semibold text-gray-900">
+                            {formatCurrency(yearlyStatements[selectedYear].liabilities + yearlyStatements[selectedYear].equity)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* All Years Download Section */}
+                <div className="p-6 bg-gray-50">
+                  <h3 className="font-semibold text-gray-900 mb-3">Download Yearly Statements</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {availableYears.map((year) => (
+                      <button
+                        key={year}
+                        onClick={() => handleDownloadYearlyStatement(year)}
+                        disabled={!yearlyStatements[year]}
+                        className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#64B5F6] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-gray-900">{year}</p>
+                          <p className="text-xs text-gray-500">{entriesByYear[year]?.length || 0} entries</p>
+                        </div>
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="px-6 py-12 text-center text-gray-400">
+                <p>No financial data for {selectedYear}</p>
+                <p className="text-xs mt-1">Add transactions to generate statements</p>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -507,21 +816,23 @@ export default function WorkspacePage() {
         </Link>
         <button
           type="button"
+          onClick={() => handleDownloadYearlyStatement(selectedYear)}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
-          Export to PDF
+          Download Statements
         </button>
         <button
           type="button"
+          onClick={() => handleDownloadJournals(selectedYear)}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
-          Export to Excel
+          Download Journals
         </button>
       </div>
     </div>

@@ -59,7 +59,7 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
-    label: "Files Workspace",
+    label: "Accounting Records",
     href: "/accounting/workspace",
     icon: "folder",
     description: "Real-time journals, ledgers, and statements",

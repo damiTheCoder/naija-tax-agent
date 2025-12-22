@@ -618,7 +618,7 @@ export default function BankConnectionsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-transparent px-5 py-2.5 text-sm font-semibold text-gray-300 hover:bg-white/5 transition-colors"
               >
                 <FileText className="w-4 h-4" />
-                Files workspace
+                Accounting Records
               </Link>
             </div>
 

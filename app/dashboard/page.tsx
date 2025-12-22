@@ -203,35 +203,156 @@ export default function DashboardPage() {
   const [engineStatements, setEngineStatements] = useState<StatementDraft | null>(null);
   const [journalCount, setJournalCount] = useState(0);
 
+  // Helper to derive transactions from journal entries based on account codes
+  const deriveTransactionsFromJournals = (journalEntries: { 
+    id: string; 
+    date: string; 
+    narration: string; 
+    lines: { accountCode: string; accountName: string; debit: number; credit: number }[] 
+  }[]): RawTransaction[] => {
+    return journalEntries.map((entry) => {
+      // Find the main economic account (not cash/bank which are just the other side)
+      const economicLine = entry.lines.find(line => {
+        const code = line.accountCode;
+        // Look for income (4xxx), expense (5xxx, 6xxx), or asset purchase (15xx)
+        return code.startsWith("4") || code.startsWith("5") || code.startsWith("6") || 
+               (code.startsWith("15") && !code.includes("1"));
+      }) || entry.lines[0];
+
+      const code = economicLine?.accountCode || "";
+      let type: "income" | "expense" = "expense";
+      let category = "other";
+      let amount = 0;
+
+      // Determine type and category based on account code
+      if (code.startsWith("4")) {
+        // 4xxx = Income/Revenue accounts
+        type = "income";
+        amount = economicLine.credit || economicLine.debit;
+        if (code === "4000") category = "sales";
+        else if (code === "4100") category = "sales-returns";
+        else if (code === "4200") category = "service-income";
+        else if (code === "4300") category = "interest-income";
+        else category = "revenue";
+      } else if (code.startsWith("50")) {
+        // 50xx = Cost of Sales
+        type = "expense";
+        amount = economicLine.debit || economicLine.credit;
+        category = "cost-of-sales";
+      } else if (code.startsWith("51") || code.startsWith("52")) {
+        // 51xx, 52xx = Purchases
+        type = "expense";
+        amount = economicLine.debit || economicLine.credit;
+        category = "purchases";
+      } else if (code.startsWith("6")) {
+        // 6xxx = Operating Expenses
+        type = "expense";
+        amount = economicLine.debit || economicLine.credit;
+        if (code === "6000") category = "salaries";
+        else if (code === "6100") category = "rent";
+        else if (code === "6200") category = "utilities";
+        else if (code === "6300") category = "professional-fees";
+        else if (code === "6400") category = "transport";
+        else if (code === "6500") category = "interest-expense";
+        else category = "operating-expenses";
+      } else if (code.startsWith("15")) {
+        // 15xx = Fixed Assets
+        type = "expense";
+        amount = economicLine.debit || economicLine.credit;
+        category = "asset-purchase";
+      } else {
+        // Fallback: use narration to determine
+        const narration = entry.narration.toLowerCase();
+        if (narration.includes("sale") || narration.includes("revenue") || narration.includes("income")) {
+          type = "income";
+          category = "sales";
+        } else if (narration.includes("purchase")) {
+          category = "purchases";
+        } else if (narration.includes("rent")) {
+          category = "rent";
+        } else if (narration.includes("salary") || narration.includes("payroll")) {
+          category = "salaries";
+        }
+        // Get the largest amount from lines
+        amount = Math.max(...entry.lines.map(l => Math.max(l.debit, l.credit)));
+      }
+
+      return {
+        id: entry.id,
+        date: entry.date,
+        description: entry.narration,
+        category,
+        amount: type === "income" ? amount : -amount,
+        type,
+      };
+    });
+  };
+
   // Load transactions from localStorage and subscribe to accounting engine
   useEffect(() => {
     setIsLoaded(true);
     if (typeof window !== "undefined") {
-      // Load transactions from localStorage
+      // Load and subscribe to accounting engine first (source of truth for journal entries)
+      accountingEngine.load();
+      const state = accountingEngine.getState();
+      setEngineStatements(accountingEngine.generateStatements());
+      setJournalCount(state.journalEntries.length);
+
+      // Try to load transactions from localStorage first
       const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
+      let loadedFromStorage = false;
+      
       if (savedTransactions) {
         try {
           const parsed = JSON.parse(savedTransactions);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setTransactions(parsed);
+            loadedFromStorage = true;
           }
         } catch {
           // ignore malformed cache
         }
       }
       
-      // Load and subscribe to accounting engine
-      accountingEngine.load();
-      const state = accountingEngine.getState();
-      setEngineStatements(accountingEngine.generateStatements());
-      setJournalCount(state.journalEntries.length);
+      // If no saved transactions but we have journal entries, derive from them
+      if (!loadedFromStorage && state.journalEntries.length > 0) {
+        const derived = deriveTransactionsFromJournals(state.journalEntries);
+        setTransactions(derived);
+        // Also save to localStorage for persistence
+        window.localStorage.setItem("insight::accounting-transactions", JSON.stringify(derived));
+      }
       
       const unsubscribe = accountingEngine.subscribe((newState) => {
         setEngineStatements(accountingEngine.generateStatements());
         setJournalCount(newState.journalEntries.length);
+        
+        // When engine updates, also update derived transactions
+        if (newState.journalEntries.length > 0) {
+          const derived = deriveTransactionsFromJournals(newState.journalEntries);
+          setTransactions(derived);
+          window.localStorage.setItem("insight::accounting-transactions", JSON.stringify(derived));
+        }
       });
       
-      return () => unsubscribe();
+      // Also listen for localStorage changes from other tabs/pages
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === "insight::accounting-transactions" && e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setTransactions(parsed);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      };
+      window.addEventListener("storage", handleStorageChange);
+      
+      return () => {
+        unsubscribe();
+        window.removeEventListener("storage", handleStorageChange);
+      };
     }
   }, []);
 

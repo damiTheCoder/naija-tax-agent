@@ -66,7 +66,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function getPageTitle(pathname: string): string {
-  if (pathname.includes("/accounting/workspace")) return "Files Workspace";
+  if (pathname.includes("/accounting/workspace")) return "Accounting Records";
   if (pathname.includes("/accounting")) return "Accounting Studio";
   if (pathname.includes("/dashboard")) return "Dashboard";
   if (pathname.includes("/main")) return "Main Tax Computation";
