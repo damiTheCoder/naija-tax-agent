@@ -23,7 +23,6 @@ import { CGT_RATE } from "@/lib/taxRules/cgt";
 import { TET_RATE } from "@/lib/taxRules/tet";
 import { generatePDF } from "@/lib/pdfGenerator";
 import dynamic from "next/dynamic";
-
 const TaxAgentChat = dynamic(() => import("@/components/TaxAgentChat"), { ssr: false });
 
 type Step = 1 | 2 | 3;
@@ -646,7 +645,7 @@ export default function HomePage() {
 
   return (
     <>
-    <section id="main-calculator" className="max-w-4xl mx-auto w-full">
+      <section id="main-calculator" className="max-w-4xl mx-auto w-full">
 
       {/* Step indicator */}
       {!result && (
@@ -677,7 +676,7 @@ export default function HomePage() {
 
       {/* Form card */}
       {!result && (
-        <div className="card">
+        <div className="rounded-3xl border border-gray-200 bg-white/95 p-6 shadow-sm">
           {/* Step 1: Profile */}
           {step === 1 && (
             <div className="space-y-6">
@@ -2058,7 +2057,7 @@ export default function HomePage() {
       {/* Results */}
       {result && (
         <div className="space-y-6">
-          <div className="card">
+          <div className="rounded-3xl border border-gray-200 bg-white/95 p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-[var(--primary)]">Tax Computation Results</h2>
               <button className="btn btn-secondary text-sm" onClick={handleStartOver}>
@@ -2513,8 +2512,8 @@ export default function HomePage() {
         NaijaTaxAgent helps Nigerian freelancers and small businesses estimate their annual tax and
         generate a printable computation sheet for FIRS or your State Board of Internal Revenue (SBIRS).
       </p>
-    </section>
-    <TaxAgentChat />
+      </section>
+      <TaxAgentChat />
     </>
   );
 }

@@ -29,7 +29,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   useEffect(() => {
     if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
       setMode("accounting");
-    } else if (pathname.startsWith("/main") || pathname.startsWith("/tax-tools")) {
+    } else if (pathname.startsWith("/main") || pathname.startsWith("/tax-tools") || pathname.startsWith("/tax")) {
       setMode("tax");
     }
   }, [pathname]);
