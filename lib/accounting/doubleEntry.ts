@@ -83,7 +83,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "1320", name: "Prepaid Insurance", type: "asset", normalBalance: "debit", subType: "current" },
   { code: "1400", name: "Input VAT Receivable", type: "asset", normalBalance: "debit", subType: "current", taxApplicable: { vat: true } },
   { code: "1410", name: "WHT Receivable", type: "asset", normalBalance: "debit", subType: "current", taxApplicable: { wht: true } },
-  
+
   // Fixed Assets
   { code: "1500", name: "Land", type: "asset", normalBalance: "debit", subType: "fixed" },
   { code: "1510", name: "Buildings", type: "asset", normalBalance: "debit", subType: "fixed" },
@@ -98,7 +98,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "1551", name: "Accumulated Depreciation - Furniture", type: "asset", normalBalance: "credit", subType: "fixed" },
   { code: "1560", name: "Computer Equipment", type: "asset", normalBalance: "debit", subType: "fixed" },
   { code: "1561", name: "Accumulated Depreciation - Computers", type: "asset", normalBalance: "credit", subType: "fixed" },
-  
+
   // ===== LIABILITIES (2000-2999) =====
   // Current Liabilities
   { code: "2000", name: "Accounts Payable", type: "liability", normalBalance: "credit", subType: "current", description: "Trade creditors" },
@@ -116,12 +116,12 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "2310", name: "Bank Overdraft", type: "liability", normalBalance: "credit", subType: "current" },
   { code: "2400", name: "Unearned Revenue", type: "liability", normalBalance: "credit", subType: "current" },
   { code: "2410", name: "Customer Deposits", type: "liability", normalBalance: "credit", subType: "current" },
-  
+
   // Non-Current Liabilities
   { code: "2500", name: "Long-term Loans", type: "liability", normalBalance: "credit", subType: "non-current" },
   { code: "2510", name: "Mortgage Payable", type: "liability", normalBalance: "credit", subType: "non-current" },
   { code: "2600", name: "Deferred Tax Liability", type: "liability", normalBalance: "credit", subType: "non-current" },
-  
+
   // ===== EQUITY (3000-3999) =====
   { code: "3000", name: "Owner's Capital", type: "equity", normalBalance: "credit", description: "Owner's investment" },
   { code: "3010", name: "Share Capital", type: "equity", normalBalance: "credit" },
@@ -130,7 +130,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "3200", name: "Drawings", type: "equity", normalBalance: "debit", description: "Owner withdrawals (contra)" },
   { code: "3300", name: "Dividends Declared", type: "equity", normalBalance: "debit", description: "Dividends (contra)" },
   { code: "3400", name: "Revaluation Reserve", type: "equity", normalBalance: "credit" },
-  
+
   // ===== INCOME/REVENUE (4000-4999) =====
   { code: "4000", name: "Sales", type: "income", normalBalance: "credit", taxApplicable: { vat: true } },
   { code: "4010", name: "Service Revenue", type: "income", normalBalance: "credit", taxApplicable: { vat: true, wht: true, whtRate: 5 } },
@@ -143,7 +143,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "4300", name: "Gain on Asset Disposal", type: "income", normalBalance: "credit" },
   { code: "4400", name: "Foreign Exchange Gain", type: "income", normalBalance: "credit" },
   { code: "4500", name: "Other Income", type: "income", normalBalance: "credit" },
-  
+
   // ===== EXPENSES (5000-6999) =====
   // Cost of Sales
   { code: "5000", name: "Cost of Goods Sold", type: "expense", normalBalance: "debit", subType: "cos" },
@@ -153,7 +153,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "5040", name: "Direct Labour", type: "expense", normalBalance: "debit", subType: "cos" },
   { code: "5050", name: "Manufacturing Overhead", type: "expense", normalBalance: "debit", subType: "cos" },
   { code: "5060", name: "Freight-In", type: "expense", normalBalance: "debit", subType: "cos" },
-  
+
   // Operating Expenses
   { code: "5500", name: "Salaries and Wages", type: "expense", normalBalance: "debit", subType: "operating" },
   { code: "5510", name: "Staff Welfare", type: "expense", normalBalance: "debit", subType: "operating" },
@@ -171,7 +171,7 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "5900", name: "Professional Fees", type: "expense", normalBalance: "debit", subType: "operating", taxApplicable: { wht: true, whtRate: 10 } },
   { code: "5910", name: "Audit Fees", type: "expense", normalBalance: "debit", subType: "operating", taxApplicable: { wht: true, whtRate: 10 } },
   { code: "5920", name: "Legal Fees", type: "expense", normalBalance: "debit", subType: "operating", taxApplicable: { wht: true, whtRate: 10 } },
-  
+
   // Administrative Expenses
   { code: "6000", name: "Advertising and Marketing", type: "expense", normalBalance: "debit", subType: "admin" },
   { code: "6010", name: "Travel and Entertainment", type: "expense", normalBalance: "debit", subType: "admin" },
@@ -181,11 +181,11 @@ export const CHART_OF_ACCOUNTS: AccountDefinition[] = [
   { code: "6050", name: "Donations", type: "expense", normalBalance: "debit", subType: "admin" },
   { code: "6060", name: "Fines and Penalties", type: "expense", normalBalance: "debit", subType: "admin" },
   { code: "6070", name: "Transport Expense", type: "expense", normalBalance: "debit", subType: "admin" },
-  
+
   // Finance Costs
   { code: "6500", name: "Interest Expense", type: "expense", normalBalance: "debit", subType: "finance" },
   { code: "6600", name: "Foreign Exchange Loss", type: "expense", normalBalance: "debit", subType: "finance" },
-  
+
   // Tax Expenses
   { code: "7000", name: "Income Tax Expense", type: "expense", normalBalance: "debit", subType: "tax" },
   { code: "7010", name: "Tertiary Education Tax", type: "expense", normalBalance: "debit", subType: "tax" },
@@ -218,7 +218,7 @@ export interface JournalEntry {
   status: "draft" | "posted" | "voided";
 }
 
-export type TransactionType = 
+export type TransactionType =
   | "sale"
   | "sale-return"
   | "purchase"
@@ -277,6 +277,17 @@ export interface TransactionInterpretation {
   costOfGoods?: number;
   assumptions: string[];
   questionsNeeded: string[];
+  // Extended fields for professional accounting logic
+  parsed?: {
+    action: string;
+    object: string;
+    counterparty: string;
+    timing: 'immediate' | 'outstanding' | 'unknown';
+    businessImpact: 'income' | 'expense' | 'asset' | 'liability' | 'equity' | 'unknown';
+  };
+  transactionNature?: 'income' | 'expense' | 'asset' | 'liability' | 'equity';
+  hasCashMovement?: boolean;
+  confidence?: number;
 }
 
 // ============================================================================
@@ -313,7 +324,7 @@ export function getAccount(code: string): AccountDefinition | undefined {
 
 export function getAccountByName(name: string): AccountDefinition | undefined {
   const normalizedName = name.toLowerCase().trim();
-  return CHART_OF_ACCOUNTS.find(acc => 
+  return CHART_OF_ACCOUNTS.find(acc =>
     acc.name.toLowerCase() === normalizedName ||
     acc.name.toLowerCase().includes(normalizedName)
   );
@@ -323,19 +334,19 @@ export function getAccountsByType(type: AccountType): AccountDefinition[] {
   return CHART_OF_ACCOUNTS.filter(acc => acc.type === type);
 }
 
-export function validateJournalEntry(lines: JournalLine[]): { 
-  isBalanced: boolean; 
-  totalDebits: number; 
+export function validateJournalEntry(lines: JournalLine[]): {
+  isBalanced: boolean;
+  totalDebits: number;
   totalCredits: number;
   difference: number;
 } {
   const totalDebits = lines.reduce((sum, line) => sum + (line.debit || 0), 0);
   const totalCredits = lines.reduce((sum, line) => sum + (line.credit || 0), 0);
   const difference = Math.abs(totalDebits - totalCredits);
-  
+
   // Allow for small rounding differences (< 0.01)
   const isBalanced = difference < 0.01;
-  
+
   return { isBalanced, totalDebits, totalCredits, difference };
 }
 

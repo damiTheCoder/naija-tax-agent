@@ -128,6 +128,7 @@ export interface NSITFResult {
     totalPayroll: number;
     rate: number;
     contributionPayable: number;
+    isApplicable: boolean;
     note: string;
 }
 
@@ -141,6 +142,7 @@ export function calculateNSITF(input: NSITFInput): NSITFResult {
         totalPayroll,
         rate: NSITF_RATE,
         contributionPayable,
+        isApplicable: totalPayroll > 0,
         note: 'NSITF Employer Contribution at 1% of payroll',
     };
 }

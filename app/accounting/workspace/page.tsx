@@ -22,12 +22,12 @@ export default function WorkspacePage() {
   const [automationConfidence, setAutomationConfidence] = useState(0.82);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("journal");
-  
+
   // Date filtering state
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
-  
+
   // Get available years from journal entries
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -45,14 +45,14 @@ export default function WorkspacePage() {
     return journalEntries.filter((entry) => {
       const entryDate = new Date(entry.date);
       const entryYear = entryDate.getFullYear();
-      
+
       // Filter by year
       if (entryYear !== selectedYear) return false;
-      
+
       // Filter by date range if set
       if (dateFrom && entryDate < new Date(dateFrom)) return false;
       if (dateTo && entryDate > new Date(dateTo)) return false;
-      
+
       return true;
     });
   }, [journalEntries, selectedYear, dateFrom, dateTo]);
@@ -71,16 +71,16 @@ export default function WorkspacePage() {
   // Calculate yearly statements
   const yearlyStatements = useMemo(() => {
     const statements: Record<number, { revenue: number; costOfSales: number; operatingExpenses: number; grossProfit: number; netIncome: number; assets: number; liabilities: number; equity: number }> = {};
-    
+
     Object.entries(entriesByYear).forEach(([yearStr, entries]) => {
       const year = parseInt(yearStr);
       let revenue = 0, costOfSales = 0, operatingExpenses = 0, assets = 0, liabilities = 0, equity = 0;
-      
+
       entries.forEach((entry) => {
         entry.lines.forEach((line) => {
           const code = line.accountCode;
           const amount = line.credit - line.debit;
-          
+
           if (code.startsWith("4")) {
             revenue += line.credit;
           } else if (code.startsWith("50")) {
@@ -96,21 +96,21 @@ export default function WorkspacePage() {
           }
         });
       });
-      
+
       const grossProfit = revenue - costOfSales;
       const netIncome = grossProfit - operatingExpenses;
-      
+
       statements[year] = { revenue, costOfSales, operatingExpenses, grossProfit, netIncome, assets, liabilities, equity };
     });
-    
+
     return statements;
   }, [entriesByYear]);
-  
+
   // Get trial balance from accounting engine
   const trialBalance = useMemo(() => {
     return accountingEngine.generateTrialBalance();
   }, [journalEntries]);
-  
+
   // Filter ledger accounts with activity
   const activeLedgerAccounts = useMemo(() => {
     return Array.from(ledgerAccounts.entries())
@@ -124,7 +124,7 @@ export default function WorkspacePage() {
   const handleDownloadYearlyStatement = (year: number) => {
     const statement = yearlyStatements[year];
     if (!statement) return;
-    
+
     // Create a simple text representation for now
     const content = `
 FINANCIAL STATEMENTS FOR YEAR ${year}
@@ -149,7 +149,7 @@ Equity:                     ₦${statement.equity.toLocaleString()}
 
 Generated on: ${new Date().toLocaleDateString('en-NG')}
     `;
-    
+
     // Download as text file
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -166,9 +166,9 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
   const handleDownloadJournals = (year: number) => {
     const entries = entriesByYear[year];
     if (!entries || entries.length === 0) return;
-    
+
     let content = `GENERAL JOURNAL FOR YEAR ${year}\n${'='.repeat(50)}\n\n`;
-    
+
     entries.forEach((entry) => {
       content += `Date: ${entry.date}\n`;
       content += `Entry ID: ${entry.id}\n`;
@@ -181,7 +181,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
       });
       content += `\n`;
     });
-    
+
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -196,21 +196,21 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
   // Load data from accounting engine
   useEffect(() => {
     if (typeof window === "undefined") return;
-    
+
     // Load accounting engine state
     accountingEngine.load();
     const state = accountingEngine.getState();
     setJournalEntries(state.journalEntries);
     setLedgerAccounts(state.ledgerAccounts);
     setFinancialStatements(accountingEngine.generateStatements());
-    
+
     // Subscribe to updates
     const unsubscribe = accountingEngine.subscribe((newState) => {
       setJournalEntries(newState.journalEntries);
       setLedgerAccounts(newState.ledgerAccounts);
       setFinancialStatements(accountingEngine.generateStatements());
     });
-    
+
     // Also load raw transactions for display
     const cachedTransactions = window.localStorage.getItem("insight::accounting-transactions");
     if (cachedTransactions) {
@@ -223,7 +223,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
         // ignore malformed cache
       }
     }
-    
+
     const storedConfidence = window.localStorage.getItem("insight::automation-confidence");
     if (storedConfidence) {
       const numeric = parseFloat(storedConfidence);
@@ -231,7 +231,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
         setAutomationConfidence(numeric);
       }
     }
-    
+
     return () => unsubscribe();
   }, []);
 
@@ -321,7 +321,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accounting Records</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {journalEntries.length > 0 
+            {journalEntries.length > 0
               ? `${journalEntries.length} journal entries • ${availableYears.length} year(s) of records`
               : "Start adding transactions to build your accounting records"
             }
@@ -356,7 +356,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
             </svg>
             <span className="text-sm font-medium text-gray-700">Filter by:</span>
           </div>
-          
+
           {/* Year Selector */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-500">Year:</label>
@@ -370,7 +370,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
               ))}
             </select>
           </div>
-          
+
           {/* Date Range */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-500">From:</label>
@@ -390,7 +390,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
             />
           </div>
-          
+
           {/* Clear Filters */}
           {(dateFrom || dateTo) && (
             <button
@@ -401,7 +401,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
             </button>
           )}
         </div>
-        
+
         {/* Year Summary Cards */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs uppercase tracking-wider text-gray-400 mb-3">Yearly Records Summary</p>
@@ -414,11 +414,10 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                 <button
                   key={year}
                   onClick={() => setSelectedYear(year)}
-                  className={`p-3 rounded-lg border text-left transition-all ${
-                    isSelected 
-                      ? 'border-[#64B5F6] bg-blue-50 ring-2 ring-[#64B5F6]/20' 
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                  }`}
+                  className={`p-3 rounded-lg border text-left transition-all ${isSelected
+                    ? 'border-[#64B5F6] bg-blue-50 ring-2 ring-[#64B5F6]/20'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
                 >
                   <p className={`text-lg font-bold ${isSelected ? 'text-[#64B5F6]' : 'text-gray-900'}`}>{year}</p>
                   <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
@@ -441,11 +440,10 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? "border-[#64B5F6] text-[#64B5F6]"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
+                ? "border-[#64B5F6] text-[#64B5F6]"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
             >
               {tab.icon}
               {tab.label}
@@ -565,21 +563,19 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono text-gray-400">{account.accountCode}</span>
                           <h3 className="font-semibold text-gray-900">{account.accountName}</h3>
-                          <span className={`text-xs px-2 py-0.5 rounded capitalize ${
-                            account.accountType === 'asset' ? 'bg-blue-50 text-blue-600' :
+                          <span className={`text-xs px-2 py-0.5 rounded capitalize ${account.accountType === 'asset' ? 'bg-blue-50 text-blue-600' :
                             account.accountType === 'liability' ? 'bg-orange-50 text-orange-600' :
-                            account.accountType === 'equity' ? 'bg-purple-50 text-purple-600' :
-                            account.accountType === 'income' ? 'bg-green-50 text-green-600' :
-                            'bg-red-50 text-red-600'
-                          }`}>{account.accountType}</span>
+                              account.accountType === 'equity' ? 'bg-purple-50 text-purple-600' :
+                                account.accountType === 'income' ? 'bg-green-50 text-green-600' :
+                                  'bg-red-50 text-red-600'
+                            }`}>{account.accountType}</span>
                         </div>
                         <p className="text-xs text-gray-500">{account.entries.length} entries</p>
                       </div>
-                      <div className={`text-lg font-semibold ${
-                        account.accountType === 'asset' || account.accountType === 'expense' 
-                          ? (account.closingBalance >= 0 ? 'text-gray-900' : 'text-red-600')
-                          : (account.closingBalance >= 0 ? 'text-green-600' : 'text-red-600')
-                      }`}>
+                      <div className={`text-lg font-semibold ${account.accountType === 'asset' || account.accountType === 'expense'
+                        ? (account.closingBalance >= 0 ? 'text-gray-900' : 'text-red-600')
+                        : (account.closingBalance >= 0 ? 'text-green-600' : 'text-red-600')
+                        }`}>
                         {formatCurrency(account.closingBalance)}
                       </div>
                     </div>
@@ -766,6 +762,88 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Cash Flow Statement */}
+                <div className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-1">Statement of Cash Flows</h3>
+                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="space-y-4 max-w-md">
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-2">Operating Activities</h4>
+                      <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                        <span className="text-sm text-gray-600">Net Cash from Operations</span>
+                        <span className="text-sm font-mono text-gray-900">
+                          {formatCurrency(accountingEngine.generateStatements().cashFromOperations)}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-2">Investing Activities</h4>
+                      <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                        <span className="text-sm text-gray-600">Net Cash from Investing</span>
+                        <span className="text-sm font-mono text-gray-900">
+                          {formatCurrency(accountingEngine.generateStatements().cashFromInvesting)}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-2">Financing Activities</h4>
+                      <div className="flex justify-between py-2 border-b border-gray-100 pl-4">
+                        <span className="text-sm text-gray-600">Net Cash from Financing</span>
+                        <span className="text-sm font-mono text-gray-900">
+                          {formatCurrency(accountingEngine.generateStatements().cashFromFinancing)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg mt-2">
+                      <span className="text-sm font-semibold text-gray-900">Net Change in Cash</span>
+                      <span className="text-sm font-mono font-bold text-gray-900">
+                        {formatCurrency(
+                          accountingEngine.generateStatements().cashFromOperations +
+                          accountingEngine.generateStatements().cashFromInvesting +
+                          accountingEngine.generateStatements().cashFromFinancing
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statement of Changes in Equity */}
+                <div className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-1">Statement of Changes in Equity</h3>
+                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="space-y-2 max-w-md">
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Opening Balance</span>
+                      <span className="text-sm font-mono text-gray-900">
+                        {formatCurrency(accountingEngine.generateStatements().equityStatement?.openingBalance || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Add: Capital Introduced</span>
+                      <span className="text-sm font-mono text-gray-900">
+                        {formatCurrency(accountingEngine.generateStatements().equityStatement?.additions || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Add: Net Income for the Year</span>
+                      <span className="text-sm font-mono text-gray-900">
+                        {formatCurrency(accountingEngine.generateStatements().equityStatement?.netIncome || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Less: Drawings</span>
+                      <span className="text-sm font-mono text-gray-900">
+                        ({formatCurrency(accountingEngine.generateStatements().equityStatement?.drawings || 0)})
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg mt-2">
+                      <span className="text-sm font-semibold text-gray-900">Closing Balance</span>
+                      <span className="text-sm font-mono font-bold text-gray-900">
+                        {formatCurrency(accountingEngine.generateStatements().equityStatement?.closingBalance || 0)}
+                      </span>
                     </div>
                   </div>
                 </div>

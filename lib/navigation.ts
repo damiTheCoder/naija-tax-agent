@@ -27,13 +27,6 @@ export const TAX_NAV_ITEMS: TaxNavItem[] = [
     mode: "tax",
   },
   {
-    label: "Tax Agent Chat",
-    href: "/tax/chat",
-    icon: "chat",
-    description: "Dialogue tied directly to the tax engine",
-    mode: "tax",
-  },
-  {
     label: "Withholding Tax",
     href: "/tax-tools/wht",
     icon: "shield",

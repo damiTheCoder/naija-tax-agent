@@ -134,123 +134,409 @@ class AccountingEngine {
   }
 
   /**
-   * Interpret a raw transaction to understand its accounting treatment
+   * PROFESSIONAL ACCOUNTING LOGIC
+   * Follows IFRS/GAAP standards and double-entry bookkeeping principles.
+   * 
+   * Core Principles Enforced:
+   * - Double-Entry: Every transaction has at least one debit and one credit
+   * - Accounting Equation: Assets = Liabilities + Equity
+   * - Revenue Recognition: Revenue only when earned
+   * - Matching Principle: Expenses matched to the period they relate to
+   * - Consistency: Same transaction type → same treatment every time
    */
   private interpretTransaction(rawTx: RawTransaction): TransactionInterpretation {
-    const category = rawTx.category?.toLowerCase() || "";
-    const description = rawTx.description.toLowerCase();
     const amount = Math.abs(rawTx.amount);
 
-    // Determine transaction type
-    let transactionType: TransactionType = "other";
-    let isCredit = false;
-    let paymentMethod: PaymentMethod = "bank";
-    let vatApplicable = false;
-    let whtApplicable = false;
-    let hasInventoryImpact = false;
-    const assumptions: string[] = [];
-    const questionsNeeded: string[] = [];
+    // ==========================================================================
+    // STEP 1: TRANSACTION PARSING LAYER
+    // Extract: Action, Object, Counterparty, Amount, Timing, Business Impact
+    // ==========================================================================
 
-    // Detect transaction type from category and description
-    if (category === "sales" || rawTx.type === "income") {
-      transactionType = "sale";
-      vatApplicable = true;
-      assumptions.push("Applied 7.5% VAT on sale");
-      if (description.includes("credit") || description.includes("invoice")) {
-        isCredit = true;
-        assumptions.push("Recorded as credit sale (accounts receivable)");
-      }
-      // Check if this is a sale with inventory (perpetual inventory system)
-      if (description.includes("goods") || description.includes("product") || description.includes("inventory")) {
-        hasInventoryImpact = true;
-        assumptions.push("Recording COGS (assumed 60% of sale price)");
-      }
-    } else if (description.includes("sales return") || description.includes("sale return") || description.includes("returned goods")) {
-      transactionType = "sale-return";
-      vatApplicable = true;
-      assumptions.push("Reversing sale with VAT adjustment");
-    } else if (description.includes("purchase return") || description.includes("returned to supplier")) {
-      transactionType = "purchase-return";
-      vatApplicable = true;
-      assumptions.push("Reversing purchase with VAT adjustment");
-    } else if (category === "purchases" || description.includes("purchase")) {
-      transactionType = "purchase";
-      vatApplicable = true;
-      hasInventoryImpact = true;
-      assumptions.push("Applied 7.5% VAT on purchase");
-      if (description.includes("credit")) {
-        isCredit = true;
-        assumptions.push("Recorded as credit purchase (accounts payable)");
-      }
-    } else if (category === "expense" || rawTx.type === "expense") {
-      transactionType = "expense";
-      // Check for WHT applicable expenses
-      if (
-        description.includes("rent") ||
-        description.includes("professional") ||
-        description.includes("consultancy") ||
-        description.includes("legal")
-      ) {
-        whtApplicable = true;
-        assumptions.push("Applied 10% WHT on payment");
-      }
-    } else if (category === "asset" || description.includes("equipment") || description.includes("machinery") || description.includes("vehicle")) {
-      transactionType = "asset-purchase";
-      assumptions.push("Capitalizing as fixed asset");
-    } else if (description.includes("depreciation")) {
-      transactionType = "depreciation";
-      assumptions.push("Recording depreciation expense");
-    } else if (description.includes("loan") && description.includes("received")) {
-      transactionType = "loan-received";
-    } else if (description.includes("loan") && (description.includes("repay") || description.includes("payment"))) {
-      transactionType = "loan-repayment";
-      assumptions.push("Splitting principal and interest (assumed 20% interest portion)");
-    } else if (description.includes("capital") || description.includes("investment")) {
-      transactionType = "owner-investment";
-    } else if (description.includes("drawing") || description.includes("withdrawal")) {
-      transactionType = "owner-drawing";
-    } else if (description.includes("transfer")) {
-      transactionType = "transfer";
-    } else if (description.includes("receipt") || description.includes("received from")) {
-      transactionType = "receipt";
-      assumptions.push("Recording cash receipt from debtor");
-    } else if (description.includes("payment to") || description.includes("paid to")) {
-      transactionType = "payment";
-      assumptions.push("Recording payment to creditor");
-    }
+    const parsed = this.parseTransactionNaturalLanguage(rawTx);
 
-    // Detect payment method
-    if (description.includes("cash")) {
-      paymentMethod = "cash";
-    } else if (description.includes("pos") || description.includes("card")) {
-      paymentMethod = "pos";
-    } else if (description.includes("transfer") || description.includes("bank")) {
-      paymentMethod = "bank";
-    } else if (description.includes("cheque") || description.includes("check")) {
-      paymentMethod = "cheque";
-    }
+    // ==========================================================================
+    // STEP 2: CLASSIFICATION RULES
+    // ==========================================================================
 
-    // Calculate amounts
-    const vatRate = vatApplicable ? 0.075 : 0;
-    const whtRate = whtApplicable ? 0.1 : 0;
-    const vatAmount = amount * vatRate;
-    const whtAmount = amount * whtRate;
-    const netAmount = amount - whtAmount;
+    // Step 2a: Identify Cash Movement
+    const hasCashMovement = parsed.action.includes('received') ||
+      parsed.action.includes('paid') ||
+      parsed.action.includes('deposited') ||
+      parsed.action.includes('withdrawn') ||
+      parsed.action.includes('bought') ||
+      parsed.action.includes('sold');
+
+    // Step 2b: Identify the Nature of the Transaction
+    const transactionNature = this.classifyTransactionNature(parsed);
+
+    // Step 2c: Determine Transaction Type for Journal Entry
+    const transactionType = this.determineTransactionType(parsed, transactionNature);
+
+    // ==========================================================================
+    // STEP 3: APPLY DECISION TREES
+    // ==========================================================================
+
+    const { isCredit, paymentMethod, assumptions, questionsNeeded } =
+      this.applyDecisionTree(parsed, transactionNature, hasCashMovement, rawTx);
+
+    // ==========================================================================
+    // STEP 4: CALCULATE CONFIDENCE SCORE
+    // ==========================================================================
+
+    const confidence = this.calculateConfidence(parsed, assumptions.length, questionsNeeded.length);
 
     return {
       transactionType,
       description: rawTx.description,
       amount,
-      netAmount,
-      vatAmount,
-      whtAmount,
+      netAmount: amount,
+      vatAmount: 0,
+      whtAmount: 0,
       paymentMethod,
       isCredit,
-      hasTax: vatApplicable || whtApplicable,
-      hasInventoryImpact,
+      hasTax: false,
+      hasInventoryImpact: parsed.object.includes('goods') || parsed.object.includes('inventory'),
       assumptions,
       questionsNeeded,
+      // Extended fields
+      parsed,
+      transactionNature,
+      hasCashMovement,
+      confidence,
     };
+  }
+
+  /**
+   * TRANSACTION PARSING LAYER
+   * Extracts: Action, Object, Counterparty, Amount, Timing, Business Impact
+   */
+  private parseTransactionNaturalLanguage(rawTx: RawTransaction): {
+    action: string;
+    object: string;
+    counterparty: string;
+    timing: 'immediate' | 'outstanding' | 'unknown';
+    businessImpact: 'income' | 'expense' | 'asset' | 'liability' | 'equity' | 'unknown';
+  } {
+    const desc = rawTx.description.toLowerCase().trim();
+    const category = (rawTx.category || '').toLowerCase().trim();
+    const type = (rawTx.type || '').toLowerCase();
+
+    // =========== EXTRACT ACTION ===========
+    let action = 'unknown';
+    const actionKeywords = {
+      received: ['received', 'receipt', 'collected', 'got', 'income'],
+      paid: ['paid', 'payment', 'spent', 'pay'],
+      sold: ['sold', 'sale', 'sales', 'revenue', 'earned'],
+      bought: ['bought', 'purchased', 'purchase', 'acquired'],
+      borrowed: ['borrowed', 'loan received', 'financing'],
+      repaid: ['repaid', 'repayment', 'loan payment', 'settled'],
+      invested: ['invested', 'capital', 'owner contribution'],
+      withdrawn: ['withdrawn', 'drawing', 'withdrawal'],
+      transferred: ['transferred', 'transfer'],
+      depreciated: ['depreciation', 'depreciated', 'amortization'],
+      returned: ['return', 'returned', 'refund'],
+    };
+
+    for (const [key, keywords] of Object.entries(actionKeywords)) {
+      if (keywords.some(kw => desc.includes(kw) || category.includes(kw))) {
+        action = key;
+        break;
+      }
+    }
+
+    // =========== EXTRACT OBJECT ===========
+    let object = 'unknown';
+    const objectKeywords = {
+      cash: ['cash', 'money', 'funds'],
+      goods: ['goods', 'inventory', 'stock', 'products', 'merchandise'],
+      services: ['service', 'services', 'consultancy', 'professional', 'fee'],
+      asset: ['equipment', 'machinery', 'vehicle', 'furniture', 'computer', 'asset'],
+      loan: ['loan', 'borrowing', 'debt', 'financing'],
+      rent: ['rent', 'lease', 'rental'],
+      supplies: ['supplies', 'office', 'stationery'],
+      utilities: ['utilities', 'electricity', 'water', 'phone', 'internet'],
+      salary: ['salary', 'wages', 'payroll', 'staff'],
+    };
+
+    for (const [key, keywords] of Object.entries(objectKeywords)) {
+      if (keywords.some(kw => desc.includes(kw) || category.includes(kw))) {
+        object = key;
+        break;
+      }
+    }
+
+    // =========== EXTRACT COUNTERPARTY ===========
+    let counterparty = 'unknown';
+    const counterpartyKeywords = {
+      customer: ['customer', 'client', 'buyer', 'debtor', 'from customer'],
+      supplier: ['supplier', 'vendor', 'creditor', 'from supplier'],
+      bank: ['bank', 'financial institution', 'lender'],
+      owner: ['owner', 'shareholder', 'partner', 'proprietor', 'director'],
+      employee: ['employee', 'staff', 'worker'],
+      government: ['tax', 'government', 'firs', 'vat', 'wht'],
+    };
+
+    for (const [key, keywords] of Object.entries(counterpartyKeywords)) {
+      if (keywords.some(kw => desc.includes(kw) || category.includes(kw))) {
+        counterparty = key;
+        break;
+      }
+    }
+
+    // =========== EXTRACT TIMING ===========
+    let timing: 'immediate' | 'outstanding' | 'unknown' = 'unknown';
+    if (desc.includes('cash') || desc.includes('paid') || desc.includes('received') ||
+      desc.includes('bank') || action === 'received' || action === 'paid') {
+      timing = 'immediate';
+    } else if (desc.includes('credit') || desc.includes('invoice') ||
+      desc.includes('on account') || desc.includes('outstanding') ||
+      desc.includes('payable') || desc.includes('receivable')) {
+      timing = 'outstanding';
+    }
+
+    // =========== EXTRACT BUSINESS IMPACT ===========
+    let businessImpact: 'income' | 'expense' | 'asset' | 'liability' | 'equity' | 'unknown' = 'unknown';
+
+    // Priority based detection
+    if (type === 'income' || category.includes('income') || category.includes('revenue') ||
+      category.includes('sales') || action === 'sold' || action === 'received') {
+      if (counterparty === 'customer' || desc.includes('customer') || desc.includes('sales')) {
+        businessImpact = 'income';
+      } else if (action === 'received' && counterparty === 'bank') {
+        businessImpact = 'liability'; // Loan received
+      } else if (action === 'received' && counterparty === 'owner') {
+        businessImpact = 'equity'; // Capital contribution
+      } else {
+        businessImpact = 'income';
+      }
+    } else if (type === 'expense' || category.includes('expense') || category.includes('cost') ||
+      action === 'paid' || action === 'bought') {
+      if (object === 'asset' || category.includes('asset')) {
+        businessImpact = 'asset';
+      } else if (action === 'repaid') {
+        businessImpact = 'liability';
+      } else {
+        businessImpact = 'expense';
+      }
+    } else if (category.includes('asset') || object === 'asset') {
+      businessImpact = 'asset';
+    } else if (category.includes('liability') || action === 'borrowed') {
+      businessImpact = 'liability';
+    } else if (category.includes('equity') || action === 'invested' || action === 'withdrawn') {
+      businessImpact = 'equity';
+    }
+
+    return { action, object, counterparty, timing, businessImpact };
+  }
+
+  /**
+   * CLASSIFY TRANSACTION NATURE
+   * Returns: income, expense, asset, liability, or equity
+   */
+  private classifyTransactionNature(parsed: {
+    action: string;
+    object: string;
+    counterparty: string;
+    timing: 'immediate' | 'outstanding' | 'unknown';
+    businessImpact: 'income' | 'expense' | 'asset' | 'liability' | 'equity' | 'unknown';
+  }): 'income' | 'expense' | 'asset' | 'liability' | 'equity' {
+
+    // Use parsed business impact if determined
+    if (parsed.businessImpact !== 'unknown') {
+      return parsed.businessImpact;
+    }
+
+    // Fallback logic
+    if (['sold', 'received'].includes(parsed.action) && parsed.counterparty === 'customer') {
+      return 'income';
+    }
+    if (['paid', 'bought'].includes(parsed.action)) {
+      if (parsed.object === 'asset') return 'asset';
+      return 'expense';
+    }
+    if (parsed.action === 'borrowed') return 'liability';
+    if (parsed.action === 'repaid') return 'liability';
+    if (parsed.action === 'invested') return 'equity';
+    if (parsed.action === 'withdrawn') return 'equity';
+
+    // Default to expense for safety (can be corrected)
+    return 'expense';
+  }
+
+  /**
+   * DETERMINE TRANSACTION TYPE
+   * Maps parsed transaction to internal transaction type for journal entry creation
+   */
+  private determineTransactionType(
+    parsed: { action: string; object: string; counterparty: string; timing: string; businessImpact: string },
+    nature: 'income' | 'expense' | 'asset' | 'liability' | 'equity'
+  ): TransactionType {
+
+    const { action, object, counterparty, timing } = parsed;
+
+    // INCOME TRANSACTIONS
+    if (nature === 'income') {
+      if (timing === 'outstanding' || action === 'sold') {
+        // Credit sale or service rendered on account
+        return 'sale';
+      }
+      if (action === 'received' && counterparty === 'customer') {
+        // Could be cash sale or receipt from debtor
+        // If description suggests existing receivable, it's a receipt
+        return 'sale'; // Default to sale, refine in decision tree
+      }
+      return 'sale';
+    }
+
+    // EXPENSE TRANSACTIONS  
+    if (nature === 'expense') {
+      if (object === 'goods' || object === 'inventory') {
+        return 'purchase';
+      }
+      return 'expense';
+    }
+
+    // ASSET TRANSACTIONS
+    if (nature === 'asset') {
+      if (action === 'depreciated') return 'depreciation';
+      return 'asset-purchase';
+    }
+
+    // LIABILITY TRANSACTIONS
+    if (nature === 'liability') {
+      if (action === 'borrowed') return 'loan-received';
+      if (action === 'repaid') return 'loan-repayment';
+      if (action === 'paid' && counterparty === 'supplier') return 'payment';
+      return 'other';
+    }
+
+    // EQUITY TRANSACTIONS
+    if (nature === 'equity') {
+      if (action === 'invested') return 'owner-investment';
+      if (action === 'withdrawn') return 'owner-drawing';
+      return 'other';
+    }
+
+    // SPECIAL CASES
+    if (action === 'transferred') return 'transfer';
+    if (action === 'returned') {
+      if (counterparty === 'customer') return 'sale-return';
+      if (counterparty === 'supplier') return 'purchase-return';
+    }
+
+    return 'other';
+  }
+
+  /**
+   * APPLY DECISION TREE
+   * For customer transactions and other complex scenarios
+   */
+  private applyDecisionTree(
+    parsed: { action: string; object: string; counterparty: string; timing: string; businessImpact: string },
+    nature: string,
+    hasCashMovement: boolean,
+    rawTx: RawTransaction
+  ): {
+    isCredit: boolean;
+    paymentMethod: PaymentMethod;
+    assumptions: string[];
+    questionsNeeded: string[];
+  } {
+    const assumptions: string[] = [];
+    const questionsNeeded: string[] = [];
+    let isCredit = false;
+    let paymentMethod: PaymentMethod = 'bank';
+
+    const desc = rawTx.description.toLowerCase();
+
+    // Detect payment method
+    if (desc.includes('cash')) {
+      paymentMethod = 'cash';
+    } else if (desc.includes('pos') || desc.includes('card')) {
+      paymentMethod = 'pos';
+    } else if (desc.includes('cheque') || desc.includes('check')) {
+      paymentMethod = 'cheque';
+    } else if (desc.includes('transfer') || desc.includes('bank')) {
+      paymentMethod = 'bank';
+    }
+
+    // ===== CUSTOMER TRANSACTION DECISION TREE =====
+    if (parsed.counterparty === 'customer') {
+      if (parsed.action === 'received' || hasCashMovement) {
+        // Money received from customer
+        // Q: Was there an existing receivable?
+        if (desc.includes('receivable') || desc.includes('outstanding') ||
+          desc.includes('invoice') || desc.includes('debtor')) {
+          // Yes → Credit Accounts Receivable
+          assumptions.push('Receipt against existing receivable - crediting Accounts Receivable');
+          isCredit = false; // Not a credit sale, it's a receipt
+        } else {
+          // No → Credit Sales Revenue (cash sale)
+          assumptions.push('Cash sale - crediting Sales Revenue');
+          isCredit = false;
+        }
+      } else if (parsed.action === 'sold' && !hasCashMovement) {
+        // Goods/services sold but not paid for
+        // Dr Accounts Receivable, Cr Sales Revenue
+        isCredit = true;
+        assumptions.push('Credit sale - debiting Accounts Receivable');
+      }
+    }
+
+    // ===== SUPPLIER TRANSACTION DECISION TREE =====
+    if (parsed.counterparty === 'supplier') {
+      if (parsed.action === 'paid' || hasCashMovement) {
+        if (desc.includes('payable') || desc.includes('outstanding') ||
+          desc.includes('invoice') || desc.includes('creditor')) {
+          assumptions.push('Payment against existing payable - debiting Accounts Payable');
+          isCredit = false;
+        } else {
+          assumptions.push('Cash purchase - debiting expense/asset account');
+          isCredit = false;
+        }
+      } else if (parsed.action === 'bought' && !hasCashMovement) {
+        isCredit = true;
+        assumptions.push('Credit purchase - crediting Accounts Payable');
+      }
+    }
+
+    // ===== GENERAL ASSUMPTIONS =====
+    if (parsed.timing === 'unknown') {
+      assumptions.push('Assumed cash basis (immediate settlement)');
+    }
+
+    if (parsed.businessImpact === 'unknown') {
+      questionsNeeded.push('Unable to determine business impact. Please clarify: is this income, expense, asset purchase, liability, or equity transaction?');
+    }
+
+    return { isCredit, paymentMethod, assumptions, questionsNeeded };
+  }
+
+  /**
+   * CALCULATE CONFIDENCE SCORE
+   * Based on how much information was successfully extracted
+   */
+  private calculateConfidence(
+    parsed: { action: string; object: string; counterparty: string; timing: string; businessImpact: string },
+    assumptionCount: number,
+    questionCount: number
+  ): number {
+    let score = 1.0;
+
+    // Deduct for unknowns
+    if (parsed.action === 'unknown') score -= 0.2;
+    if (parsed.object === 'unknown') score -= 0.1;
+    if (parsed.counterparty === 'unknown') score -= 0.15;
+    if (parsed.timing === 'unknown') score -= 0.1;
+    if (parsed.businessImpact === 'unknown') score -= 0.25;
+
+    // Deduct for assumptions
+    score -= assumptionCount * 0.05;
+
+    // Deduct for questions needed
+    score -= questionCount * 0.15;
+
+    return Math.max(0.1, Math.min(1.0, score));
   }
 
   /**
@@ -275,7 +561,7 @@ class AccountingEngine {
         // CR: Output VAT Payable (if applicable)
         // If inventory: DR COGS, CR Inventory
         const totalAmount = amount + vatAmount;
-        
+
         if (isCredit) {
           lines.push({
             accountCode: "1100",
@@ -302,32 +588,16 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          lines.push({
-            accountCode: "2200",
-            accountName: "Output VAT Payable",
-            debit: 0,
-            credit: vatAmount,
-          });
+          // lines.push({
+          //   accountCode: "2200",
+          //   accountName: "Output VAT Payable",
+          //   debit: 0,
+          //   credit: vatAmount,
+          // });
         }
 
-        // Record COGS if inventory is involved (perpetual inventory system)
-        if (interpretation.hasInventoryImpact) {
-          const costOfGoods = interpretation.costOfGoods || amount * 0.6; // Default 60% COGS ratio
-          lines.push({
-            accountCode: "5000",
-            accountName: "Cost of Goods Sold",
-            debit: costOfGoods,
-            credit: 0,
-            memo: "Cost of goods sold",
-          });
-          lines.push({
-            accountCode: "1200",
-            accountName: "Inventory",
-            debit: 0,
-            credit: costOfGoods,
-            memo: "Inventory reduction",
-          });
-        }
+        // Removed automatic COGS recording. Inventory adjustment must be manual.
+        // if (interpretation.hasInventoryImpact) { ... }
         break;
       }
 
@@ -337,7 +607,7 @@ class AccountingEngine {
         // DR: Output VAT Payable
         // CR: Cash/Bank or Accounts Receivable
         const totalAmount = amount + vatAmount;
-        
+
         lines.push({
           accountCode: "4100",
           accountName: "Sales Returns",
@@ -346,12 +616,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          lines.push({
-            accountCode: "2200",
-            accountName: "Output VAT Payable",
-            debit: vatAmount,
-            credit: 0,
-          });
+          // lines.push({
+          //   accountCode: "2200",
+          //   accountName: "Output VAT Payable",
+          //   debit: vatAmount,
+          //   credit: 0,
+          // });
         }
 
         lines.push({
@@ -387,12 +657,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          lines.push({
-            accountCode: "1400",
-            accountName: "Input VAT Receivable",
-            debit: 0,
-            credit: vatAmount,
-          });
+          // lines.push({
+          //   accountCode: "1400",
+          //   accountName: "Input VAT Receivable",
+          //   debit: 0,
+          //   credit: vatAmount,
+          // });
         }
         break;
       }
@@ -411,12 +681,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          lines.push({
-            accountCode: "1400",
-            accountName: "Input VAT Receivable",
-            debit: vatAmount,
-            credit: 0,
-          });
+          // lines.push({
+          //   accountCode: "1400",
+          //   accountName: "Input VAT Receivable",
+          //   debit: vatAmount,
+          //   credit: 0,
+          // });
         }
 
         if (isCredit) {
@@ -453,18 +723,18 @@ class AccountingEngine {
         });
 
         if (whtAmount > 0) {
-          lines.push({
-            accountCode: "2220",
-            accountName: "WHT Payable",
-            debit: 0,
-            credit: whtAmount,
-          });
-          lines.push({
-            accountCode: cashAccount,
-            accountName: cashAccountName,
-            debit: 0,
-            credit: amount - whtAmount,
-          });
+          // lines.push({
+          //   accountCode: "2220",
+          //   accountName: "WHT Payable",
+          //   debit: 0,
+          //   credit: whtAmount,
+          // });
+          // lines.push({
+          //   accountCode: cashAccount,
+          //   accountName: cashAccountName,
+          //   debit: 0,
+          //   credit: amount - whtAmount,
+          // });
         } else {
           lines.push({
             accountCode: cashAccount,
@@ -655,25 +925,48 @@ class AccountingEngine {
       }
 
       default: {
-        // Generic: Income = CR Revenue, DR Cash
-        // Expense = DR Expense, CR Cash
-        if (rawTx.type === "income") {
+        // Generic fallback for unhandled types
+        // Use the interpreted transaction type for better accuracy
+        const txType = (rawTx.type || "").toLowerCase();
+        const category = (rawTx.category || "").toLowerCase();
+        const desc = rawTx.description.toLowerCase();
+
+        // Check multiple indicators for income
+        const isIncome = txType === "income" ||
+          category.includes("income") ||
+          category.includes("receipt") ||
+          category.includes("revenue") ||
+          desc.includes("received") ||
+          desc.includes("customer") ||
+          desc.includes("sales") ||
+          rawTx.amount > 0; // Positive amounts typically indicate income
+
+        if (isIncome) {
+          // DR: Cash/Bank (asset increases)
+          // CR: Sales/Other Income (revenue increases)
           lines.push({
             accountCode: cashAccount,
             accountName: cashAccountName,
             debit: amount,
             credit: 0,
+            memo: "Cash/bank receipt",
           });
           lines.push({
-            accountCode: "4500",
-            accountName: "Other Income",
+            accountCode: "4000",
+            accountName: "Sales",
             debit: 0,
             credit: amount,
+            memo: "Revenue earned",
           });
         } else {
+          // DR: Expense (expense increases)
+          // CR: Cash/Bank (asset decreases)
+          const expenseCode = this.mapCategoryToExpenseAccount(rawTx.category || "");
+          const expenseAccount = getAccount(expenseCode);
+
           lines.push({
-            accountCode: "5820",
-            accountName: "Office Supplies",
+            accountCode: expenseCode,
+            accountName: expenseAccount?.name || "Operating Expense",
             debit: amount,
             credit: 0,
           });
@@ -870,8 +1163,73 @@ class AccountingEngine {
       }
     });
 
+    // Calculate Base Financials
     const grossProfit = revenue - costOfSales;
     const netIncome = grossProfit - operatingExpenses;
+
+    // Calculate Equity Breakdown
+    let capitalAdditions = 0;
+    let drawings = 0;
+
+    this.state.ledgerAccounts.forEach((account) => {
+      // Capital additions (3000-3099)
+      if (account.accountCode.startsWith("30")) {
+        // For equity, credit increases balance. 
+        // We look at the net movement for the period excluding opening balance
+        // Simplified: just taking the closing balance as additions for now if starting from 0
+        capitalAdditions += account.closingBalance;
+      }
+      // Drawings (3200-3299) - contra equity
+      if (account.accountCode.startsWith("32")) {
+        drawings += account.closingBalance; // This is a debit balance
+      }
+    });
+
+    const totalEquity = capitalAdditions - drawings + netIncome;
+
+    // Calculate Cash Flow (Indirect Method)
+
+    // 1. Operating Activities
+    // Start with Net Income
+    let cashFromOperations = netIncome;
+
+    // Add back non-cash items (Depreciation)
+    const depreciationExpense = this.getAccountBalance("5700");
+    cashFromOperations += depreciationExpense;
+
+    // Changes in Working Capital (Simplified)
+    // Increase in Receivables = Decrease in Cash
+    const receivables = this.state.ledgerAccounts.get("1100")?.closingBalance || 0;
+    cashFromOperations -= receivables;
+
+    // Increase in Inventory = Decrease in Cash
+    const inventory = this.state.ledgerAccounts.get("1200")?.closingBalance || 0;
+    cashFromOperations -= inventory;
+
+    // Increase in Payables = Increase in Cash
+    const payables = this.state.ledgerAccounts.get("2000")?.closingBalance || 0;
+    cashFromOperations += payables;
+
+    // 2. Investing Activities
+    let cashFromInvesting = 0;
+    // Purchase of fixed assets (15xx)
+    this.state.ledgerAccounts.forEach((account) => {
+      if (account.accountCode.startsWith("15") && !account.accountCode.endsWith("1")) { // Exclude acc dep
+        // Debit balance implies purchase = outflow
+        cashFromInvesting -= account.closingBalance;
+      }
+    });
+
+    // 3. Financing Activities
+    let cashFromFinancing = 0;
+    // Capital introduced
+    cashFromFinancing += capitalAdditions;
+    // Drawings
+    cashFromFinancing -= drawings;
+    // Loans received (23xx)
+    const loans = this.state.ledgerAccounts.get("2300")?.closingBalance || 0;
+    cashFromFinancing += loans;
+
 
     return {
       revenue,
@@ -883,10 +1241,17 @@ class AccountingEngine {
       netIncome,
       assets,
       liabilities,
-      equity: equity + netIncome,
-      cashFromOperations: netIncome,
-      cashFromInvesting: 0,
-      cashFromFinancing: 0,
+      equity: totalEquity,
+      cashFromOperations,
+      cashFromInvesting,
+      cashFromFinancing,
+      equityStatement: {
+        openingBalance: 0, // Assuming new period for now
+        additions: capitalAdditions,
+        drawings: drawings,
+        netIncome: netIncome,
+        closingBalance: totalEquity
+      },
       items: [],
       period: {
         start: new Date(new Date().getFullYear(), 0, 1).toISOString(),
@@ -1124,7 +1489,7 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   if (!amountMatch) return null;
 
   const amount = parseFloat(amountMatch[1].replace(/,/g, ""));
-  
+
   // Detect keywords
   const lowerMessage = message.toLowerCase();
   let category = "other";

@@ -23,7 +23,6 @@ import { CGT_RATE } from "@/lib/taxRules/cgt";
 import { TET_RATE } from "@/lib/taxRules/tet";
 import { generatePDF } from "@/lib/pdfGenerator";
 import dynamic from "next/dynamic";
-const TaxAgentChat = dynamic(() => import("@/components/TaxAgentChat"), { ssr: false });
 
 type Step = 1 | 2 | 3;
 
@@ -139,6 +138,16 @@ export default function HomePage() {
   });
 
   const SHOW_AUX_CALCULATORS = false;
+
+  // VAT State (Local UI state for inputs)
+  const [vatSalesInput, setVatSalesInput] = useState("");
+  const [vatInputCredit, setVatInputCredit] = useState("");
+
+  // Derived VAT calculations
+  const vatInputAmount = parseFloat(vatInputCredit.replace(/,/g, "") || "0");
+  const computedOutputVAT = (inputs.grossRevenue || 0) * (VAT_RATE || 0.075);
+  const computedNetVAT = computedOutputVAT - vatInputAmount;
+
   const validationSeverityClasses: Record<"info" | "warning" | "error", string> = {
     error: "border-red-200 bg-red-50 text-red-800",
     warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
@@ -559,16 +568,16 @@ export default function HomePage() {
           const leviesResponse = await fetch("/api/levies", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                netProfit: taxResult.taxableIncome,
-                profitBeforeTax: taxResult.taxableIncome,
-                industry: leviesInput.industry,
-                monthlyPayroll: parseFloat(leviesInput.monthlyPayroll.replace(/,/g, "")) || 0,
-                numberOfEmployees: parseInt(leviesInput.numberOfEmployees) || 0,
+            body: JSON.stringify({
+              netProfit: taxResult.taxableIncome,
+              profitBeforeTax: taxResult.taxableIncome,
+              industry: leviesInput.industry,
+              monthlyPayroll: parseFloat(leviesInput.monthlyPayroll.replace(/,/g, "")) || 0,
+              numberOfEmployees: parseInt(leviesInput.numberOfEmployees) || 0,
               annualTurnover: inputs.turnover || inputs.grossRevenue,
-                payrollEntries: inputs.payrollEntries || [],
-              }),
-            });
+              payrollEntries: inputs.payrollEntries || [],
+            }),
+          });
 
           if (leviesResponse.ok) {
             const leviesData: CompanyLeviesResult = await leviesResponse.json();
@@ -645,755 +654,395 @@ export default function HomePage() {
 
   return (
     <>
-      <section id="main-calculator" className="max-w-4xl mx-auto w-full">
+      <section id="main-calculator" className="max-w-4xl mx-auto w-full px-4 py-8">
 
-      {/* Step indicator */}
-      {!result && (
-        <div className="step-indicator">
-          <div className={`step ${step >= 1 ? "active" : ""} ${step > 1 ? "completed" : ""}`}>
-            <span className="step-number">1</span>
-            <span className="step-label">Profile</span>
-          </div>
-          <div className={`step-connector ${step > 1 ? "completed" : ""}`}></div>
-          <div className={`step ${step >= 2 ? "active" : ""} ${step > 2 ? "completed" : ""}`}>
-            <span className="step-number">2</span>
-            <span className="step-label">Financial Info</span>
-          </div>
-          <div className={`step-connector ${step > 2 ? "completed" : ""}`}></div>
-          <div className={`step ${step >= 3 ? "active" : ""}`}>
-            <span className="step-number">3</span>
-            <span className="step-label">Review & Calculate</span>
-          </div>
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Tax Computation Engine</h1>
+          <p className="text-sm text-gray-500 mt-1">Complete your profile and financial inputs to generate precise tax estimates.</p>
         </div>
-      )}
 
-      {/* Error message */}
-      {error && (
-        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg mb-6">
-          {error}
-        </div>
-      )}
-
-      {/* Form card */}
-      {!result && (
-        <div className="rounded-3xl border border-gray-200 bg-white/95 p-6 shadow-sm">
-          {/* Step 1: Profile */}
-          {step === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-[var(--primary)]">Step 1: Your Profile</h2>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={profile.fullName}
-                  onChange={(e) => handleProfileChange("fullName", e.target.value)}
-                  placeholder="Enter your full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Business Name <span className="text-[var(--muted)]">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={profile.businessName || ""}
-                  onChange={(e) => handleProfileChange("businessName", e.target.value)}
-                  placeholder="Enter your business name (if applicable)"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Taxpayer Type <span className="text-red-500">*</span>
-                </label>
-                <div className="radio-group">
-                  <label className={`radio-option ${profile.taxpayerType === "freelancer" ? "selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="taxpayerType"
-                      checked={profile.taxpayerType === "freelancer"}
-                      onChange={() => handleProfileChange("taxpayerType", "freelancer" as TaxpayerType)}
-                    />
-                    <div>
-                      <div className="font-medium">Individual / Freelancer</div>
-                      <div className="text-sm text-[var(--muted)]">Personal Income Tax (PIT)</div>
-                    </div>
-                  </label>
-                  <label className={`radio-option ${profile.taxpayerType === "company" ? "selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="taxpayerType"
-                      checked={profile.taxpayerType === "company"}
-                      onChange={() => handleProfileChange("taxpayerType", "company" as TaxpayerType)}
-                    />
-                    <div>
-                      <div className="font-medium">Company / SME</div>
-                      <div className="text-sm text-[var(--muted)]">Company Income Tax (CIT)</div>
-                    </div>
-                  </label>
+        {/* Step Progress */}
+        {!result && (
+          <nav aria-label="Progress" className="mb-8">
+            <ol role="list" className="space-y-4 md:flex md:space-y-0 md:space-x-8">
+              <li className="md:flex-1">
+                <div className={`group flex flex-col border-l-4 ${step >= 1 ? 'border-primary' : 'border-gray-200'} py-2 pl-4 hover:border-primary-dark transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4`}>
+                  <span className={`text-sm font-medium ${step >= 1 ? 'text-primary' : 'text-gray-500'}`}>Step 1</span>
+                  <span className="text-sm font-bold text-gray-900">Profile & Entity</span>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Tax Year <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={profile.taxYear}
-                    onChange={(e) => handleProfileChange("taxYear", parseInt(e.target.value) || DEFAULT_TAX_YEAR)}
-                    min={2020}
-                    max={2030}
-                  />
+              </li>
+              <li className="md:flex-1">
+                <div className={`group flex flex-col border-l-4 ${step >= 2 ? 'border-primary' : 'border-gray-200'} py-2 pl-4 hover:border-primary-dark transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4`}>
+                  <span className={`text-sm font-medium ${step >= 2 ? 'text-primary' : 'text-gray-500'}`}>Step 2</span>
+                  <span className="text-sm font-bold text-gray-900">Financial Data</span>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    State of Residence <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={profile.stateOfResidence}
-                    onChange={(e) => handleProfileChange("stateOfResidence", e.target.value)}
-                  >
-                    {NIGERIAN_STATES.map((state) => (
-                      <option key={state} value={state}>
-                        {state}
-                      </option>
-                    ))}
-                  </select>
+              </li>
+              <li className="md:flex-1">
+                <div className={`group flex flex-col border-l-4 ${step >= 3 ? 'border-primary' : 'border-gray-200'} py-2 pl-4 hover:border-primary-dark transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4`}>
+                  <span className={`text-sm font-medium ${step >= 3 ? 'text-primary' : 'text-gray-500'}`}>Step 3</span>
+                  <span className="text-sm font-bold text-gray-900">Review & Calculate</span>
                 </div>
-              </div>
+              </li>
+            </ol>
+          </nav>
+        )}
 
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Are you VAT registered? <span className="text-red-500">*</span>
-                </label>
-                <div className="radio-group">
-                  <label className={`radio-option ${profile.isVATRegistered ? "selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="vatRegistered"
-                      checked={profile.isVATRegistered}
-                      onChange={() => handleProfileChange("isVATRegistered", true)}
-                    />
-                    <span>Yes</span>
-                  </label>
-                  <label className={`radio-option ${!profile.isVATRegistered ? "selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="vatRegistered"
-                      checked={!profile.isVATRegistered}
-                      onChange={() => handleProfileChange("isVATRegistered", false)}
-                    />
-                    <span>No</span>
-                  </label>
+        {/* Error message */}
+        {error && (
+          <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">There were validation errors</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error}</p>
                 </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button className="btn btn-primary" onClick={handleNext}>
-                  Next: Financial Info →
-                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Step 2: Financial Inputs */}
-          {step === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-[var(--primary)]">Step 2: Financial Information</h2>
-              <p className="text-[var(--muted)]">Enter all amounts in Nigerian Naira (₦)</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Form card */}
+        {!result && (
+          <div className="bg-white shadow sm:rounded-lg overflow-hidden border border-gray-200">
+            {/* Step 1: Profile */}
+            {step === 1 && (
+              <div className="space-y-6 px-4 py-5 sm:p-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Total Business Income (before expenses) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.grossRevenue || ""}
-                      onChange={(e) => handleInputChange("grossRevenue", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">Profile Information</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Tell us about your entity type to configure the correct tax rules (CIT vs PIT).
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Allowable Business Expenses
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.allowableExpenses || ""}
-                      onChange={(e) => handleInputChange("allowableExpenses", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                  <div>
-                    <h3 className="text-lg font-semibold">Detailed Periodic Income (optional)</h3>
-                    <p className="text-sm text-[var(--muted)]">
-                      Add monthly or project-based figures. We will keep the totals above in sync with these entries.
-                    </p>
-                  </div>
-                  {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
-                    <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
-                      Auto totals active
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Period Label</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Jan 2024"
-                      value={newIncomeEntry.periodLabel}
-                      onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, periodLabel: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Revenue (₦)</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                  <div className="sm:col-span-3">
+                    <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
                       <input
-                        type="number"
-                        min={0}
-                        value={newIncomeEntry.revenue}
-                        onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, revenue: e.target.value }))}
-                        className="pl-8"
-                        placeholder="0.00"
+                        type="text"
+                        name="fullName"
+                        id="fullName"
+                        value={profile.fullName}
+                        onChange={(e) => handleProfileChange("fullName", e.target.value)}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md p-2"
+                        placeholder="Enter your full name"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Expenses (₦)</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+
+                  <div className="sm:col-span-3">
+                    <label htmlFor="businessName" className="block text-sm font-medium text-gray-700">
+                      Business Name <span className="text-gray-400 text-xs">(Optional)</span>
+                    </label>
+                    <div className="mt-1">
                       <input
-                        type="number"
-                        min={0}
-                        value={newIncomeEntry.expenses}
-                        onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, expenses: e.target.value }))}
-                        className="pl-8"
-                        placeholder="0.00"
+                        type="text"
+                        name="businessName"
+                        id="businessName"
+                        value={profile.businessName || ""}
+                        onChange={(e) => handleProfileChange("businessName", e.target.value)}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md p-2"
+                        placeholder="e.g. Acme Corp"
                       />
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleAddIncomeEntry}
-                  >
-                    + Add Entry
-                  </button>
-                </div>
 
-                {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Period</th>
-                          <th>Revenue</th>
-                          <th>Expenses</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inputs.incomeEntries.map((entry, index) => (
-                          <tr key={`${entry.periodLabel}-${index}`}>
-                            <td>{entry.periodLabel}</td>
-                            <td>{formatCurrency(entry.revenue)}</td>
-                            <td>{formatCurrency(entry.expenses)}</td>
-                            <td>
-                              <button
-                                type="button"
-                                className="text-red-500 text-sm"
-                                onClick={() => handleRemoveIncomeEntry(index)}
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          </tr>
+                  <div className="sm:col-span-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Taxpayer Type <span className="text-red-500">*</span>
+                    </label>
+                    <div className="bg-white rounded-md -space-y-px">
+                      {/* Radio Group Replacement */}
+                      <fieldset>
+                        <legend className="sr-only">Taxpayer Type</legend>
+                        <div className="space-y-4 sm:flex sm:items-center sm:space-y-0 sm:space-x-4">
+                          <div className={`relative flex items-center px-4 py-3 border rounded-lg cursor-pointer hover:bg-gray-50 focus:outline-none ${profile.taxpayerType === 'freelancer' ? 'bg-primary/5 border-primary ring-1 ring-primary' : 'border-gray-200'}`}>
+                            <div className="flex items-center h-5">
+                              <input
+                                id="type-freelancer"
+                                name="taxpayerType"
+                                type="radio"
+                                checked={profile.taxpayerType === "freelancer"}
+                                onChange={() => handleProfileChange("taxpayerType", "freelancer" as TaxpayerType)}
+                                className="focus:ring-primary h-4 w-4 text-primary border-gray-300"
+                              />
+                            </div>
+                            <div className="ml-3 flex flex-col">
+                              <label htmlFor="type-freelancer" className="block text-sm font-medium text-gray-900">
+                                Individual / Freelancer
+                              </label>
+                              <span className="text-xs text-gray-500">Personal Income Tax (PIT)</span>
+                            </div>
+                          </div>
+
+                          <div className={`relative flex items-center px-4 py-3 border rounded-lg cursor-pointer hover:bg-gray-50 focus:outline-none ${profile.taxpayerType === 'company' ? 'bg-primary/5 border-primary ring-1 ring-primary' : 'border-gray-200'}`}>
+                            <div className="flex items-center h-5">
+                              <input
+                                id="type-company"
+                                name="taxpayerType"
+                                type="radio"
+                                checked={profile.taxpayerType === "company"}
+                                onChange={() => handleProfileChange("taxpayerType", "company" as TaxpayerType)}
+                                className="focus:ring-primary h-4 w-4 text-primary border-gray-300"
+                              />
+                            </div>
+                            <div className="ml-3 flex flex-col">
+                              <label htmlFor="type-company" className="block text-sm font-medium text-gray-900">
+                                Company / SME
+                              </label>
+                              <span className="text-xs text-gray-500">Company Income Tax (CIT)</span>
+                            </div>
+                          </div>
+                        </div>
+                      </fieldset>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label htmlFor="taxYear" className="block text-sm font-medium text-gray-700">
+                      Tax Year <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
+                      <input
+                        type="number"
+                        name="taxYear"
+                        id="taxYear"
+                        value={profile.taxYear}
+                        onChange={(e) => handleProfileChange("taxYear", parseInt(e.target.value) || DEFAULT_TAX_YEAR)}
+                        min={2020}
+                        max={2030}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md p-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label htmlFor="stateOfResidence" className="block text-sm font-medium text-gray-700">
+                      State of Residence <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1">
+                      <select
+                        id="stateOfResidence"
+                        name="stateOfResidence"
+                        value={profile.stateOfResidence}
+                        onChange={(e) => handleProfileChange("stateOfResidence", e.target.value)}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md p-2"
+                      >
+                        {NIGERIAN_STATES.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <h3 className="text-lg font-semibold mt-6">Tax Reliefs & Deductions</h3>
-              <p className="text-sm text-[var(--muted)]">Optional — enter if applicable to reduce your taxable income</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Pension Contributions</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.pensionContributions || ""}
-                      onChange={(e) => handleInputChange("pensionContributions", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">NHF Contributions</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.nhfContributions || ""}
-                      onChange={(e) => handleInputChange("nhfContributions", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Life Insurance Premiums</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.lifeInsurancePremiums || ""}
-                      onChange={(e) => handleInputChange("lifeInsurancePremiums", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Other Reliefs</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                    <input
-                      type="number"
-                      value={inputs.otherReliefs || ""}
-                      onChange={(e) => handleInputChange("otherReliefs", e.target.value)}
-                      className="pl-8"
-                      placeholder="0.00"
-                      min={0}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {profile.isVATRegistered && (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">VAT Inputs & Credits</h3>
-                    <p className="text-sm text-[var(--muted)]">
-                      Supply purchases or the actual input VAT you intend to claim. Leave the second field blank to let us infer it from purchases.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Vatable Purchases (₦)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          value={inputs.vatTaxablePurchases || ""}
-                          onChange={(e) => handleInputChange("vatTaxablePurchases", e.target.value)}
-                          className="pl-8"
-                          placeholder="0.00"
-                          min={0}
-                        />
-                      </div>
+                      </select>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Input VAT Claimed (₦)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                  </div>
+
+                  <div className="sm:col-span-6">
+                    <span className="block text-sm font-medium text-gray-700 mb-2">VAT Status</span>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center">
                         <input
-                          type="number"
-                          value={inputs.inputVATPaid || ""}
-                          onChange={(e) => handleInputChange("inputVATPaid", e.target.value)}
-                          className="pl-8"
-                          placeholder="Leave blank to derive"
-                          min={0}
+                          id="vat-yes"
+                          name="vatRegistered"
+                          type="radio"
+                          checked={profile.isVATRegistered}
+                          onChange={() => handleProfileChange("isVATRegistered", true)}
+                          className="focus:ring-primary h-4 w-4 text-primary border-gray-300"
                         />
+                        <label htmlFor="vat-yes" className="ml-3 block text-sm font-medium text-gray-700">
+                          Registered for VAT
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          id="vat-no"
+                          name="vatRegistered"
+                          type="radio"
+                          checked={!profile.isVATRegistered}
+                          onChange={() => handleProfileChange("isVATRegistered", false)}
+                          className="focus:ring-primary h-4 w-4 text-primary border-gray-300"
+                        />
+                        <label htmlFor="vat-no" className="ml-3 block text-sm font-medium text-gray-700">
+                          Not Registered
+                        </label>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
 
-              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
+              </div>
+            )}
+            {/* Step 1: Manual Next Button */}
+            {step === 1 && (
+              <div className="px-4 py-3 bg-gray-50 text-right sm:px-6 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="inline-flex justify-center py-2.5 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-black bg-[var(--primary)] hover:bg-[var(--primary)]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-all flex items-center gap-2 ml-auto"
+                >
+                  Next: Financial Data <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 2: Financial Inputs */}
+        {
+          step === 2 && (
+            <div className="bg-white shadow sm:rounded-lg overflow-hidden border border-gray-200">
+              <div className="px-4 py-5 sm:p-6 space-y-8">
+
+                {/* Header */}
                 <div>
-                  <h3 className="text-lg font-semibold">Tax Credits & Adjustments</h3>
-                  <p className="text-sm text-[var(--muted)]">
-                    Capture withholding tax credits, carried-forward losses, and statutory incentives that reduce your eventual tax bill.
+                  <h2 className="text-xl font-bold text-gray-900">Step 2: Financial Information</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Provide your financials to let us calculate your tax obligations. All amounts in Nigerian Naira (₦).
                   </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* Core Revenue Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Withholding Tax Credits</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total Business Income <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">₦</span>
+                      </div>
                       <input
                         type="number"
-                        value={inputs.withholdingTaxCredits || ""}
-                        onChange={(e) => handleInputChange("withholdingTaxCredits", e.target.value)}
-                        className="pl-8"
-                        placeholder="Total WHT evidenced"
+                        value={inputs.grossRevenue || ""}
+                        onChange={(e) => handleInputChange("grossRevenue", e.target.value)}
+                        className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                        placeholder="0.00"
                         min={0}
                       />
                     </div>
+                    <p className="mt-1 text-xs text-gray-500">Gross revenue before any deductions.</p>
                   </div>
-                  {profile.taxpayerType === "company" && (
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Carried-Forward Losses</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          value={inputs.priorYearLosses || ""}
-                          onChange={(e) => handleInputChange("priorYearLosses", e.target.value)}
-                          className="pl-8"
-                          placeholder="0.00"
-                          min={0}
-                        />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Allowable Business Expenses
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">₦</span>
                       </div>
+                      <input
+                        type="number"
+                        value={inputs.allowableExpenses || ""}
+                        onChange={(e) => handleInputChange("allowableExpenses", e.target.value)}
+                        className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                        placeholder="0.00"
+                        min={0}
+                      />
                     </div>
-                  )}
-                  {profile.taxpayerType === "company" && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Investment Allowances</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                          <input
-                            type="number"
-                            value={inputs.investmentAllowance || ""}
-                            onChange={(e) => handleInputChange("investmentAllowance", e.target.value)}
-                            className="pl-8"
-                            placeholder="0.00"
-                            min={0}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Rural Investment Allowance</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                          <input
-                            type="number"
-                            value={inputs.ruralInvestmentAllowance || ""}
-                            onChange={(e) => handleInputChange("ruralInvestmentAllowance", e.target.value)}
-                            className="pl-8"
-                            placeholder="0.00"
-                            min={0}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Pioneer Status Relief</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                          <input
-                            type="number"
-                            value={inputs.pioneerStatusRelief || ""}
-                            onChange={(e) => handleInputChange("pioneerStatusRelief", e.target.value)}
-                            className="pl-8"
-                            placeholder="0.00"
-                            min={0}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                    <p className="mt-1 text-xs text-gray-500">Expenses wholly and exclusively incurred for business.</p>
+                  </div>
                 </div>
-                {profile.taxpayerType === "company" && (
-                  <p className="text-xs text-[var(--muted)]">
-                    Carried-forward losses are capped at 4 assessment years for most companies under the Companies Income Tax Act.
-                  </p>
-                )}
 
-                <div className="pt-4 border-t border-dashed border-[var(--border)] space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                {/* Periodic Income Section */}
+                <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                     <div>
-                      <h4 className="text-md font-semibold">Withholding Tax Certificates</h4>
-                      <p className="text-sm text-[var(--muted)]">
-                        Upload or log tax credit certificates so every ₦ claimed has a matching document.
-                      </p>
+                      <h3 className="text-sm font-semibold text-gray-900">Detailed Periodic Entries <span className="font-normal text-gray-500">(Optional)</span></h3>
+                      <p className="text-xs text-gray-500">Break down income by month or project. Auto-updates totals above.</p>
                     </div>
-                    <span className="text-xs text-[var(--muted)]">{withholdingCertificates.length} certificate(s)</span>
+                    {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        Auto-calcs active
+                      </span>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Payer Name</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end mb-4">
+                    <div className="sm:col-span-4">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Period Label</label>
                       <input
                         type="text"
-                        value={newCertificate.payerName}
-                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, payerName: e.target.value }))}
-                        placeholder="Client or withholding agent"
+                        placeholder="e.g. Jan 2024"
+                        value={newIncomeEntry.periodLabel}
+                        onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, periodLabel: e.target.value }))}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Certificate No.</label>
-                      <input
-                        type="text"
-                        value={newCertificate.certificateNumber}
-                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, certificateNumber: e.target.value }))}
-                        placeholder="e.g. WHT/123"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Issue Date</label>
-                      <input
-                        type="date"
-                        value={newCertificate.issueDate}
-                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, issueDate: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Amount (₦)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Revenue</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-xs">₦</span>
+                        </div>
                         <input
                           type="number"
                           min={0}
-                          value={newCertificate.amount}
-                          onChange={(e) => setNewCertificate((prev) => ({ ...prev, amount: e.target.value }))}
-                          className="pl-8"
+                          value={newIncomeEntry.revenue}
+                          onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, revenue: e.target.value }))}
+                          className="focus:ring-primary focus:border-primary block w-full pl-6 sm:text-sm border-gray-300 rounded-md"
                           placeholder="0.00"
                         />
                       </div>
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Attach Certificate (PDF/Image)</label>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        onChange={(e) => handleCertificateFileChange(e.target.files?.[0] || null)}
-                      />
-                      {newCertificate.fileName && (
-                        <p className="text-xs text-[var(--muted)] mt-1">Attached: {newCertificate.fileName}</p>
-                      )}
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Expenses</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-xs">₦</span>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={newIncomeEntry.expenses}
+                          onChange={(e) => setNewIncomeEntry((prev) => ({ ...prev, expenses: e.target.value }))}
+                          className="focus:ring-primary focus:border-primary block w-full pl-6 sm:text-sm border-gray-300 rounded-md"
+                          placeholder="0.00"
+                        />
+                      </div>
                     </div>
-                    <div className="md:col-span-1">
-                      <button type="button" className="btn btn-secondary w-full" onClick={handleAddCertificate}>
-                        + Save Certificate
+                    <div className="sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={handleAddIncomeEntry}
+                        className="w-full inline-flex justify-center items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      >
+                        Add
                       </button>
                     </div>
                   </div>
 
-                  {withholdingCertificates.length > 0 && (
-                    <div className="table-container">
-                      <table>
-                        <thead>
+                  {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
+                    <div className="overflow-hidden border border-gray-200 rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
                           <tr>
-                            <th>Payer</th>
-                            <th>Certificate No.</th>
-                            <th>Date</th>
-                            <th>Amount</th>
-                            <th>Attachment</th>
-                            <th></th>
+                            <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                            <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                            <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Expenses</th>
+                            <th scope="col" className="relative px-3 py-2">
+                              <span className="sr-only">Remove</span>
+                            </th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {withholdingCertificates.map((cert) => (
-                            <tr key={cert.id}>
-                              <td>{cert.payerName}</td>
-                              <td>{cert.certificateNumber}</td>
-                              <td>{cert.issueDate}</td>
-                              <td>{formatCurrency(cert.amount)}</td>
-                              <td>
-                                {cert.fileData ? (
-                                  <a
-                                    href={cert.fileData}
-                                    download={cert.fileName || `${cert.certificateNumber}.pdf`}
-                                    className="text-[var(--accent)] text-sm"
-                                  >
-                                    Download
-                                  </a>
-                                ) : (
-                                  <span className="text-xs text-[var(--muted)]">Not attached</span>
-                                )}
-                              </td>
-                              <td>
-                                <button className="text-red-500 text-sm" onClick={() => handleRemoveCertificate(cert.id)}>
-                                  Remove
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Company-specific fields */}
-              {profile.taxpayerType === "company" && (
-                <>
-                  <h3 className="text-lg font-semibold mt-6">Company-Specific Information</h3>
-                  <p className="text-sm text-[var(--muted)]">Optional — provide for more accurate CIT calculation</p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Annual Turnover</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          value={inputs.turnover || ""}
-                          onChange={(e) => handleInputChange("turnover", e.target.value)}
-                          className="pl-8"
-                          placeholder="Leave blank to use gross revenue"
-                          min={0}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Cost of Sales</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          value={inputs.costOfSales || ""}
-                          onChange={(e) => handleInputChange("costOfSales", e.target.value)}
-                          className="pl-8"
-                          placeholder="0.00"
-                          min={0}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Operating Expenses</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          value={inputs.operatingExpenses || ""}
-                          onChange={(e) => handleInputChange("operatingExpenses", e.target.value)}
-                          className="pl-8"
-                          placeholder="Leave blank to use allowable expenses"
-                          min={0}
-                        />
-                      </div>
-                    </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Capital Allowance</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                      <input
-                        type="number"
-                        value={inputs.capitalAllowance || ""}
-                        onChange={(e) => handleInputChange("capitalAllowance", e.target.value)}
-                        className="pl-8"
-                        placeholder="0.00"
-                        min={0}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                  <div>
-                    <h4 className="text-lg font-semibold">Payroll History (optional)</h4>
-                    <p className="text-sm text-[var(--muted)]">
-                      Log monthly payroll to auto-fill NSITF/ITF assumptions. We average the entries for levy calculations.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Month</label>
-                      <input
-                        type="month"
-                        value={newPayrollEntry.month}
-                        onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, month: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Payroll (₦)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={newPayrollEntry.payroll}
-                          onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, payroll: e.target.value }))}
-                          className="pl-8"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Employees</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={newPayrollEntry.employees}
-                        onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, employees: e.target.value }))}
-                        placeholder="0"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleAddPayrollEntry}
-                    >
-                      + Add Month
-                    </button>
-                  </div>
-
-                  {inputs.payrollEntries && inputs.payrollEntries.length > 0 && (
-                    <div className="table-container">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Month</th>
-                            <th>Payroll</th>
-                            <th>Employees</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {inputs.payrollEntries.map((entry, index) => (
-                            <tr key={`${entry.month}-${index}`}>
-                              <td>{entry.month}</td>
-                              <td>{formatCurrency(entry.grossPayroll)}</td>
-                              <td>{entry.employeeCount}</td>
-                              <td>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {inputs.incomeEntries.map((entry, index) => (
+                            <tr key={`${entry.periodLabel}-${index}`}>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{entry.periodLabel}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(entry.revenue)}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(entry.expenses)}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
                                 <button
-                                  type="button"
-                                  className="text-red-500 text-sm"
-                                  onClick={() => handleRemovePayrollEntry(index)}
+                                  onClick={() => handleRemoveIncomeEntry(index)}
+                                  className="text-red-500 hover:text-red-700 text-xs"
                                 >
                                   Remove
                                 </button>
@@ -1405,45 +1054,32 @@ export default function HomePage() {
                     </div>
                   )}
                 </div>
-                </>
-              )}
 
-              {SHOW_AUX_CALCULATORS && (
-              <section id="wht-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
-                <h3 className="text-lg font-semibold">Withholding Tax (WHT) Payments</h3>
-                <p className="text-sm text-[var(--muted)] mb-4">
-                  Optional — add payments you&apos;ve made/received that are subject to WHT
-                </p>
+                {/* Separator */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                    <div className="w-full border-t border-gray-300" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white px-2 text-sm text-gray-500">Deductions & Adjustments</span>
+                  </div>
+                </div>
 
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                {/* Reliefs & Deductions */}
+                <div>
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Tax Reliefs</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Payment Type</label>
-                      <select
-                        value={newWhtPayment.paymentType}
-                        onChange={(e) =>
-                          setNewWhtPayment((prev) => ({ ...prev, paymentType: e.target.value }))
-                        }
-                      >
-                        {WHT_RATES.map((rate) => (
-                          <option key={rate.paymentType} value={rate.paymentType}>
-                            {rate.description}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Amount</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Pension Contributions</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₦</span>
+                        </div>
                         <input
                           type="number"
-                          value={newWhtPayment.amount}
-                          onChange={(e) =>
-                            setNewWhtPayment((prev) => ({ ...prev, amount: e.target.value }))
-                          }
-                          className="pl-8"
+                          value={inputs.pensionContributions || ""}
+                          onChange={(e) => handleInputChange("pensionContributions", e.target.value)}
+                          className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
                           placeholder="0.00"
                           min={0}
                         />
@@ -1451,155 +1087,16 @@ export default function HomePage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-2">Residency</label>
-                      <select
-                        value={newWhtPayment.isResident ? "resident" : "non-resident"}
-                        onChange={(e) =>
-                          setNewWhtPayment((prev) => ({
-                            ...prev,
-                            isResident: e.target.value === "resident",
-                          }))
-                        }
-                      >
-                        <option value="resident">Resident</option>
-                        <option value="non-resident">Non-Resident</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleAddWhtPayment}
-                    >
-                      + Add
-                    </button>
-                  </div>
-
-                  {/* List of added payments */}
-                  {whtPayments.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <div className="text-sm font-medium text-[var(--muted)]">
-                        Added Payments ({whtPayments.length})
-                      </div>
-                      {whtPayments.map((payment, index) => {
-                        const rateInfo = getWhtRateInfo(payment.paymentType);
-                        const rate = payment.isResident
-                          ? rateInfo?.residentRate
-                          : rateInfo?.nonResidentRate;
-                        return (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between bg-white p-3 rounded-lg border"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium">
-                                {rateInfo?.description || payment.paymentType}
-                              </div>
-                              <div className="text-sm text-[var(--muted)]">
-                                {formatCurrency(payment.amount)} •{" "}
-                                {payment.isResident ? "Resident" : "Non-Resident"} •{" "}
-                                {rate ? `${(rate * 100).toFixed(0)}% WHT` : ""}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="text-red-500 hover:text-red-700 text-sm font-medium ml-4"
-                              onClick={() => handleRemoveWhtPayment(index)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
-              )}
-
-              {SHOW_AUX_CALCULATORS && (
-              <section id="vat-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
-                <h3 className="text-lg font-semibold">Value Added Tax (VAT) Quick Calculator</h3>
-                <p className="text-sm text-[var(--muted)] mb-4">
-                  Estimate output VAT on your taxable sales and offset with eligible input VAT credits.
-                </p>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Taxable Sales (₦)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={vatSalesInput}
-                      onChange={(e) => setVatSalesInput(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Input VAT Credits (₦)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={vatInputCredit}
-                      onChange={(e) => setVatInputCredit(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="grid md:grid-cols-3 gap-4 mt-4">
-                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
-                    <div className="text-sm text-[var(--muted)]">Output VAT ({(VAT_RATE * 100).toFixed(1)}%)</div>
-                    <div className="text-2xl font-semibold mt-2">{formatCurrency(computedOutputVAT)}</div>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
-                    <div className="text-sm text-[var(--muted)]">Input VAT Claimed</div>
-                    <div className="text-2xl font-semibold mt-2">{formatCurrency(vatInputAmount)}</div>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border)] p-4 bg-[var(--background)]">
-                    <div className="text-sm text-[var(--muted)]">Net VAT Position</div>
-                    <div className={`text-2xl font-semibold mt-2 ${computedNetVAT < 0 ? "text-red-500" : "text-[var(--foreground)]"}`}>
-                      {formatCurrency(Math.abs(computedNetVAT))}
-                      {computedNetVAT < 0 ? " (Refund)" : ""}
-                    </div>
-                  </div>
-                </div>
-              </section>
-              )}
-
-              {SHOW_AUX_CALCULATORS && (
-              <section id="cgt-calculator" className="mt-8 pt-6 border-t border-[var(--border)]">
-                <h3 className="text-lg font-semibold">Capital Gains Tax (CGT)</h3>
-                <p className="text-sm text-[var(--muted)] mb-4">
-                  Optional — add asset disposals subject to CGT (10% rate)
-                </p>
-
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Asset Type</label>
-                      <select
-                        value={newCgtDisposal.assetType}
-                        onChange={(e) =>
-                          setNewCgtDisposal((prev) => ({ ...prev, assetType: e.target.value as CGTInput['assetType'] }))
-                        }
-                      >
-                        <option value="real_estate">Real Estate</option>
-                        <option value="shares">Shares/Securities</option>
-                        <option value="business_assets">Business Assets</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Acquisition Cost</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">NHF Contributions</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₦</span>
+                        </div>
                         <input
                           type="number"
-                          value={newCgtDisposal.acquisitionCost}
-                          onChange={(e) =>
-                            setNewCgtDisposal((prev) => ({ ...prev, acquisitionCost: e.target.value }))
-                          }
-                          className="pl-8"
+                          value={inputs.nhfContributions || ""}
+                          onChange={(e) => handleInputChange("nhfContributions", e.target.value)}
+                          className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
                           placeholder="0.00"
                           min={0}
                         />
@@ -1607,913 +1104,1280 @@ export default function HomePage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-2">Disposal Proceeds</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Life Insurance Premiums</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₦</span>
+                        </div>
                         <input
                           type="number"
-                          value={newCgtDisposal.disposalProceeds}
-                          onChange={(e) =>
-                            setNewCgtDisposal((prev) => ({ ...prev, disposalProceeds: e.target.value }))
-                          }
-                          className="pl-8"
+                          value={inputs.lifeInsurancePremiums || ""}
+                          onChange={(e) => handleInputChange("lifeInsurancePremiums", e.target.value)}
+                          className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
                           placeholder="0.00"
                           min={0}
                         />
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleAddCgtDisposal}
-                    >
-                      + Add
-                    </button>
-                  </div>
-
-                  {/* List of CGT disposals */}
-                  {cgtDisposals.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <div className="text-sm font-medium text-[var(--muted)]">
-                        Asset Disposals ({cgtDisposals.length})
-                      </div>
-                      {cgtDisposals.map((disposal, index) => {
-                        const gain = disposal.disposalProceeds - disposal.acquisitionCost;
-                        return (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between bg-white p-3 rounded-lg border"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium capitalize">
-                                {disposal.assetType.replace('_', ' ')}
-                              </div>
-                              <div className="text-sm text-[var(--muted)]">
-                                Cost: {formatCurrency(disposal.acquisitionCost)} → Proceeds: {formatCurrency(disposal.disposalProceeds)} •{" "}
-                                <span className={gain > 0 ? "text-green-600" : "text-red-600"}>
-                                  {gain > 0 ? "Gain" : "Loss"}: {formatCurrency(Math.abs(gain))}
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="text-red-500 hover:text-red-700 text-sm font-medium ml-4"
-                              onClick={() => handleRemoveCgtDisposal(index)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
-              )}
-
-              {/* Stamp Duty Section */}
-              <div className="mt-8 pt-6 border-t border-[var(--border)]">
-                <h3 className="text-lg font-semibold">Stamp Duties</h3>
-                <p className="text-sm text-[var(--muted)] mb-4">
-                  Optional — add documents requiring stamp duties
-                </p>
-
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Document Type</label>
-                      <select
-                        value={newStampDuty.documentType}
-                        onChange={(e) =>
-                          setNewStampDuty((prev) => ({ ...prev, documentType: e.target.value as StampDutyInput['documentType'] }))
-                        }
-                      >
-                        {STAMP_DUTY_RATES.map((rate) => (
-                          <option key={rate.documentType} value={rate.documentType}>
-                            {rate.description}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Transaction Value</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Other Reliefs</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₦</span>
+                        </div>
                         <input
                           type="number"
-                          value={newStampDuty.transactionValue}
-                          onChange={(e) =>
-                            setNewStampDuty((prev) => ({ ...prev, transactionValue: e.target.value }))
-                          }
-                          className="pl-8"
+                          value={inputs.otherReliefs || ""}
+                          onChange={(e) => handleInputChange("otherReliefs", e.target.value)}
+                          className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
                           placeholder="0.00"
                           min={0}
                         />
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleAddStampDuty}
-                    >
-                      + Add
-                    </button>
                   </div>
-
-                  {/* List of stamp duty documents */}
-                  {stampDutyDocs.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <div className="text-sm font-medium text-[var(--muted)]">
-                        Documents ({stampDutyDocs.length})
-                      </div>
-                      {stampDutyDocs.map((doc, index) => {
-                        const rateInfo = STAMP_DUTY_RATES.find(r => r.documentType === doc.documentType);
-                        return (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between bg-white p-3 rounded-lg border"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium">
-                                {rateInfo?.description || doc.documentType}
-                              </div>
-                              <div className="text-sm text-[var(--muted)]">
-                                Transaction Value: {formatCurrency(doc.transactionValue)}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="text-red-500 hover:text-red-700 text-sm font-medium ml-4"
-                              onClick={() => handleRemoveStampDuty(index)}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
-              </div>
 
-              {/* Company Levies Section - Only for Companies */}
-              {profile.taxpayerType === "company" && (
-                <div className="mt-8 pt-6 border-t border-[var(--border)]">
-                  <h3 className="text-lg font-semibold">Company Levies</h3>
-                  <p className="text-sm text-[var(--muted)] mb-4">
-                    Additional statutory levies for companies (Police, NASENI, NSITF, ITF)
-                  </p>
-
-                  <div className="bg-[var(--background)] p-4 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* VAT Section */}
+                {profile.isVATRegistered && (
+                  <div className="bg-blue-50/50 rounded-lg p-4 border border-blue-100">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-2">VAT Inputs & Credits</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Enter your input VAT details to correctly calculate net VAT payable.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium mb-2">Industry</label>
-                        <select
-                          value={leviesInput.industry}
-                          onChange={(e) =>
-                            setLeviesInput((prev) => ({ ...prev, industry: e.target.value }))
-                          }
-                        >
-                          <option value="other">Other</option>
-                          <option value="banking">Banking</option>
-                          <option value="mobile_telecom">Mobile Telecom</option>
-                          <option value="ict">ICT</option>
-                          <option value="aviation">Aviation</option>
-                          <option value="maritime">Maritime</option>
-                          <option value="oil_gas">Oil & Gas</option>
-                        </select>
-                        <p className="text-xs text-[var(--muted)] mt-1">
-                          NASENI levy (0.25%) applies to banking, telecom, ICT, aviation, maritime, oil & gas
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Monthly Payroll</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₦</span>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vatable Purchases</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
                           <input
                             type="number"
-                            value={leviesInput.monthlyPayroll}
-                            onChange={(e) =>
-                              setLeviesInput((prev) => ({ ...prev, monthlyPayroll: e.target.value }))
-                            }
-                            className="pl-8"
+                            value={inputs.vatTaxablePurchases || ""}
+                            onChange={(e) => handleInputChange("vatTaxablePurchases", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
                             placeholder="0.00"
                             min={0}
                           />
                         </div>
-                        <p className="text-xs text-[var(--muted)] mt-1">For NSITF (1%) and ITF (1%)</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Input VAT Claimed</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={inputs.inputVATPaid || ""}
+                            onChange={(e) => handleInputChange("inputVATPaid", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="Leave blank to derive"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tax Credits & Adjustments */}
+                <div>
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Credits & Incentives</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Withholding Tax Credits</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">₦</span>
+                        </div>
+                        <input
+                          type="number"
+                          value={inputs.withholdingTaxCredits || ""}
+                          onChange={(e) => handleInputChange("withholdingTaxCredits", e.target.value)}
+                          className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                          placeholder="Total WHT evidenced"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    {profile.taxpayerType === "company" && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Carried-Forward Losses</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={inputs.priorYearLosses || ""}
+                              onChange={(e) => handleInputChange("priorYearLosses", e.target.value)}
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Investment Allowances</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={inputs.investmentAllowance || ""}
+                              onChange={(e) => handleInputChange("investmentAllowance", e.target.value)}
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Rural Investment Allowance</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={inputs.ruralInvestmentAllowance || ""}
+                              onChange={(e) => handleInputChange("ruralInvestmentAllowance", e.target.value)}
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Pioneer Status Relief</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={inputs.pioneerStatusRelief || ""}
+                              onChange={(e) => handleInputChange("pioneerStatusRelief", e.target.value)}
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* WHT Certificates Section */}
+                <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Withholding Tax Certificates</h3>
+                      <p className="text-xs text-gray-500">Attach evidence for your WHT credits.</p>
+                    </div>
+                    <span className="text-xs font-medium text-gray-500">{withholdingCertificates.length} attached</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end mb-4">
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Payer Name</label>
+                      <input
+                        type="text"
+                        value={newCertificate.payerName}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, payerName: e.target.value }))}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Payer Name"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Cert No.</label>
+                      <input
+                        type="text"
+                        value={newCertificate.certificateNumber}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, certificateNumber: e.target.value }))}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="WHT/..."
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                      <input
+                        type="date"
+                        value={newCertificate.issueDate}
+                        onChange={(e) => setNewCertificate((prev) => ({ ...prev, issueDate: e.target.value }))}
+                        className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                      <div className="relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-xs">₦</span>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={newCertificate.amount}
+                          onChange={(e) => setNewCertificate((prev) => ({ ...prev, amount: e.target.value }))}
+                          className="focus:ring-primary focus:border-primary block w-full pl-6 sm:text-sm border-gray-300 rounded-md"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">File</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
+                          accept="application/pdf,image/*"
+                          onChange={(e) => handleCertificateFileChange(e.target.files?.[0] || null)}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddCertificate}
+                          className="inline-flex items-center px-3 py-1 border border-transparent shadow-sm text-xs font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {withholdingCertificates.length > 0 && (
+                    <div className="overflow-hidden border border-gray-200 rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payer</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ref</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Doc</th>
+                            <th className="relative px-3 py-2"><span className="sr-only">Delete</span></th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {withholdingCertificates.map((cert) => (
+                            <tr key={cert.id}>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{cert.payerName}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{cert.certificateNumber}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{formatCurrency(cert.amount)}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center text-xs">
+                                {cert.fileData ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    PDF
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => handleRemoveCertificate(cert.id)}
+                                  className="text-red-600 hover:text-red-900 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Company Specific Extras */}
+                {profile.taxpayerType === "company" && (
+                  <div className="pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Additional Company Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Annual Turnover</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={inputs.turnover || ""}
+                            onChange={(e) => handleInputChange("turnover", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="If different from gross revenue"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cost of Sales</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={inputs.costOfSales || ""}
+                            onChange={(e) => handleInputChange("costOfSales", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="Direct costs"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Operating Expenses</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={inputs.operatingExpenses || ""}
+                            onChange={(e) => handleInputChange("operatingExpenses", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="OpEx"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Capital Allowance</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={inputs.capitalAllowance || ""}
+                            onChange={(e) => handleInputChange("capitalAllowance", e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="Claimable allowance"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payroll History */}
+                    <div className="bg-gray-50/50 rounded-lg p-4 border border-gray-200 mt-6">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">Payroll History <span className="font-normal text-gray-500">(Optional)</span></h4>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Log monthly payroll to auto-fill NSITF/ITF assumptions.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Month</label>
+                          <input
+                            type="month"
+                            value={newPayrollEntry.month}
+                            onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, month: e.target.value }))}
+                            className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Payroll (₦)</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-xs">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              value={newPayrollEntry.payroll}
+                              onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, payroll: e.target.value }))}
+                              className="focus:ring-primary focus:border-primary block w-full pl-6 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Employees</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={newPayrollEntry.employees}
+                            onChange={(e) => setNewPayrollEntry((prev) => ({ ...prev, employees: e.target.value }))}
+                            className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                            placeholder="0"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="w-full inline-flex justify-center items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                          onClick={handleAddPayrollEntry}
+                        >
+                          Add
+                        </button>
+                      </div>
+
+                      {inputs.payrollEntries && inputs.payrollEntries.length > 0 && (
+                        <div className="mt-4 overflow-hidden border border-gray-200 rounded-lg">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payroll</th>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employees</th>
+                                <th className="relative px-3 py-2"><span className="sr-only">Delete</span></th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {inputs.payrollEntries.map((entry, index) => (
+                                <tr key={`${entry.month}-${index}`}>
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{entry.month}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{formatCurrency(entry.grossPayroll)}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{entry.employeeCount}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                                    <button
+                                      type="button"
+                                      className="text-red-500 hover:text-red-700 text-xs"
+                                      onClick={() => handleRemovePayrollEntry(index)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+
+
+                {SHOW_AUX_CALCULATORS && (
+                  <section id="wht-calculator" className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Withholding Tax (WHT) Payments</h3>
+                    <p className="mt-1 text-sm text-gray-500 mb-4">
+                      Optional: Add payments you&apos;ve made or received that are subject to WHT.
+                    </p>
+
+                    <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Payment Type</label>
+                          <select
+                            value={newWhtPayment.paymentType}
+                            onChange={(e) =>
+                              setNewWhtPayment((prev) => ({ ...prev, paymentType: e.target.value }))
+                            }
+                            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                          >
+                            {WHT_RATES.map((rate) => (
+                              <option key={rate.paymentType} value={rate.paymentType}>
+                                {rate.description}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-xs">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={newWhtPayment.amount}
+                              onChange={(e) =>
+                                setNewWhtPayment((prev) => ({ ...prev, amount: e.target.value }))
+                              }
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Residency</label>
+                          <select
+                            value={newWhtPayment.isResident ? "resident" : "non-resident"}
+                            onChange={(e) =>
+                              setNewWhtPayment((prev) => ({
+                                ...prev,
+                                isResident: e.target.value === "resident",
+                              }))
+                            }
+                            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                          >
+                            <option value="resident">Resident</option>
+                            <option value="non-resident">Non-Resident</option>
+                          </select>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                          onClick={handleAddWhtPayment}
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      {/* List of added payments */}
+                      {whtPayments.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Added Payments ({whtPayments.length})
+                          </div>
+                          {whtPayments.map((payment, index) => {
+                            const rateInfo = getWhtRateInfo(payment.paymentType);
+                            const rate = payment.isResident
+                              ? rateInfo?.residentRate
+                              : rateInfo?.nonResidentRate;
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+                              >
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {rateInfo?.description || payment.paymentType}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {formatCurrency(payment.amount)} •{" "}
+                                    {payment.isResident ? "Resident" : "Non-Resident"} •{" "}
+                                    {rate ? `${(rate * 100).toFixed(0)}% WHT` : ""}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="text-red-500 hover:text-red-700 text-xs font-medium ml-4"
+                                  onClick={() => handleRemoveWhtPayment(index)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {SHOW_AUX_CALCULATORS && (
+                  <section id="vat-calculator" className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Value Added Tax (VAT) Quick Calculator</h3>
+                    <p className="mt-1 text-sm text-gray-500 mb-4">
+                      Estimate output VAT on your taxable sales and offset with eligible input VAT credits.
+                    </p>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Taxable Sales</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            value={vatSalesInput}
+                            onChange={(e) => setVatSalesInput(e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Input VAT Credits</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-sm">₦</span>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            value={vatInputCredit}
+                            onChange={(e) => setVatInputCredit(e.target.value)}
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid md:grid-cols-3 gap-4 mt-4">
+                      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 text-center">
+                        <div className="text-xs font-medium text-gray-500 uppercase">Output VAT ({(VAT_RATE * 100).toFixed(1)}%)</div>
+                        <div className="text-xl font-bold text-gray-900 mt-2">{formatCurrency(computedOutputVAT)}</div>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 text-center">
+                        <div className="text-xs font-medium text-gray-500 uppercase">Input VAT Claimed</div>
+                        <div className="text-xl font-bold text-gray-900 mt-2">{formatCurrency(vatInputAmount)}</div>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 text-center">
+                        <div className="text-xs font-medium text-gray-500 uppercase">Net VAT Position</div>
+                        <div className={`text-xl font-bold mt-2 ${computedNetVAT < 0 ? "text-green-600" : "text-gray-900"}`}>
+                          {formatCurrency(Math.abs(computedNetVAT))}
+                          {computedNetVAT < 0 ? " (Refund)" : ""}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {SHOW_AUX_CALCULATORS && (
+                  <section id="cgt-calculator" className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Capital Gains Tax (CGT)</h3>
+                    <p className="mt-1 text-sm text-gray-500 mb-4">
+                      Optional: Add asset disposals subject to CGT (10% rate).
+                    </p>
+
+                    <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Asset Type</label>
+                          <select
+                            value={newCgtDisposal.assetType}
+                            onChange={(e) =>
+                              setNewCgtDisposal((prev) => ({ ...prev, assetType: e.target.value as CGTInput['assetType'] }))
+                            }
+                            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                          >
+                            <option value="real_estate">Real Estate</option>
+                            <option value="shares">Shares/Securities</option>
+                            <option value="business_assets">Business Assets</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Acquisition Cost</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-xs">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={newCgtDisposal.acquisitionCost}
+                              onChange={(e) =>
+                                setNewCgtDisposal((prev) => ({ ...prev, acquisitionCost: e.target.value }))
+                              }
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Disposal Proceeds</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-xs">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={newCgtDisposal.disposalProceeds}
+                              onChange={(e) =>
+                                setNewCgtDisposal((prev) => ({ ...prev, disposalProceeds: e.target.value }))
+                              }
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                          onClick={handleAddCgtDisposal}
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      {/* List of CGT disposals */}
+                      {cgtDisposals.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Asset Disposals ({cgtDisposals.length})
+                          </div>
+                          {cgtDisposals.map((disposal, index) => {
+                            const gain = disposal.disposalProceeds - disposal.acquisitionCost;
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+                              >
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900 capitalize">
+                                    {disposal.assetType.replace('_', ' ')}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Cost: {formatCurrency(disposal.acquisitionCost)} → Proceeds: {formatCurrency(disposal.disposalProceeds)} •{" "}
+                                    <span className={gain > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                      {gain > 0 ? "Gain" : "Loss"}: {formatCurrency(Math.abs(gain))}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="text-red-500 hover:text-red-700 text-xs font-medium ml-4"
+                                  onClick={() => handleRemoveCgtDisposal(index)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {/* Stamp Duty Section */}
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">Stamp Duties</h3>
+                  <p className="mt-1 text-sm text-gray-500 mb-4">
+                    Optional: Add documents requiring stamp duties.
+                  </p>
+
+                  <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Document Type</label>
+                        <select
+                          value={newStampDuty.documentType}
+                          onChange={(e) =>
+                            setNewStampDuty((prev) => ({ ...prev, documentType: e.target.value as StampDutyInput['documentType'] }))
+                          }
+                          className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                        >
+                          {STAMP_DUTY_RATES.map((rate) => (
+                            <option key={rate.documentType} value={rate.documentType}>
+                              {rate.description}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium mb-2">Number of Employees</label>
-                        <input
-                          type="number"
-                          value={leviesInput.numberOfEmployees}
-                          onChange={(e) =>
-                            setLeviesInput((prev) => ({ ...prev, numberOfEmployees: e.target.value }))
-                          }
-                          placeholder="0"
-                          min={0}
-                        />
-                        <p className="text-xs text-[var(--muted)] mt-1">ITF applies if 5+ employees</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between mt-6">
-                <button className="btn btn-secondary" onClick={handleBack}>
-                  ← Back
-                </button>
-                <button className="btn btn-primary" onClick={handleNext}>
-                  Next: Review →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Review & Calculate */}
-          {step === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-[var(--primary)]">Step 3: Review & Calculate</h2>
-              <p className="text-[var(--muted)]">Please review your information before calculating</p>
-
-              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                <h3 className="font-semibold">Profile Summary</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-[var(--muted)]">Full Name:</div>
-                  <div>{profile.fullName}</div>
-                  {profile.businessName && (
-                    <>
-                      <div className="text-[var(--muted)]">Business Name:</div>
-                      <div>{profile.businessName}</div>
-                    </>
-                  )}
-                  <div className="text-[var(--muted)]">Taxpayer Type:</div>
-                  <div>{profile.taxpayerType === "freelancer" ? "Individual/Freelancer" : "Company/SME"}</div>
-                  <div className="text-[var(--muted)]">Tax Year:</div>
-                  <div>{profile.taxYear}</div>
-                  <div className="text-[var(--muted)]">State:</div>
-                  <div>{profile.stateOfResidence}</div>
-                  <div className="text-[var(--muted)]">VAT Registered:</div>
-                  <div>{profile.isVATRegistered ? "Yes" : "No"}</div>
-                </div>
-              </div>
-
-              <div className="bg-[var(--background)] p-4 rounded-lg space-y-4">
-                <h3 className="font-semibold">Financial Summary</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="text-[var(--muted)]">Gross Revenue:</div>
-                  <div>{formatCurrency(inputs.grossRevenue)}</div>
-                  <div className="text-[var(--muted)]">Allowable Expenses:</div>
-                  <div>{formatCurrency(inputs.allowableExpenses)}</div>
-                  {(inputs.pensionContributions ?? 0) > 0 && (
-                    <>
-                      <div className="text-[var(--muted)]">Pension:</div>
-                      <div>{formatCurrency(inputs.pensionContributions ?? 0)}</div>
-                    </>
-                  )}
-                  {(inputs.nhfContributions ?? 0) > 0 && (
-                    <>
-                      <div className="text-[var(--muted)]">NHF:</div>
-                      <div>{formatCurrency(inputs.nhfContributions ?? 0)}</div>
-                    </>
-                  )}
-                  {(inputs.lifeInsurancePremiums ?? 0) > 0 && (
-                    <>
-                      <div className="text-[var(--muted)]">Life Insurance:</div>
-                      <div>{formatCurrency(inputs.lifeInsurancePremiums ?? 0)}</div>
-                    </>
-                  )}
-                  {(inputs.otherReliefs ?? 0) > 0 && (
-                    <>
-                      <div className="text-[var(--muted)]">Other Reliefs:</div>
-                      <div>{formatCurrency(inputs.otherReliefs ?? 0)}</div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
-                  <h3 className="font-semibold">Detailed Income Entries ({inputs.incomeEntries.length})</h3>
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Period</th>
-                          <th>Revenue</th>
-                          <th>Expenses</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inputs.incomeEntries.map((entry, index) => (
-                          <tr key={`${entry.periodLabel}-${index}`}>
-                            <td>{entry.periodLabel}</td>
-                            <td>{formatCurrency(entry.revenue)}</td>
-                            <td>{formatCurrency(entry.expenses)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {profile.taxpayerType === "company" && inputs.payrollEntries && inputs.payrollEntries.length > 0 && (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
-                  <h3 className="font-semibold">Payroll Snapshot</h3>
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Month</th>
-                          <th>Payroll</th>
-                          <th>Employees</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inputs.payrollEntries.map((entry, index) => (
-                          <tr key={`${entry.month}-${index}`}>
-                            <td>{entry.month}</td>
-                            <td>{formatCurrency(entry.grossPayroll)}</td>
-                            <td>{entry.employeeCount}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {profile.isVATRegistered && (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-2">
-                  <h3 className="font-semibold">VAT Inputs</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-[var(--muted)]">Vatable Purchases:</div>
-                    <div>{formatCurrency(inputs.vatTaxablePurchases || 0)}</div>
-                    <div className="text-[var(--muted)]">Input VAT Claimed:</div>
-                    <div>{formatCurrency(typeof inputs.inputVATPaid === "number" ? inputs.inputVATPaid : (inputs.vatTaxablePurchases || 0) * VAT_RATE)}</div>
-                  </div>
-                </div>
-              )}
-
-              {(inputs.withholdingTaxCredits ?? 0) > 0 ||
-                (profile.taxpayerType === "company" && ((inputs.priorYearLosses ?? 0) > 0 || (inputs.investmentAllowance ?? 0) > 0 || (inputs.ruralInvestmentAllowance ?? 0) > 0 || (inputs.pioneerStatusRelief ?? 0) > 0)) ? (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-2">
-                  <h3 className="font-semibold">Credits & Adjustments</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {(inputs.withholdingTaxCredits ?? 0) > 0 && (
-                      <>
-                        <div className="text-[var(--muted)]">WHT Credits:</div>
-                        <div>{formatCurrency(inputs.withholdingTaxCredits ?? 0)}</div>
-                      </>
-                    )}
-                    {profile.taxpayerType === "company" && (inputs.priorYearLosses ?? 0) > 0 && (
-                      <>
-                        <div className="text-[var(--muted)]">Carried-Forward Losses:</div>
-                        <div>{formatCurrency(inputs.priorYearLosses ?? 0)}</div>
-                      </>
-                    )}
-                    {profile.taxpayerType === "company" && (inputs.investmentAllowance ?? 0) > 0 && (
-                      <>
-                        <div className="text-[var(--muted)]">Investment Allowance:</div>
-                        <div>{formatCurrency(inputs.investmentAllowance ?? 0)}</div>
-                      </>
-                    )}
-                    {profile.taxpayerType === "company" && (inputs.ruralInvestmentAllowance ?? 0) > 0 && (
-                      <>
-                        <div className="text-[var(--muted)]">Rural Investment Allowance:</div>
-                        <div>{formatCurrency(inputs.ruralInvestmentAllowance ?? 0)}</div>
-                      </>
-                    )}
-                    {profile.taxpayerType === "company" && (inputs.pioneerStatusRelief ?? 0) > 0 && (
-                      <>
-                        <div className="text-[var(--muted)]">Pioneer Relief:</div>
-                        <div>{formatCurrency(inputs.pioneerStatusRelief ?? 0)}</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {withholdingCertificates.length > 0 && (
-                <div className="bg-[var(--background)] p-4 rounded-lg space-y-3">
-                  <h3 className="font-semibold">WHT Certificates</h3>
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Payer</th>
-                          <th>Certificate No.</th>
-                          <th>Date</th>
-                          <th>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {withholdingCertificates.map((cert) => (
-                          <tr key={cert.id}>
-                            <td>{cert.payerName}</td>
-                            <td>{cert.certificateNumber}</td>
-                            <td>{cert.issueDate}</td>
-                            <td>{formatCurrency(cert.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between mt-6">
-                <button className="btn btn-secondary" onClick={handleBack}>
-                  ← Back
-                </button>
-                <button
-                  className="btn btn-accent"
-                  onClick={handleCalculate}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <span className="spinner mr-2"></span>
-                      Calculating...
-                    </>
-                  ) : (
-                    "Calculate Tax 🧮"
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Results */}
-      {result && (
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-gray-200 bg-white/95 p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-[var(--primary)]">Tax Computation Results</h2>
-              <button className="btn btn-secondary text-sm" onClick={handleStartOver}>
-                Start Over
-              </button>
-            </div>
-
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
-                <div className="text-sm text-[var(--muted)]">Taxable Income</div>
-                <div className="text-2xl font-bold text-[var(--primary)]">
-                  {formatCurrency(result.taxableIncome)}
-                </div>
-              </div>
-              <div className="bg-[var(--accent)] text-white p-4 rounded-lg text-center">
-                <div className="text-sm opacity-80">Total Tax Due</div>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(result.totalTaxDue)}
-                </div>
-              </div>
-              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
-                <div className="text-sm text-[var(--muted)]">Effective Rate</div>
-                <div className="text-2xl font-bold text-[var(--primary)]">
-                  {formatPercent(result.effectiveRate)}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[var(--background)] p-4 rounded-lg mb-6">
-              <div className="text-sm text-[var(--muted)]">Rule Set</div>
-              <div className="font-semibold">{result.taxRuleMetadata.version}</div>
-              <div className="text-sm text-[var(--muted)]">
-                Source: {result.taxRuleMetadata.source}
-                {result.taxRuleMetadata.lastUpdated && ` • Updated ${new Date(result.taxRuleMetadata.lastUpdated).toLocaleDateString()}`}
-              </div>
-              {result.taxRuleMetadata.remoteUrl && (
-                <div className="text-xs text-[var(--muted)] break-words">Remote: {result.taxRuleMetadata.remoteUrl}</div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
-                <div className="text-sm text-[var(--muted)]">Tax Before Credits</div>
-                <div className="text-2xl font-bold text-[var(--primary)]">
-                  {formatCurrency(result.taxBeforeCredits)}
-                </div>
-              </div>
-              <div className="bg-[var(--background)] p-4 rounded-lg text-center">
-                <div className="text-sm text-[var(--muted)]">Credits Applied</div>
-                <div className="text-2xl font-bold text-[var(--primary)]">
-                  {formatCurrency(result.taxCreditsApplied)}
-                </div>
-              </div>
-            </div>
-
-            {result.validationIssues.length > 0 && (
-              <div className="space-y-3 mb-6">
-                <h3 className="text-lg font-semibold">Data Quality Checks</h3>
-                {result.validationIssues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    className={`p-3 rounded-lg border ${validationSeverityClasses[issue.severity]}`}
-                  >
-                    <div className="text-xs uppercase tracking-wide font-semibold">
-                      {issue.severity.toUpperCase()} • {issue.field}
-                    </div>
-                    <div className="text-sm">{issue.message}</div>
-                  </div>
-                ))}
-                <p className="text-xs text-[var(--muted)]">
-                  Resolve critical errors before relying on this computation for statutory filings.
-                </p>
-              </div>
-            )}
-
-            {/* Tax breakdown table */}
-            <h3 className="text-lg font-semibold mb-3">Tax Breakdown by Band</h3>
-            <div className="table-container mb-6">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Band</th>
-                    <th>Rate</th>
-                    <th>Base Amount</th>
-                    <th>Tax Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.bands.map((band, index) => (
-                    <tr key={index}>
-                      <td>{band.bandLabel}</td>
-                      <td>{formatPercent(band.rate)}</td>
-                      <td>{formatCurrency(band.baseAmount)}</td>
-                      <td className="font-medium">{formatCurrency(band.taxAmount)}</td>
-                    </tr>
-                  ))}
-                  <tr className="font-bold bg-[var(--background)]">
-                    <td colSpan={3}>Total Tax Due</td>
-                    <td>{formatCurrency(result.totalTaxDue)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {result.calculationTrace.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Calculation Trace</h3>
-                <div className="table-container mb-6">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Step</th>
-                        <th>Detail</th>
-                        <th>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.calculationTrace.map((entry, index) => (
-                        <tr key={`${entry.step}-${index}`}>
-                          <td>{entry.step}</td>
-                          <td>{entry.detail}</td>
-                          <td>{entry.amount !== undefined ? formatCurrency(entry.amount) : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {/* VAT Summary */}
-            {result.vat && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">VAT Summary</h3>
-                <div className="bg-[var(--background)] p-4 rounded-lg mb-6">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-[var(--muted)]">VAT Rate:</div>
-                    <div>{formatPercent(result.vat.vatRate)}</div>
-                    <div className="text-[var(--muted)]">Output VAT (on sales):</div>
-                    <div>{formatCurrency(result.vat.outputVAT)}</div>
-                    {result.vat.inputVAT !== undefined && (
-                      <>
-                        <div className="text-[var(--muted)]">Input VAT (on purchases):</div>
-                        <div>{formatCurrency(result.vat.inputVAT)}</div>
-                      </>
-                    )}
-                    <div className="text-[var(--muted)] font-semibold">Net VAT Payable:</div>
-                    <div className="font-semibold">{formatCurrency(result.vat.netVATPayable)}</div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* WHT Summary */}
-            {SHOW_AUX_CALCULATORS && whtResult && whtResult.calculations.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Withholding Tax (WHT) Summary</h3>
-                <div className="table-container mb-6">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Payment Type</th>
-                        <th>Gross Amount</th>
-                        <th>Rate</th>
-                        <th>WHT Deducted</th>
-                        <th>Net Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {whtResult.calculations.map((calc, index) => (
-                        <tr key={index}>
-                          <td>
-                            {calc.paymentDescription}
-                            <span className="text-xs text-[var(--muted)] ml-1">
-                              ({calc.isResident ? "R" : "NR"})
-                            </span>
-                          </td>
-                          <td>{formatCurrency(calc.grossAmount)}</td>
-                          <td>{formatPercent(calc.rate)}</td>
-                          <td className="text-red-600">{formatCurrency(calc.whtAmount)}</td>
-                          <td className="font-medium">{formatCurrency(calc.netAmount)}</td>
-                        </tr>
-                      ))}
-                      <tr className="font-bold bg-[var(--background)]">
-                        <td>Totals</td>
-                        <td>{formatCurrency(whtResult.totalGrossAmount)}</td>
-                        <td></td>
-                        <td className="text-red-600">{formatCurrency(whtResult.totalWHTDeducted)}</td>
-                        <td>{formatCurrency(whtResult.totalNetAmount)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {withholdingCertificates.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">WHT Certificates on File</h3>
-                <div className="table-container mb-6">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Payer</th>
-                        <th>Certificate No.</th>
-                        <th>Date</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {withholdingCertificates.map((cert) => (
-                        <tr key={cert.id}>
-                          <td>{cert.payerName}</td>
-                          <td>{cert.certificateNumber}</td>
-                          <td>{cert.issueDate}</td>
-                          <td>{formatCurrency(cert.amount)}</td>
-                          <td>{cert.fileData ? "Attachment" : "No attachment"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {/* CGT Summary */}
-            {SHOW_AUX_CALCULATORS && cgtResult && cgtResult.totalGain > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Capital Gains Tax (CGT) Summary</h3>
-                <div className="summary-box mb-6">
-                  <div className="summary-item">
-                    <span className="summary-label">Total Chargeable Gains</span>
-                    <span className="summary-value">{formatCurrency(cgtResult.totalGain)}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span className="summary-label">CGT Rate</span>
-                    <span className="summary-value">{formatPercent(CGT_RATE)}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span className="summary-label">CGT Payable</span>
-                    <span className="summary-value text-red-600 font-bold">{formatCurrency(cgtResult.totalCGT)}</span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* TET Summary - Companies only */}
-            {tetResult && tetResult.isApplicable && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Tertiary Education Tax (TET)</h3>
-                <div className="summary-box mb-6">
-                  <div className="summary-item">
-                    <span className="summary-label">Assessable Profit</span>
-                    <span className="summary-value">{formatCurrency(tetResult.assessableProfit)}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span className="summary-label">TET Rate</span>
-                    <span className="summary-value">{formatPercent(TET_RATE)}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span className="summary-label">TET Payable</span>
-                    <span className="summary-value text-red-600 font-bold">{formatCurrency(tetResult.tetPayable)}</span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Stamp Duty Summary */}
-            {stampDutyResult && stampDutyResult.totalDuty > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Stamp Duties Summary</h3>
-                <div className="table-container mb-6">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Document Type</th>
-                        <th>Transaction Value</th>
-                        <th>Rate</th>
-                        <th>Duty</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stampDutyResult.documents.map((doc, index) => (
-                        <tr key={index}>
-                          <td>{doc.documentDescription}</td>
-                          <td>{formatCurrency(doc.transactionValue)}</td>
-                          <td>{doc.rate}</td>
-                          <td className="font-medium">{formatCurrency(doc.stampDuty)}</td>
-                        </tr>
-                      ))}
-                      <tr className="font-bold bg-[var(--background)]">
-                        <td colSpan={3}>Total Stamp Duties</td>
-                        <td className="text-red-600">{formatCurrency(stampDutyResult.totalDuty)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {/* Company Levies Summary */}
-            {leviesResult && leviesResult.totalLevies > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Company Levies Summary</h3>
-                <div className="table-container mb-6">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Levy Type</th>
-                        <th>Rate</th>
-                        <th>Amount Payable</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>Police Trust Fund</td>
-                        <td>{formatPercent(leviesResult.policeLevy.rate)}</td>
-                        <td>{formatCurrency(leviesResult.policeLevy.levyPayable)}</td>
-                        <td>{leviesResult.policeLevy.isApplicable ? "✓ Applicable" : "—"}</td>
-                      </tr>
-                      <tr>
-                        <td>NASENI Levy</td>
-                        <td>{formatPercent(leviesResult.naseniLevy.rate)}</td>
-                        <td>{formatCurrency(leviesResult.naseniLevy.levyPayable)}</td>
-                        <td>{leviesResult.naseniLevy.isApplicable ? "✓ Applicable" : "— Not applicable"}</td>
-                      </tr>
-                      <tr>
-                        <td>NSITF Contribution</td>
-                        <td>{formatPercent(leviesResult.nsitf.rate)}</td>
-                        <td>{formatCurrency(leviesResult.nsitf.contributionPayable)}</td>
-                        <td>✓ Applicable</td>
-                      </tr>
-                      <tr>
-                        <td>ITF Levy</td>
-                        <td>{formatPercent(leviesResult.itf.rate)}</td>
-                        <td>{formatCurrency(leviesResult.itf.levyPayable)}</td>
-                        <td>{leviesResult.itf.isApplicable ? "✓ Applicable" : "— Not applicable"}</td>
-                      </tr>
-                      <tr className="font-bold bg-[var(--background)]">
-                        <td colSpan={2}>Total Levies</td>
-                        <td className="text-red-600">{formatCurrency(leviesResult.totalLevies)}</td>
-                        <td></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {result.statutoryReferences.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Statutory References</h3>
-                <ul className="list-disc list-inside text-sm text-[var(--muted)] mb-6 space-y-1">
-                  {result.statutoryReferences.map((ref, index) => (
-                    <li key={`${ref.citation}-${index}`}>
-                      <span className="font-semibold text-[var(--foreground)]">{ref.title}</span> — {ref.citation}. {ref.description}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {/* Notes */}
-            {result.notes.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-3">Notes</h3>
-                <ul className="list-disc list-inside text-sm text-[var(--muted)] mb-6 space-y-1">
-                  {result.notes.map((note, index) => (
-                    <li key={index}>{note}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {/* Tax Optimization Suggestions */}
-            {optimizations && optimizations.suggestions.length > 0 && (
-              <div className="optimization-section mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[var(--accent)]">
-                    💡 Tax Optimization Tips
-                  </h3>
-                  {optimizations.totalPotentialSavings > 0 && (
-                    <span className="text-sm bg-[var(--accent)] text-white px-3 py-1 rounded-full">
-                      Potential Savings: {formatCurrency(optimizations.totalPotentialSavings)}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {optimizations.suggestions.map((suggestion, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border-l-4 ${suggestion.priority === "high"
-                        ? "bg-green-50 border-green-500"
-                        : suggestion.priority === "medium"
-                          ? "bg-yellow-50 border-yellow-500"
-                          : "bg-gray-50 border-gray-400"
-                        }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-semibold text-[var(--foreground)]">
-                            {suggestion.title}
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Transaction Value</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500 sm:text-xs">₦</span>
                           </div>
-                          <p className="text-sm text-[var(--muted)] mt-1">
-                            {suggestion.description}
+                          <input
+                            type="number"
+                            value={newStampDuty.transactionValue}
+                            onChange={(e) =>
+                              setNewStampDuty((prev) => ({ ...prev, transactionValue: e.target.value }))
+                            }
+                            className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                            placeholder="0.00"
+                            min={0}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                        onClick={handleAddStampDuty}
+                      >
+                        + Add
+                      </button>
+                    </div>
+
+                    {/* List of stamp duty documents */}
+                    {stampDutyDocs.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Documents ({stampDutyDocs.length})
+                        </div>
+                        {stampDutyDocs.map((doc, index) => {
+                          const rateInfo = STAMP_DUTY_RATES.find(r => r.documentType === doc.documentType);
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+                            >
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {rateInfo?.description || doc.documentType}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Transaction Value: {formatCurrency(doc.transactionValue)}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="text-red-500 hover:text-red-700 text-xs font-medium ml-4"
+                                onClick={() => handleRemoveStampDuty(index)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Company Levies Section - Only for Companies */}
+                {profile.taxpayerType === "company" && (
+                  <div className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Company Levies</h3>
+                    <p className="mt-1 text-sm text-gray-500 mb-4">
+                      Additional statutory levies for companies (Police, NASENI, NSITF, ITF).
+                    </p>
+
+                    <div className="bg-gray-50/50 rounded-lg border border-gray-200 p-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+                          <select
+                            value={leviesInput.industry}
+                            onChange={(e) =>
+                              setLeviesInput((prev) => ({ ...prev, industry: e.target.value }))
+                            }
+                            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                          >
+                            <option value="other">Other</option>
+                            <option value="banking">Banking</option>
+                            <option value="mobile_telecom">Mobile Telecom</option>
+                            <option value="ict">ICT</option>
+                            <option value="aviation">Aviation</option>
+                            <option value="maritime">Maritime</option>
+                            <option value="oil_gas">Oil & Gas</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            NASENI levy (0.25%) applies to certain sectors.
                           </p>
                         </div>
-                        {suggestion.potentialSavings && suggestion.potentialSavings > 0 && (
-                          <div className="text-sm font-medium text-[var(--accent)] whitespace-nowrap ml-4">
-                            Save ~{formatCurrency(suggestion.potentialSavings)}
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Payroll</label>
+                          <div className="relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₦</span>
+                            </div>
+                            <input
+                              type="number"
+                              value={leviesInput.monthlyPayroll}
+                              onChange={(e) =>
+                                setLeviesInput((prev) => ({ ...prev, monthlyPayroll: e.target.value }))
+                              }
+                              className="focus:ring-primary focus:border-primary block w-full pl-7 sm:text-sm border-gray-300 rounded-md"
+                              placeholder="0.00"
+                              min={0}
+                            />
                           </div>
-                        )}
+                          <p className="text-xs text-gray-500 mt-1">For NSITF and ITF calculations</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Employees</label>
+                          <input
+                            type="number"
+                            value={leviesInput.numberOfEmployees}
+                            onChange={(e) =>
+                              setLeviesInput((prev) => ({ ...prev, numberOfEmployees: e.target.value }))
+                            }
+                            className="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                            placeholder="0"
+                            min={0}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">ITF applies if 5+ employees</p>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="flex justify-between mt-6 pt-6 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    className="px-6 py-2.5 text-sm font-medium text-black bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-all shadow-sm flex items-center gap-2"
+                  >
+                    Next: Review <span aria-hidden="true">→</span>
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Download button */}
-            <div className="flex justify-center">
+        {/* Step 3: Review & Calculate */}
+        {step === 3 && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Review & Calculate</h2>
+              <p className="text-[var(--muted)]">Please review your information carefully before generating the final tax computation.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-semibold text-gray-900">Profile Summary</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <dt className="text-sm font-medium text-gray-500">Full Name</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile.fullName}</dd>
+                    </div>
+                    {profile.businessName && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-sm font-medium text-gray-500">Business Name</dt>
+                        <dd className="mt-1 text-sm text-gray-900">{profile.businessName}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Taxpayer Type</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile.taxpayerType === "freelancer" ? "Individual/Freelancer" : "Company/SME"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Tax Year</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile.taxYear}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">State</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile.stateOfResidence}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">VAT Registered</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{profile.isVATRegistered ? "Yes" : "No"}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-semibold text-gray-900">Financial Summary</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Gross Revenue</dt>
+                      <dd className="mt-1 text-sm font-semibold text-gray-900">{formatCurrency(inputs.grossRevenue)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Allowable Expenses</dt>
+                      <dd className="mt-1 text-sm font-semibold text-gray-900">{formatCurrency(inputs.allowableExpenses)}</dd>
+                    </div>
+                    {(inputs.pensionContributions ?? 0) > 0 && (
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Pension</dt>
+                        <dd className="mt-1 text-sm text-gray-900">{formatCurrency(inputs.pensionContributions ?? 0)}</dd>
+                      </div>
+                    )}
+                    {(inputs.nhfContributions ?? 0) > 0 && (
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">NHF</dt>
+                        <dd className="mt-1 text-sm text-gray-900">{formatCurrency(inputs.nhfContributions ?? 0)}</dd>
+                      </div>
+                    )}
+                    {(inputs.lifeInsurancePremiums ?? 0) > 0 && (
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500">Life Insurance</dt>
+                        <dd className="mt-1 text-sm text-gray-900">{formatCurrency(inputs.lifeInsurancePremiums ?? 0)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-6 border-t border-gray-100">
               <button
-                className="btn btn-primary text-lg px-8"
-                onClick={handleDownloadPDF}
+                onClick={handleBack}
+                className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleCalculate}
                 disabled={isLoading}
+                className="flex items-center gap-2 px-8 py-2.5 text-sm font-medium text-black bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
-                    <span className="spinner mr-2"></span>
-                    Generating PDF...
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    Calculating...
                   </>
                 ) : (
-                  "📄 Download PDF Computation Sheet"
+                  <>
+                    Calculate Tax
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </>
                 )}
               </button>
             </div>
           </div>
+        )}
 
-          {/* Disclaimer */}
-          <div className="disclaimer">
-            <strong>⚠️ Disclaimer:</strong> This computation is an ESTIMATE generated by software based on
-            simplified rules and does not constitute tax, legal, or financial advice. Please confirm all
-            calculations with the Federal Inland Revenue Service (FIRS), your State Board of Internal Revenue
-            (SBIRS), or a qualified tax professional before making any tax-related decisions or filings.
+        {/* Results */}
+        {/* Results View */}
+        {result && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+
+            {/* Main Result Card */}
+            <div className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 shadow-xl">
+              <div className="absolute top-0 left-0 w-full h-2 bg-[var(--primary)]" />
+              <div className="p-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                  <div>
+                    <h2 className="text-3xl font-bold text-gray-900">Tax Computation Results</h2>
+                    <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                      <span>Reference: {result.taxRuleMetadata.version}</span>
+                      <span>•</span>
+                      <span>{new Date().toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleStartOver}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Start Over
+                    </button>
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isLoading}
+                      className="px-4 py-2 text-sm font-medium text-black bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      Download Report
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Taxable Income</div>
+                    <div className="text-3xl font-bold text-gray-900">{formatCurrency(result.taxableIncome)}</div>
+                  </div>
+
+                  <div className="p-6 bg-[var(--primary)]/10 rounded-xl border border-[var(--primary)]/20 relative overflow-hidden group">
+                    <div className="absolute -right-6 -top-6 w-24 h-24 bg-[var(--primary)]/10 rounded-full group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-medium text-gray-600 uppercase tracking-wide mb-1">Net Tax Payable</div>
+                    <div className="text-4xl font-extrabold text-[#111827]">{formatCurrency(result.totalTaxDue)}</div>
+                    {result.effectiveRate > 0 && (
+                      <div className="mt-2 text-sm font-medium text-gray-600">
+                        Effective Rate: <span className="text-black">{formatPercent(result.effectiveRate)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Tax Credits Applied</div>
+                    <div className="text-3xl font-bold text-gray-900">{formatCurrency(result.taxCreditsApplied)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Validation Issues */}
+            {result.validationIssues.length > 0 && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl shadow-sm">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4 w-full">
+                    <h3 className="text-lg font-medium text-yellow-800">Attention Needed</h3>
+                    <div className="mt-3 space-y-3">
+                      {result.validationIssues.map((issue) => (
+                        <div key={issue.id} className="flex gap-2 text-sm text-yellow-700 bg-yellow-100/50 p-2 rounded">
+                          <span className="font-bold uppercase text-xs tracking-wider px-2 py-0.5 bg-yellow-200 rounded text-yellow-800 self-start mt-0.5">{issue.severity}</span>
+                          <span><span className="font-semibold">{issue.field}:</span> {issue.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Breakdown & Calcs */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Tax Bands Table */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-semibold text-gray-900">Tax Calculation Breakdown</h3>
+                </div>
+                <div className="p-0">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Band</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {result.bands.map((band, index) => (
+                        <tr key={index} className="hover:bg-gray-50/50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{band.bandLabel}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPercent(band.rate)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">{formatCurrency(band.taxAmount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-50 font-semibold">
+                        <td colSpan={2} className="px-6 py-4 text-sm text-gray-900 text-right">Total Tax:</td>
+                        <td className="px-6 py-4 text-sm text-gray-900 text-right">{formatCurrency(result.totalTaxDue)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Optimizations */}
+              {optimizations && optimizations.suggestions.length > 0 && (
+                <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 shadow-sm overflow-hidden h-full">
+                  <div className="px-6 py-4 border-b border-indigo-100 bg-indigo-50/80 flex justify-between items-center">
+                    <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Optimization Opportunities
+                    </h3>
+                    {optimizations.totalPotentialSavings > 0 && (
+                      <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full border border-indigo-200">
+                        Save up to {formatCurrency(optimizations.totalPotentialSavings)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                    {optimizations.suggestions.map((suggestion, index) => (
+                      <div key={index} className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start gap-4">
+                          <div>
+                            <h4 className="font-medium text-gray-900 text-sm">{suggestion.title}</h4>
+                            <p className="text-xs text-gray-500 mt-1">{suggestion.description}</p>
+                          </div>
+                          {suggestion.potentialSavings && (
+                            <div className="text-indigo-600 font-bold text-sm bg-indigo-50 px-2 py-1 rounded">
+                              {formatCurrency(suggestion.potentialSavings)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Auxiliary Logic */}
+            {(whtResult || cgtResult || stampDutyResult || leviesResult) && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-bold text-gray-900 border-b pb-2">Additional Tax Obligations</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* WHT */}
+                  {whtResult && whtResult.calculations.length > 0 && (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
+                        <h4 className="font-semibold text-gray-900">Withholding Tax (WHT)</h4>
+                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(whtResult.totalWHTDeducted)}</span>
+                      </div>
+                      <div className="p-4">
+                        <ul className="space-y-2">
+                          {whtResult.calculations.map((c, i) => (
+                            <li key={i} className="text-sm flex justify-between border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                              <span className="text-gray-600">{c.paymentDescription}</span>
+                              <span className="font-medium">{formatCurrency(c.whtAmount)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CGT */}
+                  {cgtResult && cgtResult.totalGain > 0 && (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
+                        <h4 className="font-semibold text-gray-900">Capital Gains Tax (CGT)</h4>
+                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(cgtResult.totalCGT)}</span>
+                      </div>
+                      <div className="p-4 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Total Gain</span>
+                          <span>{formatCurrency(cgtResult.totalGain)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium text-[var(--primary)]">
+                          <span>Tax Payable (10%)</span>
+                          <span>{formatCurrency(cgtResult.totalCGT)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Levies */}
+                  {leviesResult && (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
+                        <h4 className="font-semibold text-gray-900">Company Levies</h4>
+                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(leviesResult.totalLevies)}</span>
+                      </div>
+                      <div className="p-4 space-y-2 text-sm">
+                        {leviesResult.itf.isApplicable && (
+                          <div className="flex justify-between"><span>ITF (1%)</span><span>{formatCurrency(leviesResult.itf.levyPayable)}</span></div>
+                        )}
+                        {leviesResult.nsitf.isApplicable && (
+                          <div className="flex justify-between"><span>NSITF (1%)</span><span>{formatCurrency(leviesResult.nsitf.contributionPayable)}</span></div>
+                        )}
+                        {leviesResult.policeLevy.isApplicable && (
+                          <div className="flex justify-between"><span>Police Fund (0.005%)</span><span>{formatCurrency(leviesResult.policeLevy.levyPayable)}</span></div>
+                        )}
+                        {leviesResult.naseniLevy.isApplicable && (
+                          <div className="flex justify-between"><span>NASENI (0.25%)</span><span>{formatCurrency(leviesResult.naseniLevy.levyPayable)}</span></div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Helper functions for disclaimer footer */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-xs text-gray-500 max-w-4xl mx-auto">
+              <p>
+                <strong>Disclaimer:</strong> This computation is an estimate based on current Nigerian tax laws (Finance Act 2023).
+                Results should be verified by a qualified tax professional before filing.
+                NaijaTaxAgent is not liable for any inaccuracies.
+              </p>
+            </div>
+
           </div>
+        )}
+
+        <div className="hidden">
+          {/* Hidden helper for state debug if needed */}
         </div>
-      )}
-      <p className="text-center text-[var(--muted)] mt-10 text-base">
-        NaijaTaxAgent helps Nigerian freelancers and small businesses estimate their annual tax and
-        generate a printable computation sheet for FIRS or your State Board of Internal Revenue (SBIRS).
-      </p>
+
       </section>
-      <TaxAgentChat />
     </>
   );
 }

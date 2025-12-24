@@ -47,6 +47,15 @@ export interface StatementDraft {
   };
   analysisSource?: "rule" | "ai" | "hybrid";
   analysisConfidence?: number;
+  equityStatement?: EquityStatement;
+}
+
+export interface EquityStatement {
+  openingBalance: number;
+  additions: number; // Capital introduced
+  drawings: number; // Owner withdrawals
+  netIncome: number; // Profit/Loss for period
+  closingBalance: number;
 }
 
 export interface StatementLineItem {
