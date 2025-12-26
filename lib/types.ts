@@ -90,6 +90,7 @@ export interface TaxResult {
     statutoryReferences: StatutoryReference[];
     calculationTrace: CalculationTraceEntry[];
     taxRuleMetadata: TaxRuleMetadata;
+    reconciliationReport?: any[]; // Using any[] temporarily, will use ReconciliationRow from rulebook.ts
 }
 
 // API request/response types

@@ -2138,79 +2138,118 @@ export default function HomePage() {
         {/* Results */}
         {/* Results View */}
         {result && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
             {/* Main Result Card */}
-            <div className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 shadow-xl">
-              <div className="absolute top-0 left-0 w-full h-2 bg-[var(--primary)]" />
-              <div className="p-8">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="relative overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-none">
+              {/* Decorative top bar */}
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-[var(--primary)]" />
+
+              <div className="p-8 md:p-12">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
                   <div>
-                    <h2 className="text-3xl font-bold text-gray-900">Tax Computation Results</h2>
-                    <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                      <span>Reference: {result.taxRuleMetadata.version}</span>
-                      <span>•</span>
-                      <span>{new Date().toLocaleDateString()}</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold">Computation Complete</span>
+                    </div>
+                    <h2 className="text-4xl font-extrabold text-[#0a0a0a] tracking-tight">Tax Report</h2>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 font-medium">
+                      <span>Reference ID: {result.taxRuleMetadata.version || 'Insight-v2'}</span>
+                      <span className="opacity-30">•</span>
+                      <span>{new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </div>
                   </div>
                   <div className="flex gap-3">
                     <button
                       onClick={handleStartOver}
-                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      className="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 border border-transparent hover:border-gray-200 rounded-xl transition-all"
                     >
                       Start Over
                     </button>
                     <button
                       onClick={handleDownloadPDF}
                       disabled={isLoading}
-                      className="px-4 py-2 text-sm font-medium text-black bg-[var(--primary)] rounded-lg hover:bg-[var(--primary)]/90 transition-colors shadow-sm flex items-center gap-2"
+                      className="px-6 py-2.5 text-sm font-extrabold text-black bg-[var(--primary)] rounded-xl hover:bg-[var(--primary)]/90 transition-all flex items-center gap-2"
                     >
-                      Download Report
+                      Download PDF Report
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Taxable Income</div>
-                    <div className="text-3xl font-bold text-gray-900">{formatCurrency(result.taxableIncome)}</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+                  {/* Taxable Income Card */}
+                  <div className="group p-8 bg-gray-50 rounded-2xl border border-gray-100/50 hover:bg-white hover:border-gray-100 transition-all duration-300 relative overflow-hidden">
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-gray-200/20 rounded-full group-hover:scale-110 transition-transform duration-500" />
+                    <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-gray-900 group-hover:text-white transition-colors">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Gross Taxable Income</div>
+                    <div className="text-2xl font-black text-gray-900 tracking-tight">{formatCurrency(result.taxableIncome)}</div>
+                    <p className="mt-2 text-xs text-gray-500">Total earnings subject to tax</p>
                   </div>
 
-                  <div className="p-6 bg-[var(--primary)]/10 rounded-xl border border-[var(--primary)]/20 relative overflow-hidden group">
-                    <div className="absolute -right-6 -top-6 w-24 h-24 bg-[var(--primary)]/10 rounded-full group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-medium text-gray-600 uppercase tracking-wide mb-1">Net Tax Payable</div>
-                    <div className="text-4xl font-extrabold text-[#111827]">{formatCurrency(result.totalTaxDue)}</div>
+                  {/* Net Tax Due Card (Highlighted) */}
+                  <div className="group p-8 bg-gradient-to-br from-[#64B5F6] to-[#4A9FD9] rounded-2xl transition-all duration-300 relative overflow-hidden">
+                    <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700" />
+                    <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center mb-6 border border-white/30 text-white">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                    </div>
+                    <div className="text-xs font-bold text-white/70 uppercase tracking-widest mb-1">Net Tax Payable</div>
+                    <div className="text-4xl font-extrabold text-[#0a0a0a] tracking-tight">{formatCurrency(result.totalTaxDue)}</div>
                     {result.effectiveRate > 0 && (
-                      <div className="mt-2 text-sm font-medium text-gray-600">
-                        Effective Rate: <span className="text-black">{formatPercent(result.effectiveRate)}</span>
+                      <div className="inline-flex mt-4 px-2.5 py-1 bg-black/10 backdrop-blur-sm rounded-lg text-[10px] font-bold text-black border border-black/5 uppercase tracking-wider">
+                        Rate: {formatPercent(result.effectiveRate)}
                       </div>
                     )}
                   </div>
 
-                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Tax Credits Applied</div>
-                    <div className="text-3xl font-bold text-gray-900">{formatCurrency(result.taxCreditsApplied)}</div>
+                  {/* Credits Card */}
+                  <div className="group p-8 bg-gray-50 rounded-2xl border border-gray-100/50 hover:bg-white hover:border-gray-100 transition-all duration-300 relative overflow-hidden">
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-50/50 rounded-full group-hover:scale-110 transition-transform duration-500" />
+                    <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                      </svg>
+                    </div>
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Tax Credits Applied</div>
+                    <div className="text-2xl font-black text-gray-900 tracking-tight">{formatCurrency(result.taxCreditsApplied)}</div>
+                    <p className="mt-2 text-xs text-gray-500">WHT certificates and reliefs</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Validation Issues */}
+            {/* Validation Issues - Refined Style */}
             {result.validationIssues.length > 0 && (
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl shadow-sm">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <div className="bg-[#FFF9C4] border border-[#FBC02D]/30 p-8 rounded-2xl relative overflow-hidden group">
+                <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-[#FBC02D]/10 rounded-full" />
+                <div className="flex items-start gap-5 relative z-10">
+                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-[#F9A825] border border-[#FBC02D]/20">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                   </div>
-                  <div className="ml-4 w-full">
-                    <h3 className="text-lg font-medium text-yellow-800">Attention Needed</h3>
-                    <div className="mt-3 space-y-3">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-black text-[#827717] tracking-tight mb-4">Attention Required</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {result.validationIssues.map((issue) => (
-                        <div key={issue.id} className="flex gap-2 text-sm text-yellow-700 bg-yellow-100/50 p-2 rounded">
-                          <span className="font-bold uppercase text-xs tracking-wider px-2 py-0.5 bg-yellow-200 rounded text-yellow-800 self-start mt-0.5">{issue.severity}</span>
-                          <span><span className="font-semibold">{issue.field}:</span> {issue.message}</span>
+                        <div key={issue.id} className="flex flex-col bg-white/50 backdrop-blur-sm border border-white/50 p-4 rounded-xl transition-all hover:bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded ${issue.severity === 'high' ? 'bg-rose-100 text-rose-600' :
+                                issue.severity === 'medium' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                              }`}>
+                              {issue.severity}
+                            </span>
+                            <span className="text-[10px] font-bold text-[#827717] uppercase tracking-wide">{issue.field}</span>
+                          </div>
+                          <p className="text-sm text-gray-700 leading-relaxed font-semibold">{issue.message}</p>
                         </div>
                       ))}
                     </div>
@@ -2219,140 +2258,210 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Breakdown & Calcs */}
+            {/* Content Sheets */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Tax Bands Table */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full">
-                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                  <h3 className="font-semibold text-gray-900">Tax Calculation Breakdown</h3>
+
+              {/* Detailed Breakdown Card */}
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight">Calculation Breakdown</h3>
+                    <p className="text-xs text-gray-500 font-medium">Progressive PIT bands applied</p>
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
                 </div>
                 <div className="p-0">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Band</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50/50">
+                        <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Tax Band</th>
+                        <th className="px-8 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Rate</th>
+                        <th className="px-8 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Tax Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="divide-y divide-gray-50">
                       {result.bands.map((band, index) => (
-                        <tr key={index} className="hover:bg-gray-50/50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{band.bandLabel}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatPercent(band.rate)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">{formatCurrency(band.taxAmount)}</td>
+                        <tr key={index} className="group hover:bg-gray-50/80 transition-all duration-200">
+                          <td className="px-8 py-5 text-sm font-bold text-gray-700">{band.bandLabel}</td>
+                          <td className="px-8 py-5">
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black group-hover:bg-gray-900 group-hover:text-white transition-colors">{formatPercent(band.rate)}</span>
+                          </td>
+                          <td className="px-8 py-5 text-sm font-black text-gray-900 text-right">{formatCurrency(band.taxAmount)}</td>
                         </tr>
                       ))}
-                      <tr className="bg-gray-50 font-semibold">
-                        <td colSpan={2} className="px-6 py-4 text-sm text-gray-900 text-right">Total Tax:</td>
-                        <td className="px-6 py-4 text-sm text-gray-900 text-right">{formatCurrency(result.totalTaxDue)}</td>
-                      </tr>
                     </tbody>
+                    <tfoot>
+                      <tr className="bg-[#64B5F6]/5">
+                        <td colSpan={2} className="px-8 py-6 text-xs font-black text-gray-600 uppercase tracking-[0.2em] text-right">Aggregate PIT Liability</td>
+                        <td className="px-8 py-6 text-lg font-black text-[#0a0a0a] text-right">{formatCurrency(result.totalTaxDue)}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
 
-              {/* Optimizations */}
-              {optimizations && optimizations.suggestions.length > 0 && (
-                <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 shadow-sm overflow-hidden h-full">
-                  <div className="px-6 py-4 border-b border-indigo-100 bg-indigo-50/80 flex justify-between items-center">
-                    <h3 className="font-semibold text-indigo-900 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Optimization Opportunities
-                    </h3>
+              {/* Advanced Optimizations Card */}
+              {optimizations && (
+                <div className="bg-[#f5f3ff] rounded-2xl border border-[#ddd6fe]/50 overflow-hidden relative group">
+                  <div className="absolute -right-16 -top-16 w-48 h-48 bg-[#ddd6fe]/30 rounded-full blur-3xl" />
+                  <div className="px-8 py-6 border-b border-[#ddd6fe]/30 bg-white/50 backdrop-blur-sm flex justify-between items-center relative z-10">
+                    <div>
+                      <h3 className="text-lg font-black text-[#4338ca] tracking-tight">Tax Optimizer</h3>
+                      <p className="text-xs text-[#6366f1] font-bold">Suggested savings based on FA 2023</p>
+                    </div>
                     {optimizations.totalPotentialSavings > 0 && (
-                      <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full border border-indigo-200">
-                        Save up to {formatCurrency(optimizations.totalPotentialSavings)}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.1em] mb-1">Max Savings Capacity</span>
+                        <span className="text-sm font-black bg-indigo-600 text-white px-3 py-1 rounded-full scale-100 group-hover:scale-105 transition-transform">
+                          {formatCurrency(optimizations.totalPotentialSavings)}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                    {optimizations.suggestions.map((suggestion, index) => (
-                      <div key={index} className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start gap-4">
-                          <div>
-                            <h4 className="font-medium text-gray-900 text-sm">{suggestion.title}</h4>
-                            <p className="text-xs text-gray-500 mt-1">{suggestion.description}</p>
-                          </div>
-                          {suggestion.potentialSavings && (
-                            <div className="text-indigo-600 font-bold text-sm bg-indigo-50 px-2 py-1 rounded">
-                              {formatCurrency(suggestion.potentialSavings)}
+                  <div className="p-6 space-y-4 max-h-[440px] overflow-y-auto scrollbar-thin relative z-10">
+                    {optimizations.suggestions.length > 0 ? (
+                      optimizations.suggestions.map((suggestion, index) => (
+                        <div key={index} className="bg-white/80 backdrop-blur-md p-6 rounded-2xl border border-white hover:border-indigo-200 transition-all group/item">
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                                <h4 className="font-extrabold text-gray-900 text-xs sm:text-sm tracking-tight">{suggestion.title}</h4>
+                              </div>
+                              <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 leading-relaxed mb-4">{suggestion.description}</p>
+                              <button className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
+                                Learn Strategy <span aria-hidden="true">→</span>
+                              </button>
                             </div>
-                          )}
+                            {suggestion.potentialSavings && suggestion.potentialSavings > 0 && (
+                              <div className="text-right self-end sm:self-start">
+                                <div className="text-[10px] sm:text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 whitespace-nowrap">
+                                  {formatCurrency(suggestion.potentialSavings)}
+                                </div>
+                                <div className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase mt-1">Impact</div>
+                              </div>
+                            )}
+                          </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center">
+                        <div className="w-16 h-16 bg-white/50 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-300">
+                          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm font-bold text-indigo-900/60">No additional optimizations found.</p>
+                        <p className="text-xs text-indigo-900/40 px-8 mt-1">Your current profile is highly tax-efficient under Nigeria law.</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Auxiliary Logic */}
+            {/* Additional Tax Sections */}
             {(whtResult || cgtResult || stampDutyResult || leviesResult) && (
-              <div className="space-y-6">
-                <h3 className="text-xl font-bold text-gray-900 border-b pb-2">Additional Tax Obligations</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* WHT */}
+              <div className="space-y-6 pt-4">
+                <div className="flex items-center gap-4 mb-2">
+                  <h3 className="text-2xl font-black text-[#0a0a0a] tracking-tight">Auxiliary Schedules</h3>
+                  <div className="h-px flex-1 bg-gray-100" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* WHT Schedule */}
                   {whtResult && whtResult.calculations.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
-                        <h4 className="font-semibold text-gray-900">Withholding Tax (WHT)</h4>
-                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(whtResult.totalWHTDeducted)}</span>
+                    <div className="bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 transition-colors">
+                      <div className="flex items-center justify-between mb-8">
+                        <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                          </svg>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total WHT</div>
+                          <div className="text-xl font-black text-gray-900">{formatCurrency(whtResult.totalWHTDeducted)}</div>
+                        </div>
                       </div>
-                      <div className="p-4">
-                        <ul className="space-y-2">
-                          {whtResult.calculations.map((c, i) => (
-                            <li key={i} className="text-sm flex justify-between border-b border-gray-50 last:border-0 pb-2 last:pb-0">
-                              <span className="text-gray-600">{c.paymentDescription}</span>
-                              <span className="font-medium">{formatCurrency(c.whtAmount)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Payment Breakdown</h4>
+                      <ul className="space-y-3">
+                        {whtResult.calculations.slice(0, 4).map((c, i) => (
+                          <li key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                            <span className="text-xs font-bold text-gray-600 truncate mr-4">{c.paymentDescription}</span>
+                            <span className="text-xs font-black text-gray-900">{formatCurrency(c.whtAmount)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {whtResult.calculations.length > 4 && (
+                        <p className="mt-4 text-[10px] font-bold text-rose-500 text-center uppercase tracking-widest cursor-pointer hover:opacity-70">View all deductions</p>
+                      )}
                     </div>
                   )}
 
-                  {/* CGT */}
+                  {/* CGT Schedule */}
                   {cgtResult && cgtResult.totalGain > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
-                        <h4 className="font-semibold text-gray-900">Capital Gains Tax (CGT)</h4>
-                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(cgtResult.totalCGT)}</span>
+                    <div className="bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 transition-colors">
+                      <div className="flex items-center justify-between mb-8">
+                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total CGT</div>
+                          <div className="text-xl font-black text-emerald-600">{formatCurrency(cgtResult.totalCGT)}</div>
+                        </div>
                       </div>
-                      <div className="p-4 space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Total Gain</span>
-                          <span>{formatCurrency(cgtResult.totalGain)}</span>
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Asset Performance</h4>
+                      <div className="space-y-4">
+                        <div className="bg-gray-50 p-4 rounded-xl flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase">Recognized Gain</span>
+                          <span className="text-sm font-black text-gray-900">{formatCurrency(cgtResult.totalGain)}</span>
                         </div>
-                        <div className="flex justify-between font-medium text-[var(--primary)]">
-                          <span>Tax Payable (10%)</span>
-                          <span>{formatCurrency(cgtResult.totalCGT)}</span>
-                        </div>
+                        <p className="text-[10px] text-gray-500 font-medium leading-relaxed italic">
+                          Calculated at 10% on qualifying asset disposals as per CGT Act.
+                        </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Levies */}
+                  {/* Levies & Corporate Obligations */}
                   {leviesResult && (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between">
-                        <h4 className="font-semibold text-gray-900">Company Levies</h4>
-                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{formatCurrency(leviesResult.totalLevies)}</span>
+                    <div className="bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 transition-colors">
+                      <div className="flex items-center justify-between mb-8">
+                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CITA Levies</div>
+                          <div className="text-xl font-black text-gray-900">{formatCurrency(leviesResult.totalLevies)}</div>
+                        </div>
                       </div>
-                      <div className="p-4 space-y-2 text-sm">
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Obligation Details</h4>
+                      <div className="space-y-2">
                         {leviesResult.itf.isApplicable && (
-                          <div className="flex justify-between"><span>ITF (1%)</span><span>{formatCurrency(leviesResult.itf.levyPayable)}</span></div>
+                          <div className="flex justify-between items-center py-1.5 px-3 bg-blue-50/50 rounded-lg">
+                            <span className="text-[10px] font-black text-blue-800/60 uppercase tracking-widest">ITF (1%)</span>
+                            <span className="text-xs font-black text-blue-900">{formatCurrency(leviesResult.itf.levyPayable)}</span>
+                          </div>
                         )}
                         {leviesResult.nsitf.isApplicable && (
-                          <div className="flex justify-between"><span>NSITF (1%)</span><span>{formatCurrency(leviesResult.nsitf.contributionPayable)}</span></div>
+                          <div className="flex justify-between items-center py-1.5 px-3 bg-blue-50/50 rounded-lg">
+                            <span className="text-[10px] font-black text-blue-800/60 uppercase tracking-widest">NSITF (1%)</span>
+                            <span className="text-xs font-black text-blue-900">{formatCurrency(leviesResult.nsitf.contributionPayable)}</span>
+                          </div>
                         )}
                         {leviesResult.policeLevy.isApplicable && (
-                          <div className="flex justify-between"><span>Police Fund (0.005%)</span><span>{formatCurrency(leviesResult.policeLevy.levyPayable)}</span></div>
-                        )}
-                        {leviesResult.naseniLevy.isApplicable && (
-                          <div className="flex justify-between"><span>NASENI (0.25%)</span><span>{formatCurrency(leviesResult.naseniLevy.levyPayable)}</span></div>
+                          <div className="flex justify-between items-center py-1.5 px-3 bg-blue-50/50 rounded-lg">
+                            <span className="text-[10px] font-black text-blue-800/60 uppercase tracking-widest">NPF Fund</span>
+                            <span className="text-xs font-black text-blue-900">{formatCurrency(leviesResult.policeLevy.levyPayable)}</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2361,12 +2470,17 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Helper functions for disclaimer footer */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-xs text-gray-500 max-w-4xl mx-auto">
-              <p>
-                <strong>Disclaimer:</strong> This computation is an estimate based on current Nigerian tax laws (Finance Act 2023).
-                Results should be verified by a qualified tax professional before filing.
-                NaijaTaxAgent is not liable for any inaccuracies.
+            {/* Premium Disclaimer Footer */}
+            <div className="mt-12 text-center max-w-2xl mx-auto px-6">
+              <div className="inline-flex items-center gap-2 mb-4">
+                <div className="h-px w-8 bg-gray-200" />
+                <span className="text-[10px] font-black text-gray-300 uppercase tracking-[0.4em]">Governance & Precision</span>
+                <div className="h-px w-8 bg-gray-200" />
+              </div>
+              <p className="text-[11px] leading-relaxed text-gray-400 font-medium italic">
+                This computation is an artificial intelligence-driven estimate based on the Nigerian Finance Act 2023.
+                Data processed through the Insight engine is encrypted and compliant with NDPR.
+                Statutory filings should always be verified by a licensed TAX consultant.
               </p>
             </div>
 

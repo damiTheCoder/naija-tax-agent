@@ -1,0 +1,150 @@
+{
+    "metadata": {
+        "tax_year": "2024",
+        "jurisdiction": "Federal",
+        "version": "1.2.0",
+        "effective_date": "2024-01-01",
+        "legal_reference": "PITA 2011, CITA 2023, VATA 2023, SDA Cap S8"
+    },
+    "citations": [
+        {
+            "id": "PITA_S33",
+            "law": "Personal Income Tax Act 2011",
+            "section": "33",
+            "text": "Consolidated Relief Allowance and progressive tax bands."
+        },
+        {
+            "id": "CITA_S9",
+            "law": "Companies Income Tax Act",
+            "section": "9",
+            "text": "Charge of tax and company size thresholds."
+        },
+        {
+            "id": "VATA_S4",
+            "law": "Value Added Tax Act",
+            "section": "4",
+            "text": "Rate of tax."
+        },
+        {
+            "id": "SDA_SCHED",
+            "law": "Stamp Duties Act",
+            "section": "Schedule",
+            "text": "Rates of stamp duty on various instruments."
+        }
+    ],
+    "rules": {
+        "CRA_FIXED": {
+            "type": "constant",
+            "formula": "200000",
+            "description": "Fixed component of CRA",
+            "citation_id": "PITA_S33"
+        },
+        "CRA_PERCENTAGE": {
+            "type": "constant",
+            "formula": "0.01",
+            "description": "1% component of CRA base"
+        },
+        "CRA_ADDITIONAL": {
+            "type": "constant",
+            "formula": "0.20",
+            "description": "20% additional relief component"
+        },
+        "PIT_BANDS_2024": {
+            "type": "progressive_bands",
+            "formula": "taxable_income",
+            "bands": [
+                {
+                    "label": "First ₦300,000",
+                    "threshold": 300000,
+                    "rate": 0.07
+                },
+                {
+                    "label": "Next ₦300,000",
+                    "threshold": 300000,
+                    "rate": 0.11
+                },
+                {
+                    "label": "Next ₦500,000",
+                    "threshold": 500000,
+                    "rate": 0.15
+                },
+                {
+                    "label": "Next ₦500,000",
+                    "threshold": 500000,
+                    "rate": 0.19
+                },
+                {
+                    "label": "Next ₦1,600,000",
+                    "threshold": 1600000,
+                    "rate": 0.21
+                },
+                {
+                    "label": "Above ₦3,200,000",
+                    "threshold": 1000000000,
+                    "rate": 0.24
+                }
+            ],
+            "citation_id": "PITA_S33"
+        },
+        "MINIMUM_TAX_RATE": {
+            "type": "constant",
+            "formula": "0.01",
+            "description": "1% minimum tax for individuals if income > 300k"
+        },
+        "CIT_SMALL_THRESHOLD": {
+            "type": "constant",
+            "formula": "25000000",
+            "description": "Exemption threshold for small companies"
+        },
+        "CIT_MEDIUM_THRESHOLD": {
+            "type": "constant",
+            "formula": "100000000",
+            "description": "Threshold for medium companies"
+        },
+        "CIT_SMALL_RATE": {
+            "type": "constant",
+            "formula": "0",
+            "description": "0% tax rate for small companies"
+        },
+        "CIT_MEDIUM_RATE": {
+            "type": "constant",
+            "formula": "0.20",
+            "description": "20% tax rate for medium companies"
+        },
+        "CIT_LARGE_RATE": {
+            "type": "constant",
+            "formula": "0.30",
+            "description": "30% tax rate for large companies"
+        },
+        "VAT_RATE": {
+            "type": "constant",
+            "formula": "0.075",
+            "description": "Standard VAT rate 7.5%"
+        },
+        "VAT_REGISTRATION_THRESHOLD": {
+            "type": "constant",
+            "formula": "25000000",
+            "description": "₦25M turnover threshold for mandatory VAT entry"
+        },
+        "CIT_MIN_TAX_RATE": {
+            "type": "constant",
+            "formula": "0.005",
+            "description": "0.5% minimum tax for companies"
+        },
+        "STAMP_AGREEMENT_FIXED": {
+            "type": "constant",
+            "formula": "500",
+            "description": "Fixed duty for general agreements"
+        },
+        "STAMP_DEED_RATE": {
+            "type": "constant",
+            "formula": "0.015",
+            "description": "1.5% ad valorem duty for deeds"
+        },
+        "STAMP_MORTGAGE_RATE": {
+            "type": "constant",
+            "formula": "0.00375",
+            "description": "0.375% ad valorem duty for mortgages (SDA amended)"
+        }
+    }
+}

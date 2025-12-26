@@ -1,8 +1,11 @@
+import {
+    loadRuleBook,
+    evaluateFormula,
+    ReconciliationRow
+} from "./rulebook";
+
 /**
- * Stamp Duties Calculator for Nigeria
- * 
- * Stamp duties are charged on various instruments/documents
- * Legal Basis: Stamp Duties Act Cap S8 LFN 2004
+ * Stamp Duties Calculator for Nigeria (V2 - Rulebook Driven)
  */
 
 export type StampDutyDocumentType =
@@ -17,176 +20,82 @@ export type StampDutyDocumentType =
     | 'bank_transfer'       // Electronic bank transfers
     | 'other';
 
-export interface StampDutyRate {
-    documentType: StampDutyDocumentType;
-    description: string;
-    rateType: 'fixed' | 'percentage' | 'tiered';
-    fixedAmount?: number;
-    percentageRate?: number;
-    threshold?: number;         // Minimum amount before duty applies
-}
-
 export interface StampDutyInput {
     documentType: StampDutyDocumentType;
     transactionValue: number;
-    isElectronic?: boolean;     // Electronic transfers have flat rate
+    taxYear?: number;
+    jurisdiction?: string;
 }
 
 export interface StampDutyResult {
     documentType: StampDutyDocumentType;
-    documentDescription: string;
     transactionValue: number;
-    rate: string;
     stampDuty: number;
+    reconciliationReport: ReconciliationRow[];
     note: string;
 }
 
-// Stamp duty rates for various documents
-export const STAMP_DUTY_RATES: StampDutyRate[] = [
-    {
-        documentType: 'agreement',
-        description: 'Agreement or Memorandum of Agreement',
-        rateType: 'fixed',
-        fixedAmount: 500,
-    },
-    {
-        documentType: 'lease',
-        description: 'Lease Agreement',
-        rateType: 'percentage',
-        percentageRate: 0.0078,  // 0.78%
-    },
-    {
-        documentType: 'deed',
-        description: 'Deed of Assignment (Property)',
-        rateType: 'percentage',
-        percentageRate: 0.015,   // 1.5%
-    },
-    {
-        documentType: 'mortgage',
-        description: 'Mortgage Deed',
-        rateType: 'percentage',
-        percentageRate: 0.015,   // 1.5%
-    },
-    {
-        documentType: 'share_transfer',
-        description: 'Share Transfer Form',
-        rateType: 'percentage',
-        percentageRate: 0.0075,  // 0.75%
-    },
-    {
-        documentType: 'power_of_attorney',
-        description: 'Power of Attorney',
-        rateType: 'fixed',
-        fixedAmount: 2000,
-    },
-    {
-        documentType: 'receipt',
-        description: 'Receipt (above N4 threshold)',
-        rateType: 'fixed',
-        fixedAmount: 1,         // N1 for first N1000, then N0.50 per N1000
-        threshold: 4,
-    },
-    {
-        documentType: 'insurance_policy',
-        description: 'Insurance Policy',
-        rateType: 'percentage',
-        percentageRate: 0.0025,  // 0.25%
-    },
-    {
-        documentType: 'bank_transfer',
-        description: 'Electronic Bank Transfer',
-        rateType: 'fixed',
-        fixedAmount: 50,        // N50 flat rate for transfers >= N10,000
-        threshold: 10000,
-    },
-    {
-        documentType: 'other',
-        description: 'Other Documents',
-        rateType: 'fixed',
-        fixedAmount: 500,
-    },
-];
-
 /**
- * Get stamp duty rate info for a document type
- */
-export function getStampDutyRate(documentType: StampDutyDocumentType): StampDutyRate | undefined {
-    return STAMP_DUTY_RATES.find(r => r.documentType === documentType);
-}
-
-/**
- * Calculate stamp duty for a document
+ * Calculate stamp duty for a document using the rulebook
  */
 export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
-    const rateInfo = getStampDutyRate(input.documentType);
-
-    if (!rateInfo) {
-        return {
-            documentType: input.documentType,
-            documentDescription: 'Unknown Document',
-            transactionValue: input.transactionValue,
-            rate: 'N/A',
-            stampDuty: 0,
-            note: 'Document type not found',
-        };
-    }
+    const year = (input.taxYear || 2024).toString();
+    const jurisdiction = (input.jurisdiction || "Federal") as any;
+    const rulebook = loadRuleBook(year, jurisdiction);
+    const reconciliationReport: ReconciliationRow[] = [];
 
     let stampDuty = 0;
-    let rate = '';
+    let ruleKey = "";
+    let label = "";
+    let formula = "";
+    let citation = "SDA Schedule";
 
-    // Check threshold
-    if (rateInfo.threshold && input.transactionValue < rateInfo.threshold) {
-        return {
-            documentType: input.documentType,
-            documentDescription: rateInfo.description,
-            transactionValue: input.transactionValue,
-            rate: 'Below threshold',
-            stampDuty: 0,
-            note: `No duty - transaction below ₦${rateInfo.threshold.toLocaleString()} threshold`,
-        };
+    switch (input.documentType) {
+        case 'agreement':
+            ruleKey = "STAMP_AGREEMENT_FIXED";
+            label = "Fixed Duty on Agreement";
+            stampDuty = evaluateFormula(rulebook.rules[ruleKey].formula, {});
+            formula = `Fixed: ${stampDuty.toLocaleString()}`;
+            break;
+
+        case 'deed':
+            ruleKey = "STAMP_DEED_RATE";
+            label = "Ad Valorem Duty on Deed (1.5%)";
+            const deedRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
+            stampDuty = input.transactionValue * deedRate;
+            formula = `${input.transactionValue.toLocaleString()} * ${deedRate}`;
+            break;
+
+        case 'mortgage':
+            ruleKey = "STAMP_MORTGAGE_RATE";
+            label = "Ad Valorem Duty on Mortgage (0.375%)";
+            const mortgageRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
+            stampDuty = input.transactionValue * mortgageRate;
+            formula = `${input.transactionValue.toLocaleString()} * ${mortgageRate}`;
+            break;
+
+        default:
+            // Fallback for other types using fixed 500
+            stampDuty = 500;
+            label = "General Fixed duty";
+            formula = "500";
     }
 
-    switch (rateInfo.rateType) {
-        case 'fixed':
-            stampDuty = rateInfo.fixedAmount || 0;
-            rate = `₦${stampDuty.toLocaleString()} flat`;
-            break;
-
-        case 'percentage':
-            const percentRate = rateInfo.percentageRate || 0;
-            stampDuty = input.transactionValue * percentRate;
-            rate = `${(percentRate * 100).toFixed(2)}%`;
-            break;
-
-        case 'tiered':
-            // Implement tiered calculation if needed
-            stampDuty = 0;
-            rate = 'Tiered';
-            break;
-    }
+    const row: ReconciliationRow = {
+        step_id: `STAMP_${input.documentType.toUpperCase()}`,
+        label: label,
+        value: stampDuty,
+        formula: formula,
+        rule_key: ruleKey,
+        citation: citation
+    };
+    reconciliationReport.push(row);
 
     return {
         documentType: input.documentType,
-        documentDescription: rateInfo.description,
         transactionValue: input.transactionValue,
-        rate,
         stampDuty,
-        note: `Stamp duty calculated per Stamp Duties Act`,
-    };
-}
-
-/**
- * Calculate stamp duties for multiple documents
- */
-export function calculateTotalStampDuty(inputs: StampDutyInput[]): {
-    documents: StampDutyResult[];
-    totalDuty: number;
-} {
-    const documents = inputs.map(calculateStampDuty);
-    const totalDuty = documents.reduce((sum, d) => sum + d.stampDuty, 0);
-
-    return {
-        documents,
-        totalDuty,
+        reconciliationReport,
+        note: `Stamp duty calculated per rulebook ${rulebook.metadata.version}`
     };
 }
