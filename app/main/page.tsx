@@ -22,6 +22,7 @@ import { STAMP_DUTY_RATES } from "@/lib/taxRules/stampDuty";
 import { CGT_RATE } from "@/lib/taxRules/cgt";
 import { TET_RATE } from "@/lib/taxRules/tet";
 import { generatePDF } from "@/lib/pdfGenerator";
+import { clearAllData } from "@/lib/utils/system";
 import dynamic from "next/dynamic";
 
 type Step = 1 | 2 | 3;
@@ -876,8 +877,26 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                </div>
 
+                  <div className="mt-8 pt-8 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-rose-600 uppercase tracking-wider">System Reset</h4>
+                        <p className="text-xs text-gray-500 mt-1">Permanently clear all journal entries, computations, and transaction history.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm("THIS CANNOT BE UNDONE. Are you sure you want to completely clear all application data?")) {
+                            clearAllData();
+                          }
+                        }}
+                        className="px-4 py-2 border border-rose-200 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-50 transition-all"
+                      >
+                        Reset System Data
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             {/* Step 1: Manual Next Button */}
@@ -2154,7 +2173,7 @@ export default function HomePage() {
                     </div>
                     <h2 className="text-4xl font-extrabold text-[#0a0a0a] tracking-tight">Tax Report</h2>
                     <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 font-medium">
-                      <span>Reference ID: {result.taxRuleMetadata.version || 'Insight-v2'}</span>
+                      <span>Reference ID: {result.taxRuleMetadata?.version || 'Insight-v2'}</span>
                       <span className="opacity-30">•</span>
                       <span>{new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </div>
@@ -2227,7 +2246,7 @@ export default function HomePage() {
             </div>
 
             {/* Validation Issues - Refined Style */}
-            {result.validationIssues.length > 0 && (
+            {result.validationIssues?.length > 0 && (
               <div className="bg-[#FFF9C4] border border-[#FBC02D]/30 p-8 rounded-2xl relative overflow-hidden group">
                 <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-[#FBC02D]/10 rounded-full" />
                 <div className="flex items-start gap-5 relative z-10">
@@ -2239,11 +2258,11 @@ export default function HomePage() {
                   <div className="flex-1">
                     <h3 className="text-xl font-black text-[#827717] tracking-tight mb-4">Attention Required</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {result.validationIssues.map((issue) => (
+                      {result.validationIssues?.map((issue) => (
                         <div key={issue.id} className="flex flex-col bg-white/50 backdrop-blur-sm border border-white/50 p-4 rounded-xl transition-all hover:bg-white">
                           <div className="flex items-center gap-2 mb-2">
                             <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded ${issue.severity === 'high' ? 'bg-rose-100 text-rose-600' :
-                                issue.severity === 'medium' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                              issue.severity === 'medium' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
                               }`}>
                               {issue.severity}
                             </span>
@@ -2284,7 +2303,7 @@ export default function HomePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {result.bands.map((band, index) => (
+                      {result.bands?.map((band, index) => (
                         <tr key={index} className="group hover:bg-gray-50/80 transition-all duration-200">
                           <td className="px-8 py-5 text-sm font-bold text-gray-700">{band.bandLabel}</td>
                           <td className="px-8 py-5">
@@ -2323,8 +2342,8 @@ export default function HomePage() {
                     )}
                   </div>
                   <div className="p-6 space-y-4 max-h-[440px] overflow-y-auto scrollbar-thin relative z-10">
-                    {optimizations.suggestions.length > 0 ? (
-                      optimizations.suggestions.map((suggestion, index) => (
+                    {optimizations?.suggestions?.length > 0 ? (
+                      optimizations?.suggestions?.map((suggestion, index) => (
                         <div key={index} className="bg-white/80 backdrop-blur-md p-6 rounded-2xl border border-white hover:border-indigo-200 transition-all group/item">
                           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                             <div className="flex-1">
@@ -2374,7 +2393,7 @@ export default function HomePage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {/* WHT Schedule */}
-                  {whtResult && whtResult.calculations.length > 0 && (
+                  {whtResult && whtResult.calculations?.length > 0 && (
                     <div className="bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 transition-colors">
                       <div className="flex items-center justify-between mb-8">
                         <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500">
@@ -2389,14 +2408,14 @@ export default function HomePage() {
                       </div>
                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Payment Breakdown</h4>
                       <ul className="space-y-3">
-                        {whtResult.calculations.slice(0, 4).map((c, i) => (
+                        {whtResult?.calculations?.slice(0, 4).map((c, i) => (
                           <li key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
                             <span className="text-xs font-bold text-gray-600 truncate mr-4">{c.paymentDescription}</span>
                             <span className="text-xs font-black text-gray-900">{formatCurrency(c.whtAmount)}</span>
                           </li>
                         ))}
                       </ul>
-                      {whtResult.calculations.length > 4 && (
+                      {whtResult.calculations?.length > 4 && (
                         <p className="mt-4 text-[10px] font-bold text-rose-500 text-center uppercase tracking-widest cursor-pointer hover:opacity-70">View all deductions</p>
                       )}
                     </div>

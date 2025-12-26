@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:safe": "lsof -ti :3000,3001 | xargs kill -9 2>/dev/null || true && rm -f .next/dev/lock && npm run dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

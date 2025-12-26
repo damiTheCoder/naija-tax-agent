@@ -176,33 +176,89 @@ class AccountingEngine {
     // STEP 3: APPLY DECISION TREES
     // ==========================================================================
 
-    const { isCredit, paymentMethod, assumptions, questionsNeeded } =
+    const { isCredit, paymentMethod, assumptions, questionsNeeded, typeOverride } =
       this.applyDecisionTree(parsed, transactionNature, hasCashMovement, rawTx);
 
+    const finalTransactionType = typeOverride || transactionType;
+
+    // Step 4: Detect Taxes (VAT, WHT)
+    const taxes = this.detectTaxes(rawTx, amount);
+
     // ==========================================================================
-    // STEP 4: CALCULATE CONFIDENCE SCORE
+    // STEP 5: CALCULATE CONFIDENCE SCORE
     // ==========================================================================
 
-    const confidence = this.calculateConfidence(parsed, assumptions.length, questionsNeeded.length);
+    const confidence = this.calculateConfidence(parsed, assumptions.length + taxes.assumptions.length, questionsNeeded.length);
 
     return {
-      transactionType,
+      transactionType: finalTransactionType,
       description: rawTx.description,
-      amount,
+      amount: taxes.baseAmount,
       netAmount: amount,
-      vatAmount: 0,
-      whtAmount: 0,
+      vatAmount: taxes.vatAmount,
+      whtAmount: taxes.whtAmount,
       paymentMethod,
       isCredit,
-      hasTax: false,
+      hasTax: taxes.hasTax,
       hasInventoryImpact: parsed.object.includes('goods') || parsed.object.includes('inventory'),
-      assumptions,
+      assumptions: [...assumptions, ...taxes.assumptions],
       questionsNeeded,
       // Extended fields
       parsed,
       transactionNature,
       hasCashMovement,
       confidence,
+    };
+  }
+
+  /**
+   * DETECT TAXES (VAT, WHT)
+   * Analyzes description for tax mentions and computes amounts
+   */
+  private detectTaxes(rawTx: RawTransaction, totalAmount: number): {
+    baseAmount: number;
+    vatAmount: number;
+    whtAmount: number;
+    hasTax: boolean;
+    assumptions: string[];
+  } {
+    const desc = rawTx.description.toLowerCase();
+    let vatAmount = 0;
+    let whtAmount = 0;
+    let hasTax = false;
+    const assumptions: string[] = [];
+    const VAT_RATE = 0.075; // Standard Nigerian VAT
+
+    // VAT Detection
+    if (desc.includes('vat') || desc.includes('tax')) {
+      hasTax = true;
+      if (desc.includes('inclusive') || desc.includes('incl')) {
+        // Assume VAT is included in the total
+        vatAmount = totalAmount - (totalAmount / (1 + VAT_RATE));
+        assumptions.push(`VAT detected (inclusive) - extracted ${VAT_RATE * 100}%`);
+      } else {
+        // Assume VAT is to be added
+        vatAmount = totalAmount * VAT_RATE;
+        assumptions.push(`VAT detected (exclusive) - added ${VAT_RATE * 100}%`);
+      }
+    }
+
+    // WHT Detection (mostly for services/contracts)
+    if (desc.includes('wht') || desc.includes('withholding')) {
+      hasTax = true;
+      const whtRate = desc.includes('director') || desc.includes('rent') ? 0.1 : 0.05;
+      whtAmount = totalAmount * whtRate;
+      assumptions.push(`WHT detected - computed at ${whtRate * 100}%`);
+    }
+
+    const baseAmount = totalAmount - (desc.includes('inclusive') ? vatAmount : 0);
+
+    return {
+      baseAmount,
+      vatAmount: Math.round(vatAmount),
+      whtAmount: Math.round(whtAmount),
+      hasTax,
+      assumptions
     };
   }
 
@@ -230,11 +286,14 @@ class AccountingEngine {
       bought: ['bought', 'purchased', 'purchase', 'acquired'],
       borrowed: ['borrowed', 'loan received', 'financing'],
       repaid: ['repaid', 'repayment', 'loan payment', 'settled'],
-      invested: ['invested', 'capital', 'owner contribution'],
-      withdrawn: ['withdrawn', 'drawing', 'withdrawal'],
-      transferred: ['transferred', 'transfer'],
+      invested: ['invested', 'capital', 'owner contribution', 'started business'],
+      withdrawn: ['withdrawn', 'drawing', 'withdrawal', 'took cash'],
+      transferred: ['transferred', 'transfer', 'deposited', 'withdrew from bank'],
       depreciated: ['depreciation', 'depreciated', 'amortization'],
       returned: ['return', 'returned', 'refund'],
+      accrued: ['accrued', 'outstanding bill', 'unpaid bill', 'incurred'],
+      earned: ['earned', 'recognised revenue', 'unearned revenue'],
+      writtenoff: ['written off', 'bad debt', 'uncollectible'],
     };
 
     for (const [key, keywords] of Object.entries(actionKeywords)) {
@@ -251,11 +310,14 @@ class AccountingEngine {
       goods: ['goods', 'inventory', 'stock', 'products', 'merchandise'],
       services: ['service', 'services', 'consultancy', 'professional', 'fee'],
       asset: ['equipment', 'machinery', 'vehicle', 'furniture', 'computer', 'asset'],
-      loan: ['loan', 'borrowing', 'debt', 'financing'],
+      loan: ['loan', 'borrowing', 'debt', 'financing', 'interest'],
       rent: ['rent', 'lease', 'rental'],
       supplies: ['supplies', 'office', 'stationery'],
-      utilities: ['utilities', 'electricity', 'water', 'phone', 'internet'],
+      utilities: ['utilities', 'electricity', 'water', 'phone', 'internet', 'bill'],
       salary: ['salary', 'wages', 'payroll', 'staff'],
+      advance: ['advance', 'prepayment', 'deposit from customer'],
+      equipment: ['equipment', 'laptop', 'computer', 'machinery'],
+      furniture: ['furniture', 'fittings', 'chair', 'desk'],
     };
 
     for (const [key, keywords] of Object.entries(objectKeywords)) {
@@ -283,15 +345,24 @@ class AccountingEngine {
       }
     }
 
+    // Fallback: Infer counterparty from action if still unknown
+    if (counterparty === 'unknown') {
+      if (action === 'sold') counterparty = 'customer';
+      if (action === 'bought' || action === 'paid' || (action === 'returned' && desc.includes('supplier'))) counterparty = 'supplier';
+      if (action === 'returned' && desc.includes('customer')) counterparty = 'customer';
+    }
+
     // =========== EXTRACT TIMING ===========
     let timing: 'immediate' | 'outstanding' | 'unknown' = 'unknown';
-    if (desc.includes('cash') || desc.includes('paid') || desc.includes('received') ||
-      desc.includes('bank') || action === 'received' || action === 'paid') {
+    const immediateKeywords = ['cash', 'paid', 'received', 'bank', 'transfer', 'deposited', 'hand'];
+    const outstandingKeywords = ['credit', 'invoice', 'on account', 'outstanding', 'payable', 'receivable', 'later', 'accrued', 'unpaid'];
+
+    if (immediateKeywords.some(kw => desc.includes(kw))) {
       timing = 'immediate';
-    } else if (desc.includes('credit') || desc.includes('invoice') ||
-      desc.includes('on account') || desc.includes('outstanding') ||
-      desc.includes('payable') || desc.includes('receivable')) {
+    } else if (outstandingKeywords.some(kw => desc.includes(kw))) {
       timing = 'outstanding';
+    } else if (action === 'received' || action === 'paid') {
+      timing = 'immediate';
     }
 
     // =========== EXTRACT BUSINESS IMPACT ===========
@@ -346,6 +417,9 @@ class AccountingEngine {
       return parsed.businessImpact;
     }
 
+    if (parsed.action === 'invested') return 'equity';
+    if (parsed.action === 'withdrawn') return 'equity';
+
     // Fallback logic
     if (['sold', 'received'].includes(parsed.action) && parsed.counterparty === 'customer') {
       return 'income';
@@ -356,10 +430,8 @@ class AccountingEngine {
     }
     if (parsed.action === 'borrowed') return 'liability';
     if (parsed.action === 'repaid') return 'liability';
-    if (parsed.action === 'invested') return 'equity';
-    if (parsed.action === 'withdrawn') return 'equity';
 
-    // Default to expense for safety (can be corrected)
+    // Default to expense for safety
     return 'expense';
   }
 
@@ -373,6 +445,14 @@ class AccountingEngine {
   ): TransactionType {
 
     const { action, object, counterparty, timing } = parsed;
+
+    // SPECIAL CASES (CHECK FIRST)
+    if (action === 'transferred') return 'transfer';
+    if (action === 'returned') {
+      if (counterparty === 'customer') return 'sale-return';
+      if (counterparty === 'supplier' || counterparty === 'unknown') return 'purchase-return';
+      return 'purchase-return'; // Default return to purchase-return if unknown
+    }
 
     // INCOME TRANSACTIONS
     if (nature === 'income') {
@@ -399,6 +479,7 @@ class AccountingEngine {
     // ASSET TRANSACTIONS
     if (nature === 'asset') {
       if (action === 'depreciated') return 'depreciation';
+      if (action === 'sold') return 'asset-disposal';
       return 'asset-purchase';
     }
 
@@ -406,6 +487,7 @@ class AccountingEngine {
     if (nature === 'liability') {
       if (action === 'borrowed') return 'loan-received';
       if (action === 'repaid') return 'loan-repayment';
+      if (action === 'accrued' && object === 'loan') return 'adjustment'; // Interest accrual
       if (action === 'paid' && counterparty === 'supplier') return 'payment';
       return 'other';
     }
@@ -418,11 +500,12 @@ class AccountingEngine {
     }
 
     // SPECIAL CASES
-    if (action === 'transferred') return 'transfer';
-    if (action === 'returned') {
-      if (counterparty === 'customer') return 'sale-return';
-      if (counterparty === 'supplier') return 'purchase-return';
-    }
+    if (action === 'transferred' || action === 'deposited' || action === 'withdrawn') return 'transfer';
+    if (action === 'writtenoff') return 'adjustment';
+    if (action === 'accrued') return 'adjustment';
+    if (action === 'earned' || object === 'advance') return 'adjustment';
+
+    // special cases moved to top
 
     return 'other';
   }
@@ -441,12 +524,14 @@ class AccountingEngine {
     paymentMethod: PaymentMethod;
     assumptions: string[];
     questionsNeeded: string[];
+    typeOverride?: TransactionType;
   } {
+    const { action, object, counterparty, timing, businessImpact } = parsed;
     const assumptions: string[] = [];
     const questionsNeeded: string[] = [];
     let isCredit = false;
     let paymentMethod: PaymentMethod = 'bank';
-
+    let typeOverride: TransactionType | undefined = undefined;
     const desc = rawTx.description.toLowerCase();
 
     // Detect payment method
@@ -460,36 +545,81 @@ class AccountingEngine {
       paymentMethod = 'bank';
     }
 
+    // detect transfers/contra entries
+    if (parsed.action === 'transferred' || desc.includes('deposited') || desc.includes('withdrew from bank')) {
+      if (desc.includes('cash') && (desc.includes('bank') || desc.includes('into'))) {
+        paymentMethod = 'bank'; // Destination is bank
+        assumptions.push('Bank deposit detected - DR Bank, CR Cash');
+      } else if (desc.includes('withdrew') || (desc.includes('bank') && desc.includes('office'))) {
+        paymentMethod = 'cash'; // Destination is cash
+        assumptions.push('Bank withdrawal detected - DR Cash, CR Bank');
+      }
+    }
+
+    // detect advances / pre-payments
+    if (object === 'advance' || desc.includes('advance')) {
+      if (nature === 'income') {
+        assumptions.push('Unearned revenue (customer advance) detected');
+      }
+    }
+
+    // detect asset disposals
+    if (action === 'sold' && nature === 'asset') {
+      assumptions.push('Asset disposal detected - recording gain/loss and removal from books');
+    }
+
+    // detect accruals
+    if (action === 'accrued' || (timing === 'outstanding' && nature === 'expense')) {
+      assumptions.push('Accrual bookkeeping - recording liability for unpaid expense');
+    }
+
     // ===== CUSTOMER TRANSACTION DECISION TREE =====
     if (parsed.counterparty === 'customer') {
       if (parsed.action === 'received' || hasCashMovement) {
-        // Money received from customer
-        // Q: Was there an existing receivable?
+        // Is this payment for an EARLIER credit sale?
         if (desc.includes('receivable') || desc.includes('outstanding') ||
-          desc.includes('invoice') || desc.includes('debtor')) {
+          desc.includes('invoice') || desc.includes('debtor') ||
+          desc.includes('earlier') || desc.includes('against')) {
           // Yes → Credit Accounts Receivable
           assumptions.push('Receipt against existing receivable - crediting Accounts Receivable');
           isCredit = false; // Not a credit sale, it's a receipt
+          typeOverride = 'receipt';
+        } else if (desc.includes('advance') || desc.includes('deposit')) {
+          assumptions.push('Customer advance payment - recording unearned revenue');
+          typeOverride = 'adjustment';
         } else {
           // No → Credit Sales Revenue (cash sale)
           assumptions.push('Cash sale - crediting Sales Revenue');
           isCredit = false;
         }
       } else if (parsed.action === 'sold' && !hasCashMovement) {
-        // Goods/services sold but not paid for
-        // Dr Accounts Receivable, Cr Sales Revenue
         isCredit = true;
-        assumptions.push('Credit sale - debiting Accounts Receivable');
+        assumptions.push("Credit sale identified (no cash movement mentioned)");
+      } else if (parsed.timing === 'outstanding') {
+        isCredit = true;
+      } else if (parsed.action === 'returned') {
+        // Return from customer - usually reduces receivable unless cash paid back
+        if (!hasCashMovement && !desc.includes('cash')) {
+          isCredit = true;
+          assumptions.push('Assumed return against outstanding receivable');
+        }
       }
     }
 
     // ===== SUPPLIER TRANSACTION DECISION TREE =====
     if (parsed.counterparty === 'supplier') {
       if (parsed.action === 'paid' || hasCashMovement) {
+        // Is this payment for an EARLIER credit purchase?
         if (desc.includes('payable') || desc.includes('outstanding') ||
-          desc.includes('invoice') || desc.includes('creditor')) {
+          desc.includes('bill') || desc.includes('creditor') ||
+          desc.includes('earlier') || desc.includes('against')) {
+          // Yes → Debit Accounts Payable
           assumptions.push('Payment against existing payable - debiting Accounts Payable');
           isCredit = false;
+          typeOverride = 'payment';
+        } else if (desc.includes('accrued') || desc.includes('salary') || desc.includes('rent')) {
+          assumptions.push('Payment against accrued liability');
+          typeOverride = 'adjustment'; // We'll handle different liability accounts in createJournalEntry
         } else {
           assumptions.push('Cash purchase - debiting expense/asset account');
           isCredit = false;
@@ -497,19 +627,34 @@ class AccountingEngine {
       } else if (parsed.action === 'bought' && !hasCashMovement) {
         isCredit = true;
         assumptions.push('Credit purchase - crediting Accounts Payable');
+      } else if (parsed.action === 'returned') {
+        // Return to supplier - usually reduces payable unless cash received
+        if (!hasCashMovement && !desc.includes('cash')) {
+          isCredit = true;
+          assumptions.push('Assumed return against outstanding payable');
+        }
       }
     }
 
-    // ===== GENERAL ASSUMPTIONS =====
-    if (parsed.timing === 'unknown') {
-      assumptions.push('Assumed cash basis (immediate settlement)');
+    // ===== OTHER PROFESSIONAL CASES =====
+    if (desc.includes('interest')) {
+      if (action === 'paid') typeOverride = 'loan-repayment';
+      if (action === 'accrued') typeOverride = 'adjustment';
     }
 
-    if (parsed.businessImpact === 'unknown') {
-      questionsNeeded.push('Unable to determine business impact. Please clarify: is this income, expense, asset purchase, liability, or equity transaction?');
+    if (desc.includes('bad debt') || desc.includes('written off')) {
+      typeOverride = 'adjustment';
     }
 
-    return { isCredit, paymentMethod, assumptions, questionsNeeded };
+    if (desc.includes('inventory') || (desc.includes('stock') && desc.includes('count'))) {
+      typeOverride = 'adjustment';
+    }
+
+    if (desc.includes('close') || desc.includes('year-end')) {
+      typeOverride = 'closing';
+    }
+
+    return { isCredit, paymentMethod, assumptions, questionsNeeded, typeOverride };
   }
 
   /**
@@ -710,10 +855,10 @@ class AccountingEngine {
 
       case "expense": {
         // DR: Expense account
-        // CR: Cash/Bank
-        // CR: WHT Payable (if applicable)
+        // CR: Cash/Bank OR Accrued Expenses
         const expenseCode = this.mapCategoryToExpenseAccount(rawTx.category || "");
         const expenseAccount = getAccount(expenseCode);
+        const isAccrued = interpretation.assumptions.some(a => a.toLowerCase().includes('accrual'));
 
         lines.push({
           accountCode: expenseCode,
@@ -723,18 +868,40 @@ class AccountingEngine {
         });
 
         if (whtAmount > 0) {
-          // lines.push({
-          //   accountCode: "2220",
-          //   accountName: "WHT Payable",
-          //   debit: 0,
-          //   credit: whtAmount,
-          // });
-          // lines.push({
-          //   accountCode: cashAccount,
-          //   accountName: cashAccountName,
-          //   debit: 0,
-          //   credit: amount - whtAmount,
-          // });
+          // handled previously
+        } else {
+          lines.push({
+            accountCode: isAccrued ? "2100" : cashAccount,
+            accountName: isAccrued ? "Accrued Expenses" : cashAccountName,
+            debit: 0,
+            credit: amount,
+            memo: isAccrued ? "Accrued expense" : undefined
+          });
+        }
+        break;
+      }
+
+      case "asset-purchase": {
+        // DR: Fixed Asset
+        // CR: Cash/Bank or Accounts Payable
+        const assetCode = interpretation.parsed?.object === 'furniture' ? "1550" : "1540";
+        const assetName = interpretation.parsed?.object === 'furniture' ? "Furniture and Fittings" : "Office Equipment";
+
+        lines.push({
+          accountCode: assetCode,
+          accountName: assetName,
+          debit: amount,
+          credit: 0,
+        });
+
+        if (isCredit) {
+          lines.push({
+            accountCode: "2000",
+            accountName: "Accounts Payable",
+            debit: 0,
+            credit: amount,
+            memo: "Asset purchase on credit"
+          });
         } else {
           lines.push({
             accountCode: cashAccount,
@@ -746,18 +913,19 @@ class AccountingEngine {
         break;
       }
 
-      case "asset-purchase": {
-        // DR: Fixed Asset
-        // CR: Cash/Bank
+      case "asset-disposal": {
+        // DR: Cash/Bank
+        // CR: Fixed Asset
+        // CR: Gain on Asset Disposal (assuming for simplicity we sell at gain/book value)
         lines.push({
-          accountCode: "1540",
-          accountName: "Office Equipment",
+          accountCode: cashAccount,
+          accountName: cashAccountName,
           debit: amount,
           credit: 0,
         });
         lines.push({
-          accountCode: cashAccount,
-          accountName: cashAccountName,
+          accountCode: "4300",
+          accountName: "Gain on Asset Disposal",
           debit: 0,
           credit: amount,
         });
@@ -905,21 +1073,79 @@ class AccountingEngine {
       }
 
       case "transfer": {
-        // DR: Destination account (Bank)
-        // CR: Source account (Cash)
+        // DR: Destination account
+        // CR: Source account
+        const isDeposit = interpretation.assumptions.some(a => a.includes('deposit'));
+        const isWithdrawal = interpretation.assumptions.some(a => a.includes('withdrawal'));
+
+        if (isDeposit) {
+          lines.push({ accountCode: "1020", accountName: "Bank", debit: amount, credit: 0 });
+          lines.push({ accountCode: "1000", accountName: "Cash", debit: 0, credit: amount });
+        } else if (isWithdrawal) {
+          lines.push({ accountCode: "1000", accountName: "Cash", debit: amount, credit: 0 });
+          lines.push({ accountCode: "1020", accountName: "Bank", debit: 0, credit: amount });
+        } else {
+          lines.push({ accountCode: "1020", accountName: "Bank", debit: amount, credit: 0 });
+          lines.push({ accountCode: "1000", accountName: "Cash", debit: 0, credit: amount });
+        }
+        break;
+      }
+
+      case "adjustment": {
+        const desc = rawTx.description.toLowerCase();
+        if (desc.includes('bad debt') || desc.includes('written off')) {
+          lines.push({ accountCode: "6040", accountName: "Bad Debts Expense", debit: amount, credit: 0 });
+          lines.push({ accountCode: "1100", accountName: "Accounts Receivable", debit: 0, credit: amount });
+        } else if (desc.includes('salary') && desc.includes('accrued')) {
+          lines.push({ accountCode: "5500", accountName: "Salaries and Wages", debit: amount, credit: 0 });
+          lines.push({ accountCode: "2110", accountName: "Accrued Salaries", debit: 0, credit: amount });
+        } else if (desc.includes('salary') && desc.includes('paid')) {
+          lines.push({ accountCode: "2110", accountName: "Accrued Salaries", debit: amount, credit: 0 });
+          lines.push({ accountCode: "1020", accountName: "Bank", debit: 0, credit: amount });
+        } else if (desc.includes('interest') && desc.includes('accrued')) {
+          lines.push({ accountCode: "6500", accountName: "Interest Expense", debit: amount, credit: 0 });
+          lines.push({ accountCode: "2120", accountName: "Accrued Interest", debit: 0, credit: amount });
+        } else if (desc.includes('advance') || desc.includes('unearned')) {
+          if (interpretation.assumptions.some(a => a.includes('Unearned'))) {
+            lines.push({ accountCode: cashAccount, accountName: cashAccountName, debit: amount, credit: 0 });
+            lines.push({ accountCode: "2400", accountName: "Unearned Revenue", debit: 0, credit: amount });
+          } else {
+            lines.push({ accountCode: "2400", accountName: "Unearned Revenue", debit: amount, credit: 0 });
+            lines.push({ accountCode: "4000", accountName: "Sales", debit: 0, credit: amount });
+          }
+        } else if (desc.includes('inventory') || desc.includes('stock')) {
+          if (desc.includes('unsold') || desc.includes('closing')) {
+            // Increase Inventory, Decrease COGS
+            lines.push({ accountCode: "1200", accountName: "Inventory", debit: amount, credit: 0 });
+            lines.push({ accountCode: "5000", accountName: "Cost of Goods Sold", debit: 0, credit: amount });
+          } else {
+            // Decrease Inventory, Increase COGS
+            lines.push({ accountCode: "5000", accountName: "Cost of Goods Sold", debit: amount, credit: 0 });
+            lines.push({ accountCode: "1200", accountName: "Inventory", debit: 0, credit: amount });
+          }
+        } else {
+          lines.push({ accountCode: "2100", accountName: "Accrued Expenses", debit: amount, credit: 0 });
+          lines.push({ accountCode: cashAccount, accountName: cashAccountName, debit: 0, credit: amount });
+        }
+        break;
+      }
+
+      case "closing": {
+        // Summary Closing Entry: Move Net Income to Retained Earnings
+        // (Simplified placeholder for professional demo)
         lines.push({
-          accountCode: "1020",
-          accountName: "Bank",
-          debit: amount,
-          credit: 0,
-          memo: "Transfer in",
-        });
-        lines.push({
-          accountCode: "1000",
-          accountName: "Cash",
+          accountCode: "3100",
+          accountName: "Retained Earnings",
           debit: 0,
           credit: amount,
-          memo: "Transfer out",
+          memo: "Year-end closing entry (Net Income → Equity)"
+        });
+        lines.push({
+          accountCode: "4000",
+          accountName: "Sales",
+          debit: amount,
+          credit: 0,
+          memo: "Closing revenue accounts"
         });
         break;
       }
@@ -1022,6 +1248,9 @@ class AccountingEngine {
       training: "6020",
       bank: "6030",
       transport: "6070",
+      interest: "6500",
+      "bad debt": "6040",
+      debt: "6040",
     };
     return categoryMap[category.toLowerCase()] || "5820";
   }
@@ -1505,6 +1734,16 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     category = "salary";
   } else if (lowerMessage.includes("expense")) {
     category = "expense";
+  } else if (lowerMessage.includes("invested") || lowerMessage.includes("capital")) {
+    category = "equity";
+  } else if (lowerMessage.includes("withdrawal") || lowerMessage.includes("drawing")) {
+    category = "equity";
+  } else if (lowerMessage.includes("loan") || lowerMessage.includes("borrow")) {
+    category = "liability";
+  } else if (lowerMessage.includes("asset") || lowerMessage.includes("equipment") || lowerMessage.includes("computer")) {
+    category = "asset";
+  } else if (lowerMessage.includes("transfer") || lowerMessage.includes("deposit")) {
+    category = "transfer";
   }
 
   if (lowerMessage.includes("cash")) {

@@ -6,11 +6,29 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
+import { useEffect } from "react";
+import { clearAllData } from "@/lib/utils/system";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+Shift+R (Mac) or Ctrl+Shift+R (Win/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        if (confirm("Are you sure you want to reset all system data? This will clear all transactions and cannot be undone.")) {
+          clearAllData();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (isLanding) {
     return (
@@ -37,7 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <span className="text-lg font-extrabold text-[#0a0a0a]">Insight</span>
             </Link>
-            
+
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setSidebarOpen(true)}

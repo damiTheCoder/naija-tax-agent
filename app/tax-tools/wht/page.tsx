@@ -154,7 +154,7 @@ export default function WhtCalculatorPage() {
                 </tr>
               </thead>
               <tbody>
-                {whtResult.calculations.map((calc, index) => (
+                {whtResult.calculations?.map((calc, index) => (
                   <tr key={index}>
                     <td>
                       {calc.paymentDescription}

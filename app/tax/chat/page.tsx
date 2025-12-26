@@ -9,6 +9,7 @@ import {
 } from "@/lib/tax/taxEngine";
 import { getClientTaxRuleMetadata, refreshClientTaxRules } from "@/lib/taxRules/liveRatesClient";
 import type { TaxRuleMetadata } from "@/lib/types";
+import { Menu, Plus, ArrowRight, BarChart3, SendHorizontal } from "lucide-react";
 
 type ChatMessage = {
   id: string;
@@ -26,49 +27,17 @@ const currency = new Intl.NumberFormat("en-NG", {
 
 const formatCurrency = (value: number) => currency.format(Math.round(value || 0));
 
-function summarizeComputation(
-  computation: TaxComputationResult,
-  transaction?: TaxTransaction,
-): string {
-  const txLabel = transaction?.description || `Transaction ${computation.transactionId.slice(-4)}`;
-  const taxLines =
-    computation.taxesApplied.length > 0
-      ? computation.taxesApplied.map(
-          (tax) => `• ${tax.taxType} (${(tax.rate * 100).toFixed(1)}%): ${formatCurrency(tax.taxAmount)}`,
-        )
-      : ["• No immediate tax found for this entry"];
-
-  return [
-    `Recorded **${txLabel}** for ${formatCurrency(computation.amount)}.`,
-    "",
-    ...taxLines,
-    "",
-    `Total tax impact: ${formatCurrency(computation.totalTax)} | Net: ${formatCurrency(computation.netAmount)}`,
-  ].join("\n");
-}
-
 export default function TaxChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [summary, setSummary] = useState(() => taxEngine.getTaxSummary());
   const [ruleMetadata, setRuleMetadata] = useState<TaxRuleMetadata>(() => getClientTaxRuleMetadata());
-  const [recentComputations, setRecentComputations] = useState<TaxComputationResult[]>([]);
-  const [transactionsMap, setTransactionsMap] = useState<Record<string, TaxTransaction>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const hydratedRef = useRef(false);
 
   const syncState = useCallback(() => {
     const latestSummary = taxEngine.getTaxSummary();
-    const state = taxEngine.getState();
-    const recent = state.computations.slice(-6).reverse();
-    const txIndex = state.transactions.reduce<Record<string, TaxTransaction>>((acc, tx) => {
-      acc[tx.id] = tx;
-      return acc;
-    }, {});
-
     setSummary(latestSummary);
-    setRecentComputations(recent);
-    setTransactionsMap(txIndex);
   }, []);
 
   useEffect(() => {
@@ -85,32 +54,21 @@ export default function TaxChatPage() {
   useEffect(() => {
     refreshClientTaxRules()
       .then(() => setRuleMetadata(getClientTaxRuleMetadata()))
-      .catch(() => {
-        // ignore hydration failures
-      });
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
     if (messages.length === 0) {
-      const intro = [
-        "I'm wired directly into the Nigerian tax engine.",
-        `Current VAT net payable: ${formatCurrency(summary.netVATPayable)}.`,
-        "Tell me about a payment or disposal (e.g. “Paid ₦420,000 rent to Abuja landlord this month”).",
-      ].join(" ");
       setMessages([
         {
           id: "intro",
           role: "assistant",
-          content: intro,
+          content: "I'm wired directly into the Nigerian tax engine. Tell me about a payment or disposal (e.g. “Paid ₦420,000 rent to Abuja landlord”).",
           timestamp: Date.now(),
         },
       ]);
     }
-  }, [messages.length, summary.netVATPayable]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages.length]);
 
   const appendMessage = useCallback((role: ChatMessage["role"], content: string) => {
     setMessages((prev) => [
@@ -149,124 +107,111 @@ export default function TaxChatPage() {
         syncState();
         return;
       } catch (error) {
-        console.error("Tax chat processing failed", error);
-        appendMessage("assistant", "I couldn't journal that entry automatically. Please double-check the format.");
-        return;
+        appendMessage("assistant", "I couldn't journal that entry automatically.");
       }
     }
-
-    const { totalVAT, totalWHT, totalCGT, totalStampDuty, netVATPayable } = taxEngine.getTaxSummary();
-    appendMessage(
-      "assistant",
-      `No taxable transaction detected. Current flows → VAT: ${formatCurrency(totalVAT)}, WHT: ${formatCurrency(
-        totalWHT,
-      )}, CGT: ${formatCurrency(totalCGT)}, Stamp duty: ${formatCurrency(totalStampDuty)}. Net VAT payable ${formatCurrency(
-        netVATPayable,
-      )}.`,
-    );
+    appendMessage("assistant", "No taxable transaction detected.");
   };
 
-  const summaryCards = useMemo(
-    () => [
-      { label: "Net VAT payable", value: summary.netVATPayable, detail: "Output minus input credit" },
-      { label: "Withholding tax", value: summary.totalWHT, detail: "Professional fees, rent, dividends" },
-      { label: "Capital gains", value: summary.totalCGT, detail: "Assets, property, shares" },
-      { label: "Stamp duty", value: summary.totalStampDuty, detail: "Transfers ≥ ₦10k & instruments" },
-    ],
-    [summary],
-  );
-
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <section className="lg:col-span-2 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <header className="flex flex-col gap-2 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+    <div className="max-w-2xl mx-auto min-h-screen flex flex-col p-6 bg-[#f8f9fa]">
+      {/* Header */}
+      <header className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#0070f3] rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <SendHorizontal className="w-6 h-6 text-white rotate-[-45deg] ml-1" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Insight</h1>
+        </div>
+        <button className="p-2.5 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">
+          <Menu className="w-5 h-5 text-gray-700" />
+        </button>
+      </header>
+
+      {/* Subtitles */}
+      <div className="mb-8">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9ca3af] mb-1">
+          Tax Agent Chat
+        </p>
+        <p className="text-[#6b7280] font-medium text-sm">
+          Real-time Nigerian tax computation engine.
+        </p>
+      </div>
+
+      {/* Badges */}
+      <div className="flex items-center gap-2 mb-8">
+        <span className="px-3 py-1 bg-[#f3f4f6] text-[#6b7280] text-[11px] font-medium rounded-lg border border-gray-100 shadow-sm">
+          Ruleset: {ruleMetadata.version || "base"}
+        </span>
+        <span className="px-3 py-1 bg-[#f3f4f6] text-[#6b7280] text-[11px] font-medium rounded-lg border border-gray-100 shadow-sm">
+          config.ts
+        </span>
+      </div>
+
+      {/* Current Tax Position Card */}
+      <div className="bg-white rounded-[2rem] border border-[#f1f5f9] shadow-sm overflow-hidden mb-24">
+        <div className="p-6 border-b border-[#f1f5f9] flex items-center gap-4">
+          <div className="w-10 h-10 bg-[#eff6ff] rounded-lg flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-[#3b82f6]" />
+          </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Tax agent chat</p>
-            <h1 className="text-2xl font-semibold text-gray-900">Conversations synced with the tax engine</h1>
-            <p className="text-sm text-gray-600">Describe payments, disposals, or ask for the current VAT/WHT position.</p>
+            <h3 className="font-semibold text-gray-900 leading-none mb-1">Current Tax Position</h3>
+            <p className="text-xs text-[#94a3b8]">Live summary of accrued liabilities</p>
           </div>
-          <div className="text-right text-xs text-gray-500">
-            <p>Ruleset: {ruleMetadata.version}</p>
-            {ruleMetadata.source && <p>Source · {ruleMetadata.source}</p>}
-          </div>
-        </header>
+        </div>
 
-        <div className="mt-4 flex h-[520px] flex-col rounded-2xl border border-gray-100">
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] whitespace-pre-line rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === "user" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
+        <div className="p-5 space-y-4">
+          {/* NET VAT PAYABLE */}
+          <div className="p-6 rounded-[1.5rem] bg-white border border-[#e0e7ff] relative overflow-hidden group hover:border-[#818cf8] transition-colors">
+            <div className="relative z-10">
+              <p className="text-[11px] font-bold text-[#6366f1] tracking-wider uppercase mb-2">Net VAT Payable</p>
+              <p className="text-3xl font-black text-gray-900 mb-1 leading-tight">{formatCurrency(summary.netVATPayable)}</p>
+              <p className="text-[11px] font-medium text-[#94a3b8]">Output - Input</p>
+            </div>
           </div>
-          <div className="border-t border-gray-100 p-4">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="e.g. Paid ₦420,000 professional fees last Friday"
-              className="w-full resize-none rounded-2xl border border-gray-200 p-3 text-sm outline-none focus:border-gray-400"
-              rows={3}
-            />
-            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-              <span>Enter to submit · Shift+Enter for newline</span>
-              <button
-                type="button"
-                className="rounded-full bg-gray-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-gray-800"
-                onClick={handleSend}
-              >
-                Post to tax engine
-              </button>
+
+          {/* WITHHOLDING TAX */}
+          <div className="p-6 rounded-[1.5rem] bg-[#fff1f2]/30 border border-[#fee2e2] relative overflow-hidden group hover:border-[#f43f5e] transition-colors">
+            <div className="relative z-10">
+              <p className="text-[11px] font-bold text-[#f43f5e] tracking-wider uppercase mb-2">Withholding Tax</p>
+              <p className="text-3xl font-black text-gray-900 mb-1 leading-tight">{formatCurrency(summary.totalWHT)}</p>
+              <p className="text-[11px] font-medium text-[#94a3b8]">WHT deducted</p>
+            </div>
+          </div>
+
+          {/* CAPITAL GAINS */}
+          <div className="p-6 rounded-[1.5rem] bg-[#f0fdf4]/50 border border-[#dcfce7] relative overflow-hidden group hover:border-[#22c55e] transition-colors">
+            <div className="relative z-10">
+              <p className="text-[11px] font-bold text-[#22c55e] tracking-wider uppercase mb-2">Capital Gains</p>
+              <p className="text-3xl font-black text-gray-900 mb-1 leading-tight">{formatCurrency(summary.totalCGT)}</p>
+              <p className="text-[11px] font-medium text-[#94a3b8]">Asset disposals</p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <aside className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.3em] text-gray-500">Live flows</p>
-        <h2 className="mt-2 text-lg font-semibold text-gray-900">Nigerian tax position</h2>
-        <div className="mt-4 space-y-3">
-          {summaryCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{card.label}</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">{formatCurrency(card.value)}</p>
-              <p className="text-xs text-gray-600">{card.detail}</p>
-            </div>
-          ))}
+      {/* Floating Chat Input */}
+      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4">
+        <div className="bg-[#e9e9e9] rounded-full p-2.5 flex items-center gap-2 shadow-2xl shadow-black/5 ring-1 ring-white/20">
+          <button className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm shrink-0">
+            <Plus className="w-6 h-6 text-gray-900" />
+          </button>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Ask the tax agent or record a transaction..."
+            className="flex-1 bg-transparent border-none focus:ring-0 text-gray-600 placeholder:text-gray-400 text-sm py-2 px-1"
+          />
+          <button
+            onClick={handleSend}
+            className="w-12 h-12 bg-gray-200/50 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors shadow-sm shrink-0"
+          >
+            <ArrowRight className="w-5 h-5 text-gray-500" />
+          </button>
         </div>
-
-        <p className="mt-6 text-xs uppercase tracking-[0.3em] text-gray-500">Latest postings</p>
-        <div className="mt-2 space-y-3">
-          {recentComputations.length === 0 && <p className="text-sm text-gray-500">No entries yet.</p>}
-          {recentComputations.map((comp) => (
-            <div key={comp.transactionId} className="rounded-2xl border border-gray-100 p-3">
-              <p className="text-sm font-semibold text-gray-900">
-                {transactionsMap[comp.transactionId]?.description || `Entry ${comp.transactionId.slice(-4)}`}
-              </p>
-              <p className="text-xs text-gray-500">
-                {transactionsMap[comp.transactionId]?.date
-                  ? new Date(transactionsMap[comp.transactionId].date).toLocaleDateString("en-NG")
-                  : "Undated"}
-              </p>
-              <p className="mt-1 text-xs text-gray-600 whitespace-pre-line">
-                {summarizeComputation(comp, transactionsMap[comp.transactionId])}
-              </p>
-            </div>
-          ))}
-        </div>
-      </aside>
+      </footer>
     </div>
   );
 }

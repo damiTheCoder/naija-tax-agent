@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+// Statically import core rulebooks to support both server and client-side execution
+import ng_federal_2024 from "../../data/rules/ng_federal_2024.json";
 
 export type Jurisdiction = "Federal" | "Lagos" | "Ogun" | "Rivers" | "Kano" | "Other";
 export type RoundingMethod = "bankers" | "nearest_naira" | "floor" | "ceil" | "two_decimal";
@@ -66,18 +66,24 @@ export interface EnhancedTaxResult {
 }
 
 /**
- * Loads a rulebook from the filesystem based on year and jurisdiction.
+ * Loads a rulebook based on year and jurisdiction.
+ * Uses static imports for client-side support.
  */
 export function loadRuleBook(year: string, jurisdiction: Jurisdiction = "Federal"): TaxRuleBook {
-    const fileName = `ng_${jurisdiction.toLowerCase()}_${year}.json`;
-    const filePath = path.join(process.cwd(), "data", "rules", fileName);
+    // For now, we only have 2024 Federal. We registry them here.
+    const rulebookMap: Record<string, any> = {
+        "Federal_2024": ng_federal_2024,
+        "Lagos_2024": ng_federal_2024, // Fallback for demo
+    };
 
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`CRITICAL: Tax rulebook missing for ${jurisdiction} in ${year}. Expected at ${filePath}`);
+    const key = `${jurisdiction}_${year}`;
+    const rulebook = rulebookMap[key] || rulebookMap["Federal_2024"];
+
+    if (!rulebook) {
+        throw new Error(`CRITICAL: Tax rulebook missing for ${jurisdiction} in ${year}.`);
     }
 
-    const raw = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as TaxRuleBook;
+    return rulebook as TaxRuleBook;
 }
 
 /**

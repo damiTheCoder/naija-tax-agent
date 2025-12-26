@@ -13,6 +13,7 @@ import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory }
 import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
 import { AutomationStatus, BANK_PROVIDERS, deriveWorkspaceFiles, mockAutomationClient } from "@/lib/accounting/automationAgent";
 import { accountingEngine, parseTransactionFromChat, AccountingState } from "@/lib/accounting/transactionBridge";
+import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 
 type ManualTransactionDraft = {
@@ -231,7 +232,10 @@ export default function AccountingPage() {
         description: parsedTx.description || trimmed.substring(0, 100),
         category: parsedTx.category || "other",
         amount: parsedTx.amount,
-        type: parsedTx.category === "sales" ? "income" : "expense",
+        type: (parsedTx.category === "sales" || parsedTx.category === "revenue") ? "income" :
+          (parsedTx.category === "equity" ? "equity" :
+            (parsedTx.category === "asset" ? "asset" :
+              (parsedTx.category === "liability" ? "liability" : "expense"))),
       };
 
       try {
@@ -484,7 +488,14 @@ export default function AccountingPage() {
                             <p className="text-xs text-gray-500">{transactions.length.toLocaleString()} transaction{transactions.length !== 1 ? 's' : ''} recorded</p>
                           </div>
                         </div>
-                        <button className="text-xs text-rose-500 hover:text-rose-600 font-medium" onClick={() => setTransactions([])}>
+                        <button
+                          className="text-xs text-rose-500 hover:text-rose-600 font-medium"
+                          onClick={() => {
+                            if (confirm("This will permanently clear all your transactions and tax history. Proceed?")) {
+                              clearAllData();
+                            }
+                          }}
+                        >
                           Clear all
                         </button>
                       </div>
@@ -580,75 +591,7 @@ export default function AccountingPage() {
                   </div>
                 )}
 
-                {/* Financial Statements Section */}
-                {statementCards && (
-                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                    <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900">Draft Financial Statements</h3>
-                            <p className="text-xs text-gray-500">Income Statement • Balance Sheet • Cash Flow</p>
-                          </div>
-                        </div>
-                        {!auditedPacket && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Awaiting audit
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-3 md:p-5">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
-                        <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200/50 p-4">
-                          <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Income Statement</p>
-                          <p className="mt-2 text-2xl font-bold text-gray-900 font-mono">₦{statementCards.revenue.toLocaleString()}</p>
-                          <p className="text-xs text-gray-500 mt-1">Revenue</p>
-                          <div className="mt-3 pt-3 border-t border-emerald-200/50">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Net Income</span>
-                              <span className="font-mono font-semibold text-emerald-700">₦{statementCards.netIncome.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-gradient-to-br from-rose-50 to-rose-100/50 border border-rose-200/50 p-4">
-                          <p className="text-xs font-medium text-rose-600 uppercase tracking-wider">Expenses</p>
-                          <p className="mt-2 text-2xl font-bold text-gray-900 font-mono">₦{statementCards.operatingExpenses.toLocaleString()}</p>
-                          <p className="text-xs text-gray-500 mt-1">Operating Expenses</p>
-                          <div className="mt-3 pt-3 border-t border-rose-200/50">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Cost of Sales</span>
-                              <span className="font-mono font-semibold text-rose-700">₦{statementCards.costOfSales.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 p-4">
-                          <p className="text-xs font-medium text-blue-600 uppercase tracking-wider">Balance Sheet</p>
-                          <div className="mt-2 space-y-1.5">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Assets</span>
-                              <span className="font-mono font-semibold text-gray-900">₦{statementCards.assets.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Liabilities</span>
-                              <span className="font-mono font-semibold text-gray-900">₦{statementCards.liabilities.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm pt-1.5 border-t border-blue-200/50">
-                              <span className="text-gray-600">Equity</span>
-                              <span className="font-mono font-semibold text-blue-700">₦{statementCards.equity.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Financial Statements Section removed as per user request */}
 
                 {/* Audited Pack Section */}
                 {auditedPacket && (
