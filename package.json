@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/clear-next-lock.cjs",
+    "predev:safe": "node scripts/clear-next-lock.cjs",
     "dev": "next dev --webpack",
     "dev:safe": "lsof -ti :3000,3001 | xargs kill -9 2>/dev/null || true && rm -f .next/dev/lock && npm run dev",
     "build": "next build",

@@ -29,8 +29,8 @@ export default function HeaderNav() {
   return (
     <header className="sticky top-0 z-50 bg-[#fafafa]/90 backdrop-blur-xl">
       <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative w-11 h-11 overflow-hidden rounded-xl">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="relative w-8 h-8 overflow-hidden rounded-xl">
             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
           </div>
           <div>
@@ -41,12 +41,12 @@ export default function HeaderNav() {
 
         <div className="relative">
           <button
-            className="w-11 h-11 rounded-2xl flex items-center justify-center text-[#0a0a0a] hover:bg-[#64B5F6]/30 transition-colors"
+            className="w-8 h-8 rounded-2xl flex items-center justify-center text-[#0a0a0a] hover:bg-[#64B5F6]/30 transition-colors"
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label="Toggle navigation menu"
             aria-expanded={isMenuOpen}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           </button>

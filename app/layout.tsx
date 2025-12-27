@@ -1,12 +1,24 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { APP_LOGO_SRC } from "@/lib/constants";
 
-const inter = Inter({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const glacial = localFont({
+  src: [
+    {
+      path: "./fonts/GlacialIndifference-Regular.woff",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/GlacialIndifference-Bold.woff",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-glacial",
+  display: "swap",
 });
 
 const siteTitle = "Insight - Smart Nigerian Tax Manager";
@@ -41,7 +53,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased`}>
+      <body className={`${glacial.variable} antialiased`}>
         <AppShell>{children}</AppShell>
       </body>
     </html>

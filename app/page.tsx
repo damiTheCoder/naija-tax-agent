@@ -28,32 +28,24 @@ const problemPoints = [
   "Can't tell if they're growing or just surviving",
 ];
 
-const samplePrompts = [
-  "How much profit did I make last month?",
-  "Why did expenses increase in March?",
-  "Prepare my financial statements.",
-  "Add this expense manually.",
-  "What's hurting my cash flow?",
-];
-
 const howItWorks = [
   {
-    step: "1",
+    icon: "bankLarge",
     title: "Connect Your Bank",
     description: "Securely link your business bank accounts. The AI automatically pulls and organizes transactions.",
   },
   {
-    step: "2",
+    icon: "chat",
     title: "Talk to Your Books",
     description: "Chat with your accounting records: Categorize transactions, add manual entries, ask financial questions.",
   },
   {
-    step: "3",
+    icon: "chatgpt",
     title: "AI-Prepared Accounting",
     description: "The AI prepares your books, structures transactions properly, and keeps your records clean and consistent.",
   },
   {
-    step: "4",
+    icon: "check",
     title: "Audit & Compliance Ready",
     description: "Upload audit documents or past financials. The AI reconstructs historical data and aligns records.",
   },
@@ -92,14 +84,6 @@ const coreFeatures = [
   },
 ];
 
-const whoItsFor = [
-  "Small business owners",
-  "Freelancers & agencies",
-  "Growing SMEs",
-  "Founders without finance teams",
-  "Businesses tired of guessing",
-];
-
 // SVG Icons
 const icons = {
   chatgpt: (
@@ -123,7 +107,7 @@ const icons = {
     </svg>
   ),
   bankLarge: (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
     </svg>
   ),
@@ -168,10 +152,14 @@ const getFeatureIcon = (iconName: string) => {
   switch (iconName) {
     case "chat": return icons.chat;
     case "bank": return icons.bank;
+    case "bankLarge": return icons.bankLarge;
     case "edit": return icons.edit;
     case "chart": return icons.chart;
     case "search": return icons.search;
     case "compass": return icons.compass;
+    case "sparkle": return icons.sparkle;
+    case "chatgpt": return icons.chatgpt;
+    case "check": return icons.check;
     default: return icons.sparkle;
   }
 };
@@ -279,8 +267,8 @@ export default function LandingPage() {
               <div className="hero-image-card">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=500&fit=crop&crop=face"
-                  alt="Business professional"
+                  src="/_ (53).jpeg"
+                  alt="Business owner"
                   className="hero-person-img"
                 />
 
@@ -471,6 +459,10 @@ export default function LandingPage() {
       {/* Problem Section - Dramatic Visual Storytelling */}
       <section className="problem-section-new animate-on-scroll" id="problem">
         <div className="problem-container">
+          <div className="problem-visual-simple">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/tesla.png" alt="Business performance dashboard" className="problem-side-img" />
+          </div>
           <div className="problem-content">
             <span className="problem-eyebrow">THE PROBLEM</span>
             <h2 className="problem-headline">
@@ -482,28 +474,13 @@ export default function LandingPage() {
             <div className="problem-points-grid">
               {problemPoints.map((point, index) => (
                 <div key={index} className="problem-point-card">
-                  <div className="problem-point-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                    </svg>
+                  <div className="problem-point-meta">
+                    <span className="problem-point-step">{index + 1}</span>
+                    <span className="problem-point-label">Pain point</span>
                   </div>
                   <p>{point}</p>
                 </div>
               ))}
-            </div>
-          </div>
-          <div className="problem-visual">
-            <div className="problem-image-wrapper">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&h=700&fit=crop"
-                alt="Business owner stressed over finances"
-                className="problem-main-image"
-              />
-              <div className="problem-overlay-card">
-                <div className="problem-stat">68%</div>
-                <p>of SMEs don&apos;t know their real profit margins</p>
-              </div>
             </div>
           </div>
         </div>
@@ -521,53 +498,12 @@ export default function LandingPage() {
               Instead of dashboards you don&apos;t understand, spreadsheets you avoid, or reports you never read — you just ask the AI.
             </p>
           </div>
-
-          <div className="solution-showcase">
-            <div className="chat-mockup">
-              <div className="chat-header">
-                <div className="chat-header-dot"></div>
-                <div className="chat-header-dot"></div>
-                <div className="chat-header-dot"></div>
-                <span>Insight AI Assistant</span>
-              </div>
-              <div className="chat-messages">
-                <div className="chat-message user">
-                  <p>How much profit did I make last month?</p>
-                </div>
-                <div className="chat-message ai">
-                  <div className="ai-avatar">
-                    <Image src={APP_LOGO_SRC} alt="AI" width={24} height={24} />
-                  </div>
-                  <div className="ai-content">
-                    <p>Based on your March transactions, your net profit was <strong>₦847,500</strong> — up 23% from February.</p>
-                    <div className="ai-chart-preview">
-                      <div className="mini-bar" style={{ height: '40%' }}></div>
-                      <div className="mini-bar" style={{ height: '55%' }}></div>
-                      <div className="mini-bar" style={{ height: '70%' }}></div>
-                      <div className="mini-bar" style={{ height: '62%' }}></div>
-                      <div className="mini-bar active" style={{ height: '85%' }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="prompts-showcase">
-              <h3>Try asking things like:</h3>
-              <div className="prompt-bubbles">
-                {samplePrompts.map((prompt, index) => (
-                  <div key={index} className="prompt-bubble">
-                    <span className="prompt-icon">&ldquo;</span>
-                    <p>{prompt}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="solution-single-visual">
+            <picture>
+              <source media="(max-width: 768px)" srcSet="/R4.png" />
+              <img src="/R1.png" alt="Insight in action" className="solution-single-img" />
+            </picture>
           </div>
-
-          <p className="solution-tagline-new">
-            The AI understands your books — and explains them like a finance partner would.
-          </p>
         </div>
       </section>
 
@@ -582,14 +518,10 @@ export default function LandingPage() {
 
           <div className="hiw-timeline">
             {howItWorks.map((step, index) => (
-              <div key={step.step} className="hiw-step">
+              <div key={step.title} className="hiw-step">
                 <div className="hiw-step-visual">
-                  <div className="hiw-step-number">{step.step}</div>
-                  <div className="hiw-step-icon">
-                    {index === 0 && icons.bank}
-                    {index === 1 && icons.chat}
-                    {index === 2 && icons.sparkle}
-                    {index === 3 && icons.check}
+                  <div className={`hiw-step-number hiw-step-number-${index + 1}`}>
+                    <div className="hiw-step-icon">{getFeatureIcon(step.icon)}</div>
                   </div>
                 </div>
                 <div className="hiw-step-content">
