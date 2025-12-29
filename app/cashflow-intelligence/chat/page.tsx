@@ -537,12 +537,12 @@ export default function CashflowChatPage() {
             {/* Fixed Bottom Composer */}
             <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none">
                 <div className="mx-auto w-full max-w-3xl">
-                    <div className="pointer-events-auto flex items-end gap-3 rounded-[24px] bg-[#e5e5e5] px-5 py-3 shadow-lg transition-all">
+                    <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#e5e5e5] px-3 py-1.5 shadow-lg transition-all">
                         <textarea
                             ref={textareaRef}
                             rows={1}
                             placeholder="Ask about automations, returns, or set up a new rule..."
-                            className="flex-1 bg-transparent border-none text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px]"
+                            className="flex-1 bg-transparent border-none text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
                             value={composerInput}
                             onChange={(e) => setComposerInput(e.target.value)}
                             onKeyDown={(e) => {
@@ -553,7 +553,7 @@ export default function CashflowChatPage() {
                             }}
                         />
                         <button
-                            className={`w-10 h-10 rounded-full flex items-center justify-center mb-0.5 transition-colors ${canSend ? "bg-gray-900 text-white" : "bg-white text-gray-400 cursor-not-allowed"
+                            className={`w-9 h-9 rounded-full flex items-center justify-center mb-0.5 transition-all ${canSend ? "bg-white text-[#64B5F6] shadow-sm" : "bg-white/50 text-[#64B5F6] opacity-50 cursor-not-allowed"
                                 }`}
                             onClick={handleSendMessage}
                             disabled={!canSend}
