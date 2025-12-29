@@ -12,7 +12,8 @@ import {
 import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory } from "@/lib/accounting/statementEngine";
 import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
 import { AutomationStatus, BANK_PROVIDERS, deriveWorkspaceFiles, mockAutomationClient } from "@/lib/accounting/automationAgent";
-import { accountingEngine, parseTransactionFromChat, AccountingState } from "@/lib/accounting/transactionBridge";
+import { accountingEngine, parseTransactionFromChat, AccountingState, CustomAccount } from "@/lib/accounting/transactionBridge";
+import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
 import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 
@@ -88,6 +89,41 @@ export default function AccountingPage() {
   const manualFormRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Post Entry Section State
+  type PostEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
+  const [showPostEntry, setShowPostEntry] = useState(false);
+  const [postEntryNarration, setPostEntryNarration] = useState("");
+  const [postEntryDate, setPostEntryDate] = useState(new Date().toISOString().split("T")[0]);
+  const [postEntryLines, setPostEntryLines] = useState<PostEntryLine[]>([
+    { id: "1", accountCode: "", accountName: "", debit: "", credit: "" },
+    { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
+  ]);
+  const [postEntryError, setPostEntryError] = useState("");
+  const customAccounts = accountingState?.customAccounts || [];
+
+  // Combine all accounts for selection
+  const allAccountsForSelect = useMemo(() => {
+    const standard = CHART_OF_ACCOUNTS.map((acc) => ({
+      code: acc.code,
+      name: acc.name,
+      class: acc.class,
+    }));
+    const custom = customAccounts.map((acc: CustomAccount) => ({
+      code: acc.code,
+      name: acc.name,
+      class: acc.class,
+    }));
+    return [...standard, ...custom].sort((a, b) => a.code.localeCompare(b.code));
+  }, [customAccounts]);
+
+  // Calculate post entry totals
+  const postEntryTotals = useMemo(() => {
+    const totalDebit = postEntryLines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0);
+    const totalCredit = postEntryLines.reduce((sum, l) => sum + (parseFloat(l.credit) || 0), 0);
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
+    return { totalDebit, totalCredit, isBalanced };
+  }, [postEntryLines]);
+
   // Auto-expand textarea as user types
   useEffect(() => {
     if (textareaRef.current) {
@@ -103,10 +139,20 @@ export default function AccountingPage() {
   // Subscribe to accounting engine and load persisted state
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Load persisted engine state
-    accountingEngine.load();
-    setAccountingState(accountingEngine.getState());
-    setJournalEntries(accountingEngine.getState().journalEntries);
+
+    // Defer heavy localStorage load to allow page to render first
+    const loadEngine = () => {
+      accountingEngine.load();
+      setAccountingState(accountingEngine.getState());
+      setJournalEntries(accountingEngine.getState().journalEntries);
+    };
+
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if ('requestIdleCallback' in window) {
+      (window as Window & { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(loadEngine);
+    } else {
+      setTimeout(loadEngine, 0);
+    }
 
     // Subscribe to updates
     const unsubscribe = accountingEngine.subscribe((state) => {
@@ -225,23 +271,64 @@ export default function AccountingPage() {
     const parsedTx = parseTransactionFromChat(trimmed);
 
     if (parsedTx && parsedTx.amount && parsedTx.amount > 0) {
-      // User entered a transaction-like message
+      // Map parsedType to transaction type
+      const typeMap: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
+        'sale': 'income',
+        'receipt': 'income',
+        'purchase': 'expense',
+        'expense': 'expense',
+        'payment': 'liability',  // Payment to supplier reduces liability
+        'transfer': 'asset',
+        'asset': 'asset',
+        'equity': 'equity',
+        'loan': 'liability',
+        'other': 'expense',
+      };
+
+      // Map category to proper transaction categorization
+      const categoryToType: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
+        'sales': 'income',
+        'service': 'income',
+        'receipt': 'income',
+        'purchases': 'expense',
+        'rent': 'expense',
+        'salary': 'expense',
+        'utilities': 'expense',
+        'transport': 'expense',
+        'expense': 'expense',
+        'asset': 'asset',
+        'capital': 'equity',
+        'drawing': 'equity',
+        'loan-received': 'liability',
+        'loan-repayment': 'liability',
+        'supplier-payment': 'liability',  // Key: paid supplier
+        'payment': 'liability',
+        'transfer': 'asset',
+      };
+
+      // Use category-based mapping if available, otherwise fall back to parsedType
+      const transactionType = categoryToType[parsedTx.category || ''] || typeMap[parsedTx.parsedType] || 'expense';
+
       const newTransaction: RawTransaction = {
         id: `chat-${Date.now()}`,
         date: new Date().toISOString().split("T")[0],
-        description: parsedTx.description || trimmed.substring(0, 100),
+        description: parsedTx.description || trimmed.substring(0, 150),
         category: parsedTx.category || "other",
         amount: parsedTx.amount,
-        type: (parsedTx.category === "sales" || parsedTx.category === "revenue") ? "income" :
-          (parsedTx.category === "equity" ? "equity" :
-            (parsedTx.category === "asset" ? "asset" :
-              (parsedTx.category === "liability" ? "liability" : "expense"))),
+        type: transactionType,
       };
+
+      // Show confidence indicator if available
+      const confidenceText = parsedTx.confidence >= 0.9 ? "✓ High confidence" :
+        parsedTx.confidence >= 0.7 ? "⚡ Medium confidence" : "⚠️ Low confidence";
 
       try {
         const result = accountingEngine.processTransaction(newTransaction);
         setTransactions((prev) => [...prev, newTransaction]);
-        appendMessage("assistant", result.chatResponse);
+
+        // Enhanced response with confidence and parsed type
+        const enhancedResponse = `${result.chatResponse}\n\n_${confidenceText} (${parsedTx.parsedType} detected)_`;
+        appendMessage("assistant", enhancedResponse);
         pushAutomationActivity("Chat journal", `Parsed and posted: ${result.journalEntry.id}`);
 
         // Auto-update statements
@@ -250,7 +337,7 @@ export default function AccountingPage() {
       } catch {
         appendMessage(
           "assistant",
-          `I detected a transaction (₦${parsedTx.amount.toLocaleString()}). Use the manual form above for full control, or I can journal it with assumptions.`,
+          `I detected a ${parsedTx.parsedType} transaction (₦${parsedTx.amount.toLocaleString()}). ${confidenceText}.\n\nUse the manual form above for full control, or I can journal it with assumptions.`,
         );
       }
     } else {
@@ -402,6 +489,74 @@ export default function AccountingPage() {
     setIsActionMenuOpen(false);
   };
 
+  // Post Entry handlers
+  const handlePostEntry = () => {
+    setPostEntryError("");
+    if (!postEntryNarration.trim()) {
+      setPostEntryError("Please enter a narration");
+      return;
+    }
+    if (!postEntryTotals.isBalanced) {
+      setPostEntryError("Entry must be balanced (Total DR = Total CR)");
+      return;
+    }
+
+    try {
+      const entry = accountingEngine.postManualJournalEntry({
+        narration: postEntryNarration,
+        date: postEntryDate,
+        lines: postEntryLines
+          .filter((l) => l.accountCode && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+          .map((l) => ({
+            accountCode: l.accountCode,
+            accountName: l.accountName,
+            debit: parseFloat(l.debit) || 0,
+            credit: parseFloat(l.credit) || 0,
+          })),
+      });
+
+      appendMessage("assistant", `✅ Posted journal entry ${entry.id}: ${postEntryNarration}`);
+      pushAutomationActivity("Manual entry", `Posted: ${entry.id}`);
+
+      // Reset form
+      setShowPostEntry(false);
+      setPostEntryNarration("");
+      setPostEntryDate(new Date().toISOString().split("T")[0]);
+      setPostEntryLines([
+        { id: "1", accountCode: "", accountName: "", debit: "", credit: "" },
+        { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
+      ]);
+    } catch (err: unknown) {
+      setPostEntryError(err instanceof Error ? err.message : "Failed to post entry");
+    }
+  };
+
+  const addPostEntryLine = () => {
+    setPostEntryLines([
+      ...postEntryLines,
+      { id: Date.now().toString(), accountCode: "", accountName: "", debit: "", credit: "" },
+    ]);
+  };
+
+  const updatePostEntryLine = (id: string, field: string, value: string) => {
+    setPostEntryLines(
+      postEntryLines.map((l) => {
+        if (l.id !== id) return l;
+        if (field === "accountCode") {
+          const account = allAccountsForSelect.find((a) => a.code === value);
+          return { ...l, accountCode: value, accountName: account?.name || "" };
+        }
+        return { ...l, [field]: value };
+      })
+    );
+  };
+
+  const removePostEntryLine = (id: string) => {
+    if (postEntryLines.length > 2) {
+      setPostEntryLines(postEntryLines.filter((l) => l.id !== id));
+    }
+  };
+
   return (
     <>
       <div className="space-y-6 pb-32">
@@ -429,6 +584,22 @@ export default function AccountingPage() {
           <div className="chat-feed flex flex-col min-h-[60vh]">
             <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
               <div className="space-y-4">
+                {/* Post Journal Entry Button */}
+                <button
+                  onClick={() => setShowPostEntry(true)}
+                  className="w-full rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/50 hover:bg-purple-100/50 hover:border-purple-400 transition-all p-5 flex items-center justify-center gap-3 group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-purple-900">Post Journal Entry</h3>
+                    <p className="text-xs text-purple-600">Manual double-entry with DR/CR columns</p>
+                  </div>
+                </button>
+
                 {/* Documents Section */}
                 <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                   <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
@@ -551,8 +722,8 @@ export default function AccountingPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                      {journalEntries.slice(-5).reverse().map((entry) => (
+                    <div className="divide-y divide-gray-100 max-h-[280px] overflow-y-auto">
+                      {journalEntries.slice(-10).reverse().map((entry) => (
                         <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                           <div className="flex items-start justify-between gap-3 mb-3">
                             <div>
@@ -735,7 +906,7 @@ export default function AccountingPage() {
             </div>
           )}
 
-          <div className="pointer-events-auto flex items-end gap-3 rounded-[24px] bg-[#e5e5e5] px-5 py-3 shadow-lg transition-all">
+          <div className="pointer-events-auto flex items-end gap-3 rounded-[36px] bg-[#e5e5e5] px-4 py-2 shadow-lg transition-all">
             <button
               className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 mb-0.5"
               onClick={() => setIsActionMenuOpen((prev) => !prev)}
@@ -744,20 +915,27 @@ export default function AccountingPage() {
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </svg>
             </button>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Ask the accounting agent..."
-              className="flex-1 bg-transparent border-none text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px]"
-              value={composerInput}
-              onChange={(e) => setComposerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-            />
+            <div className="relative flex-1">
+              {composerInput.length === 0 && (
+                <span className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-sm text-gray-400 truncate pr-2">
+                  Ask the accounting agent...
+                </span>
+              )}
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                aria-label="Ask the accounting agent"
+                className="w-full bg-transparent border-none text-sm text-gray-700 focus:outline-none resize-none py-2.5 min-h-[44px]"
+                value={composerInput}
+                onChange={(e) => setComposerInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+            </div>
             <div className="flex items-center gap-2 mb-0.5">
               <button className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -780,6 +958,204 @@ export default function AccountingPage() {
 
       <input ref={fileUploadRef} type="file" multiple className="hidden" onChange={handleDocumentUpload} />
       <input ref={auditUploadRef} type="file" className="hidden" onChange={handleAuditedUpload} />
+
+      {/* Post Journal Entry Modal */}
+      {showPostEntry && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Post Journal Entry</h2>
+                  <p className="text-sm text-gray-500">Create a double-entry transaction</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPostEntry(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    value={postEntryDate}
+                    onChange={(e) => setPostEntryDate(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
+                  <input
+                    type="text"
+                    value={postEntryNarration}
+                    onChange={(e) => setPostEntryNarration(e.target.value)}
+                    placeholder="e.g., Purchased office equipment"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Entry Lines */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
+                  <button
+                    onClick={addPostEntryLine}
+                    className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                  >
+                    + Add Line
+                  </button>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
+                        <th className="w-12"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {postEntryLines.map((line) => (
+                        <tr key={line.id}>
+                          <td className="px-4 py-3">
+                            <select
+                              value={line.accountCode}
+                              onChange={(e) => updatePostEntryLine(line.id, "accountCode", e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            >
+                              <option value="">Select account...</option>
+                              {allAccountsForSelect.map((acc) => (
+                                <option key={acc.code} value={acc.code}>
+                                  {acc.code} - {acc.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={line.debit}
+                              onChange={(e) => updatePostEntryLine(line.id, "debit", e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={line.credit}
+                              onChange={(e) => updatePostEntryLine(line.id, "credit", e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            {postEntryLines.length > 2 && (
+                              <button
+                                onClick={() => removePostEntryLine(line.id)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t border-gray-200">
+                      <tr>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                          ₦{postEntryTotals.totalDebit.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                          ₦{postEntryTotals.totalCredit.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-3">
+                          {postEntryTotals.isBalanced ? (
+                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          ) : postEntryTotals.totalDebit > 0 || postEntryTotals.totalCredit > 0 ? (
+                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {postEntryError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {postEntryError}
+                </div>
+              )}
+
+              {!postEntryTotals.isBalanced && postEntryTotals.totalDebit > 0 && (
+                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Entry not balanced: DR ₦{postEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{postEntryTotals.totalCredit.toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowPostEntry(false)}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handlePostEntry();
+                    if (postEntryTotals.isBalanced && postEntryNarration.trim()) {
+                      setShowPostEntry(false);
+                    }
+                  }}
+                  disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim()}
+                  className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Post Entry
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

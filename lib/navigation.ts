@@ -1,6 +1,6 @@
-export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report";
+export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence";
 
-export type AppMode = "tax" | "accounting";
+export type AppMode = "tax" | "accounting" | "intelligence";
 
 export interface TaxNavItem {
   label: string;
@@ -66,14 +66,14 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
-    label: "Accounting Studio",
+    label: "Accounting Chat",
     href: "/accounting",
-    icon: "ledger",
-    description: "Generate financial statements",
+    icon: "chat",
+    description: "Chat-based transaction entry",
     mode: "accounting",
   },
   {
-    label: "Accounting Records",
+    label: "Financial Reporting",
     href: "/accounting/workspace",
     icon: "folder",
     description: "Real-time journals, ledgers, and statements",
@@ -87,10 +87,10 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
-    label: "Reports",
+    label: "Chart of Accounts",
     href: "/accounting/reports",
     icon: "report",
-    description: "Financial reports and exports",
+    description: "View accounts and post manual entries",
     mode: "accounting",
   },
   {
@@ -99,5 +99,23 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     icon: "chat",
     description: "Talk to your accounting records",
     mode: "accounting",
+  },
+];
+
+// Intelligence/Cash Management navigation (standalone)
+export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Cash Intelligence",
+    href: "/cashflow-intelligence",
+    icon: "intelligence",
+    description: "Cashflow analytics, modelling & investment tools",
+    mode: "intelligence",
+  },
+  {
+    label: "Cashflow Chat",
+    href: "/cashflow-intelligence/chat",
+    icon: "chat",
+    description: "Set up automations and track returns",
+    mode: "intelligence",
   },
 ];

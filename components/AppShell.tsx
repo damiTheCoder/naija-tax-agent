@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,6 +8,21 @@ import Sidebar from "@/components/Sidebar";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
+
+// Loading spinner component
+function PageLoadingSpinner() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative w-10 h-10">
+          <div className="absolute inset-0 rounded-full border-2 border-gray-200"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-t-[#64B5F6] animate-spin"></div>
+        </div>
+        <p className="text-sm text-gray-500">Loading page...</p>
+      </div>
+    </div>
+  );
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -71,7 +86,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Page Content */}
         <main className="flex-1 p-4 lg:p-8">
-          <div className="max-w-6xl mx-auto w-full">{children}</div>
+          <div className="max-w-6xl mx-auto w-full">
+            <Suspense fallback={<PageLoadingSpinner />}>
+              {children}
+            </Suspense>
+          </div>
         </main>
 
         {/* Footer */}

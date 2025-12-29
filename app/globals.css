@@ -2,7 +2,7 @@
 
 :root {
   /* Brand Colors - Light Blue & Black */
-  --background: #f8f9fa;
+  --background: #ffffff;
   --foreground: #0a0a0a;
   --primary: #64B5F6;
   --primary-dark: #4A9FD9;
@@ -41,22 +41,68 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Modern thin style */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--border);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Hide scrollbar by default, show on hover */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Subtle scrollbar that appears on hover */
+.subtle-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.subtle-scrollbar:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.subtle-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.subtle-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subtle-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.subtle-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
 /* ========================================
@@ -144,7 +190,7 @@ body {
 
 .landing-container {
   min-height: 100vh;
-  background: #fafafa;
+  background: var(--background);
   overflow-x: hidden;
 }
 
@@ -2073,14 +2119,14 @@ body {
 }
 
 .hiw-card-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #22c55e;
   color: white;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 700;
   border-radius: 10px;
 }
@@ -2911,7 +2957,8 @@ body {
   }
 
   .hiw-visual {
-    display: none;
+    display: block;
+    margin-top: 2rem;
   }
 
   .features-bento {

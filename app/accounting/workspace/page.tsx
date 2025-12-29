@@ -319,7 +319,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounting Records</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Financial Reporting</h1>
           <p className="text-sm text-gray-500 mt-1">
             {journalEntries.length > 0
               ? `${journalEntries.length} journal entries • ${availableYears.length} year(s) of records`
@@ -435,14 +435,14 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-1 -mb-px overflow-x-auto">
+        <nav className="flex gap-1 overflow-x-auto pb-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
-                ? "border-[#64B5F6] text-[#64B5F6]"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-colors whitespace-nowrap ${activeTab === tab.id
+                ? "bg-gray-100 text-[#0a0a0a]"
+                : "text-gray-500 hover:text-gray-700"
                 }`}
             >
               {tab.icon}
@@ -527,7 +527,7 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                               </td>
                             </tr>
                           ))}
-                          <tr className="border-t border-gray-200 font-semibold">
+                          <tr className="border-t border-gray-200 border-b-4 border-[#bfdbfe] font-semibold">
                             <td className="py-2 text-gray-600">Total</td>
                             <td className="py-2 text-right font-mono">{formatCurrency(entry.totalDebits)}</td>
                             <td className="py-2 text-right font-mono">{formatCurrency(entry.totalCredits)}</td>
@@ -579,34 +579,36 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                         {formatCurrency(account.closingBalance)}
                       </div>
                     </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                          <th className="text-left py-2 font-medium">Date</th>
-                          <th className="text-left py-2 font-medium">Description</th>
-                          <th className="text-right py-2 font-medium">Debit</th>
-                          <th className="text-right py-2 font-medium">Credit</th>
-                          <th className="text-right py-2 font-medium">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {account.entries.slice(-5).map((entry, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="py-2 text-gray-600">{formatDate(entry.date)}</td>
-                            <td className="py-2 text-gray-900">{entry.narration}</td>
-                            <td className="py-2 text-right font-mono text-gray-700">
-                              {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
-                            </td>
-                            <td className="py-2 text-right font-mono text-gray-700">
-                              {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
-                            </td>
-                            <td className="py-2 text-right font-mono font-semibold text-gray-900">
-                              {formatCurrency(entry.balance)}
-                            </td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[640px] text-sm">
+                        <thead>
+                          <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                            <th className="text-left py-2 font-medium">Date</th>
+                            <th className="text-left py-2 font-medium">Description</th>
+                            <th className="text-right py-2 font-medium">Debit</th>
+                            <th className="text-right py-2 font-medium">Credit</th>
+                            <th className="text-right py-2 font-medium">Balance</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {account.entries.slice(-5).map((entry, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
+                              <td className="py-2 text-gray-900 max-w-[240px] truncate">{entry.narration}</td>
+                              <td className="py-2 text-right font-mono text-gray-700 whitespace-nowrap">
+                                {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
+                              </td>
+                              <td className="py-2 text-right font-mono text-gray-700 whitespace-nowrap">
+                                {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
+                              </td>
+                              <td className="py-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
+                                {formatCurrency(entry.balance)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                     {account.entries.length > 5 && (
                       <p className="text-xs text-gray-400 mt-2 text-center">
                         Showing last 5 of {account.entries.length} entries

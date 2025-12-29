@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { NavIconBadge } from "./NavIconBadge";
 
 interface SidebarProps {
@@ -16,67 +16,114 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  
+  const [isPending, startNavTransition] = useTransition();
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+  const [switchingToMode, setSwitchingToMode] = useState<AppMode | null>(null);
+
+  // Clear navigating state when pathname changes (navigation complete)
+  useEffect(() => {
+    setNavigatingTo(null);
+    setSwitchingToMode(null);
+  }, [pathname]);
+
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
+    if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
     if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
     return "tax";
   };
-  
+
   const [mode, setMode] = useState<AppMode>(getInitialMode);
-  
+
   // Update mode when pathname changes
   useEffect(() => {
-    if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
+    if (pathname.startsWith("/cashflow-intelligence")) {
+      setMode("intelligence");
+    } else if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
       setMode("accounting");
     } else if (pathname.startsWith("/main") || pathname.startsWith("/tax-tools") || pathname.startsWith("/tax")) {
       setMode("tax");
     }
   }, [pathname]);
-  
-  const navItems = mode === "tax" ? TAX_NAV_ITEMS : ACCOUNTING_NAV_ITEMS;
-  
+
+  const navItems = mode === "tax"
+    ? TAX_NAV_ITEMS
+    : mode === "intelligence"
+      ? INTELLIGENCE_NAV_ITEMS
+      : ACCOUNTING_NAV_ITEMS;
+
   const handleModeSwitch = (newMode: AppMode) => {
-    setMode(newMode);
-    // Navigate to the first page of the selected mode
-    if (newMode === "tax") {
-      router.push("/main");
-    } else {
-      router.push("/accounting");
-    }
+    if (mode === newMode) return;
+    setSwitchingToMode(newMode);
+    startNavTransition(() => {
+      setMode(newMode);
+      // Navigate to the first page of the selected mode
+      if (newMode === "tax") {
+        router.push("/main");
+      } else if (newMode === "intelligence") {
+        router.push("/cashflow-intelligence");
+      } else {
+        router.push("/accounting");
+      }
+    });
     onClose();
   };
 
   const ModeToggle = () => (
-    <div className="relative p-4 border-b border-white/10">
-      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl">
+    <div className="relative py-3 px-5 border-b border-white/10">
+      <div className="flex items-center gap-0.5 p-1 bg-white/5 rounded-xl overflow-x-auto hide-scrollbar">
         <button
           onClick={() => handleModeSwitch("accounting")}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-            mode === "accounting"
-              ? "bg-[#64B5F6] text-[#0a0a0a]"
-              : "text-white/60 hover:text-white hover:bg-white/10"
-          }`}
+          disabled={switchingToMode !== null}
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${mode === "accounting"
+            ? "text-[#64B5F6]"
+            : "text-white/60 hover:text-white hover:bg-white/10"
+            } ${switchingToMode === "accounting" ? "bg-white/10" : ""}`}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h11l3 3v13H6z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9h14" />
-          </svg>
-          Accounting
+          {switchingToMode === "accounting" ? (
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-[#64B5F6] animate-spin flex-shrink-0" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 flex-shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h11l3 3v13H6z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9h14" />
+            </svg>
+          )}
+          <span className="truncate">{switchingToMode === "accounting" ? "Loading..." : "Accounting"}</span>
         </button>
         <button
           onClick={() => handleModeSwitch("tax")}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-            mode === "tax"
-              ? "bg-[#64B5F6] text-[#0a0a0a]"
-              : "text-white/60 hover:text-white hover:bg-white/10"
-          }`}
+          disabled={switchingToMode !== null}
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${mode === "tax"
+            ? "text-[#64B5F6]"
+            : "text-white/60 hover:text-white hover:bg-white/10"
+            } ${switchingToMode === "tax" ? "bg-white/10" : ""}`}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-            <rect x="4" y="2" width="16" height="20" rx="2" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2" />
-          </svg>
-          Tax
+          {switchingToMode === "tax" ? (
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-[#64B5F6] animate-spin flex-shrink-0" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 flex-shrink-0">
+              <rect x="4" y="2" width="16" height="20" rx="2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h8M8 10h2M14 10h2" />
+            </svg>
+          )}
+          <span className="truncate">{switchingToMode === "tax" ? "Loading..." : "Tax"}</span>
+        </button>
+        <button
+          onClick={() => handleModeSwitch("intelligence")}
+          disabled={switchingToMode !== null}
+          className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${mode === "intelligence"
+            ? "text-[#64B5F6]"
+            : "text-white/60 hover:text-white hover:bg-white/10"
+            } ${switchingToMode === "intelligence" ? "bg-white/10" : ""}`}
+        >
+          {switchingToMode === "intelligence" ? (
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-[#64B5F6] animate-spin flex-shrink-0" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 flex-shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          )}
+          <span className="truncate">{switchingToMode === "intelligence" ? "Loading..." : "Cash"}</span>
         </button>
       </div>
     </div>
@@ -86,7 +133,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     <>
       {/* Mobile Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={onClose}
         />
@@ -97,7 +144,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Decorative gradient blurs */}
         <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#64B5F6]/20 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-20 -right-10 w-32 h-32 bg-[#818cf8]/15 rounded-full blur-3xl pointer-events-none"></div>
-        
+
         {/* Logo Section */}
         <div className="relative p-6 border-b border-white/10">
           <Link href="/" className="flex items-center gap-3 group">
@@ -114,29 +161,42 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "tax" ? "Tax Tools" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : "Accounting"}
           </p>
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-            
+            // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
+            const isActive = pathname === item.href;
+            const isNavigating = navigatingTo === item.href;
+
             return (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
+                onClick={() => {
+                  if (pathname !== item.href) {
+                    setNavigatingTo(item.href);
+                    startNavTransition(() => {
+                      router.push(item.href);
+                    });
+                  }
+                }}
                 className={`
-                  relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200
-                  ${isActive 
-                    ? "bg-[#64B5F6] text-[#0a0a0a]" 
+                  relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
+                  ${isActive
+                    ? "bg-[#64B5F6] text-[#0a0a0a]"
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                   }
                 `}
               >
-                <NavIconBadge icon={item.icon} />
-                <span>{item.label}</span>
-                {isActive && (
-                  <div className="absolute right-3 w-2 h-2 rounded-full bg-[#0a0a0a]"></div>
+                {isNavigating ? (
+                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                ) : (
+                  <NavIconBadge icon={item.icon} />
                 )}
-              </Link>
+                <span>{item.label}</span>
+                {isNavigating && (
+                  <span className="ml-auto text-xs opacity-60">Loading...</span>
+                )}
+              </button>
             );
           })}
         </nav>
@@ -171,30 +231,42 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-hidden">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "tax" ? "Tax Tools" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : "Accounting"}
           </p>
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-            
+            const isActive = pathname === item.href;
+            const isNavigating = navigatingTo === item.href;
+
             return (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
-                onClick={onClose}
+                onClick={() => {
+                  if (pathname !== item.href) {
+                    setNavigatingTo(item.href);
+                    startNavTransition(() => {
+                      router.push(item.href);
+                    });
+                  }
+                  onClose();
+                }}
                 className={`
-                  relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200
-                  ${isActive 
-                    ? "bg-[#64B5F6] text-[#0a0a0a]" 
+                  relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
+                  ${isActive
+                    ? "bg-[#64B5F6] text-[#0a0a0a]"
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                   }
                 `}
               >
-                <NavIconBadge icon={item.icon} />
-                <span>{item.label}</span>
-                {isActive && (
-                  <div className="absolute right-3 w-2 h-2 rounded-full bg-[#0a0a0a]"></div>
+                {isNavigating ? (
+                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                ) : (
+                  <NavIconBadge icon={item.icon} />
                 )}
-              </Link>
+                <span>{item.label}</span>
+                {isNavigating && (
+                  <span className="ml-auto text-xs opacity-60">Loading...</span>
+                )}
+              </button>
             );
           })}
         </nav>

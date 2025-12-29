@@ -64,7 +64,7 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
       </div>
     );
   }
-  
+
   let currentAngle = 0;
 
   const createArcPath = (startAngle: number, endAngle: number, radius: number) => {
@@ -105,7 +105,7 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
 // Bar Chart Component
 function BarChart({ data, height = 250 }: { data: { month: string; value: number }[]; height?: number }) {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
-  
+
   if (data.every(d => d.value === 0)) {
     return (
       <div className="flex items-center justify-center" style={{ height }}>
@@ -116,7 +116,7 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
       </div>
     );
   }
-  
+
   return (
     <div className="flex items-end gap-2 h-full" style={{ height }}>
       {data.map((item, index) => {
@@ -154,13 +154,12 @@ function MetricCardComponent({ metric }: { metric: MetricCard }) {
           {metric.icon}
         </div>
         <span
-          className={`text-xs font-semibold px-2 py-1 rounded-full ${
-            metric.changeType === "positive"
-              ? "bg-emerald-100 text-emerald-600"
-              : metric.changeType === "negative"
+          className={`text-xs font-semibold px-2 py-1 rounded-full ${metric.changeType === "positive"
+            ? "bg-emerald-100 text-emerald-600"
+            : metric.changeType === "negative"
               ? "bg-red-100 text-red-600"
               : "bg-gray-100 text-gray-600"
-          }`}
+            }`}
         >
           {metric.change}
         </span>
@@ -204,22 +203,31 @@ export default function DashboardPage() {
   const [journalCount, setJournalCount] = useState(0);
 
   // Helper to derive transactions from journal entries based on account codes
-  const deriveTransactionsFromJournals = (journalEntries: { 
-    id: string; 
-    date: string; 
-    narration: string; 
-    lines: { accountCode: string; accountName: string; debit: number; credit: number }[] 
+  const deriveTransactionsFromJournals = (journalEntries: {
+    id: string;
+    date: string;
+    narration: string;
+    lines: { accountCode: string; accountName: string; debit: number; credit: number }[]
   }[]): RawTransaction[] => {
     return journalEntries.map((entry) => {
+      const narration = entry.narration.toLowerCase();
+
       // Find the main economic account (not cash/bank which are just the other side)
       const economicLine = entry.lines.find(line => {
         const code = line.accountCode;
-        // Look for income (4xxx), expense (5xxx, 6xxx), or asset purchase (15xx)
-        return code.startsWith("4") || code.startsWith("5") || code.startsWith("6") || 
-               (code.startsWith("15") && !code.includes("1"));
-      }) || entry.lines[0];
+        // Look for income (4xxx), expense (5xxx, 6xxx, 7xxx), or asset purchase (15xx)
+        return code.startsWith("4") || code.startsWith("5") || code.startsWith("6") || code.startsWith("7") ||
+          (code.startsWith("15") && !code.includes("1"));
+      });
 
-      const code = economicLine?.accountCode || "";
+      // Also check for liability accounts being debited (indicates payment of expense)
+      const liabilityPayment = entry.lines.find(line => {
+        const code = line.accountCode;
+        // Liability accounts (2xxx) being debited = paying off an expense liability
+        return code.startsWith("2") && line.debit > 0;
+      });
+
+      const code = economicLine?.accountCode || liabilityPayment?.accountCode || "";
       let type: "income" | "expense" = "expense";
       let category = "other";
       let amount = 0;
@@ -228,50 +236,58 @@ export default function DashboardPage() {
       if (code.startsWith("4")) {
         // 4xxx = Income/Revenue accounts
         type = "income";
-        amount = economicLine.credit || economicLine.debit;
+        amount = economicLine!.credit || economicLine!.debit;
         if (code === "4000") category = "sales";
         else if (code === "4100") category = "sales-returns";
-        else if (code === "4200") category = "service-income";
+        else if (code === "4200" || code === "4010") category = "service-income";
         else if (code === "4300") category = "interest-income";
         else category = "revenue";
-      } else if (code.startsWith("50")) {
-        // 50xx = Cost of Sales
+      } else if (code.startsWith("5") || code.startsWith("6") || code.startsWith("7")) {
+        // 5xxx, 6xxx, 7xxx = All Expense accounts (COS, Operating, Admin, Finance, Tax)
         type = "expense";
-        amount = economicLine.debit || economicLine.credit;
-        category = "cost-of-sales";
-      } else if (code.startsWith("51") || code.startsWith("52")) {
-        // 51xx, 52xx = Purchases
-        type = "expense";
-        amount = economicLine.debit || economicLine.credit;
-        category = "purchases";
-      } else if (code.startsWith("6")) {
-        // 6xxx = Operating Expenses
-        type = "expense";
-        amount = economicLine.debit || economicLine.credit;
-        if (code === "6000") category = "salaries";
-        else if (code === "6100") category = "rent";
-        else if (code === "6200") category = "utilities";
-        else if (code === "6300") category = "professional-fees";
-        else if (code === "6400") category = "transport";
-        else if (code === "6500") category = "interest-expense";
+        amount = economicLine!.debit || economicLine!.credit;
+
+        // Categorize by account code range
+        if (code.startsWith("50")) category = "cost-of-sales";
+        else if (code.startsWith("51") || code.startsWith("52")) category = "purchases";
+        else if (code.startsWith("55")) category = "salaries";
+        else if (code.startsWith("56")) category = "rent";
+        else if (code.startsWith("57")) category = "depreciation";
+        else if (code.startsWith("58")) category = "office-expenses";
+        else if (code.startsWith("59")) category = "professional-fees";
+        else if (code.startsWith("60")) category = "marketing";
+        else if (code.startsWith("65")) category = "interest-expense";
         else category = "operating-expenses";
       } else if (code.startsWith("15")) {
         // 15xx = Fixed Assets
         type = "expense";
-        amount = economicLine.debit || economicLine.credit;
+        amount = economicLine!.debit || economicLine!.credit;
         category = "asset-purchase";
+      } else if (code.startsWith("2") && liabilityPayment) {
+        // 2xxx = Liability account being debited = paying off an expense
+        type = "expense";
+        amount = liabilityPayment.debit;
+        // Try to categorize from narration
+        if (narration.includes("rent")) category = "rent";
+        else if (narration.includes("salary") || narration.includes("payroll")) category = "salaries";
+        else if (narration.includes("utility") || narration.includes("utilities")) category = "utilities";
+        else if (narration.includes("insurance")) category = "insurance";
+        else category = "operating-expenses";
       } else {
-        // Fallback: use narration to determine
-        const narration = entry.narration.toLowerCase();
-        if (narration.includes("sale") || narration.includes("revenue") || narration.includes("income")) {
+        // Fallback: use narration to determine type and category
+        if (narration.includes("sale") || narration.includes("revenue") || narration.includes("income") || narration.includes("sold") || narration.includes("received")) {
           type = "income";
           category = "sales";
+        } else if (narration.includes("paid") || narration.includes("expense") || narration.includes("cost") || narration.includes("payment")) {
+          type = "expense";
+          if (narration.includes("rent")) category = "rent";
+          else if (narration.includes("salary") || narration.includes("payroll")) category = "salaries";
+          else if (narration.includes("purchase")) category = "purchases";
+          else if (narration.includes("utility") || narration.includes("utilities")) category = "utilities";
+          else category = "operating-expenses";
         } else if (narration.includes("purchase")) {
+          type = "expense";
           category = "purchases";
-        } else if (narration.includes("rent")) {
-          category = "rent";
-        } else if (narration.includes("salary") || narration.includes("payroll")) {
-          category = "salaries";
         }
         // Get the largest amount from lines
         amount = Math.max(...entry.lines.map(l => Math.max(l.debit, l.credit)));
@@ -292,63 +308,55 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsLoaded(true);
     if (typeof window !== "undefined") {
-      // Load and subscribe to accounting engine first (source of truth for journal entries)
+      // Load accounting engine (source of truth for journal entries)
       accountingEngine.load();
       const state = accountingEngine.getState();
       setEngineStatements(accountingEngine.generateStatements());
       setJournalCount(state.journalEntries.length);
 
-      // Try to load transactions from localStorage first
-      const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
-      let loadedFromStorage = false;
-      
-      if (savedTransactions) {
-        try {
-          const parsed = JSON.parse(savedTransactions);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTransactions(parsed);
-            loadedFromStorage = true;
-          }
-        } catch {
-          // ignore malformed cache
-        }
-      }
-      
-      // If no saved transactions but we have journal entries, derive from them
-      if (!loadedFromStorage && state.journalEntries.length > 0) {
+      // Always derive transactions from journal entries (source of truth)
+      if (state.journalEntries.length > 0) {
         const derived = deriveTransactionsFromJournals(state.journalEntries);
         setTransactions(derived);
-        // Also save to localStorage for persistence
-        window.localStorage.setItem("insight::accounting-transactions", JSON.stringify(derived));
-      }
-      
-      const unsubscribe = accountingEngine.subscribe((newState) => {
-        setEngineStatements(accountingEngine.generateStatements());
-        setJournalCount(newState.journalEntries.length);
-        
-        // When engine updates, also update derived transactions
-        if (newState.journalEntries.length > 0) {
-          const derived = deriveTransactionsFromJournals(newState.journalEntries);
-          setTransactions(derived);
-          window.localStorage.setItem("insight::accounting-transactions", JSON.stringify(derived));
-        }
-      });
-      
-      // Also listen for localStorage changes from other tabs/pages
-      const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === "insight::accounting-transactions" && e.newValue) {
+      } else {
+        // Fallback to localStorage only if no journal entries exist
+        const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
+        if (savedTransactions) {
           try {
-            const parsed = JSON.parse(e.newValue);
-            if (Array.isArray(parsed)) {
+            const parsed = JSON.parse(savedTransactions);
+            if (Array.isArray(parsed) && parsed.length > 0) {
               setTransactions(parsed);
             }
           } catch {
-            // ignore
+            // ignore malformed cache
           }
+        }
+      }
+
+      // Subscribe to accounting engine updates
+      const unsubscribe = accountingEngine.subscribe((newState) => {
+        setEngineStatements(accountingEngine.generateStatements());
+        setJournalCount(newState.journalEntries.length);
+
+        // Always re-derive transactions when engine updates
+        const derived = deriveTransactionsFromJournals(newState.journalEntries);
+        setTransactions(derived);
+      });
+
+      // Also listen for accounting engine localStorage changes from other tabs
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === "insight::accounting-engine" && e.newValue) {
+          // Reload the engine and re-derive transactions
+          accountingEngine.load();
+          const freshState = accountingEngine.getState();
+          setEngineStatements(accountingEngine.generateStatements());
+          setJournalCount(freshState.journalEntries.length);
+          const derived = deriveTransactionsFromJournals(freshState.journalEntries);
+          setTransactions(derived);
         }
       };
       window.addEventListener("storage", handleStorageChange);
-      
+
       return () => {
         unsubscribe();
         window.removeEventListener("storage", handleStorageChange);
@@ -362,7 +370,7 @@ export default function DashboardPage() {
     let totalRevenue: number;
     let totalExpenses: number;
     let netProfit: number;
-    
+
     if (engineStatements && journalCount > 0) {
       totalRevenue = engineStatements.revenue;
       totalExpenses = engineStatements.costOfSales + engineStatements.operatingExpenses;
@@ -372,14 +380,14 @@ export default function DashboardPage() {
       totalRevenue = transactions
         .filter(tx => tx.type === "income" || tx.amount > 0)
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      
+
       totalExpenses = transactions
         .filter(tx => tx.type === "expense" || tx.amount < 0)
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      
+
       netProfit = totalRevenue - totalExpenses;
     }
-    
+
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
     const avgTransaction = transactions.length > 0 ? (totalRevenue + totalExpenses) / transactions.length : 0;
 
@@ -391,7 +399,7 @@ export default function DashboardPage() {
         const category = tx.category || "Other";
         expensesByCategory[category] = (expensesByCategory[category] || 0) + Math.abs(tx.amount);
       });
-    
+
     const expenseCategories: ChartData[] = Object.entries(expensesByCategory)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -409,7 +417,7 @@ export default function DashboardPage() {
         const category = tx.category || "Other";
         incomeByCategory[category] = (incomeByCategory[category] || 0) + Math.abs(tx.amount);
       });
-    
+
     const incomeStreams: ChartData[] = Object.entries(incomeByCategory)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
@@ -463,13 +471,8 @@ export default function DashboardPage() {
     };
   }, [transactions, engineStatements, journalCount]);
 
-  // Format currency
+  // Format currency - always show precise amounts
   const formatCurrency = (amount: number): string => {
-    if (amount >= 1000000) {
-      return `₦${(amount / 1000000).toFixed(1)}M`;
-    } else if (amount >= 1000) {
-      return `₦${(amount / 1000).toFixed(0)}K`;
-    }
     return `₦${amount.toLocaleString()}`;
   };
 
@@ -649,9 +652,8 @@ export default function DashboardPage() {
                     <div key={tx.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            tx.type === "income" ? "bg-emerald-100" : "bg-red-100"
-                          }`}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "income" ? "bg-emerald-100" : "bg-red-100"
+                            }`}
                         >
                           {tx.type === "income" ? (
                             <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -687,25 +689,25 @@ export default function DashboardPage() {
           {/* Quick Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { 
-                label: "Profit Margin", 
-                value: calculatedData.profitMargin > 0 ? `${calculatedData.profitMargin.toFixed(1)}%` : "—", 
-                sublabel: calculatedData.netProfit > 0 ? "Profitable" : "No profit yet" 
+              {
+                label: "Profit Margin",
+                value: calculatedData.profitMargin > 0 ? `${calculatedData.profitMargin.toFixed(1)}%` : "—",
+                sublabel: calculatedData.netProfit > 0 ? "Profitable" : "No profit yet"
               },
-              { 
-                label: "Avg. Transaction", 
-                value: formatCurrency(calculatedData.avgTransaction), 
-                sublabel: `${calculatedData.transactionCount} total` 
+              {
+                label: "Avg. Transaction",
+                value: formatCurrency(calculatedData.avgTransaction),
+                sublabel: `${calculatedData.transactionCount} total`
               },
-              { 
-                label: "Income Entries", 
-                value: transactions.filter(tx => tx.type === "income" || tx.amount > 0).length.toString(), 
-                sublabel: "Revenue transactions" 
+              {
+                label: "Income Entries",
+                value: transactions.filter(tx => tx.type === "income" || tx.amount > 0).length.toString(),
+                sublabel: "Revenue transactions"
               },
-              { 
-                label: "Expense Entries", 
-                value: transactions.filter(tx => tx.type === "expense" || tx.amount < 0).length.toString(), 
-                sublabel: "Cost transactions" 
+              {
+                label: "Expense Entries",
+                value: transactions.filter(tx => tx.type === "expense" || tx.amount < 0).length.toString(),
+                sublabel: "Cost transactions"
               },
             ].map((stat, index) => (
               <div key={index} className="bg-white rounded-xl p-5 border border-gray-100">

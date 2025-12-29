@@ -57,8 +57,20 @@ export default function TaxChatPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    taxEngine.load();
-    syncState();
+
+    // Defer heavy localStorage load to allow page to render first
+    const loadEngine = () => {
+      taxEngine.load();
+      syncState();
+    };
+
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if ('requestIdleCallback' in window) {
+      (window as Window & { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(loadEngine);
+    } else {
+      setTimeout(loadEngine, 0);
+    }
+
     const unsubscribe = taxEngine.subscribe(() => {
       syncState();
     });
@@ -68,7 +80,7 @@ export default function TaxChatPage() {
   useEffect(() => {
     refreshClientTaxRules()
       .then(() => setRuleMetadata(getClientTaxRuleMetadata()))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -358,11 +370,10 @@ export default function TaxChatPage() {
                 {messages.map((msg, index) => (
                   <div key={`msg-${msg.timestamp}-${index}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed border ${
-                        msg.role === "user"
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed border ${msg.role === "user"
                           ? "bg-indigo-50 border-indigo-100 text-indigo-900"
                           : "bg-slate-50 border-slate-200 text-slate-800"
-                      }`}
+                        }`}
                     >
                       {msg.content}
                     </div>
@@ -417,9 +428,8 @@ export default function TaxChatPage() {
               }}
             />
             <button
-              className={`w-10 h-10 rounded-full flex items-center justify-center mb-0.5 transition-colors ${
-                canSend ? "bg-gray-900 text-white" : "bg-white text-gray-400 cursor-not-allowed"
-              }`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center mb-0.5 transition-colors ${canSend ? "bg-gray-900 text-white" : "bg-white text-gray-400 cursor-not-allowed"
+                }`}
               onClick={handleSendMessage}
               disabled={!canSend}
             >

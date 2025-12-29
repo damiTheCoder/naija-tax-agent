@@ -27,9 +27,20 @@ import {
 // ACCOUNTING ENGINE STATE
 // ============================================================================
 
+// Custom account created by user
+export interface CustomAccount {
+  code: string;
+  name: string;
+  class: "asset" | "liability" | "equity" | "revenue" | "expense";
+  subClass: string;
+  description: string;
+  createdAt: string;
+}
+
 export interface AccountingState {
   journalEntries: JournalEntry[];
   ledgerAccounts: Map<string, LedgerAccount>;
+  customAccounts: CustomAccount[];
   lastUpdated: string;
 }
 
@@ -41,6 +52,7 @@ class AccountingEngine {
     this.state = {
       journalEntries: [],
       ledgerAccounts: new Map(),
+      customAccounts: [],
       lastUpdated: new Date().toISOString(),
     };
     this.initializeLedger();
@@ -49,11 +61,18 @@ class AccountingEngine {
   private initializeLedger() {
     // Initialize ledger accounts from chart of accounts
     CHART_OF_ACCOUNTS.forEach((account) => {
+      // Use account type directly (already typed as AccountType)
+      const accountType = account.type;
+
+      // Determine normal balance based on account type
+      const normalBalance: "debit" | "credit" =
+        ["asset", "expense"].includes(account.type) ? "debit" : "credit";
+
       this.state.ledgerAccounts.set(account.code, {
         accountCode: account.code,
         accountName: account.name,
-        accountType: account.type,
-        normalBalance: account.normalBalance,
+        accountType,
+        normalBalance,
         openingBalance: 0,
         entries: [],
         closingBalance: 0,
@@ -79,6 +98,7 @@ class AccountingEngine {
     const serializable = {
       journalEntries: this.state.journalEntries,
       ledgerAccounts: Array.from(this.state.ledgerAccounts.entries()),
+      customAccounts: this.state.customAccounts,
       lastUpdated: this.state.lastUpdated,
     };
     window.localStorage.setItem("insight::accounting-engine", JSON.stringify(serializable));
@@ -92,9 +112,24 @@ class AccountingEngine {
       try {
         const parsed = JSON.parse(saved);
         this.state.journalEntries = parsed.journalEntries || [];
+        this.state.customAccounts = parsed.customAccounts || [];
         if (parsed.ledgerAccounts) {
           this.state.ledgerAccounts = new Map(parsed.ledgerAccounts);
         }
+        // Initialize ledger accounts for custom accounts
+        this.state.customAccounts.forEach((acc) => {
+          if (!this.state.ledgerAccounts.has(acc.code)) {
+            this.state.ledgerAccounts.set(acc.code, {
+              accountCode: acc.code,
+              accountName: acc.name,
+              accountType: acc.class as AccountType,
+              normalBalance: ["asset", "expense"].includes(acc.class) ? "debit" : "credit",
+              openingBalance: 0,
+              entries: [],
+              closingBalance: 0,
+            });
+          }
+        });
         this.state.lastUpdated = parsed.lastUpdated || new Date().toISOString();
       } catch {
         // Ignore malformed cache
@@ -104,6 +139,103 @@ class AccountingEngine {
 
   getState(): AccountingState {
     return this.state;
+  }
+
+  /**
+   * Add a custom account to the Chart of Accounts
+   */
+  addCustomAccount(account: Omit<CustomAccount, 'createdAt'>): CustomAccount {
+    // Check if code already exists
+    if (this.state.ledgerAccounts.has(account.code)) {
+      throw new Error(`Account code ${account.code} already exists`);
+    }
+
+    const customAccount: CustomAccount = {
+      ...account,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Add to custom accounts
+    this.state.customAccounts.push(customAccount);
+
+    // Initialize ledger account
+    this.state.ledgerAccounts.set(account.code, {
+      accountCode: account.code,
+      accountName: account.name,
+      accountType: account.class as AccountType,
+      normalBalance: ["asset", "expense"].includes(account.class) ? "debit" : "credit",
+      openingBalance: 0,
+      entries: [],
+      closingBalance: 0,
+    });
+
+    this.notify();
+    return customAccount;
+  }
+
+  /**
+   * Get all accounts (standard + custom)
+   */
+  getAllAccounts(): Array<{ code: string; name: string; class: string; subClass: string; isCustom: boolean }> {
+    const standardAccounts = CHART_OF_ACCOUNTS.map(acc => ({
+      code: acc.code,
+      name: acc.name,
+      class: acc.type,
+      subClass: acc.subType || '',
+      isCustom: false,
+    }));
+
+    const customAccounts = this.state.customAccounts.map(acc => ({
+      code: acc.code,
+      name: acc.name,
+      class: acc.class,
+      subClass: acc.subClass,
+      isCustom: true,
+    }));
+
+    return [...standardAccounts, ...customAccounts].sort((a, b) => a.code.localeCompare(b.code));
+  }
+
+  /**
+   * Post a manual journal entry directly (for professional accountants)
+   */
+  postManualJournalEntry(entry: {
+    narration: string;
+    date: string;
+    lines: { accountCode: string; accountName: string; debit: number; credit: number }[];
+  }): JournalEntry {
+    // Validate balance
+    const totalDebits = entry.lines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredits = entry.lines.reduce((sum, l) => sum + l.credit, 0);
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new Error(`Entry not balanced: DR ${totalDebits} ≠ CR ${totalCredits}`);
+    }
+
+    // Create journal entry
+    const journalEntry: JournalEntry = {
+      id: generateJournalId(),
+      date: entry.date,
+      narration: entry.narration,
+      reference: `MANUAL-${Date.now()}`,
+      lines: entry.lines,
+      isBalanced: true,
+      totalDebits,
+      totalCredits,
+      transactionType: 'other' as TransactionType,
+      createdAt: new Date().toISOString(),
+      postedAt: new Date().toISOString(),
+      status: 'posted',
+    };
+
+    // Post to ledger
+    this.postToLedger(journalEntry);
+
+    // Add to state
+    this.state.journalEntries.push(journalEntry);
+    this.notify();
+
+    return journalEntry;
   }
 
   /**
@@ -545,6 +677,37 @@ class AccountingEngine {
       paymentMethod = 'bank';
     }
 
+    // ===== GAAP/IFRS: ASSET PURCHASE DETECTION (Priority over supplier logic) =====
+    // Per IAS 16 (Property, Plant and Equipment) - recognize asset at cost
+    const assetKeywords = ['equipment', 'machinery', 'vehicle', 'car', 'furniture', 'computer', 'laptop', 'phone', 'asset', 'machine'];
+    const isAssetPurchase = (action === 'bought' || action === 'purchased' || desc.includes('bought') || desc.includes('purchased')) &&
+      (object === 'asset' || object === 'equipment' || object === 'furniture' ||
+        assetKeywords.some(kw => desc.includes(kw)));
+
+    if (isAssetPurchase) {
+      typeOverride = 'asset-purchase';
+      isCredit = false; // Cash payment assumed unless specified
+      assumptions.push('GAAP/IFRS: Asset purchase detected - DR Fixed Asset, CR Bank per IAS 16');
+
+      // Check if credit purchase explicitly stated
+      if (desc.includes('credit') || desc.includes('on account') || desc.includes('payable')) {
+        isCredit = true;
+        assumptions.push('Credit terms detected - CR Accounts Payable instead of Bank');
+      }
+    }
+
+    // ===== GAAP/IFRS: EXPENSE PAYMENT DETECTION =====
+    // Per IAS 1 - expenses recognized when incurred
+    const expenseKeywords = ['rent', 'salary', 'utilities', 'electricity', 'water', 'insurance', 'repairs', 'maintenance', 'advertising', 'transport', 'fuel'];
+    const isExpensePayment = (action === 'paid' || desc.includes('paid')) &&
+      expenseKeywords.some(kw => desc.includes(kw));
+
+    if (isExpensePayment && !typeOverride) {
+      typeOverride = 'expense';
+      isCredit = false;
+      assumptions.push('GAAP/IFRS: Expense payment detected - DR Expense, CR Bank per IAS 1');
+    }
+
     // detect transfers/contra entries
     if (parsed.action === 'transferred' || desc.includes('deposited') || desc.includes('withdrew from bank')) {
       if (desc.includes('cash') && (desc.includes('bank') || desc.includes('into'))) {
@@ -607,7 +770,15 @@ class AccountingEngine {
     }
 
     // ===== SUPPLIER TRANSACTION DECISION TREE =====
-    if (parsed.counterparty === 'supplier') {
+    // Explicit "paid supplier" detection - this is a clear payment to reduce payable
+    if (desc.includes('paid supplier') || desc.includes('pay supplier') ||
+      desc.includes('paid vendor') || desc.includes('pay vendor')) {
+      assumptions.push('Payment to supplier/vendor - debiting Accounts Payable');
+      typeOverride = 'payment';
+      isCredit = false;
+    }
+    // General supplier counterparty detection
+    else if (parsed.counterparty === 'supplier') {
       if (parsed.action === 'paid' || hasCashMovement) {
         // Is this payment for an EARLIER credit purchase?
         if (desc.includes('payable') || desc.includes('outstanding') ||
@@ -621,8 +792,10 @@ class AccountingEngine {
           assumptions.push('Payment against accrued liability');
           typeOverride = 'adjustment'; // We'll handle different liability accounts in createJournalEntry
         } else {
-          assumptions.push('Cash purchase - debiting expense/asset account');
+          // Default: treat "paid supplier" as payment to accounts payable
+          assumptions.push('Payment to supplier - debiting Accounts Payable');
           isCredit = false;
+          typeOverride = 'payment';
         }
       } else if (parsed.action === 'bought' && !hasCashMovement) {
         isCredit = true;
@@ -882,16 +1055,44 @@ class AccountingEngine {
       }
 
       case "asset-purchase": {
-        // DR: Fixed Asset
+        // GAAP/IFRS IAS 16: Property, Plant and Equipment
+        // DR: Fixed Asset (at cost including all directly attributable costs)
         // CR: Cash/Bank or Accounts Payable
-        const assetCode = interpretation.parsed?.object === 'furniture' ? "1550" : "1540";
-        const assetName = interpretation.parsed?.object === 'furniture' ? "Furniture and Fittings" : "Office Equipment";
+        const desc = rawTx.description.toLowerCase();
+
+        // Determine asset type and account based on description
+        let assetCode = "1540"; // Default: Office Equipment
+        let assetName = "Office Equipment";
+
+        if (desc.includes('vehicle') || desc.includes('car') || desc.includes('truck') || desc.includes('motorcycle')) {
+          assetCode = "1530";
+          assetName = "Motor Vehicles";
+        } else if (desc.includes('furniture') || desc.includes('fittings') || desc.includes('chair') || desc.includes('desk') || desc.includes('table')) {
+          assetCode = "1550";
+          assetName = "Furniture and Fittings";
+        } else if (desc.includes('machinery') || desc.includes('machine') || desc.includes('plant')) {
+          assetCode = "1520";
+          assetName = "Plant and Machinery";
+        } else if (desc.includes('building') || desc.includes('property') || desc.includes('office building')) {
+          assetCode = "1510";
+          assetName = "Buildings";
+        } else if (desc.includes('land')) {
+          assetCode = "1500";
+          assetName = "Land";
+        } else if (desc.includes('computer') || desc.includes('laptop') || desc.includes('phone') || desc.includes('software')) {
+          assetCode = "1540";
+          assetName = "Office Equipment";
+        } else if (interpretation.parsed?.object === 'furniture') {
+          assetCode = "1550";
+          assetName = "Furniture and Fittings";
+        }
 
         lines.push({
           accountCode: assetCode,
           accountName: assetName,
           debit: amount,
           credit: 0,
+          memo: `Asset purchase per IAS 16`,
         });
 
         if (isCredit) {
@@ -1102,6 +1303,14 @@ class AccountingEngine {
         } else if (desc.includes('salary') && desc.includes('paid')) {
           lines.push({ accountCode: "2110", accountName: "Accrued Salaries", debit: amount, credit: 0 });
           lines.push({ accountCode: "1020", accountName: "Bank", debit: 0, credit: amount });
+        } else if (desc.includes('rent') && desc.includes('paid')) {
+          // Paid rent - record as expense with cash payment
+          lines.push({ accountCode: "5600", accountName: "Rent Expense", debit: amount, credit: 0 });
+          lines.push({ accountCode: cashAccount, accountName: cashAccountName, debit: 0, credit: amount });
+        } else if (desc.includes('utilities') && desc.includes('paid')) {
+          // Paid utilities - record as expense with cash payment
+          lines.push({ accountCode: "5610", accountName: "Utilities Expense", debit: amount, credit: 0 });
+          lines.push({ accountCode: cashAccount, accountName: cashAccountName, debit: 0, credit: amount });
         } else if (desc.includes('interest') && desc.includes('accrued')) {
           lines.push({ accountCode: "6500", accountName: "Interest Expense", debit: amount, credit: 0 });
           lines.push({ accountCode: "2120", accountName: "Accrued Interest", debit: 0, credit: amount });
@@ -1333,8 +1542,29 @@ class AccountingEngine {
       if (account.closingBalance === 0 && account.entries.length === 0) return;
 
       const isDebitNormal = account.normalBalance === "debit";
-      const debit = isDebitNormal && account.closingBalance > 0 ? account.closingBalance : 0;
-      const credit = !isDebitNormal && account.closingBalance > 0 ? account.closingBalance : 0;
+      let debit = 0;
+      let credit = 0;
+
+      // If account has closing balance, determine where it shows on trial balance
+      if (account.closingBalance !== 0) {
+        if (isDebitNormal) {
+          // Debit-normal accounts (Assets, Expenses)
+          if (account.closingBalance > 0) {
+            debit = account.closingBalance;
+          } else {
+            // Negative balance means it's actually a credit
+            credit = Math.abs(account.closingBalance);
+          }
+        } else {
+          // Credit-normal accounts (Liabilities, Equity, Income)
+          if (account.closingBalance > 0) {
+            credit = account.closingBalance;
+          } else {
+            // Negative balance means it's actually a debit
+            debit = Math.abs(account.closingBalance);
+          }
+        }
+      }
 
       if (debit > 0 || credit > 0) {
         accounts.push({
@@ -1515,6 +1745,7 @@ class AccountingEngine {
     this.state = {
       journalEntries: [],
       ledgerAccounts: new Map(),
+      customAccounts: [],
       lastUpdated: new Date().toISOString(),
     };
     this.initializeLedger();
@@ -1711,55 +1942,446 @@ export const accountingEngine = new AccountingEngine();
 // ============================================================================
 
 /**
- * Parse a chat message to extract transaction details
+ * ENHANCED TRANSACTION PARSER
+ * Parses natural language chat messages into structured transaction data with high accuracy.
+ * 
+ * Supports multiple input formats:
+ * 1. Natural language: "sold goods for 50000", "paid rent 30000"
+ * 2. Direct entry: "debit bank 50000 credit sales", "dr cash cr capital 100000"
+ * 3. Simple amounts with context: "sales 50000", "rent expense 20000"
  */
-export function parseTransactionFromChat(message: string): Partial<TransactionInput> | null {
-  const amountMatch = message.match(/₦?\s*([\d,]+(?:\.\d{2})?)/);
-  if (!amountMatch) return null;
+export function parseTransactionFromChat(message: string): Partial<TransactionInput> & {
+  confidence: number;
+  parsedType: 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+  debitAccount?: string;
+  creditAccount?: string;
+} | null {
+  const msg = message.trim();
+  if (!msg) return null;
 
-  const amount = parseFloat(amountMatch[1].replace(/,/g, ""));
+  const lowerMsg = msg.toLowerCase();
 
-  // Detect keywords
-  const lowerMessage = message.toLowerCase();
-  let category = "other";
-  let paymentMethod: PaymentMethod = "bank";
+  // ==========================================================================
+  // STEP 1: EXTRACT AMOUNT(S) - Extract the largest number from the message
+  // ==========================================================================
 
-  if (lowerMessage.includes("sale") || lowerMessage.includes("sold")) {
-    category = "sales";
-  } else if (lowerMessage.includes("purchase") || lowerMessage.includes("bought")) {
-    category = "purchases";
-  } else if (lowerMessage.includes("rent")) {
-    category = "rent";
-  } else if (lowerMessage.includes("salary") || lowerMessage.includes("payroll")) {
-    category = "salary";
-  } else if (lowerMessage.includes("expense")) {
-    category = "expense";
-  } else if (lowerMessage.includes("invested") || lowerMessage.includes("capital")) {
-    category = "equity";
-  } else if (lowerMessage.includes("withdrawal") || lowerMessage.includes("drawing")) {
-    category = "equity";
-  } else if (lowerMessage.includes("loan") || lowerMessage.includes("borrow")) {
-    category = "liability";
-  } else if (lowerMessage.includes("asset") || lowerMessage.includes("equipment") || lowerMessage.includes("computer")) {
-    category = "asset";
-  } else if (lowerMessage.includes("transfer") || lowerMessage.includes("deposit")) {
-    category = "transfer";
+  // First, try to find explicit currency amounts
+  let amount = 0;
+
+  // Pattern 1: ₦ prefix (₦50,000 or ₦50000)
+  const nairaMatch = msg.match(/₦\s*([\d,]+(?:\.\d{1,2})?)/);
+  if (nairaMatch) {
+    amount = parseFloat(nairaMatch[1].replace(/,/g, ''));
   }
 
-  if (lowerMessage.includes("cash")) {
-    paymentMethod = "cash";
-  } else if (lowerMessage.includes("transfer")) {
-    paymentMethod = "transfer";
-  } else if (lowerMessage.includes("pos") || lowerMessage.includes("card")) {
-    paymentMethod = "pos";
+  // Pattern 2: NGN prefix
+  if (amount === 0) {
+    const ngnMatch = msg.match(/ngn\s*([\d,]+(?:\.\d{1,2})?)/i);
+    if (ngnMatch) {
+      amount = parseFloat(ngnMatch[1].replace(/,/g, ''));
+    }
   }
 
-  return {
-    description: message.substring(0, 100),
-    amount,
-    category,
-    paymentMethod,
+  // Pattern 3: Any number (find the largest one, likely the amount)
+  if (amount === 0) {
+    const numberMatches = msg.match(/\d[\d,]*/g);
+    if (numberMatches) {
+      const amounts = numberMatches.map(n => parseFloat(n.replace(/,/g, '')));
+      amount = Math.max(...amounts);
+    }
+  }
+
+  if (amount <= 0) return null;
+
+  // ==========================================================================
+  // STEP 2: DETECT DIRECT DEBIT/CREDIT ENTRY
+  // ==========================================================================
+  // Pattern: "debit bank 50000 credit sales" or "dr cash cr revenue 100000"
+  const directEntryPattern = /(?:debit|dr)\s+(\w+(?:\s+\w+)?)\s+(?:credit|cr)\s+(\w+(?:\s+\w+)?)/i;
+  const reverseEntryPattern = /(?:credit|cr)\s+(\w+(?:\s+\w+)?)\s+(?:debit|dr)\s+(\w+(?:\s+\w+)?)/i;
+
+  let directEntry = lowerMsg.match(directEntryPattern);
+  if (directEntry) {
+    const debitAccountName = directEntry[1].trim();
+    const creditAccountName = directEntry[2].trim();
+    return {
+      description: msg,
+      amount,
+      category: 'direct-entry',
+      confidence: 0.95,
+      parsedType: 'other',
+      debitAccount: fuzzyMatchAccount(debitAccountName),
+      creditAccount: fuzzyMatchAccount(creditAccountName),
+    };
+  }
+
+  directEntry = lowerMsg.match(reverseEntryPattern);
+  if (directEntry) {
+    const creditAccountName = directEntry[1].trim();
+    const debitAccountName = directEntry[2].trim();
+    return {
+      description: msg,
+      amount,
+      category: 'direct-entry',
+      confidence: 0.95,
+      parsedType: 'other',
+      debitAccount: fuzzyMatchAccount(debitAccountName),
+      creditAccount: fuzzyMatchAccount(creditAccountName),
+    };
+  }
+
+  // ==========================================================================
+  // STEP 3: PATTERN-BASED TRANSACTION CLASSIFICATION
+  // ==========================================================================
+
+  type TransactionPattern = {
+    patterns: RegExp[];
+    parsedType: 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+    category: string;
+    paymentMethod?: PaymentMethod;
+    isIncome: boolean;
   };
+
+  const transactionPatterns: TransactionPattern[] = [
+    // ===== SALES / REVENUE =====
+    {
+      patterns: [
+        /(?:sold|sale|sales)\s+(?:of\s+)?(?:goods|products|items|merchandise)/i,
+        /(?:sold|sale)\s+.*(?:for|@|at)/i,
+        /(?:cash\s+)?sale/i,
+        /(?:received|got)\s+(?:from\s+)?customer/i,
+        /revenue\s+(?:from|of|received)/i,
+        /(?:invoice|invoiced)\s+(?:customer|client)/i,
+      ],
+      parsedType: 'sale',
+      category: 'sales',
+      isIncome: true,
+    },
+    {
+      patterns: [
+        /service\s+(?:fee|revenue|income|rendered)/i,
+        /(?:consultancy|consulting)\s+(?:fee|income|service)/i,
+        /professional\s+(?:fee|service)/i,
+      ],
+      parsedType: 'sale',
+      category: 'service',
+      isIncome: true,
+    },
+
+    // ===== PURCHASES =====
+    {
+      patterns: [
+        /(?:bought|purchased|purchase)\s+(?:goods|inventory|stock|products|materials)/i,
+        /(?:bought|purchased)\s+.*(?:from\s+)?(?:supplier|vendor)/i,
+        /purchase\s+(?:of|from)/i,
+      ],
+      parsedType: 'purchase',
+      category: 'purchases',
+      isIncome: false,
+    },
+
+    // ===== RENT =====
+    {
+      patterns: [
+        /(?:paid|pay)\s+(?:for\s+)?rent/i,
+        /rent\s+(?:payment|expense|paid)/i,
+        /office\s+rent/i,
+        /shop\s+rent/i,
+      ],
+      parsedType: 'expense',
+      category: 'rent',
+      isIncome: false,
+    },
+
+    // ===== SALARIES / PAYROLL =====
+    {
+      patterns: [
+        /(?:paid|pay)\s+(?:staff\s+)?(?:salary|salaries|wages)/i,
+        /salary\s+(?:payment|expense|paid)/i,
+        /payroll/i,
+        /staff\s+(?:salary|wages|payment)/i,
+      ],
+      parsedType: 'expense',
+      category: 'salary',
+      isIncome: false,
+    },
+
+    // ===== UTILITIES =====
+    {
+      patterns: [
+        /(?:paid|pay)\s+(?:for\s+)?(?:electricity|power|nepa|phcn)/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:water|water\s+bill)/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:internet|airtime|data|phone)/i,
+        /utility\s+(?:bill|payment|expense)/i,
+      ],
+      parsedType: 'expense',
+      category: 'utilities',
+      isIncome: false,
+    },
+
+    // ===== TRANSPORT =====
+    {
+      patterns: [
+        /(?:paid|pay)\s+(?:for\s+)?(?:transport|transportation|fuel|diesel|petrol)/i,
+        /transport\s+(?:fare|expense|cost)/i,
+        /(?:uber|bolt|taxi|bus)\s+(?:fare|fee)/i,
+      ],
+      parsedType: 'expense',
+      category: 'transport',
+      isIncome: false,
+    },
+
+    // ===== ASSETS =====
+    {
+      patterns: [
+        /(?:bought|purchased|acquired)\s+(?:a\s+)?(?:computer|laptop|phone|equipment|machinery|vehicle|car|furniture)/i,
+        /(?:computer|laptop|equipment|machinery|vehicle|furniture)\s+(?:purchase|bought)/i,
+        /(?:new|bought)\s+(?:office\s+)?equipment/i,
+      ],
+      parsedType: 'asset',
+      category: 'asset',
+      isIncome: false,
+    },
+
+    // ===== CAPITAL / EQUITY =====
+    {
+      patterns: [
+        /(?:owner|capital)\s+(?:contribution|investment|invested)/i,
+        /(?:invested|injected)\s+(?:capital|money)/i,
+        /(?:started|start)\s+(?:business|company)\s+with/i,
+        /business\s+capital/i,
+      ],
+      parsedType: 'equity',
+      category: 'capital',
+      isIncome: false,
+    },
+    {
+      patterns: [
+        /(?:owner|personal)\s+(?:withdrawal|drawing|withdrew)/i,
+        /(?:withdrew|took)\s+(?:for\s+)?personal/i,
+        /drawing/i,
+      ],
+      parsedType: 'equity',
+      category: 'drawing',
+      isIncome: false,
+    },
+
+    // ===== LOANS =====
+    {
+      patterns: [
+        /(?:received|got|took)\s+(?:a\s+)?loan/i,
+        /loan\s+(?:received|disbursed|from)/i,
+        /borrowed\s+(?:money|funds)/i,
+      ],
+      parsedType: 'loan',
+      category: 'loan-received',
+      isIncome: false,
+    },
+    {
+      patterns: [
+        /(?:paid|repaid|repay)\s+(?:a\s+)?loan/i,
+        /loan\s+(?:repayment|payment|paid)/i,
+      ],
+      parsedType: 'payment',
+      category: 'loan-repayment',
+      isIncome: false,
+    },
+
+    // ===== TRANSFERS =====
+    {
+      patterns: [
+        /(?:transfer(?:red)?|moved)\s+(?:money|funds|cash)\s+(?:from|to)/i,
+        /(?:deposited|deposit)\s+(?:cash|money)\s+(?:to|into)\s+bank/i,
+        /bank\s+(?:deposit|transfer)/i,
+        /(?:withdrew|withdraw)\s+(?:from\s+)?bank/i,
+        /cash\s+(?:deposit|withdrawal)/i,
+      ],
+      parsedType: 'transfer',
+      category: 'transfer',
+      isIncome: false,
+    },
+
+    // ===== GENERAL EXPENSES =====
+    {
+      patterns: [
+        /(?:paid|pay|spent)\s+(?:for\s+)?(?:office\s+)?supplies/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:repairs|maintenance)/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:advertising|marketing)/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:insurance|premium)/i,
+        /(?:paid|pay)\s+(?:for\s+)?(?:training|course)/i,
+        /bank\s+charges/i,
+      ],
+      parsedType: 'expense',
+      category: 'expense',
+      isIncome: false,
+    },
+
+    // ===== RECEIPTS FROM DEBTORS =====
+    {
+      patterns: [
+        /(?:received|collected)\s+(?:payment\s+)?(?:from\s+)?(?:debtor|customer)/i,
+        /customer\s+(?:paid|payment)/i,
+        /(?:debtor|receivable)\s+(?:paid|collected)/i,
+      ],
+      parsedType: 'receipt',
+      category: 'receipt',
+      isIncome: true,
+    },
+
+    // ===== PAYMENTS TO CREDITORS =====
+    {
+      patterns: [
+        /paid\s+supplier/i,                                    // "paid supplier 3000000"
+        /paid\s+(?:to\s+)?(?:creditor|supplier|vendor)/i,      // "paid to supplier"
+        /(?:creditor|payable)\s+(?:paid|payment)/i,
+        /settled\s+(?:supplier|vendor|creditor)/i,
+        /supplier\s+payment/i,                                  // "supplier payment"
+        /pay\s+(?:to\s+)?(?:supplier|vendor|creditor)/i,
+      ],
+      parsedType: 'payment',
+      category: 'supplier-payment',
+      isIncome: false,
+    },
+  ];
+
+  // Try to match each pattern
+  for (const txPattern of transactionPatterns) {
+    for (const regex of txPattern.patterns) {
+      if (regex.test(lowerMsg)) {
+        const paymentMethod = detectPaymentMethod(lowerMsg);
+        return {
+          description: msg.substring(0, 150),
+          amount,
+          category: txPattern.category,
+          paymentMethod,
+          confidence: 0.90,
+          parsedType: txPattern.parsedType,
+        };
+      }
+    }
+  }
+
+  // ==========================================================================
+  // STEP 4: KEYWORD-BASED FALLBACK (Lower confidence)
+  // ==========================================================================
+  const keywordCategories: { keywords: string[]; category: string; parsedType: TransactionPattern['parsedType']; isIncome: boolean }[] = [
+    { keywords: ['sale', 'sold', 'revenue', 'income'], category: 'sales', parsedType: 'sale', isIncome: true },
+    { keywords: ['purchase', 'bought', 'buy'], category: 'purchases', parsedType: 'purchase', isIncome: false },
+    { keywords: ['rent'], category: 'rent', parsedType: 'expense', isIncome: false },
+    { keywords: ['salary', 'wages', 'payroll', 'staff'], category: 'salary', parsedType: 'expense', isIncome: false },
+    { keywords: ['utility', 'electricity', 'water', 'internet', 'phone'], category: 'utilities', parsedType: 'expense', isIncome: false },
+    { keywords: ['transport', 'fuel', 'diesel', 'petrol'], category: 'transport', parsedType: 'expense', isIncome: false },
+    { keywords: ['equipment', 'computer', 'laptop', 'furniture', 'vehicle', 'machinery'], category: 'asset', parsedType: 'asset', isIncome: false },
+    { keywords: ['capital', 'invested', 'investment', 'owner'], category: 'capital', parsedType: 'equity', isIncome: false },
+    { keywords: ['drawing', 'withdrawal', 'personal'], category: 'drawing', parsedType: 'equity', isIncome: false },
+    { keywords: ['loan', 'borrow'], category: 'loan', parsedType: 'loan', isIncome: false },
+    { keywords: ['transfer', 'deposit', 'withdraw'], category: 'transfer', parsedType: 'transfer', isIncome: false },
+    { keywords: ['expense', 'paid', 'spent', 'cost'], category: 'expense', parsedType: 'expense', isIncome: false },
+    { keywords: ['received', 'got', 'collected'], category: 'income', parsedType: 'receipt', isIncome: true },
+  ];
+
+  for (const kc of keywordCategories) {
+    if (kc.keywords.some(kw => lowerMsg.includes(kw))) {
+      const paymentMethod = detectPaymentMethod(lowerMsg);
+      return {
+        description: msg.substring(0, 150),
+        amount,
+        category: kc.category,
+        paymentMethod,
+        confidence: 0.70,
+        parsedType: kc.parsedType,
+      };
+    }
+  }
+
+  // ==========================================================================
+  // STEP 5: AMOUNT-ONLY FALLBACK (Low confidence)
+  // ==========================================================================
+  return {
+    description: msg.substring(0, 150),
+    amount,
+    category: 'other',
+    paymentMethod: detectPaymentMethod(lowerMsg),
+    confidence: 0.40,
+    parsedType: 'other',
+  };
+}
+
+/**
+ * Detect payment method from message
+ */
+function detectPaymentMethod(msg: string): PaymentMethod {
+  if (msg.includes('cash')) return 'cash';
+  if (msg.includes('pos') || msg.includes('card') || msg.includes('atm')) return 'pos';
+  if (msg.includes('transfer') || msg.includes('bank transfer')) return 'transfer';
+  if (msg.includes('cheque') || msg.includes('check')) return 'cheque';
+  if (msg.includes('mobile') || msg.includes('ussd')) return 'mobile';
+  if (msg.includes('credit') || msg.includes('on account') || msg.includes('invoice')) return 'credit';
+  return 'bank'; // Default
+}
+
+/**
+ * Fuzzy match account name to chart of accounts code
+ */
+function fuzzyMatchAccount(input: string): string {
+  const normalized = input.toLowerCase().trim();
+
+  // Direct mappings for common terms
+  const directMappings: Record<string, string> = {
+    'cash': '1000',
+    'bank': '1020',
+    'sales': '4000',
+    'revenue': '4000',
+    'service': '4010',
+    'purchases': '5010',
+    'cost of sales': '5000',
+    'cogs': '5000',
+    'rent': '5600',
+    'salary': '5500',
+    'salaries': '5500',
+    'wages': '5500',
+    'capital': '3000',
+    'equity': '3000',
+    'drawings': '3200',
+    'drawing': '3200',
+    'receivables': '1100',
+    'debtors': '1100',
+    'payables': '2000',
+    'creditors': '2000',
+    'inventory': '1200',
+    'stock': '1200',
+    'equipment': '1540',
+    'computer': '1560',
+    'furniture': '1550',
+    'vehicle': '1530',
+    'loan': '2500',
+    'utilities': '5610',
+    'electricity': '5610',
+    'transport': '6070',
+    'advertising': '6000',
+    'marketing': '6000',
+    'insurance': '5800',
+    'repairs': '5810',
+    'maintenance': '5810',
+    'bank charges': '6030',
+    'interest income': '4200',
+    'interest expense': '6500',
+    'vat payable': '2200',
+    'vat receivable': '1400',
+    'wht payable': '2220',
+  };
+
+  if (directMappings[normalized]) {
+    return directMappings[normalized];
+  }
+
+  // Fuzzy search in chart of accounts
+  const account = CHART_OF_ACCOUNTS.find(acc =>
+    acc.name.toLowerCase().includes(normalized) ||
+    normalized.includes(acc.name.toLowerCase().split(' ')[0])
+  );
+
+  return account?.code || '5000'; // Default to general expense
 }
 
 /**
