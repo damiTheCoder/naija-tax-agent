@@ -3,6 +3,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { APP_LOGO_SRC } from "@/lib/constants";
+import { ThemeProvider } from "@/lib/ThemeContext";
+import { NavigationProvider } from "@/lib/NavigationContext";
+import GlobalSpinner from "@/components/GlobalSpinner";
 
 const glacial = localFont({
   src: [
@@ -54,8 +57,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${glacial.variable} antialiased`}>
-        <AppShell>{children}</AppShell>
+        <ThemeProvider>
+          <NavigationProvider>
+            <GlobalSpinner />
+            <AppShell>{children}</AppShell>
+          </NavigationProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
 }
+

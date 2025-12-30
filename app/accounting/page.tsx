@@ -16,6 +16,7 @@ import { accountingEngine, parseTransactionFromChat, AccountingState, CustomAcco
 import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
 import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
+import { useTheme } from "@/lib/ThemeContext";
 
 type ManualTransactionDraft = {
   date: string;
@@ -53,6 +54,8 @@ const initialTransaction: ManualTransactionDraft = {
 };
 
 export default function AccountingPage() {
+  const { theme } = useTheme();
+  // -- State for Documents & Automation --
   const [documents, setDocuments] = useState<DraftDocumentMeta[]>([]);
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [manualTx, setManualTx] = useState<ManualTransactionDraft>(initialTransaction);
@@ -587,16 +590,28 @@ export default function AccountingPage() {
                 {/* Post Journal Entry Button */}
                 <button
                   onClick={() => setShowPostEntry(true)}
-                  className="w-full rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/50 hover:bg-purple-100/50 hover:border-purple-400 transition-all p-5 flex items-center justify-center gap-3 group"
+                  className={`
+                    w-full rounded-2xl border-2 border-dashed transition-all p-5 flex items-center justify-center gap-3 group
+                    ${theme === 'dark'
+                      ? 'border-purple-300 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-purple-400'
+                      : 'border-purple-300 bg-purple-50/50 hover:bg-purple-100/50 hover:border-purple-400'
+                    }
+                  `}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <div className={`
+                    w-10 h-10 rounded-xl flex items-center justify-center transition-colors
+                    ${theme === 'dark'
+                      ? 'bg-purple-100 group-hover:bg-purple-200'
+                      : 'bg-purple-100 group-hover:bg-purple-200'
+                    }
+                  `}>
+                    <svg className={`w-5 h-5 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </div>
                   <div className="text-left">
-                    <h3 className="text-sm font-semibold text-purple-900">Post Journal Entry</h3>
-                    <p className="text-xs text-purple-600">Manual double-entry with DR/CR columns</p>
+                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-900'}`}>Post Journal Entry</h3>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>Manual double-entry with DR/CR columns</p>
                   </div>
                 </button>
 
@@ -722,7 +737,7 @@ export default function AccountingPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="divide-y divide-gray-100 max-h-[280px] overflow-y-auto">
+                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[280px] overflow-y-auto">
                       {journalEntries.slice(-10).reverse().map((entry) => (
                         <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                           <div className="flex items-start justify-between gap-3 mb-3">
@@ -848,13 +863,13 @@ export default function AccountingPage() {
               </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--background)] to-transparent" />
+
           </div>
         </section>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none">
-        <div className="mx-auto w-full max-w-3xl">
+      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none !bg-transparent">
+        <div className="mx-auto w-full max-w-3xl !bg-transparent">
           {isActionMenuOpen && (
             <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
               <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => fileUploadRef.current?.click()}>
@@ -906,52 +921,49 @@ export default function AccountingPage() {
             </div>
           )}
 
-          <div className="pointer-events-auto flex items-end gap-3 rounded-[36px] bg-[#e5e5e5] px-4 py-2 shadow-lg transition-all">
+          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#e5e5e5] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
             <button
-              className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 mb-0.5"
+              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-slate-600 dark:text-white mb-0.5"
               onClick={() => setIsActionMenuOpen((prev) => !prev)}
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </svg>
             </button>
-            <div className="relative flex-1">
-              {composerInput.length === 0 && (
-                <span className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-sm text-gray-400 truncate pr-2">
-                  Ask the accounting agent...
-                </span>
-              )}
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                aria-label="Ask the accounting agent"
-                className="w-full bg-transparent border-none text-sm text-gray-700 focus:outline-none resize-none py-2.5 min-h-[44px]"
-                value={composerInput}
-                onChange={(e) => setComposerInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-              />
-            </div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <button className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3z" />
-                  <path d="M5 10v2a7 7 0 0014 0v-2" strokeLinecap="round" />
-                  <path d="M12 19v4" strokeLinecap="round" />
-                  <path d="M8 23h8" strokeLinecap="round" />
-                </svg>
-              </button>
-              <button className="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center transition-colors" onClick={handleSendMessage}>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M5 12h14" strokeLinecap="round" />
-                  <path d="M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder="Ask the accounting agent..."
+              aria-label="Ask the accounting agent"
+              className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
+              value={composerInput}
+              onChange={(e) => setComposerInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+            />
+            <button
+              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-gray-500 dark:text-white mb-0.5"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3z" />
+                <path d="M5 10v2a7 7 0 0014 0v-2" strokeLinecap="round" />
+                <path d="M12 19v4" strokeLinecap="round" />
+                <path d="M8 23h8" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button
+              className="w-9 h-9 rounded-full bg-gray-900 dark:bg-[#64B5F6] text-white flex items-center justify-center mb-0.5 transition-colors"
+              onClick={handleSendMessage}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M5 12h14" strokeLinecap="round" />
+                <path d="M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>

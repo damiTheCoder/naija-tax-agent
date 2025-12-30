@@ -371,8 +371,8 @@ export default function TaxChatPage() {
                   <div key={`msg-${msg.timestamp}-${index}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed border ${msg.role === "user"
-                          ? "bg-indigo-50 border-indigo-100 text-indigo-900"
-                          : "bg-slate-50 border-slate-200 text-slate-800"
+                        ? "bg-indigo-50 border-indigo-100 text-indigo-900"
+                        : "bg-slate-50 border-slate-200 text-slate-800"
                         }`}
                     >
                       {msg.content}
@@ -382,13 +382,13 @@ export default function TaxChatPage() {
                 <div ref={chatEndRef} />
               </div>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--background)] to-transparent" />
+
           </div>
         </section>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none">
-        <div className="mx-auto w-full max-w-3xl">
+      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none !bg-transparent">
+        <div className="mx-auto w-full max-w-3xl !bg-transparent">
           {isActionMenuOpen && (
             <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
               <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => { setIsActionMenuOpen(false); handleImportAccountingDraft(); }}>
@@ -406,18 +406,18 @@ export default function TaxChatPage() {
             </div>
           )}
 
-          <div className="pointer-events-auto flex items-end gap-3 rounded-[24px] bg-[#e5e5e5] px-5 py-3 shadow-lg transition-all">
+          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#e5e5e5] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
             <button
-              className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 mb-0.5"
+              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-slate-600 dark:text-white mb-0.5"
               onClick={() => setIsActionMenuOpen((prev) => !prev)}
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
             </button>
             <textarea
               ref={textareaRef}
               rows={1}
               placeholder="Describe a payment, sale, or disposal..."
-              className="flex-1 bg-transparent border-none text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px]"
+              className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
               value={composerInput}
               onChange={(e) => setComposerInput(e.target.value)}
               onKeyDown={(e) => {
@@ -428,7 +428,7 @@ export default function TaxChatPage() {
               }}
             />
             <button
-              className={`w-10 h-10 rounded-full flex items-center justify-center mb-0.5 transition-colors ${canSend ? "bg-gray-900 text-white" : "bg-white text-gray-400 cursor-not-allowed"
+              className={`w-9 h-9 rounded-full flex items-center justify-center mb-0.5 transition-colors ${canSend ? "bg-gray-900 dark:bg-[#64B5F6] text-white" : "bg-white dark:bg-[#3a3a3a] text-gray-400 cursor-not-allowed"
                 }`}
               onClick={handleSendMessage}
               disabled={!canSend}

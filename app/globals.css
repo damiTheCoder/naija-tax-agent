@@ -19,6 +19,208 @@
   --error: #dc2626;
   --warning: #f59e0b;
   --success: #10b981;
+  --app-bg: #f5f5f7;
+}
+
+/* Dark Mode */
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card-bg: #1a1a1a;
+  --card-bg-light: #2a2a2a;
+  --border: #333333;
+  --muted: #b0b0b0;
+  --soft-gray: #252525;
+  --cream: #0a0a0a;
+  --app-bg: #000000;
+}
+
+/* ============================================
+   DARK MODE - COMPREHENSIVE OVERRIDES
+   Main containers: #1a1a1a (darker grey)
+   Sub containers:  #2a2a2a (lighter grey)
+   ============================================ */
+
+/* Force all elements with white-ish backgrounds to dark grey */
+.dark div,
+.dark section,
+.dark article,
+.dark aside,
+.dark main,
+.dark header,
+.dark footer,
+.dark nav {
+  background-color: inherit;
+}
+
+/* Primary white backgrounds -> dark grey */
+.dark [class*="bg-white"],
+.dark [class*="bg-[#fff"],
+.dark [class*="bg-[#FFFFFF"],
+.dark [class*="bg-[#fafafa"],
+.dark [class*="bg-[#f5f5"],
+.dark [class*="bg-gray-50"],
+.dark [class*="bg-gray-100"] {
+  background-color: #1a1a1a !important;
+}
+
+/* Nested/sub backgrounds -> lighter grey */
+.dark [class*="bg-white"] [class*="bg-white"],
+.dark [class*="bg-white"] [class*="bg-gray-"],
+.dark [class*="bg-gray-50"] [class*="bg-white"],
+.dark [class*="bg-[#f5f5"] [class*="bg-white"] {
+  background-color: #2a2a2a !important;
+}
+
+/* Light grey backgrounds -> slightly lighter dark */
+.dark [class*="bg-gray-200"],
+.dark [class*="bg-gray-300"],
+.dark [class*="bg-[#e0e0"],
+.dark [class*="bg-[#e8e8"] {
+  background-color: #333333 !important;
+}
+
+/* Inputs, selects, textareas */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #252525 !important;
+  color: #ffffff !important;
+  border-color: #444444 !important;
+}
+
+/* Exception for transparent textareas (chat inputs) */
+.dark textarea[class*="bg-transparent"] {
+  background-color: transparent !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #888888 !important;
+}
+
+/* ALL text should be white or light */
+.dark * {
+  color: inherit;
+}
+
+.dark [class*="text-gray-"],
+.dark [class*="text-black"],
+.dark [class*="text-[#0"],
+.dark [class*="text-[#1"],
+.dark [class*="text-[#2"],
+.dark [class*="text-[#3"],
+.dark [class*="text-[#4"],
+.dark [class*="text-[#5"],
+.dark [class*="text-[#6"],
+.dark [class*="text-[#7"],
+.dark [class*="text-[#8"],
+.dark [class*="text-[#9"] {
+  color: #ffffff !important;
+}
+
+/* Remove all grey borders in dark mode */
+.dark [class*="border-gray"],
+.dark [class*="border-[#e"],
+.dark [class*="border-[#d"],
+.dark [class*="border-[#c"],
+.dark [class*="border-[#b"],
+.dark [class*="border-[#a"],
+.dark [class*="border-[#9"],
+.dark [class*="border-[#8"],
+.dark [class*="divide-gray"] {
+  border-color: transparent !important;
+}
+
+/* Also remove borders from common elements */
+.dark div[class*="border"],
+.dark section[class*="border"],
+.dark article[class*="border"] {
+  border-color: transparent !important;
+}
+
+/* Muted/secondary text */
+.dark [class*="text-gray-400"],
+.dark [class*="text-gray-500"],
+.dark [class*="text-gray-600"],
+.dark [class*="text-muted"],
+.dark [class*="text-[#666"],
+.dark [class*="text-[#999"] {
+  color: #a0a0a0 !important;
+}
+
+/* Tables */
+.dark table {
+  background-color: #1a1a1a !important;
+}
+
+.dark th {
+  background-color: #252525 !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+.dark td {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
+  border-color: #333333 !important;
+}
+
+.dark tr:hover td {
+  background-color: #252525 !important;
+}
+
+/* Borders */
+.dark [class*="border-gray"],
+.dark [class*="border-[#e"],
+.dark [class*="border-[#d"],
+.dark [class*="border-[#c"],
+.dark [class*="border-[#b"] {
+  border-color: #333333 !important;
+}
+
+/* Buttons */
+.dark button {
+  color: inherit;
+}
+
+.dark button[class*="bg-white"],
+.dark button[class*="bg-gray-"] {
+  background-color: #2a2a2a !important;
+  color: #ffffff !important;
+  border-color: #444444 !important;
+}
+
+/* Dropdowns and menus */
+.dark [class*="dropdown"],
+.dark [role="listbox"],
+.dark [role="menu"],
+.dark [role="dialog"] {
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
+}
+
+/* Cards and panels with shadows */
+.dark [class*="shadow"],
+.dark [class*="rounded"] {
+  /* Let these inherit but ensure no white */
+}
+
+/* Specific overrides for any remaining whites */
+.dark [style*="background: white"],
+.dark [style*="background-color: white"],
+.dark [style*="background: #fff"],
+.dark [style*="background-color: #fff"],
+.dark [style*="background: rgb(255"],
+.dark [style*="background-color: rgb(255"] {
+  background-color: #1a1a1a !important;
+}
+
+/* Chat input containers - grey background in dark mode */
+.dark [class*="bg-[#e5e5e5]"],
+.dark [class*="bg-[#e0e0e0]"],
+.dark [class*="bg-[#f5f5f7]"] {
+  background-color: #2a2a2a !important;
 }
 
 @theme inline {
