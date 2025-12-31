@@ -80,6 +80,42 @@
   background-color: #333333 !important;
 }
 
+/* Preserve semantic icon backgrounds in dark mode */
+.dark [class*="bg-orange-100"] {
+  background-color: rgb(124, 45, 18) !important;
+  /* orange-900 */
+}
+
+.dark [class*="bg-emerald-100"] {
+  background-color: rgb(6, 78, 59) !important;
+  /* emerald-900 */
+}
+
+.dark [class*="bg-rose-100"] {
+  background-color: rgb(136, 19, 55) !important;
+  /* rose-900 */
+}
+
+.dark [class*="bg-blue-100"] {
+  background-color: rgb(30, 58, 138) !important;
+  /* blue-900 */
+}
+
+.dark [class*="bg-purple-100"] {
+  background-color: rgb(88, 28, 135) !important;
+  /* purple-900 */
+}
+
+.dark [class*="bg-amber-100"] {
+  background-color: rgb(120, 53, 15) !important;
+  /* amber-900 */
+}
+
+.dark [class*="bg-gray-200"] {
+  background-color: rgb(55, 65, 81) !important;
+  /* gray-700 */
+}
+
 /* Inputs, selects, textareas */
 .dark input,
 .dark select,
@@ -147,6 +183,43 @@
 .dark [class*="text-[#666"],
 .dark [class*="text-[#999"] {
   color: #a0a0a0 !important;
+}
+
+/* Preserve semantic colors in dark mode with lighter variants */
+.dark [class*="text-emerald-600"],
+.dark [class*="text-emerald-700"] {
+  color: #34d399 !important;
+  /* emerald-400 */
+}
+
+.dark [class*="text-rose-600"],
+.dark [class*="text-rose-700"] {
+  color: #fb7185 !important;
+  /* rose-400 */
+}
+
+.dark [class*="text-blue-600"],
+.dark [class*="text-blue-700"] {
+  color: #60a5fa !important;
+  /* blue-400 */
+}
+
+.dark [class*="text-purple-600"],
+.dark [class*="text-purple-700"] {
+  color: #a78bfa !important;
+  /* purple-400 */
+}
+
+.dark [class*="text-amber-600"],
+.dark [class*="text-amber-700"] {
+  color: #fbbf24 !important;
+  /* amber-400 */
+}
+
+.dark [class*="text-orange-600"],
+.dark [class*="text-orange-700"] {
+  color: #fb923c !important;
+  /* orange-400 */
 }
 
 /* Tables */

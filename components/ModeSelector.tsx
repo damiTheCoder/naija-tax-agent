@@ -58,18 +58,16 @@ export default function ModeSelector() {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#64B5F6]/10 hover:bg-[#64B5F6]/20 transition-all text-sm font-bold text-[#2563EB] w-full md:w-auto justify-between"
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-600 hover:bg-gray-700 transition-all text-sm font-bold text-white"
             >
                 <div className="flex items-center gap-2">
-                    {isNavigating ? (
-                        <div className="w-4 h-4 rounded-full border-2 border-[#2563EB]/30 border-t-[#2563EB] animate-spin" />
-                    ) : (
-                        <ModeIcon mode={mode} className="w-5 h-5 text-[#2563EB]" />
+                    {isNavigating && (
+                        <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                     )}
-                    <span>{getModeLabel(mode)}</span>
+                    <span className="text-xs">{getModeLabel(mode)}</span>
                 </div>
                 <svg
-                    className={`w-4 h-4 text-[#2563EB] transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`w-3 h-3 text-white transition-transform ${isOpen ? "rotate-180" : ""}`}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -80,10 +78,8 @@ export default function ModeSelector() {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl border border-gray-100 shadow-xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="absolute -top-10 -right-10 w-20 h-20 bg-[#64B5F6]/10 rounded-full blur-2xl pointer-events-none"></div>
-
-                    <div className="relative">
+                <div className="absolute right-0 lg:top-full lg:mt-2 bottom-full mb-2 lg:bottom-auto lg:mb-0 w-48 bg-gray-100/90 dark:bg-[#2a2a2a]/90 backdrop-blur-xl rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl py-1 z-50 animate-in fade-in">
+                    <div className="divide-y divide-gray-200 dark:divide-gray-600">
                         <ModeOption
                             mode="accounting"
                             label="Accounting"
@@ -126,17 +122,16 @@ function ModeOption({
         <button
             onClick={onClick}
             className={`
-        w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
-        ${isSelected
-                    ? "bg-[#64B5F6]/10 text-[#64B5F6]"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-all
+                ${isSelected
+                    ? "text-[#2563EB]"
+                    : "text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
                 }
-      `}
+            `}
         >
-            <ModeIcon mode={mode} className={`w-4 h-4 ${isSelected ? "text-[#64B5F6]" : "text-gray-400"}`} />
             <span>{label}</span>
             {isSelected && (
-                <svg className="w-4 h-4 ml-auto text-[#64B5F6]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-[#2563EB]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
             )}

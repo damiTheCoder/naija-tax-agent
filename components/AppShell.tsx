@@ -72,6 +72,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
 
+  // Determine if current page is a chat page (has chat input)
+  const isChatPage = pathname.startsWith('/accounting') ||
+    pathname.startsWith('/tax/chat') ||
+    pathname.startsWith('/cashflow-intelligence/chat');
+
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -122,12 +127,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative w-8 h-8 overflow-hidden rounded-full border-2 border-[#64B5F6]">
                 <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
               </div>
-              <span className="text-base font-extrabold" style={{ color: 'var(--foreground)' }}>Insight</span>
+              <span className="text-base font-extrabold" style={{ color: 'var(--foreground)' }}>CashOS</span>
             </Link>
 
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <ModeSelector />
               {/* Mobile Menu Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -160,8 +164,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <footer className="py-6 px-4 lg:px-8 text-center text-sm border-t transition-colors duration-300" style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}>
-          <p>© 2024 Insight · Smart Nigerian Tax Manager</p>
+          <p>© 2024 CashOS · Smart Nigerian Tax Manager</p>
         </footer>
+      </div>
+
+      {/* Mobile Fixed ModeSelector */}
+      <div className={`
+        fixed z-50 lg:hidden
+        ${isChatPage
+          ? 'bottom-20 right-4'
+          : 'bottom-6 right-4'
+        }
+      `}>
+        <ModeSelector />
       </div>
     </div>
   );
@@ -175,7 +190,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/tax-tools/wht")) return "Withholding Tax";
   if (pathname.includes("/tax-tools/vat")) return "Value Added Tax";
   if (pathname.includes("/tax-tools/cgt")) return "Capital Gains Tax";
-  return "Insight";
+  return "CashOS";
 }
 
 function getPageDescription(pathname: string): string {

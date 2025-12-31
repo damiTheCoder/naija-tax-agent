@@ -76,7 +76,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="relative w-8 h-8 overflow-hidden rounded-lg ring-2 ring-[#64B5F6]/30 group-hover:ring-[#64B5F6]/60 transition-all">
               <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
             </div>
-            <h1 className="text-lg font-extrabold tracking-tight text-white dark:!text-white">Insight</h1>
+            <h1 className="text-lg font-extrabold tracking-tight text-white dark:!text-white">CashOS</h1>
           </Link>
         </div>
 

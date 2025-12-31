@@ -566,10 +566,6 @@ export default function AccountingPage() {
         <section className="relative min-h-[75vh]">
           <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Accounting chat</p>
-                <p className="text-sm text-gray-500">One stream for uploads, journals, audit attachments, and final handoff.</p>
-              </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className={`px-3 py-1 rounded-md ${documents.length ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
                   Docs {documents.length}
@@ -605,13 +601,30 @@ export default function AccountingPage() {
                       : 'bg-purple-100 group-hover:bg-purple-200'
                     }
                   `}>
-                    <svg className={`w-5 h-5 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg
+                      className="w-5 h-5"
+                      style={{ color: theme === 'dark' ? '#c4b5fd' : '#9333ea' }}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </div>
                   <div className="text-left">
-                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-900'}`}>Post Journal Entry</h3>
-                    <p className={`text-xs ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>Manual double-entry with DR/CR columns</p>
+                    <h3
+                      className="text-sm font-semibold"
+                      style={{ color: theme === 'dark' ? '#c4b5fd' : '#581c87' }}
+                    >
+                      Post Journal Entry
+                    </h3>
+                    <p
+                      className="text-xs"
+                      style={{ color: theme === 'dark' ? '#a78bfa' : '#9333ea' }}
+                    >
+                      Manual double-entry with DR/CR columns
+                    </p>
                   </div>
                 </button>
 
@@ -659,61 +672,7 @@ export default function AccountingPage() {
                 </div>
 
                 {/* Transactions Section */}
-                {transactions.length > 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                    <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-semibold text-gray-900">Journal Entries</h3>
-                            <p className="text-xs text-gray-500">{transactions.length.toLocaleString()} transaction{transactions.length !== 1 ? 's' : ''} recorded</p>
-                          </div>
-                        </div>
-                        <button
-                          className="text-xs text-rose-500 hover:text-rose-600 font-medium"
-                          onClick={() => {
-                            if (confirm("This will permanently clear all your transactions and tax history. Proceed?")) {
-                              clearAllData();
-                            }
-                          }}
-                        >
-                          Clear all
-                        </button>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-100 bg-gray-50/30">
-                            <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Date</th>
-                            <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Description</th>
-                            <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Category</th>
-                            <th className="text-right text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Amount (₦)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {transactions.slice(-6).map((tx) => (
-                            <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-5 py-3 text-sm text-gray-500 font-mono">{tx.date}</td>
-                              <td className="px-5 py-3 text-sm text-gray-900">{tx.description}</td>
-                              <td className="px-5 py-3">
-                                <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 capitalize">{tx.category}</span>
-                              </td>
-                              <td className={`px-5 py-3 text-sm text-right font-mono font-semibold ${tx.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                                {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Journal Entries Section - Double Entry View */}
                 {journalEntries.length > 0 && (
@@ -742,7 +701,7 @@ export default function AccountingPage() {
                         <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                           <div className="flex items-start justify-between gap-3 mb-3">
                             <div>
-                              <span className="text-xs font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{entry.id}</span>
+                              <span className="text-xs font-mono text-purple-600">{entry.id}</span>
                               <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
                             </div>
                             <span className="text-xs text-gray-400 font-mono">{entry.date}</span>

@@ -34,7 +34,7 @@ export default function HeaderNav() {
             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Insight</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">CashOS</h1>
             <p className="hidden text-xs text-[#666666] sm:block">Smart Nigerian Tax Manager</p>
           </div>
         </Link>
@@ -53,8 +53,8 @@ export default function HeaderNav() {
 
           {isMenuOpen && (
             <>
-              <div 
-                className="fixed inset-0 z-40" 
+              <div
+                className="fixed inset-0 z-40"
                 onClick={() => setIsMenuOpen(false)}
               />
               <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-[#e0e0e0]/30 bg-white shadow-xl p-2 space-y-1 z-50 overflow-hidden">
@@ -62,7 +62,7 @@ export default function HeaderNav() {
                 <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#64B5F6]/40 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-[#818cf8]/30 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute top-1/2 right-1/4 w-20 h-20 bg-[#ec4899]/20 rounded-full blur-3xl pointer-events-none"></div>
-                
+
                 {TAX_NAV_ITEMS.map((item) => (
                   <button
                     key={item.href}

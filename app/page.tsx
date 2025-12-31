@@ -197,7 +197,7 @@ export default function LandingPage() {
         <div className="nav-content">
           <Link href="/" className="nav-logo">
             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} className="logo-image" />
-            <span className="logo-text">Insight</span>
+            <span className="logo-text">CashOS</span>
           </Link>
           <div className="nav-links">
             {navLinks.map((link) => (
@@ -285,7 +285,7 @@ export default function LandingPage() {
                     <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} className="rounded-full" />
                   </div>
                   <div className="profile-info">
-                    <div className="profile-name">Insight AI</div>
+                    <div className="profile-name">CashOS AI</div>
                     <div className="profile-role">Your Accountant</div>
                   </div>
                   <div className="profile-actions">
@@ -323,7 +323,7 @@ export default function LandingPage() {
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Insight partners with major Nigerian banks
+              CashOS partners with major Nigerian banks
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
@@ -348,7 +348,7 @@ export default function LandingPage() {
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Insight partners with major Nigerian banks
+              CashOS partners with major Nigerian banks
             </span>
             <span className="ticker-item">
               <svg className="ticker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
@@ -368,9 +368,9 @@ export default function LandingPage() {
 
       {/* About Section */}
       <section className="about-section animate-on-scroll" id="about">
-        <div className="about-label">About Insight</div>
+        <div className="about-label">About CashOS</div>
         <p className="about-text">
-          At Insight, we don&apos;t just track numbers — we make them make sense. Since 2024,
+          At CashOS, we don&apos;t just track numbers — we make them make sense. Since 2024,
           our platform has been a home for business owners of all types, from eager
           freelancers to seasoned enterprises.
         </p>
@@ -501,7 +501,7 @@ export default function LandingPage() {
           <div className="solution-single-visual">
             <picture>
               <source media="(max-width: 768px)" srcSet="/R4.png" />
-              <img src="/R1.png" alt="Insight in action" className="solution-single-img" />
+              <img src="/R1.png" alt="CashOS in action" className="solution-single-img" />
             </picture>
           </div>
         </div>
@@ -615,7 +615,7 @@ export default function LandingPage() {
             <div className="comparison-side comparison-new-side">
               <div className="comparison-side-header">
                 <span className="comparison-badge new">After</span>
-                <h3>Insight AI Platform</h3>
+                <h3>CashOS AI Platform</h3>
               </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -738,7 +738,7 @@ export default function LandingPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/j3.jpeg" alt="User" />
                 </div>
-                <span>Join 500+ businesses already using Insight</span>
+                <span>Join 500+ businesses already using CashOS</span>
               </div>
             </div>
           </div>
@@ -752,7 +752,7 @@ export default function LandingPage() {
             <div className="footer-brand-new">
               <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={48} height={48} className="footer-logo" />
               <div>
-                <span className="footer-brand-name">Insight</span>
+                <span className="footer-brand-name">CashOS</span>
                 <p className="footer-brand-tagline">AI Accounting for Real Businesses</p>
               </div>
             </div>
@@ -780,7 +780,7 @@ export default function LandingPage() {
           </div>
 
           <div className="footer-bottom">
-            <p>© 2024 Insight. Built for Nigerian businesses. 🇳🇬</p>
+            <p>© 2024 CashOS. Built for Nigerian businesses. 🇳🇬</p>
             <div className="footer-social">
               <a href="#" aria-label="Twitter">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

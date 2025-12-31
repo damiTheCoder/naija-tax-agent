@@ -24,15 +24,15 @@ const glacial = localFont({
   display: "swap",
 });
 
-const siteTitle = "Insight - Smart Nigerian Tax Manager";
+const siteTitle = "CashOS - Smart Nigerian Tax Manager";
 const siteDescription =
-  "Estimate your Nigerian taxes (CGT, CIT, PIT, VAT) with Insight. Your personal AI tax assistant.";
+  "Estimate your Nigerian taxes (CGT, CIT, PIT, VAT) with CashOS. Your personal AI tax assistant.";
 
 export const metadata: Metadata = {
   title: siteTitle,
   description: siteDescription,
-  keywords: ["Nigerian tax", "FIRS", "Insight", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
-  authors: [{ name: "Insight" }],
+  keywords: ["Nigerian tax", "FIRS", "CashOS", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
+  authors: [{ name: "CashOS" }],
   icons: {
     icon: APP_LOGO_SRC,
     shortcut: APP_LOGO_SRC,

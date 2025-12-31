@@ -2173,7 +2173,7 @@ export default function HomePage() {
                     </div>
                     <h2 className="text-4xl font-extrabold text-[#0a0a0a] tracking-tight">Tax Report</h2>
                     <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 font-medium">
-                      <span>Reference ID: {result.taxRuleMetadata?.version || 'Insight-v2'}</span>
+                      <span>Reference ID: {result.taxRuleMetadata?.version || 'CashOS-v2'}</span>
                       <span className="opacity-30">•</span>
                       <span>{new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </div>
@@ -2498,7 +2498,7 @@ export default function HomePage() {
               </div>
               <p className="text-[11px] leading-relaxed text-gray-400 font-medium italic">
                 This computation is an artificial intelligence-driven estimate based on the Nigerian Finance Act 2023.
-                Data processed through the Insight engine is encrypted and compliant with NDPR.
+                Data processed through the CashOS engine is encrypted and compliant with NDPR.
                 Statutory filings should always be verified by a licensed TAX consultant.
               </p>
             </div>

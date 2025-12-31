@@ -143,8 +143,8 @@ export default function CashIntelligencePage() {
 
             <main className="max-w-7xl mx-auto px-1 md:px-2 py-3 md:py-4 space-y-3">
                 {/* Metrics Dashboard */}
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 overflow-hidden">
-                    <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100/50">
+                <div className="">
+                    <div className="py-4">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                                 <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -152,45 +152,45 @@ export default function CashIntelligencePage() {
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-900">Cashflow Metrics</h3>
-                                <p className="text-xs text-gray-500">Real-time financial health indicators</p>
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Cashflow Metrics</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Real-time financial health indicators</p>
                             </div>
                         </div>
                     </div>
-                    <div className="p-3 md:p-5">
+                    <div className="">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                             {/* Cash Balance */}
-                            <div className="rounded-xl p-4 bg-white border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide">Cash Balance</p>
-                                <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">
+                            <div className="rounded-xl p-4">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Balance</p>
+                                <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold mt-1">
                                     {formatNaira(analytics?.cashBalance || 0)}
                                 </p>
                             </div>
 
                             {/* Monthly Inflow */}
-                            <div className="rounded-xl p-4 bg-white border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide">Monthly Inflow</p>
-                                <p className="text-xl md:text-2xl font-bold text-emerald-600 mt-1">
+                            <div className="rounded-xl p-4">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Inflow</p>
+                                <p className="text-xl md:text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                                     +{formatNaira(analytics?.monthlyInflow || 0)}
                                 </p>
                             </div>
 
                             {/* Monthly Outflow */}
-                            <div className="rounded-xl p-4 bg-white border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide">Monthly Outflow</p>
-                                <p className="text-xl md:text-2xl font-bold text-rose-600 mt-1">
+                            <div className="rounded-xl p-4">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Outflow</p>
+                                <p className="text-xl md:text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
                                     -{formatNaira(analytics?.monthlyOutflow || 0)}
                                 </p>
                             </div>
 
                             {/* Runway */}
-                            <div className="rounded-xl p-4 bg-white border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide">Cash Runway</p>
+                            <div className="rounded-xl p-4">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Runway</p>
                                 <div className="flex items-end gap-2 mt-1">
-                                    <p className="text-xl md:text-2xl font-bold text-gray-900">
+                                    <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold">
                                         {analytics?.runwayMonths === 999 ? "∞" : analytics?.runwayMonths || 0}
                                     </p>
-                                    <span className="text-sm text-gray-500 mb-0.5">months</span>
+                                    <span className="text-sm text-gray-500 dark:text-gray-400 mb-0.5">months</span>
                                 </div>
                                 <div className={`w-full h-1.5 rounded-full mt-2 ${getHealthColor(analytics?.healthStatus || "moderate")}`} />
                             </div>
@@ -199,56 +199,56 @@ export default function CashIntelligencePage() {
                 </div>
 
                 {/* Burn Rate Analysis */}
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 overflow-hidden">
-                    <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100/50">
+                <div className="">
+                    <div className="py-4">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-900">Burn Rate Analysis</h3>
-                                <p className="text-xs text-gray-500">Cash consumption & sustainability metrics</p>
+                                <h3 style={{ color: 'var(--foreground)' }} className="text-sm font-semibold">Burn Rate Analysis</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Cash consumption & sustainability metrics</p>
                             </div>
                         </div>
                     </div>
-                    <div className="p-3 md:p-5">
+                    <div className="">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100">
-                                <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <div className="flex items-center gap-3 p-3 rounded-xl">
+                                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-gray-500">Daily Burn Rate</p>
-                                    <p className="text-lg font-semibold text-gray-900">{formatNaira(analytics?.burnRate || 0)}<span className="text-sm font-normal text-gray-500">/day</span></p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Daily Burn Rate</p>
+                                    <p style={{ color: 'var(--foreground)' }} className="text-lg font-semibold">{formatNaira(analytics?.burnRate || 0)}<span className="text-sm font-normal text-gray-500 dark:text-gray-400">/day</span></p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100">
+                            <div className="flex items-center gap-3 p-3 rounded-xl">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${(analytics?.netCashflow || 0) >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-                                    <svg className={`w-5 h-5 ${(analytics?.netCashflow || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <svg className={`w-5 h-5 ${(analytics?.netCashflow || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-gray-500">Net Cashflow</p>
-                                    <p className={`text-lg font-semibold ${(analytics?.netCashflow || 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Net Cashflow</p>
+                                    <p className={`text-lg font-semibold ${(analytics?.netCashflow || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                         {(analytics?.netCashflow || 0) >= 0 ? "+" : ""}{formatNaira(analytics?.netCashflow || 0)}<span className="text-sm font-normal opacity-70">/mo</span>
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100">
+                            <div className="flex items-center gap-3 p-3 rounded-xl">
                                 <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-gray-500">Runway Remaining</p>
-                                    <p className="text-lg font-semibold text-gray-900">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Runway Remaining</p>
+                                    <p style={{ color: 'var(--foreground)' }} className="text-lg font-semibold">
                                         {analytics?.runwayDays === 999 ? "Sustainable" : `${analytics?.runwayDays || 0} days`}
                                     </p>
                                 </div>

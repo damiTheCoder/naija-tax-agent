@@ -397,25 +397,20 @@ export default function CashflowChatPage() {
     return (
         <>
             <div className="space-y-6 pb-32">
-                {/* Header */}
-                <header className="px-3 md:px-4 py-3">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <main className="px-3 space-y-4">
+                    {/* Inflow Display */}
+                    {analytics && (
                         <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Cashflow Chat</p>
-                            <p className="text-sm text-gray-500">Set up automations and track your investment returns</p>
+                            <p className="text-xs font-medium text-gray-500 mb-0.5">Inflow</p>
+                            <p className="text-2xl font-bold text-green-500" style={{ color: '#22c55e' }}>
+                                {formatNaira(analytics.monthlyInflow)}<span className="text-sm text-gray-400 font-normal ml-1">/mo</span>
+                            </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="px-3 py-1 rounded-md bg-emerald-50 text-emerald-600 font-medium">
-                                {rules.filter(r => r.isActive).length} active rules
-                            </span>
-                        </div>
-                    </div>
-                </header>
+                    )}
 
-                <main className="max-w-4xl mx-auto px-2 md:px-4 space-y-4">
                     {/* Embedded Finance Products - Horizontal Scroll */}
                     <div className="rounded-2xl overflow-hidden">
-                        <div className="px-3 py-2">
+                        <div className="py-2">
                             <h3 className="text-sm font-semibold text-gray-900">Embedded Finance</h3>
                             <p className="text-xs text-gray-500">Explore investment products</p>
                         </div>
@@ -428,22 +423,13 @@ export default function CashflowChatPage() {
                         </div>
                     </div>
 
-                    {/* Inflow Display */}
-                    {analytics && (
-                        <div className="px-3">
-                            <p className="text-2xl font-semibold text-gray-900">
-                                Inflow: <span className="text-green-500">{formatNaira(analytics.monthlyInflow)}</span><span className="text-sm text-gray-500 font-normal">/mo</span>
-                            </p>
-                        </div>
-                    )}
-
                     {/* Quick Automation Sliders */}
                     <div className="rounded-2xl overflow-hidden">
-                        <div className="px-3 py-2">
+                        <div className="py-2">
                             <h3 className="text-sm font-semibold text-gray-900">Quick Automation Setup</h3>
                             <p className="text-xs text-gray-500">Drag to set allocation, then tap to activate</p>
                         </div>
-                        <div className="p-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="space-y-2">
                                 <AutomationSlider
                                     type="tbills"
@@ -489,7 +475,7 @@ export default function CashflowChatPage() {
                     {/* Active Rules */}
                     {rules.length > 0 && (
                         <div className="rounded-2xl overflow-hidden">
-                            <div className="px-3 py-2">
+                            <div className="py-2">
                                 <h3 className="text-sm font-semibold text-gray-900">Active Automations</h3>
                                 <p className="text-xs text-gray-500">{rules.filter(r => r.isActive).length} of {rules.length} active</p>
                             </div>

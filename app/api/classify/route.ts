@@ -4,17 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { 
-  classifyTransaction, 
-  classifyTransactions, 
+import {
+  classifyTransaction,
+  classifyTransactions,
   analyzeTransaction,
   AIClassificationResult,
-  AIConfig 
+  AIConfig
 } from "@/lib/accounting/aiEngine";
-import { 
-  generateStatementDraft, 
+import {
+  generateStatementDraft,
   generateStatementDraftWithAI,
-  analyzeForCompliance 
+  analyzeForCompliance
 } from "@/lib/accounting/statementEngine";
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { runComplianceChecks } from "@/lib/accounting/standards";
@@ -57,10 +57,10 @@ interface ClassifyResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ClassifyResponse>> {
   const startTime = Date.now();
-  
+
   try {
     const body: ClassifyRequest = await request.json();
-    
+
     // Get AI config from request or environment
     const aiConfig: Partial<AIConfig> = {
       useAI: body.useAI ?? true,
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
       confidenceThreshold: body.aiConfig?.confidenceThreshold || 0.75,
       aiTimeout: 10000,
     };
-    
+
     switch (body.action) {
       // Single transaction classification
       case "classify": {
@@ -80,9 +80,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
             error: "Transaction is required for classify action",
           }, { status: 400 });
         }
-        
+
         const classification = await classifyTransaction(body.transaction, aiConfig);
-        
+
         return NextResponse.json({
           success: true,
           data: { classification },
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           },
         });
       }
-      
+
       // Batch transaction classification
       case "classify-batch": {
         if (!body.transactions || body.transactions.length === 0) {
@@ -102,19 +102,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
             error: "Transactions array is required for classify-batch action",
           }, { status: 400 });
         }
-        
+
         const classificationsMap = await classifyTransactions(body.transactions, aiConfig);
         const classifications: Record<string, AIClassificationResult> = {};
         classificationsMap.forEach((value, key) => {
           classifications[key] = value;
         });
-        
+
         // Calculate average confidence
         const values = Object.values(classifications);
         const avgConfidence = values.reduce((sum, c) => sum + c.confidence, 0) / values.length;
         const sources = new Set(values.map(c => c.source));
         const overallSource = sources.size > 1 ? "hybrid" : values[0]?.source || "rule";
-        
+
         return NextResponse.json({
           success: true,
           data: { classifications },
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           },
         });
       }
-      
+
       // Full transaction analysis
       case "analyze": {
         if (!body.transaction) {
@@ -134,13 +134,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
             error: "Transaction is required for analyze action",
           }, { status: 400 });
         }
-        
+
         const analysis = await analyzeTransaction(
-          body.transaction, 
-          aiConfig, 
+          body.transaction,
+          aiConfig,
           body.complianceData
         );
-        
+
         return NextResponse.json({
           success: true,
           data: { analysis },
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           },
         });
       }
-      
+
       // Generate financial statement
       case "generate-statement": {
         if (!body.transactions || body.transactions.length === 0) {
@@ -160,17 +160,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
             error: "Transactions array is required for generate-statement action",
           }, { status: 400 });
         }
-        
+
         if (body.useAI !== false && aiConfig.useAI) {
           const result = await generateStatementDraftWithAI(body.transactions, aiConfig);
           const classifications: Record<string, AIClassificationResult> = {};
           result.classifications.forEach((value, key) => {
             classifications[key] = value;
           });
-          
+
           return NextResponse.json({
             success: true,
-            data: { 
+            data: {
               statement: result.statement,
               classifications,
             },
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           });
         } else {
           const statement = generateStatementDraft(body.transactions, { includeLineItems: true });
-          
+
           return NextResponse.json({
             success: true,
             data: { statement },
@@ -194,12 +194,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           });
         }
       }
-      
+
       // Compliance check
       case "compliance-check": {
         if (body.statement) {
           const statementAnalysis = await analyzeForCompliance(body.statement, aiConfig);
-          
+
           return NextResponse.json({
             success: true,
             data: { statementAnalysis },
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           });
         } else if (body.complianceData) {
           const complianceResults = runComplianceChecks(body.complianceData);
-          
+
           return NextResponse.json({
             success: true,
             data: { complianceResults },
@@ -226,17 +226,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
           }, { status: 400 });
         }
       }
-      
+
       default:
         return NextResponse.json({
           success: false,
           error: `Unknown action: ${body.action}. Valid actions are: classify, classify-batch, analyze, generate-statement, compliance-check`,
         }, { status: 400 });
     }
-    
+
   } catch (error) {
     console.error("AI Classification API Error:", error);
-    
+
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClassifyR
 
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
-    name: "Insight AI Classification API",
+    name: "CashOS AI Classification API",
     version: "1.0.0",
     description: "Dual rule-based + AI transaction classification for Nigerian accounting",
     endpoints: {
