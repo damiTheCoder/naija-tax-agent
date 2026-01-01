@@ -1,6 +1,6 @@
-export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence";
+export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "inventory";
 
-export type AppMode = "tax" | "accounting" | "intelligence";
+export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "inventory";
 
 export interface TaxNavItem {
   label: string;
@@ -117,5 +117,90 @@ export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
     icon: "chat",
     description: "Set up automations and track returns",
     mode: "intelligence",
+  },
+];
+
+// Wallet/Fintech navigation
+export const WALLET_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Wallet Home",
+    href: "/wallet",
+    icon: "wallet",
+    description: "Send, receive, and manage money",
+    mode: "wallet",
+  },
+  {
+    label: "Transaction History",
+    href: "/wallet/history",
+    icon: "receipt",
+    description: "View all your transactions",
+    mode: "wallet",
+  },
+  {
+    label: "Linked Cards",
+    href: "/wallet/cards",
+    icon: "bank",
+    description: "Manage payment cards",
+    mode: "wallet",
+  },
+  {
+    label: "Settings",
+    href: "/wallet/settings",
+    icon: "chart",
+    description: "Wallet preferences and security",
+    mode: "wallet",
+  },
+];
+
+// Inventory Intelligence navigation
+export const INVENTORY_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/inventory",
+    icon: "chart",
+    description: "Inventory overview and KPIs",
+    mode: "inventory",
+  },
+  {
+    label: "Products",
+    href: "/inventory/products",
+    icon: "inventory",
+    description: "Manage product catalog",
+    mode: "inventory",
+  },
+  {
+    label: "Stock Levels",
+    href: "/inventory/stock",
+    icon: "ledger",
+    description: "View and adjust stock by location",
+    mode: "inventory",
+  },
+  {
+    label: "Purchase Orders",
+    href: "/inventory/purchase-orders",
+    icon: "receipt",
+    description: "Create POs and receive stock",
+    mode: "inventory",
+  },
+  {
+    label: "Transfers",
+    href: "/inventory/transfers",
+    icon: "trend",
+    description: "Move stock between locations",
+    mode: "inventory",
+  },
+  {
+    label: "Insights",
+    href: "/inventory/insights",
+    icon: "intelligence",
+    description: "Analytics and recommendations",
+    mode: "inventory",
+  },
+  {
+    label: "Charts",
+    href: "/inventory/charts",
+    icon: "cashflow",
+    description: "Visualize inventory trends",
+    mode: "inventory",
   },
 ];

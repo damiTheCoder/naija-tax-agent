@@ -1,0 +1,252 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================================================
+// INVENTORY INTELLIGENCE - Multi-Branch Inventory Management
+// SQLite compatible (no enums - using String with defaults)
+// ============================================================================
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  locations      Location[]
+  users          User[]
+  suppliers      Supplier[]
+  categories     Category[]
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+  transfers      Transfer[]
+  sales          Sale[]
+  stockMovements StockMovement[]
+  menuItems      MenuItem[]
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  companyId String
+  type      String   @default("BRANCH") // WAREHOUSE | BRANCH
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+
+  company            Company            @relation(fields: [companyId], references: [id])
+  users              User[]
+  inventoryBalances  InventoryBalance[]
+  purchaseOrders     PurchaseOrder[]
+  transfersFrom      Transfer[]         @relation("TransferFrom")
+  transfersTo        Transfer[]         @relation("TransferTo")
+  sales              Sale[]
+  stockMovementsFrom StockMovement[]    @relation("MovementFrom")
+  stockMovementsTo   StockMovement[]    @relation("MovementTo")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  companyId  String
+  locationId String?
+  email      String   @unique
+  name       String
+  role       String   @default("STAFF") // OWNER | MANAGER | STAFF
+  createdAt  DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  company        Company         @relation(fields: [companyId], references: [id])
+  purchaseOrders PurchaseOrder[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  createdAt DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  products Product[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  companyId    String
+  categoryId   String?
+  sku          String   @unique
+  name         String
+  unit         String   @default("pcs")
+  costPrice    Float    @default(0)
+  sellingPrice Float    @default(0)
+  reorderLevel Int      @default(10)
+  trackExpiry  Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company            Company              @relation(fields: [companyId], references: [id])
+  category           Category?            @relation(fields: [categoryId], references: [id])
+  inventoryBalances  InventoryBalance[]
+  stockMovements     StockMovement[]
+  purchaseOrderLines PurchaseOrderLine[]
+  transferLines      TransferLine[]
+  saleLines          SaleLine[]
+  bomLines           BomLine[]
+}
+
+model InventoryBalance {
+  id         String   @id @default(cuid())
+  productId  String
+  locationId String
+  onHand     Int      @default(0)
+  reserved   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId])
+}
+
+model StockMovement {
+  id             String   @id @default(cuid())
+  companyId      String
+  productId      String
+  fromLocationId String?
+  toLocationId   String?
+  type           String   // PURCHASE_RECEIPT | SALE | ADJUSTMENT | TRANSFER_OUT | TRANSFER_IN
+  qty            Int
+  unitCost       Float    @default(0)
+  referenceType  String?
+  referenceId    String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  company      Company   @relation(fields: [companyId], references: [id])
+  product      Product   @relation(fields: [productId], references: [id])
+  fromLocation Location? @relation("MovementFrom", fields: [fromLocationId], references: [id])
+  toLocation   Location? @relation("MovementTo", fields: [toLocationId], references: [id])
+}
+
+model PurchaseOrder {
+  id         String   @id @default(cuid())
+  companyId  String
+  supplierId String
+  locationId String
+  status     String   @default("DRAFT") // DRAFT | PENDING | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company  Company             @relation(fields: [companyId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  location Location            @relation(fields: [locationId], references: [id])
+  lines    PurchaseOrderLine[]
+}
+
+model PurchaseOrderLine {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  qtyOrdered      Int
+  qtyReceived     Int    @default(0)
+  unitCost        Float  @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+}
+
+model Transfer {
+  id             String   @id @default(cuid())
+  companyId      String
+  fromLocationId String
+  toLocationId   String
+  status         String   @default("CREATED") // CREATED | IN_TRANSIT | RECEIVED | CANCELLED
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company      Company        @relation(fields: [companyId], references: [id])
+  fromLocation Location       @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  toLocation   Location       @relation("TransferTo", fields: [toLocationId], references: [id])
+  lines        TransferLine[]
+}
+
+model TransferLine {
+  id         String @id @default(cuid())
+  transferId String
+  productId  String
+  qty        Int
+  unitCost   Float  @default(0)
+
+  transfer Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+model Sale {
+  id          String   @id @default(cuid())
+  companyId   String
+  locationId  String
+  totalAmount Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  company  Company    @relation(fields: [companyId], references: [id])
+  location Location   @relation(fields: [locationId], references: [id])
+  lines    SaleLine[]
+}
+
+model SaleLine {
+  id         String  @id @default(cuid())
+  saleId     String
+  productId  String?
+  menuItemId String?
+  qty        Int
+  unitPrice  Float   @default(0)
+  unitCost   Float   @default(0)
+
+  sale     Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id])
+  menuItem MenuItem? @relation(fields: [menuItemId], references: [id])
+}
+
+// Restaurant Mode (Optional BOM support)
+model MenuItem {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  sellingPrice Float    @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  bomLines  BomLine[]
+  saleLines SaleLine[]
+}
+
+model BomLine {
+  id         String @id @default(cuid())
+  menuItemId String
+  productId  String
+  qtyPerUnit Float  @default(1)
+
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+}

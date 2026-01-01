@@ -94,6 +94,21 @@ export function NavIconBadge({ icon }: { icon: NavIcon }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
         </svg>
       );
+    case "wallet":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className}>
+          <rect x="2" y="6" width="20" height="14" rx="2" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M22 10H18a2 2 0 0 0 0 4h4" />
+          <circle cx="18" cy="12" r="1" fill="currentColor" />
+        </svg>
+      );
+    case "inventory":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4v10l8 4 8-4V7z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 17V7M4 7l8 4 8-4" />
+        </svg>
+      );
     default:
       return null;
   }

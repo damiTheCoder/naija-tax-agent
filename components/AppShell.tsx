@@ -75,7 +75,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Determine if current page is a chat page (has chat input)
   const isChatPage = pathname.startsWith('/accounting') ||
     pathname.startsWith('/tax/chat') ||
-    pathname.startsWith('/cashflow-intelligence/chat');
+    pathname.startsWith('/cashflow-intelligence/chat') ||
+    pathname.startsWith('/wallet');
 
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {

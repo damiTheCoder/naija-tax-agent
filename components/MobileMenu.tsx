@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, INVENTORY_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -25,6 +25,8 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
 
     // Determine mode based on path (logic from Sidebar)
     const getInitialMode = (): AppMode => {
+        if (pathname.startsWith("/inventory")) return "inventory";
+        if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
         return "tax";
@@ -33,7 +35,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const [mode, setMode] = useState<AppMode>(getInitialMode);
 
     useEffect(() => {
-        if (pathname.startsWith("/cashflow-intelligence")) {
+        if (pathname.startsWith("/inventory")) {
+            setMode("inventory");
+        } else if (pathname.startsWith("/wallet")) {
+            setMode("wallet");
+        } else if (pathname.startsWith("/cashflow-intelligence")) {
             setMode("intelligence");
         } else if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
             setMode("accounting");
@@ -42,30 +48,34 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         }
     }, [pathname]);
 
-    const navItems = mode === "tax"
-        ? TAX_NAV_ITEMS
-        : mode === "intelligence"
-            ? INTELLIGENCE_NAV_ITEMS
-            : ACCOUNTING_NAV_ITEMS;
+    const navItems = mode === "wallet"
+        ? WALLET_NAV_ITEMS
+        : mode === "tax"
+            ? TAX_NAV_ITEMS
+            : mode === "intelligence"
+                ? INTELLIGENCE_NAV_ITEMS
+                : mode === "inventory"
+                    ? INVENTORY_NAV_ITEMS
+                    : ACCOUNTING_NAV_ITEMS;
 
     if (!isOpen) return null;
 
     return (
         <>
-            {/* Invisible backdrop to close menu on click outside */}
+            {/* Transparent backdrop to close menu on click outside */}
             <div
-                className="fixed inset-0 z-40 bg-transparent lg:hidden"
+                className="fixed inset-0 z-40 !bg-black/10 backdrop-blur-[1px] lg:hidden"
                 onClick={onClose}
             />
 
             {/* Dropdown Menu */}
-            <div className="absolute top-16 right-4 w-64 z-50 bg-white dark:!bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-none lg:hidden overflow-hidden transform origin-top-right transition-all">
+            <div className="fixed top-16 right-4 w-64 z-50 bg-white dark:!bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-none lg:hidden overflow-hidden transform origin-top-right transition-all">
                 <div className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
 
                     {/* Section Header */}
                     <div className="px-4 py-3 bg-gray-50/50 dark:bg-white/5">
                         <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : "Accounting"}
+                            {mode === "wallet" ? "Wallet" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : "Accounting"}
                         </p>
                     </div>
 

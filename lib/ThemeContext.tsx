@@ -7,6 +7,7 @@ type Theme = "light" | "dark";
 interface ThemeContextValue {
     theme: Theme;
     toggleTheme: () => void;
+    mounted: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -41,10 +42,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setTheme((prev) => (prev === "light" ? "dark" : "light"));
     };
 
-    // Always provide context, even before mount (with default values)
+    // Render children always, but with suppressed hydration warning div wrapper
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
-            {mounted ? children : null}
+        <ThemeContext.Provider value={{ theme, toggleTheme, mounted }}>
+            <div suppressHydrationWarning>
+                {children}
+            </div>
         </ThemeContext.Provider>
     );
 }
