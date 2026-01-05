@@ -81,6 +81,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
             formula = "500";
     }
 
+
     const row: ReconciliationRow = {
         step_id: `STAMP_${input.documentType.toUpperCase()}`,
         label: label,
@@ -97,5 +98,27 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
         stampDuty,
         reconciliationReport,
         note: `Stamp duty calculated per rulebook ${rulebook.metadata.version}`
+    };
+}
+
+export const STAMP_DUTY_RATES = {
+    agreement: { label: "General Agreement", rate: "Fixed ₦1,000", type: "fixed" },
+    lease: { label: "Lease Agreement", rate: "6% of Rent", type: "ad_valorem" },
+    deed: { label: "Deed of Assignment", rate: "1.5%", type: "ad_valorem" },
+    mortgage: { label: "Mortgage", rate: "0.375%", type: "ad_valorem" },
+    share_transfer: { label: "Share Transfer", rate: "0.75%", type: "ad_valorem" },
+    power_of_attorney: { label: "Power of Attorney", rate: "Fixed", type: "fixed" },
+    receipt: { label: "Receipt > ₦10k", rate: "₦50", type: "fixed" },
+    insurance_policy: { label: "Insurance Policy", rate: "0.75%", type: "ad_valorem" },
+    bank_transfer: { label: "Bank Transfer > ₦10k", rate: "₦50", type: "fixed" },
+    other: { label: "Other Instruments", rate: "Fixed/Agreed", type: "mixed" }
+};
+
+export function calculateTotalStampDuty(documents: StampDutyInput[]): { documents: StampDutyResult[], totalDuty: number } {
+    const results = documents.map(doc => calculateStampDuty(doc));
+    const totalDuty = results.reduce((sum, res) => sum + res.stampDuty, 0);
+    return {
+        documents: results,
+        totalDuty
     };
 }

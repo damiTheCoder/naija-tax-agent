@@ -10,6 +10,7 @@ import {
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
 import { JournalEntry, LedgerAccount } from "@/lib/accounting/doubleEntry";
+import { generateFinancialStatementsPDF, generateJournalsPDF, generateTrialBalancePDF, generateIncomeStatementPDF, generateBalanceSheetPDF, generateCashFlowStatementPDF, generateEquityStatementPDF, CashFlowData, EquityStatementData } from "@/lib/accountingPdfGenerator";
 
 type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements";
 
@@ -120,77 +121,54 @@ export default function WorkspacePage() {
 
   const automationConfidencePercent = Math.round(automationConfidence * 100);
 
-  // Download yearly statement as PDF (stub - would need actual PDF generation)
+  // Download yearly statement as PDF (includes all 4 statements)
   const handleDownloadYearlyStatement = (year: number) => {
     const statement = yearlyStatements[year];
     if (!statement) return;
 
-    // Create a simple text representation for now
-    const content = `
-FINANCIAL STATEMENTS FOR YEAR ${year}
-=====================================
+    // Get cash flow and equity data from accounting engine
+    const statementsData = accountingEngine.generateStatements();
 
-INCOME STATEMENT
-----------------
-Revenue:                    ₦${statement.revenue.toLocaleString()}
-Less: Cost of Sales:       (₦${statement.costOfSales.toLocaleString()})
-                           ----------------
-Gross Profit:               ₦${statement.grossProfit.toLocaleString()}
-Less: Operating Expenses:  (₦${statement.operatingExpenses.toLocaleString()})
-                           ----------------
-Net Income:                 ₦${statement.netIncome.toLocaleString()}
+    const cashFlow: CashFlowData = {
+      year,
+      cashFromOperations: statementsData.cashFromOperations,
+      cashFromInvesting: statementsData.cashFromInvesting,
+      cashFromFinancing: statementsData.cashFromFinancing,
+    };
 
+    const equityStatement: EquityStatementData = {
+      year,
+      openingBalance: statementsData.equityStatement?.openingBalance || 0,
+      additions: statementsData.equityStatement?.additions || 0,
+      netIncome: statementsData.equityStatement?.netIncome || 0,
+      drawings: statementsData.equityStatement?.drawings || 0,
+      closingBalance: statementsData.equityStatement?.closingBalance || 0,
+    };
 
-BALANCE SHEET
--------------
-Assets:                     ₦${statement.assets.toLocaleString()}
-Liabilities:                ₦${statement.liabilities.toLocaleString()}
-Equity:                     ₦${statement.equity.toLocaleString()}
-
-Generated on: ${new Date().toLocaleDateString('en-NG')}
-    `;
-
-    // Download as text file
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `financial-statements-${year}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    generateFinancialStatementsPDF(
+      {
+        year,
+        revenue: statement.revenue,
+        costOfSales: statement.costOfSales,
+        grossProfit: statement.grossProfit,
+        operatingExpenses: statement.operatingExpenses,
+        netIncome: statement.netIncome,
+        assets: statement.assets,
+        liabilities: statement.liabilities,
+        equity: statement.equity,
+        cashFlow,
+        equityStatement,
+      },
+      "CashOS Business"
+    );
   };
 
-  // Download journal entries for a year
+  // Download journal entries for a year as PDF
   const handleDownloadJournals = (year: number) => {
     const entries = entriesByYear[year];
     if (!entries || entries.length === 0) return;
 
-    let content = `GENERAL JOURNAL FOR YEAR ${year}\n${'='.repeat(50)}\n\n`;
-
-    entries.forEach((entry) => {
-      content += `Date: ${entry.date}\n`;
-      content += `Entry ID: ${entry.id}\n`;
-      content += `Narration: ${entry.narration}\n`;
-      content += `${'─'.repeat(40)}\n`;
-      content += `Account                          Debit         Credit\n`;
-      entry.lines.forEach((line) => {
-        const indent = line.credit > 0 ? '  ' : '';
-        content += `${indent}${line.accountCode} ${line.accountName.padEnd(25)} ${line.debit > 0 ? '₦' + line.debit.toLocaleString().padStart(10) : ''.padStart(11)} ${line.credit > 0 ? '₦' + line.credit.toLocaleString().padStart(10) : ''}\n`;
-      });
-      content += `\n`;
-    });
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `journal-entries-${year}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    generateJournalsPDF(entries, year, "CashOS Business");
   };
 
   // Load data from accounting engine
@@ -629,8 +607,25 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                 <h2 className="font-semibold text-gray-900">Trial Balance</h2>
                 <p className="text-xs text-gray-500 mt-0.5">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
-              <div className={`text-xs font-medium px-2 py-1 rounded ${Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                {Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "✓ Balanced" : "⚠ Unbalanced"}
+              <div className="flex items-center gap-3">
+                {trialBalance.accounts.length > 0 && (
+                  <button
+                    onClick={() => generateTrialBalancePDF(
+                      trialBalance,
+                      new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }),
+                      "CashOS Business"
+                    )}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Download PDF
+                  </button>
+                )}
+                <div className={`text-xs font-medium px-2 py-1 rounded ${Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "✓ Balanced" : "⚠ Unbalanced"}
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -704,8 +699,31 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
               <>
                 {/* Income Statement */}
                 <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-1">Income Statement</h3>
-                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Income Statement</h3>
+                      <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
+                    </div>
+                    <button
+                      onClick={() => generateIncomeStatementPDF({
+                        year: selectedYear,
+                        revenue: yearlyStatements[selectedYear].revenue,
+                        costOfSales: yearlyStatements[selectedYear].costOfSales,
+                        grossProfit: yearlyStatements[selectedYear].grossProfit,
+                        operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
+                        netIncome: yearlyStatements[selectedYear].netIncome,
+                        assets: yearlyStatements[selectedYear].assets,
+                        liabilities: yearlyStatements[selectedYear].liabilities,
+                        equity: yearlyStatements[selectedYear].equity,
+                      }, "CashOS Business")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
                   <div className="space-y-3 max-w-md">
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-600">Revenue</span>
@@ -734,8 +752,31 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
 
                 {/* Balance Sheet */}
                 <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-1">Balance Sheet</h3>
-                  <p className="text-xs text-gray-500 mb-4">As at 31 December {selectedYear}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Balance Sheet</h3>
+                      <p className="text-xs text-gray-500">As at 31 December {selectedYear}</p>
+                    </div>
+                    <button
+                      onClick={() => generateBalanceSheetPDF({
+                        year: selectedYear,
+                        revenue: yearlyStatements[selectedYear].revenue,
+                        costOfSales: yearlyStatements[selectedYear].costOfSales,
+                        grossProfit: yearlyStatements[selectedYear].grossProfit,
+                        operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
+                        netIncome: yearlyStatements[selectedYear].netIncome,
+                        assets: yearlyStatements[selectedYear].assets,
+                        liabilities: yearlyStatements[selectedYear].liabilities,
+                        equity: yearlyStatements[selectedYear].equity,
+                      }, "CashOS Business")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
                       <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Assets</h4>
@@ -769,8 +810,26 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
                 </div>
                 {/* Cash Flow Statement */}
                 <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-1">Statement of Cash Flows</h3>
-                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Statement of Cash Flows</h3>
+                      <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
+                    </div>
+                    <button
+                      onClick={() => generateCashFlowStatementPDF({
+                        year: selectedYear,
+                        cashFromOperations: accountingEngine.generateStatements().cashFromOperations,
+                        cashFromInvesting: accountingEngine.generateStatements().cashFromInvesting,
+                        cashFromFinancing: accountingEngine.generateStatements().cashFromFinancing,
+                      }, "CashOS Business")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
                   <div className="space-y-4 max-w-md">
                     <div>
                       <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-2">Operating Activities</h4>
@@ -814,8 +873,28 @@ Generated on: ${new Date().toLocaleDateString('en-NG')}
 
                 {/* Statement of Changes in Equity */}
                 <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-1">Statement of Changes in Equity</h3>
-                  <p className="text-xs text-gray-500 mb-4">For the year ended 31 December {selectedYear}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Statement of Changes in Equity</h3>
+                      <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
+                    </div>
+                    <button
+                      onClick={() => generateEquityStatementPDF({
+                        year: selectedYear,
+                        openingBalance: accountingEngine.generateStatements().equityStatement?.openingBalance || 0,
+                        additions: accountingEngine.generateStatements().equityStatement?.additions || 0,
+                        netIncome: accountingEngine.generateStatements().equityStatement?.netIncome || 0,
+                        drawings: accountingEngine.generateStatements().equityStatement?.drawings || 0,
+                        closingBalance: accountingEngine.generateStatements().equityStatement?.closingBalance || 0,
+                      }, "CashOS Business")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
                   <div className="space-y-2 max-w-md">
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-600">Opening Balance</span>

@@ -17,6 +17,7 @@ import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
 import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { useTheme } from "@/lib/ThemeContext";
+import { Onboarding, EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
 
 type ManualTransactionDraft = {
   date: string;
@@ -102,6 +103,16 @@ export default function AccountingPage() {
     { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
   ]);
   const [postEntryError, setPostEntryError] = useState("");
+
+  // Edit Entry Section State
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [showEditEntry, setShowEditEntry] = useState(false);
+  const [editEntryNarration, setEditEntryNarration] = useState("");
+  const [editEntryDate, setEditEntryDate] = useState("");
+  type EditEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
+  const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
+  const [editEntryError, setEditEntryError] = useState("");
+
   const customAccounts = accountingState?.customAccounts || [];
 
   // Combine all accounts for selection
@@ -126,6 +137,14 @@ export default function AccountingPage() {
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
     return { totalDebit, totalCredit, isBalanced };
   }, [postEntryLines]);
+
+  // Calculate edit entry totals
+  const editEntryTotals = useMemo(() => {
+    const totalDebit = editEntryLines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0);
+    const totalCredit = editEntryLines.reduce((sum, l) => sum + (parseFloat(l.credit) || 0), 0);
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
+    return { totalDebit, totalCredit, isBalanced };
+  }, [editEntryLines]);
 
   // Auto-expand textarea as user types
   useEffect(() => {
@@ -560,8 +579,112 @@ export default function AccountingPage() {
     }
   };
 
+  // Edit Entry handlers
+  const openEditEntry = (entry: JournalEntry) => {
+    setEditingEntryId(entry.id);
+    setEditEntryNarration(entry.narration);
+    setEditEntryDate(entry.date);
+    setEditEntryLines(
+      entry.lines.map((line, idx) => ({
+        id: idx.toString(),
+        accountCode: line.accountCode,
+        accountName: line.accountName,
+        debit: line.debit > 0 ? line.debit.toString() : "",
+        credit: line.credit > 0 ? line.credit.toString() : "",
+      }))
+    );
+    setEditEntryError("");
+    setShowEditEntry(true);
+  };
+
+  const handleSaveEditEntry = () => {
+    setEditEntryError("");
+    if (!editEntryNarration.trim()) {
+      setEditEntryError("Please enter a narration");
+      return;
+    }
+    if (!editEntryTotals.isBalanced) {
+      setEditEntryError("Entry must be balanced (Total DR = Total CR)");
+      return;
+    }
+    if (!editingEntryId) {
+      setEditEntryError("No entry selected for editing");
+      return;
+    }
+
+    try {
+      const updatedEntry = accountingEngine.updateJournalEntry(editingEntryId, {
+        narration: editEntryNarration,
+        date: editEntryDate,
+        lines: editEntryLines
+          .filter((l) => l.accountCode && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
+          .map((l) => ({
+            accountCode: l.accountCode,
+            accountName: l.accountName,
+            debit: parseFloat(l.debit) || 0,
+            credit: parseFloat(l.credit) || 0,
+          })),
+      });
+
+      appendMessage("assistant", `✅ Updated journal entry ${updatedEntry.id}: ${editEntryNarration}`);
+      pushAutomationActivity("Entry updated", `Updated: ${updatedEntry.id}`);
+
+      // Reset form and close modal
+      setShowEditEntry(false);
+      setEditingEntryId(null);
+      setEditEntryNarration("");
+      setEditEntryDate("");
+      setEditEntryLines([]);
+    } catch (err: unknown) {
+      setEditEntryError(err instanceof Error ? err.message : "Failed to update entry");
+    }
+  };
+
+  const handleDeleteEntry = (entryId: string) => {
+    if (!confirm("Are you sure you want to delete this journal entry? This will reverse all related ledger entries.")) {
+      return;
+    }
+
+    try {
+      accountingEngine.deleteJournalEntry(entryId);
+      appendMessage("assistant", `🗑️ Deleted journal entry ${entryId}`);
+      pushAutomationActivity("Entry deleted", `Deleted: ${entryId}`);
+    } catch (err: unknown) {
+      appendMessage("assistant", `❌ Failed to delete entry: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
+
+  const addEditEntryLine = () => {
+    setEditEntryLines([
+      ...editEntryLines,
+      { id: Date.now().toString(), accountCode: "", accountName: "", debit: "", credit: "" },
+    ]);
+  };
+
+  const updateEditEntryLine = (id: string, field: string, value: string) => {
+    setEditEntryLines(
+      editEntryLines.map((l) => {
+        if (l.id !== id) return l;
+        if (field === "accountCode") {
+          const account = allAccountsForSelect.find((a) => a.code === value);
+          return { ...l, accountCode: value, accountName: account?.name || "" };
+        }
+        return { ...l, [field]: value };
+      })
+    );
+  };
+
+  const removeEditEntryLine = (id: string) => {
+    if (editEntryLines.length > 2) {
+      setEditEntryLines(editEntryLines.filter((l) => l.id !== id));
+    }
+  };
+
   return (
     <>
+      {/* Onboarding Modal for First-Time Users */}
+      <Onboarding />
+
       <div className="space-y-6 pb-32">
         <section className="relative min-h-[75vh]">
           <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
@@ -698,13 +821,36 @@ export default function AccountingPage() {
                     </div>
                     <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[280px] overflow-y-auto">
                       {journalEntries.slice(-10).reverse().map((entry) => (
-                        <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
+                        <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors group">
                           <div className="flex items-start justify-between gap-3 mb-3">
                             <div>
                               <span className="text-xs font-mono text-purple-600">{entry.id}</span>
                               <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
                             </div>
-                            <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
+                              {/* Edit/Delete buttons - visible on hover */}
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditEntry(entry)}
+                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                  title="Edit entry"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEntry(entry.id)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete entry"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                           <table className="w-full text-xs mt-2">
                             <thead>
@@ -1122,6 +1268,207 @@ export default function AccountingPage() {
                 >
                   Post Entry
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Journal Entry Modal */}
+      {showEditEntry && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Edit Journal Entry</h2>
+                  <p className="text-sm text-gray-500">Modify entry {editingEntryId}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditEntry(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    value={editEntryDate}
+                    onChange={(e) => setEditEntryDate(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
+                  <input
+                    type="text"
+                    value={editEntryNarration}
+                    onChange={(e) => setEditEntryNarration(e.target.value)}
+                    placeholder="e.g., Purchased office equipment"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Entry Lines */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
+                  <button
+                    onClick={addEditEntryLine}
+                    className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                  >
+                    + Add Line
+                  </button>
+                </div>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
+                        <th className="w-12"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {editEntryLines.map((line) => (
+                        <tr key={line.id}>
+                          <td className="px-4 py-3">
+                            <select
+                              value={line.accountCode}
+                              onChange={(e) => updateEditEntryLine(line.id, "accountCode", e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <option value="">Select account...</option>
+                              {allAccountsForSelect.map((acc) => (
+                                <option key={acc.code} value={acc.code}>
+                                  {acc.code} - {acc.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={line.debit}
+                              onChange={(e) => updateEditEntryLine(line.id, "debit", e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={line.credit}
+                              onChange={(e) => updateEditEntryLine(line.id, "credit", e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            {editEntryLines.length > 2 && (
+                              <button
+                                onClick={() => removeEditEntryLine(line.id)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t border-gray-200">
+                      <tr>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                          ₦{editEntryTotals.totalDebit.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                          ₦{editEntryTotals.totalCredit.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-3">
+                          {editEntryTotals.isBalanced ? (
+                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          ) : editEntryTotals.totalDebit > 0 || editEntryTotals.totalCredit > 0 ? (
+                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {editEntryError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {editEntryError}
+                </div>
+              )}
+
+              {!editEntryTotals.isBalanced && editEntryTotals.totalDebit > 0 && (
+                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Entry not balanced: DR ₦{editEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{editEntryTotals.totalCredit.toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => editingEntryId && handleDeleteEntry(editingEntryId)}
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Delete Entry
+                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowEditEntry(false)}
+                    className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEditEntry}
+                    disabled={!editEntryTotals.isBalanced || !editEntryNarration.trim()}
+                    className="px-5 py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>

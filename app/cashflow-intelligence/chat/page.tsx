@@ -505,9 +505,9 @@ export default function CashflowChatPage() {
                                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                 >
                                     <div
-                                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed border whitespace-pre-wrap ${msg.role === "user"
-                                            ? "bg-indigo-50 border-indigo-100 text-indigo-900"
-                                            : "bg-slate-50 border-slate-200 text-slate-800"
+                                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "user"
+                                            ? "bg-gray-200 text-gray-900"
+                                            : "bg-gray-100 text-gray-800"
                                             }`}
                                     >
                                         {msg.content}
@@ -527,7 +527,8 @@ export default function CashflowChatPage() {
                         <textarea
                             ref={textareaRef}
                             rows={1}
-                            placeholder="Ask about automations, returns, or set up a new rule..."
+                            placeholder="Ask about automations or returns..."
+                            aria-label="Ask about automations"
                             className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
                             value={composerInput}
                             onChange={(e) => setComposerInput(e.target.value)}
@@ -539,12 +540,23 @@ export default function CashflowChatPage() {
                             }}
                         />
                         <button
-                            className={`w-9 h-9 rounded-full flex items-center justify-center mb-0.5 transition-all ${canSend ? "bg-white dark:bg-[#64B5F6] text-[#64B5F6] dark:text-white shadow-sm" : "bg-white/50 dark:bg-[#3a3a3a] text-[#64B5F6] opacity-50 cursor-not-allowed"
-                                }`}
-                            onClick={handleSendMessage}
-                            disabled={!canSend}
+                            className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-gray-500 dark:text-white mb-0.5"
                         >
-                            <SendHorizontal className="w-4 h-4" />
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3z" />
+                                <path d="M5 10v2a7 7 0 0014 0v-2" strokeLinecap="round" />
+                                <path d="M12 19v4" strokeLinecap="round" />
+                                <path d="M8 23h8" strokeLinecap="round" />
+                            </svg>
+                        </button>
+                        <button
+                            className="w-9 h-9 rounded-full bg-gray-900 dark:bg-[#64B5F6] text-white flex items-center justify-center mb-0.5 transition-colors"
+                            onClick={handleSendMessage}
+                        >
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M5 12h14" strokeLinecap="round" />
+                                <path d="M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                         </button>
                     </div>
                 </div>

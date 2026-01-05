@@ -239,6 +239,108 @@ class AccountingEngine {
   }
 
   /**
+   * Update an existing journal entry
+   * Reverses the old entry from the ledger and posts the new one
+   */
+  updateJournalEntry(
+    entryId: string,
+    updates: {
+      narration?: string;
+      date?: string;
+      lines: { accountCode: string; accountName: string; debit: number; credit: number }[];
+    }
+  ): JournalEntry {
+    // Find the existing entry
+    const entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) {
+      throw new Error(`Journal entry ${entryId} not found`);
+    }
+
+    const oldEntry = this.state.journalEntries[entryIndex];
+
+    // Validate new lines balance
+    const totalDebits = updates.lines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredits = updates.lines.reduce((sum, l) => sum + l.credit, 0);
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new Error(`Entry not balanced: DR ${totalDebits} ≠ CR ${totalCredits}`);
+    }
+
+    // Reverse the old entry from ledger (subtract old values)
+    this.reverseFromLedger(oldEntry);
+
+    // Create updated entry
+    const updatedEntry: JournalEntry = {
+      ...oldEntry,
+      narration: updates.narration ?? oldEntry.narration,
+      date: updates.date ?? oldEntry.date,
+      lines: updates.lines,
+      isBalanced: true,
+      totalDebits,
+      totalCredits,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Post the new entry to ledger
+    this.postToLedger(updatedEntry);
+
+    // Replace in state
+    this.state.journalEntries[entryIndex] = updatedEntry;
+    this.notify();
+
+    return updatedEntry;
+  }
+
+  /**
+   * Delete a journal entry and reverse its effect from the ledger
+   */
+  deleteJournalEntry(entryId: string): void {
+    const entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) {
+      throw new Error(`Journal entry ${entryId} not found`);
+    }
+
+    const entry = this.state.journalEntries[entryIndex];
+
+    // Reverse the entry from ledger
+    this.reverseFromLedger(entry);
+
+    // Remove from state
+    this.state.journalEntries.splice(entryIndex, 1);
+    this.notify();
+  }
+
+  /**
+   * Reverse a journal entry from the ledger (subtract values instead of add)
+   */
+  private reverseFromLedger(journalEntry: JournalEntry) {
+    journalEntry.lines.forEach((line) => {
+      const ledgerAccount = this.state.ledgerAccounts.get(line.accountCode);
+      if (!ledgerAccount) return;
+
+      const isDebitNormal = ledgerAccount.normalBalance === "debit";
+
+      // Calculate reversed balance (opposite of posting)
+      if (isDebitNormal) {
+        ledgerAccount.closingBalance -= (line.debit - line.credit);
+      } else {
+        ledgerAccount.closingBalance -= (line.credit - line.debit);
+      }
+
+      // Remove the entry from the ledger entries (find and remove latest matching)
+      const entryIdx = ledgerAccount.entries.findIndex(
+        e => e.narration === journalEntry.narration &&
+          e.date === journalEntry.date &&
+          e.debit === line.debit &&
+          e.credit === line.credit
+      );
+      if (entryIdx !== -1) {
+        ledgerAccount.entries.splice(entryIdx, 1);
+      }
+    });
+  }
+
+  /**
    * Process a raw transaction and create journal entries
    */
   processTransaction(rawTx: RawTransaction): {
@@ -290,13 +392,21 @@ class AccountingEngine {
     // STEP 2: CLASSIFICATION RULES
     // ==========================================================================
 
-    // Step 2a: Identify Cash Movement
-    const hasCashMovement = parsed.action.includes('received') ||
+    // Step 2a: Identify Cash Movement (IFRS-compliant)
+    // Per IAS 2 & IFRS: Credit transactions do NOT involve immediate cash movement
+    const desc = rawTx.description.toLowerCase();
+    const creditKeywords = ['credit', 'on account', 'on credit', 'payable', 'receivable', 'invoice', 'outstanding', 'accrued'];
+    const hasCreditIndicator = creditKeywords.some(kw => desc.includes(kw));
+
+    // If credit is explicitly mentioned, it's NOT a cash movement
+    const hasCashMovement = !hasCreditIndicator && (
+      parsed.action.includes('received') ||
       parsed.action.includes('paid') ||
       parsed.action.includes('deposited') ||
       parsed.action.includes('withdrawn') ||
-      parsed.action.includes('bought') ||
-      parsed.action.includes('sold');
+      (parsed.action.includes('bought') && (desc.includes('cash') || desc.includes('bank'))) ||
+      (parsed.action.includes('sold') && (desc.includes('cash') || desc.includes('bank')))
+    );
 
     // Step 2b: Identify the Nature of the Transaction
     const transactionNature = this.classifyTransactionNature(parsed);
@@ -413,11 +523,12 @@ class AccountingEngine {
     let action = 'unknown';
     const actionKeywords = {
       received: ['received', 'receipt', 'collected', 'got', 'income'],
-      paid: ['paid', 'payment', 'spent', 'pay'],
+      paid: ['paid', 'payment', 'spent', 'pay', 'settled', 'cleared', 'paid off', 'paid for'],
       sold: ['sold', 'sale', 'sales', 'revenue', 'earned'],
-      bought: ['bought', 'purchased', 'purchase', 'acquired'],
+      bought: ['bought', 'acquired'],
+      purchased: ['purchased', 'purchase'], // Distinct from 'bought' for better detection
       borrowed: ['borrowed', 'loan received', 'financing'],
-      repaid: ['repaid', 'repayment', 'loan payment', 'settled'],
+      repaid: ['repaid', 'repayment', 'loan payment'],
       invested: ['invested', 'capital', 'owner contribution', 'started business'],
       withdrawn: ['withdrawn', 'drawing', 'withdrawal', 'took cash'],
       transferred: ['transferred', 'transfer', 'deposited', 'withdrew from bank'],
@@ -436,26 +547,35 @@ class AccountingEngine {
     }
 
     // =========== EXTRACT OBJECT ===========
+    // Priority order matters! Check most specific objects first
     let object = 'unknown';
-    const objectKeywords = {
-      cash: ['cash', 'money', 'funds'],
-      goods: ['goods', 'inventory', 'stock', 'products', 'merchandise'],
-      services: ['service', 'services', 'consultancy', 'professional', 'fee'],
-      asset: ['equipment', 'machinery', 'vehicle', 'furniture', 'computer', 'asset'],
-      loan: ['loan', 'borrowing', 'debt', 'financing', 'interest'],
-      rent: ['rent', 'lease', 'rental'],
-      supplies: ['supplies', 'office', 'stationery'],
-      utilities: ['utilities', 'electricity', 'water', 'phone', 'internet', 'bill'],
-      salary: ['salary', 'wages', 'payroll', 'staff'],
-      advance: ['advance', 'prepayment', 'deposit from customer'],
-      equipment: ['equipment', 'laptop', 'computer', 'machinery'],
-      furniture: ['furniture', 'fittings', 'chair', 'desk'],
-    };
 
-    for (const [key, keywords] of Object.entries(objectKeywords)) {
-      if (keywords.some(kw => desc.includes(kw) || category.includes(kw))) {
-        object = key;
-        break;
+    // Priority 1: Check for goods/inventory first (most specific for purchases)
+    const goodsKeywords = ['goods', 'inventory', 'stock', 'products', 'merchandise'];
+    if (goodsKeywords.some(kw => desc.includes(kw) || category.includes(kw))) {
+      object = 'goods';
+    }
+    // Priority 2: Check for other specific objects
+    else {
+      const objectKeywords = {
+        services: ['service', 'services', 'consultancy', 'professional', 'fee'],
+        asset: ['equipment', 'machinery', 'vehicle', 'furniture', 'computer', 'asset'],
+        loan: ['loan', 'borrowing', 'debt', 'financing', 'interest'],
+        rent: ['rent', 'lease', 'rental'],
+        supplies: ['supplies', 'office', 'stationery'],
+        utilities: ['utilities', 'electricity', 'water', 'phone', 'internet', 'bill'],
+        salary: ['salary', 'wages', 'payroll', 'staff'],
+        advance: ['advance', 'prepayment', 'deposit from customer'],
+        equipment: ['equipment', 'laptop', 'computer', 'machinery'],
+        furniture: ['furniture', 'fittings', 'chair', 'desk'],
+        cash: ['cash', 'money', 'funds'], // Cash last - least priority
+      };
+
+      for (const [key, keywords] of Object.entries(objectKeywords)) {
+        if (keywords.some(kw => desc.includes(kw) || category.includes(kw))) {
+          object = key;
+          break;
+        }
       }
     }
 
@@ -480,7 +600,7 @@ class AccountingEngine {
     // Fallback: Infer counterparty from action if still unknown
     if (counterparty === 'unknown') {
       if (action === 'sold') counterparty = 'customer';
-      if (action === 'bought' || action === 'paid' || (action === 'returned' && desc.includes('supplier'))) counterparty = 'supplier';
+      if (action === 'bought' || action === 'purchased' || action === 'paid' || (action === 'returned' && desc.includes('supplier'))) counterparty = 'supplier';
       if (action === 'returned' && desc.includes('customer')) counterparty = 'customer';
     }
 
@@ -696,16 +816,37 @@ class AccountingEngine {
       }
     }
 
-    // ===== GAAP/IFRS: EXPENSE PAYMENT DETECTION =====
+    // ===== PRIORITY 1: GAAP/IFRS: EXPENSE PAYMENT DETECTION =====
     // Per IAS 1 - expenses recognized when incurred
-    const expenseKeywords = ['rent', 'salary', 'utilities', 'electricity', 'water', 'insurance', 'repairs', 'maintenance', 'advertising', 'transport', 'fuel'];
-    const isExpensePayment = (action === 'paid' || desc.includes('paid')) &&
+    // This MUST run before supplier logic to ensure "paid rent" is NOT treated as supplier payment
+    const expenseKeywords = [
+      'rent', 'rental', 'lease',
+      'salary', 'salaries', 'wages', 'payroll', 'staff payment',
+      'utilities', 'utility', 'electricity', 'electric', 'power', 'nepa', 'phcn',
+      'water bill', 'water',
+      'internet', 'data', 'airtime', 'phone', 'telephone', 'communication',
+      'insurance', 'premium',
+      'repairs', 'repair', 'maintenance', 'servicing',
+      'advertising', 'advert', 'marketing', 'promotion',
+      'transport', 'transportation', 'fuel', 'petrol', 'diesel', 'uber', 'bolt', 'taxi',
+      'training', 'course', 'seminar', 'workshop',
+      'office supplies', 'stationery', 'supplies',
+      'professional fee', 'consultancy', 'legal fee', 'audit fee',
+      'entertainment', 'refreshment', 'meals',
+      'bank charges', 'commission', 'service charge'
+    ];
+
+    // Check if this is clearly an expense payment (e.g., "paid rent", "paid salary")
+    const isExpensePayment = (action === 'paid' || desc.includes('paid') || desc.includes('pay ')) &&
       expenseKeywords.some(kw => desc.includes(kw));
 
-    if (isExpensePayment && !typeOverride) {
+    // Expense payments should ALWAYS override - they are NOT supplier payments
+    if (isExpensePayment) {
       typeOverride = 'expense';
       isCredit = false;
-      assumptions.push('GAAP/IFRS: Expense payment detected - DR Expense, CR Bank per IAS 1');
+      // Determine the correct expense category from description
+      const expenseCategory = this.detectExpenseCategory(desc);
+      assumptions.push(`GAAP/IFRS: ${expenseCategory} expense payment detected - DR ${expenseCategory} Expense, CR Bank per IAS 1`);
     }
 
     // detect transfers/contra entries
@@ -769,42 +910,57 @@ class AccountingEngine {
       }
     }
 
-    // ===== SUPPLIER TRANSACTION DECISION TREE =====
-    // Explicit "paid supplier" detection - this is a clear payment to reduce payable
-    if (desc.includes('paid supplier') || desc.includes('pay supplier') ||
-      desc.includes('paid vendor') || desc.includes('pay vendor')) {
-      assumptions.push('Payment to supplier/vendor - debiting Accounts Payable');
-      typeOverride = 'payment';
-      isCredit = false;
-    }
-    // General supplier counterparty detection
-    else if (parsed.counterparty === 'supplier') {
-      if (parsed.action === 'paid' || hasCashMovement) {
-        // Is this payment for an EARLIER credit purchase?
-        if (desc.includes('payable') || desc.includes('outstanding') ||
-          desc.includes('bill') || desc.includes('creditor') ||
-          desc.includes('earlier') || desc.includes('against')) {
-          // Yes → Debit Accounts Payable
-          assumptions.push('Payment against existing payable - debiting Accounts Payable');
+
+    // ===== SUPPLIER TRANSACTION DECISION TREE (IFRS IAS 2 Compliant) =====
+    // Priority 1: Distinguish PURCHASE (acquiring goods/services) from PAYMENT (settling liability)
+
+    if (parsed.counterparty === 'supplier') {
+      // PRIORITY 1: Check if this is a PURCHASE transaction (buying goods/services)
+      if (parsed.action === 'bought' || parsed.action === 'purchased') {
+        // Per IAS 2: Inventory purchased shall be measured at cost
+        if (desc.includes('credit') || desc.includes('on account') || desc.includes('on credit') ||
+          timing === 'outstanding' || !hasCashMovement) {
+          // Credit purchase: DR Purchases/Inventory, CR Accounts Payable
+          isCredit = true;
+          assumptions.push('IFRS IAS 2: Credit purchase of goods/inventory - DR Purchases, CR Accounts Payable');
+          // Keep transactionType as 'purchase', don't override to 'payment'
+        } else if (desc.includes('cash') || desc.includes('bank') || hasCashMovement) {
+          // Cash purchase: DR Purchases/Inventory, CR Cash/Bank
           isCredit = false;
-          typeOverride = 'payment';
-        } else if (desc.includes('accrued') || desc.includes('salary') || desc.includes('rent')) {
-          assumptions.push('Payment against accrued liability');
-          typeOverride = 'adjustment'; // We'll handle different liability accounts in createJournalEntry
+          assumptions.push('IFRS IAS 2: Cash purchase of goods/inventory - DR Purchases, CR Bank/Cash');
+          // Keep transactionType as 'purchase'
         } else {
-          // Default: treat "paid supplier" as payment to accounts payable
-          assumptions.push('Payment to supplier - debiting Accounts Payable');
+          // Ambiguous - default to cash purchase
           isCredit = false;
-          typeOverride = 'payment';
+          assumptions.push('Ambiguous purchase - defaulting to cash purchase');
         }
-      } else if (parsed.action === 'bought' && !hasCashMovement) {
-        isCredit = true;
-        assumptions.push('Credit purchase - crediting Accounts Payable');
-      } else if (parsed.action === 'returned') {
+      }
+      // PRIORITY 2: Check if this is a PAYMENT transaction (settling existing payable)
+      else if (parsed.action === 'paid' || desc.includes('paid supplier') ||
+        desc.includes('pay supplier') || desc.includes('paid vendor') ||
+        desc.includes('pay vendor') || desc.includes('settled')) {
+        // Payment to reduce Accounts Payable: DR Accounts Payable, CR Cash/Bank
+        typeOverride = 'payment';
+        isCredit = false;
+        assumptions.push('Payment to supplier - DR Accounts Payable, CR Bank/Cash');
+      }
+      // PRIORITY 3: Check for returns to supplier
+      else if (parsed.action === 'returned') {
         // Return to supplier - usually reduces payable unless cash received
         if (!hasCashMovement && !desc.includes('cash')) {
           isCredit = true;
-          assumptions.push('Assumed return against outstanding payable');
+          assumptions.push('Return to supplier - DR Accounts Payable, CR Purchases Returns');
+        } else {
+          isCredit = false;
+          assumptions.push('Cash refund from supplier - DR Cash, CR Purchases Returns');
+        }
+      }
+      // PRIORITY 4: Fallback for ambiguous supplier transactions
+      else if (parsed.action === 'received') {
+        // Received from supplier - likely a purchase
+        if (!hasCashMovement || desc.includes('credit') || desc.includes('on account')) {
+          isCredit = true;
+          assumptions.push('Received goods from supplier on credit - DR Purchases, CR Accounts Payable');
         }
       }
     }
@@ -1029,13 +1185,66 @@ class AccountingEngine {
       case "expense": {
         // DR: Expense account
         // CR: Cash/Bank OR Accrued Expenses
-        const expenseCode = this.mapCategoryToExpenseAccount(rawTx.category || "");
-        const expenseAccount = getAccount(expenseCode);
+        // IMPROVED: Detect expense type from description if category is not provided
+        const desc = rawTx.description.toLowerCase();
+        let expenseCode: string;
+        let expenseAccountName: string;
+
+        // Try to detect expense type from description first
+        if (desc.includes('rent') || desc.includes('rental') || desc.includes('lease')) {
+          expenseCode = "5600";
+          expenseAccountName = "Rent Expense";
+        } else if (desc.includes('salary') || desc.includes('salaries') || desc.includes('wages') || desc.includes('payroll')) {
+          expenseCode = "5500";
+          expenseAccountName = "Salaries and Wages";
+        } else if (desc.includes('electricity') || desc.includes('nepa') || desc.includes('phcn') || desc.includes('power')) {
+          expenseCode = "5610";
+          expenseAccountName = "Utilities - Electricity";
+        } else if (desc.includes('water')) {
+          expenseCode = "5610";
+          expenseAccountName = "Utilities - Water";
+        } else if (desc.includes('internet') || desc.includes('data') || desc.includes('phone') || desc.includes('telephone')) {
+          expenseCode = "5620";
+          expenseAccountName = "Telephone and Internet";
+        } else if (desc.includes('insurance') || desc.includes('premium')) {
+          expenseCode = "5800";
+          expenseAccountName = "Insurance Expense";
+        } else if (desc.includes('repair') || desc.includes('maintenance')) {
+          expenseCode = "5810";
+          expenseAccountName = "Repairs and Maintenance";
+        } else if (desc.includes('advertising') || desc.includes('marketing') || desc.includes('advert')) {
+          expenseCode = "6000";
+          expenseAccountName = "Advertising and Marketing";
+        } else if (desc.includes('transport') || desc.includes('fuel') || desc.includes('petrol') || desc.includes('diesel')) {
+          expenseCode = "6070";
+          expenseAccountName = "Transport and Fuel";
+        } else if (desc.includes('training') || desc.includes('course')) {
+          expenseCode = "6020";
+          expenseAccountName = "Training and Development";
+        } else if (desc.includes('office') || desc.includes('stationery') || desc.includes('supplies')) {
+          expenseCode = "5820";
+          expenseAccountName = "Office Supplies";
+        } else if (desc.includes('professional') || desc.includes('consultancy')) {
+          expenseCode = "5900";
+          expenseAccountName = "Professional Fees";
+        } else if (desc.includes('bank charge') || desc.includes('service charge')) {
+          expenseCode = "6030";
+          expenseAccountName = "Bank Charges";
+        } else if (desc.includes('entertainment') || desc.includes('refreshment')) {
+          expenseCode = "6010";
+          expenseAccountName = "Entertainment Expense";
+        } else {
+          // Fall back to category mapping
+          expenseCode = this.mapCategoryToExpenseAccount(rawTx.category || "");
+          const expenseAccount = getAccount(expenseCode);
+          expenseAccountName = expenseAccount?.name || "Operating Expense";
+        }
+
         const isAccrued = interpretation.assumptions.some(a => a.toLowerCase().includes('accrual'));
 
         lines.push({
           accountCode: expenseCode,
-          accountName: expenseAccount?.name || "Operating Expense",
+          accountName: expenseAccountName,
           debit: amount,
           credit: 0,
         });
@@ -1462,6 +1671,62 @@ class AccountingEngine {
       debt: "6040",
     };
     return categoryMap[category.toLowerCase()] || "5820";
+  }
+
+  /**
+   * Detect expense category from description for better accounting classification
+   */
+  private detectExpenseCategory(desc: string): string {
+    const lowerDesc = desc.toLowerCase();
+
+    // Check for specific expense types in order of specificity
+    if (lowerDesc.includes('rent') || lowerDesc.includes('rental') || lowerDesc.includes('lease')) {
+      return 'Rent';
+    }
+    if (lowerDesc.includes('salary') || lowerDesc.includes('salaries') || lowerDesc.includes('wages') || lowerDesc.includes('payroll')) {
+      return 'Salaries & Wages';
+    }
+    if (lowerDesc.includes('electricity') || lowerDesc.includes('nepa') || lowerDesc.includes('phcn') || lowerDesc.includes('power')) {
+      return 'Electricity';
+    }
+    if (lowerDesc.includes('water')) {
+      return 'Water';
+    }
+    if (lowerDesc.includes('internet') || lowerDesc.includes('data') || lowerDesc.includes('airtime') || lowerDesc.includes('phone') || lowerDesc.includes('telephone')) {
+      return 'Telephone & Internet';
+    }
+    if (lowerDesc.includes('insurance') || lowerDesc.includes('premium')) {
+      return 'Insurance';
+    }
+    if (lowerDesc.includes('repair') || lowerDesc.includes('maintenance') || lowerDesc.includes('servicing')) {
+      return 'Repairs & Maintenance';
+    }
+    if (lowerDesc.includes('advertising') || lowerDesc.includes('advert') || lowerDesc.includes('marketing') || lowerDesc.includes('promotion')) {
+      return 'Advertising & Marketing';
+    }
+    if (lowerDesc.includes('transport') || lowerDesc.includes('fuel') || lowerDesc.includes('petrol') || lowerDesc.includes('diesel') || lowerDesc.includes('uber') || lowerDesc.includes('taxi')) {
+      return 'Transport & Fuel';
+    }
+    if (lowerDesc.includes('training') || lowerDesc.includes('course') || lowerDesc.includes('seminar')) {
+      return 'Training';
+    }
+    if (lowerDesc.includes('office supplies') || lowerDesc.includes('stationery') || lowerDesc.includes('supplies')) {
+      return 'Office Supplies';
+    }
+    if (lowerDesc.includes('professional') || lowerDesc.includes('consultancy') || lowerDesc.includes('legal') || lowerDesc.includes('audit')) {
+      return 'Professional Fees';
+    }
+    if (lowerDesc.includes('entertainment') || lowerDesc.includes('refreshment') || lowerDesc.includes('meals')) {
+      return 'Entertainment';
+    }
+    if (lowerDesc.includes('bank charge') || lowerDesc.includes('service charge') || lowerDesc.includes('commission')) {
+      return 'Bank Charges';
+    }
+    if (lowerDesc.includes('utilities') || lowerDesc.includes('utility')) {
+      return 'Utilities';
+    }
+
+    return 'Operating';
   }
 
   /**

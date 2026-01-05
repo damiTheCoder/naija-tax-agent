@@ -5,9 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-    calculateStampDuty,
     calculateTotalStampDuty,
-    getStampDutyRate,
     StampDutyInput,
     StampDutyResult,
     STAMP_DUTY_RATES
