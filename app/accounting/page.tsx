@@ -18,6 +18,7 @@ import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { useTheme } from "@/lib/ThemeContext";
 import { Onboarding, EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
+import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 type ManualTransactionDraft = {
   date: string;
@@ -103,6 +104,9 @@ export default function AccountingPage() {
     { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
   ]);
   const [postEntryError, setPostEntryError] = useState("");
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<any>(null); // AuditResult type
+
 
   // Edit Entry Section State
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -145,6 +149,72 @@ export default function AccountingPage() {
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
     return { totalDebit, totalCredit, isBalanced };
   }, [editEntryLines]);
+
+  const handleAIAudit = async () => {
+    if (!postEntryNarration) {
+      setPostEntryError("Please enter a narration first.");
+      return;
+    }
+
+    setIsAuditing(true);
+    setAuditResult(null);
+    setPostEntryError("");
+
+    try {
+      const entryDraft = {
+        date: postEntryDate,
+        dateCreated: new Date().toISOString(),
+        narration: postEntryNarration,
+        // Map UI lines to JournalEntry lines
+        lines: postEntryLines
+          .filter(l => l.accountCode)
+          .map(l => ({
+            accountCode: l.accountCode,
+            accountName: allAccountsForSelect.find(a => a.code === l.accountCode)?.name || "",
+            debit: parseFloat(l.debit) || 0,
+            credit: parseFloat(l.credit) || 0,
+          }))
+      };
+
+      const res = await fetch("/api/ai/audit-entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entry: entryDraft,
+          description: postEntryNarration
+        })
+      });
+
+      const result = await res.json();
+      setAuditResult(result);
+
+      if (!result.isValid) {
+        // Auto-expand checks if invalid
+      }
+
+    } catch (err) {
+      console.error(err);
+      setPostEntryError("AI Audit failed. Please try again.");
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const applyAISuggestion = () => {
+    if (auditResult && auditResult.suggestedCorrections) {
+      // Map back to UI lines
+      const newLines = auditResult.suggestedCorrections.lines.map((l: any, idx: number) => ({
+        id: Date.now().toString() + idx,
+        accountCode: l.accountCode,
+        accountName: l.accountName,
+        debit: l.debit > 0 ? l.debit.toString() : "",
+        credit: l.credit > 0 ? l.credit.toString() : ""
+      }));
+      setPostEntryLines(newLines);
+      setAuditResult({ ...auditResult, isValid: true, fixed: true }); // Mark as fixed
+    }
+  };
+
 
   // Auto-expand textarea as user types
   useEffect(() => {
@@ -686,6 +756,11 @@ export default function AccountingPage() {
       <Onboarding />
 
       <div className="space-y-6 pb-32">
+        {/* Mobile Module Button Bar - Fixed at top below navbar */}
+        <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
+          <ModuleButtonBar />
+        </div>
+
         <section className="relative min-h-[75vh]">
           <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -829,8 +904,8 @@ export default function AccountingPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
-                              {/* Edit/Delete buttons - visible on hover */}
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {/* Edit/Delete buttons - always visible */}
+                              <div className="flex gap-1">
                                 <button
                                   onClick={() => openEditEntry(entry)}
                                   className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -973,8 +1048,10 @@ export default function AccountingPage() {
         </section>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none !bg-transparent">
-        <div className="mx-auto w-full max-w-3xl !bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 lg:left-[252px] z-40 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none" />
+        <div className="relative mx-auto w-full max-w-3xl px-4 sm:px-6 pb-2 pt-3">
+
           {isActionMenuOpen && (
             <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
               <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => fileUploadRef.current?.click()}>
@@ -1026,7 +1103,7 @@ export default function AccountingPage() {
             </div>
           )}
 
-          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#e5e5e5] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
+          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#f3f4f6] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
             <button
               className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-slate-600 dark:text-white mb-0.5"
               onClick={() => setIsActionMenuOpen((prev) => !prev)}
@@ -1038,7 +1115,7 @@ export default function AccountingPage() {
             <textarea
               ref={textareaRef}
               rows={1}
-              placeholder="Ask the accounting agent..."
+              placeholder="Ask anything..."
               aria-label="Ask the accounting agent"
               className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
               value={composerInput}
@@ -1226,6 +1303,75 @@ export default function AccountingPage() {
                     </tfoot>
                   </table>
                 </div>
+              </div>
+
+              {/* AI Verification Section */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">AI Accountant</h3>
+                      <p className="text-xs text-gray-500">Verify your entry against accounting standards</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAIAudit}
+                    disabled={isAuditing}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {isAuditing ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Analysing...
+                      </>
+                    ) : (
+                      <>Verify Entry</>
+                    )}
+                  </button>
+                </div>
+
+                {/* Audit Results */}
+                {auditResult && (
+                  <div className={`mt-3 p-3 rounded-lg text-sm border ${auditResult.isValid || auditResult.fixed
+                      ? "bg-green-50 border-green-100 text-green-800"
+                      : "bg-amber-50 border-amber-100 text-amber-800"
+                    }`}>
+                    <div className="flex items-start gap-2">
+                      {auditResult.isValid || auditResult.fixed ? (
+                        <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {auditResult.fixed ? "Entry corrected based on AI suggestions." : auditResult.reasoning}
+                        </p>
+
+                        {!auditResult.isValid && !auditResult.fixed && auditResult.suggestedCorrections && (
+                          <div className="mt-2">
+                            <button
+                              onClick={applyAISuggestion}
+                              className="text-xs font-semibold bg-white border border-amber-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-amber-50 transition-colors"
+                            >
+                              Apply Suggested Fix
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {postEntryError && (

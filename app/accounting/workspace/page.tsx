@@ -10,9 +10,10 @@ import {
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
 import { JournalEntry, LedgerAccount } from "@/lib/accounting/doubleEntry";
-import { generateFinancialStatementsPDF, generateJournalsPDF, generateTrialBalancePDF, generateIncomeStatementPDF, generateBalanceSheetPDF, generateCashFlowStatementPDF, generateEquityStatementPDF, CashFlowData, EquityStatementData } from "@/lib/accountingPdfGenerator";
+import { generateFinancialStatementsPDF, generateJournalsPDF, generateTrialBalancePDF, generateIncomeStatementPDF, generateBalanceSheetPDF, generateCashFlowStatementPDF, generateEquityStatementPDF, generateTaxPayablesPDF, CashFlowData, EquityStatementData, TaxPayablesData } from "@/lib/accountingPdfGenerator";
+import { generateTaxSchedule, TransactionTaxAnalysis, TaxPayablesSchedule } from "@/lib/accounting/transactionTaxAnalyzer";
 
-type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements";
+type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements" | "tax-payables" | "cashbook";
 
 export default function WorkspacePage() {
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
@@ -287,6 +288,24 @@ export default function WorkspacePage() {
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+      ),
+    },
+    {
+      id: "tax-payables",
+      label: "Tax Payables",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
+        </svg>
+      ),
+    },
+    {
+      id: "cashbook",
+      label: "Cashbook",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
       ),
     },
@@ -960,10 +979,418 @@ export default function WorkspacePage() {
             )}
           </div>
         )}
-      </div>
+
+        {/* Tax Payables */}
+        {/* Tax Payables - 2026 Nigerian Tax Analysis Engine */}
+        {activeTab === "tax-payables" && (
+          <div className="divide-y divide-gray-200">
+            {(() => {
+              // Generate tax schedule using the new 2026 Tax Analyzer
+              const taxSchedule = generateTaxSchedule(journalEntries, {
+                isVatRegistered: true, // Configurable later
+                // isSmallCompany is now auto-detected if omitted (based on ₦50M threshold)
+              });
+
+              return (
+                <>
+                  {/* Header & Controls */}
+                  <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+                    <div>
+                      <h2 className="font-semibold text-gray-900">Tax Payables Schedule - {selectedYear}</h2>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-500">
+                          Based on 2026 Nigerian Tax Laws (Nigeria Tax Reform Acts)
+                        </span>
+                      </div>
+                    </div>
+                    {/* Main Download Button - Consistent with Financial Statements */}
+                    <button
+                      onClick={() => {
+                        try {
+                          console.log("Generating Tax Payables PDF...", taxSchedule);
+                          generateTaxPayablesPDF(taxSchedule, "CashOS Business");
+                        } catch (error) {
+                          console.error("Failed to generate PDF:", error);
+                          alert("Failed to generate PDF. Please try again or check console for details.");
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#64B5F6] rounded-lg hover:bg-[#4A9FD9] transition-colors shadow-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      Download Schedule
+                    </button>
+                  </div>
+
+                  {/* Period Summary Section - Accounting Basis */}
+                  <div className="mx-6 mt-6 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
+                    <h4 className="text-xs uppercase tracking-wider text-blue-700 mb-3 font-semibold">Financial Period Summary (Accounting Basis)</h4>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div>
+                        <span className="text-xs text-blue-500 block">Total Revenue</span>
+                        <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.totalRevenue)}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-blue-500 block">Total Expenses</span>
+                        <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.totalExpenses)}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-blue-500 block">Payroll Costs</span>
+                        <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.payrollExpense)}</span>
+                      </div>
+                      <div>
+                        <span className="text-xs text-blue-500 block">Net Profit (Before Tax)</span>
+                        <span className={`text-sm font-mono font-bold ${taxSchedule.periodSummary.netProfitBeforeTax >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                          {formatCurrency(taxSchedule.periodSummary.netProfitBeforeTax)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tax Summary Section - Matches Balance Sheet Layout */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Tax Liability Summary</h3>
+                        <p className="text-xs text-gray-500">Breakdown of estimated tax obligations for {selectedYear}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8">
+                      {/* Left Column: Transaction Taxes (Indirect) */}
+                      <div>
+                        <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Transaction Taxes (VAT/WHT)</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">Value Added Tax (VAT)</span>
+                              <span className="text-[10px] text-gray-400">7.5% on taxable supplies</span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.vatPayable)}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">Withholding Tax (WHT)</span>
+                              <span className="text-[10px] text-gray-400">Deducted from payments</span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.whtPayable)}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">Capital Gains Tax (CGT)</span>
+                              <span className="text-[10px] text-gray-400">10% on chargeable gains</span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.cgtPayable)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Period Taxes (Direct) */}
+                      <div>
+                        <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3">Period Taxes (Profit Based)</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">Company Income Tax (CIT)</span>
+                              <span className={`text-[10px] ${taxSchedule.periodTaxes.citAssessment.applies ? 'text-gray-400' : 'text-green-600'}`}>
+                                {taxSchedule.periodTaxes.citAssessment.reason}
+                              </span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.citPayable)}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">Development Levy</span>
+                              <span className={`text-[10px] ${taxSchedule.periodTaxes.devLevyAssessment.applies ? 'text-gray-400' : 'text-green-600'}`}>
+                                {taxSchedule.periodTaxes.devLevyAssessment.reason}
+                              </span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.developmentLevy)}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b border-gray-100">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-gray-600">PAYE Liability (Est.)</span>
+                              <span className="text-[10px] text-gray-400">Based on gross payroll</span>
+                            </div>
+                            <span className="text-sm font-mono text-gray-900">{formatCurrency(taxSchedule.summary.payePayable)}</span>
+                          </div>
+                        </div>
+
+                        {/* Total Box */}
+                        <div className="flex justify-between py-3 bg-gray-50 px-4 rounded-lg mt-4 border border-gray-100">
+                          <span className="text-sm font-semibold text-gray-700">Total Tax Liability</span>
+                          <span className="text-sm font-mono font-bold text-rose-700">
+                            {formatCurrency(taxSchedule.summary.totalPayable)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Assumptions Footer */}
+                    <div className="mt-6 pt-4 border-t border-gray-100">
+                      <div className="flex flex-wrap gap-x-6 gap-y-2">
+                        {taxSchedule.assumptions.map((assumption, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <span className="w-1 h-1 rounded-full bg-gray-300" />
+                            {assumption}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trace Table - Only Transaction Taxes */}
+                  <div>
+                    <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-900">Transaction Tax Trace (VAT / WHT / CGT)</h3>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-100">
+                        <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                          <tr>
+                            <th className="px-6 py-3 text-left font-medium w-24">Date</th>
+                            <th className="px-6 py-3 text-left font-medium">Transaction</th>
+                            <th className="px-6 py-3 text-right font-medium w-32">Amount (₦)</th>
+                            <th className="px-6 py-3 text-left font-medium w-64">Applicable Taxes</th>
+                            <th className="px-6 py-3 text-right font-medium w-32">Tax Payable (₦)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {taxSchedule.analyses.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">
+                                <p>No transactions found to analyze</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            taxSchedule.analyses.map((analysis) => {
+                              const applicableTaxes = analysis.taxAssessments.filter(t => t.applies);
+                              const totalTaxForTx = analysis.totalTaxForTransaction;
+
+                              return (
+                                <tr key={analysis.transactionId} className="hover:bg-gray-50">
+                                  <td className="px-6 py-3 text-xs text-gray-500 font-mono align-top whitespace-nowrap">
+                                    {new Date(analysis.transactionDate).toLocaleDateString("en-NG")}
+                                  </td>
+                                  <td className="px-6 py-3 text-sm text-gray-900 align-top">
+                                    <div className="font-medium text-[10px] text-blue-600 mb-0.5 uppercase tracking-wide">
+                                      {analysis.transactionNature.replace(/_/g, " ")}
+                                    </div>
+                                    <span className="text-gray-700">{analysis.transactionNarration}</span>
+                                  </td>
+                                  <td className="px-6 py-3 text-sm text-gray-900 text-right align-top font-mono">
+                                    {formatCurrency(analysis.transactionAmount)}
+                                  </td>
+                                  <td className="px-6 py-3 text-xs text-gray-600 align-top">
+                                    {applicableTaxes.length > 0 ? (
+                                      <div className="space-y-1.5">
+                                        {applicableTaxes.map((tax, i) => (
+                                          <div key={i} className="flex flex-col">
+                                            <div className="flex items-center gap-1.5 font-medium text-gray-700">
+                                              <span className={`w-1.5 h-1.5 rounded-full ${tax.taxType === 'VAT' ? 'bg-purple-500' :
+                                                tax.taxType === 'WHT' ? 'bg-orange-500' :
+                                                  tax.taxType === 'CGT' ? 'bg-emerald-500' : 'bg-gray-500'}`} />
+                                              {tax.taxType} @ {tax.legalRate}
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 pl-3">{tax.reason}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-300 italic text-[11px]">No transaction tax</span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-3 text-sm font-medium text-right align-top font-mono">
+                                    {totalTaxForTx !== 0 ? (
+                                      <span className={totalTaxForTx > 0 ? "text-rose-600" : "text-green-600"}>
+                                        {formatCurrency(totalTaxForTx)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                        <tfoot className="bg-gray-50">
+                          <tr>
+                            <td colSpan={2} className="px-6 py-3 text-sm font-semibold text-gray-900 text-right">Total Transaction Taxes (VAT/WHT/CGT)</td>
+                            <td className="px-6 py-3 text-sm text-right font-mono font-medium text-gray-500">
+                              {formatCurrency(taxSchedule.analyses.reduce((sum, a) => sum + a.transactionAmount, 0))}
+                            </td>
+                            <td className="px-6 py-3"></td>
+                            <td className="px-6 py-3 text-sm font-bold text-rose-700 text-right font-mono">
+                              {formatCurrency(taxSchedule.summary.vatPayable + taxSchedule.summary.whtPayable + taxSchedule.summary.cgtPayable)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Cashbook */}
+        {
+          activeTab === "cashbook" && (
+            <div className="divide-y divide-gray-200">
+              {/* Header */}
+              <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-900">Cashbook - {selectedYear}</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">All receipts and payments (Cash & Bank)</p>
+                </div>
+              </div>
+
+              {(() => {
+                // Get all cash transactions (accounts 1000 - Cash, 1010 - Petty Cash, 1020 - Bank, 1021 - Savings)
+                const cashAccountCodes = ["1000", "1010", "1020", "1021"];
+                const cashTransactions: Array<{
+                  date: string;
+                  description: string;
+                  receipt: number;
+                  payment: number;
+                  account: string;
+                  entryId: string;
+                }> = [];
+
+                journalEntries.forEach((entry) => {
+                  entry.lines.forEach((line) => {
+                    if (cashAccountCodes.includes(line.accountCode)) {
+                      cashTransactions.push({
+                        date: entry.date,
+                        description: entry.narration,
+                        receipt: line.debit,
+                        payment: line.credit,
+                        account: line.accountName,
+                        entryId: entry.id,
+                      });
+                    }
+                  });
+                });
+
+                // Sort by date
+                cashTransactions.sort((a, b) => a.date.localeCompare(b.date));
+
+                // Calculate running balance
+                let runningBalance = 0;
+                const transactionsWithBalance = cashTransactions.map((tx) => {
+                  runningBalance += tx.receipt - tx.payment;
+                  return { ...tx, balance: runningBalance };
+                });
+
+                const totalReceipts = cashTransactions.reduce((sum, tx) => sum + tx.receipt, 0);
+                const totalPayments = cashTransactions.reduce((sum, tx) => sum + tx.payment, 0);
+
+                return (
+                  <>
+                    {/* Summary Section */}
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">Cash Position Summary</h3>
+                          <p className="text-xs text-gray-500">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 max-w-md">
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-600">Total Receipts</span>
+                          <span className="text-sm font-mono text-emerald-600">{formatCurrency(totalReceipts)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-600">Total Payments</span>
+                          <span className="text-sm font-mono text-rose-600">({formatCurrency(totalPayments)})</span>
+                        </div>
+                        <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
+                          <span className="text-sm font-semibold text-gray-900">Cash Balance</span>
+                          <span className={`text-sm font-mono font-bold ${runningBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {formatCurrency(runningBalance)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Transaction Detail */}
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">Transaction Detail</h3>
+                          <p className="text-xs text-gray-500">{cashTransactions.length} transactions</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-emerald-600 uppercase tracking-wider">Receipts</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-rose-600 uppercase tracking-wider">Payments</th>
+                              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {transactionsWithBalance.length > 0 ? (
+                              transactionsWithBalance.map((tx, idx) => (
+                                <tr key={`${tx.entryId}-${idx}`} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(tx.date)}</td>
+                                  <td className="px-4 py-3 text-gray-900 max-w-[250px] truncate">{tx.description}</td>
+                                  <td className="px-4 py-3 text-right font-mono text-emerald-600">
+                                    {tx.receipt > 0 ? formatCurrency(tx.receipt) : "—"}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono text-rose-600">
+                                    {tx.payment > 0 ? formatCurrency(tx.payment) : "—"}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
+                                    {formatCurrency(tx.balance)}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                                  <p>No cash transactions yet</p>
+                                  <p className="text-xs mt-1">Post entries with Cash or Bank accounts to see the cashbook</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                          {transactionsWithBalance.length > 0 && (
+                            <tfoot className="bg-gray-900 text-white">
+                              <tr>
+                                <td colSpan={2} className="px-4 py-3 text-sm font-semibold">Totals</td>
+                                <td className="px-4 py-3 text-right font-mono font-semibold">
+                                  {formatCurrency(totalReceipts)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono font-semibold">
+                                  {formatCurrency(totalPayments)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono font-bold">
+                                  {formatCurrency(runningBalance)}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )
+        }
+      </div >
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
+      < div className="flex flex-wrap gap-3" >
         <Link
           href="/accounting"
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -993,7 +1420,7 @@ export default function WorkspacePage() {
           </svg>
           Download Journals
         </button>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

@@ -7,6 +7,7 @@ import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import ModeSelector from "@/components/ModeSelector";
+import GlobalSearch from "@/components/GlobalSearch";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
@@ -27,7 +28,7 @@ function PageLoadingSpinner() {
   );
 }
 
-// Theme toggle switch component
+// Theme toggle switch component (Desktop)
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
@@ -62,6 +63,58 @@ function ThemeToggle() {
         className="w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300"
         style={{ transform: isDark ? 'translateX(28px)' : 'translateX(0)' }}
       />
+    </button>
+  );
+}
+
+// Mobile theme toggle - WhatsApp status style ring
+function MobileThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className="relative w-7 h-7 flex items-center justify-center transition-all"
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      {/* Segmented status ring using SVG */}
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 36 36"
+        style={{ transform: 'rotate(-90deg)' }}
+      >
+        {/* First segment */}
+        <circle
+          cx="18"
+          cy="18"
+          r="16"
+          fill="none"
+          stroke={isDark ? "#fbbf24" : "#64748b"}
+          strokeWidth="2"
+          strokeDasharray="25 5"
+          strokeLinecap="round"
+        />
+      </svg>
+      {isDark ? (
+        // Sun icon when in dark mode (click to go light)
+        <svg
+          className="w-4 h-4 text-amber-400 relative z-10"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+        </svg>
+      ) : (
+        // Moon icon when in light mode (click to go dark)
+        <svg
+          className="w-4 h-4 text-gray-600 relative z-10"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -111,7 +164,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="lg:ml-[252px] min-h-screen flex flex-col">
+      <div className="lg:ml-60 min-h-screen flex flex-col">
         {/* Desktop Header */}
         <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-end items-center pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-3">
@@ -121,32 +174,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Mobile Header Only */}
-        <header className="sticky top-0 z-40 lg:hidden transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
-          <div className="px-4 py-4 flex items-center justify-between">
+        <header
+          className="sticky top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
+          style={{ background: theme === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' }}
+        >
+          <div className="px-4 py-3 flex items-center justify-between">
             {/* Mobile Logo */}
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative w-8 h-8 overflow-hidden rounded-full border-2 border-[#64B5F6]">
+            <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+              <div className="relative w-8 h-8 overflow-hidden rounded-full border-2 border-[#1a8cff]">
                 <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
               </div>
               <span className="text-base font-extrabold" style={{ color: 'var(--foreground)' }}>CashOS</span>
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Search Bar */}
+              <GlobalSearch />
               <ThemeToggle />
               {/* Mobile Menu Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="w-9 h-9 rounded-lg flex items-center justify-center p-1.5 transition-colors"
-                style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e0e0e0', color: theme === 'dark' ? '#f5f5f5' : '#333333' }}
+                className="w-8 h-8 flex items-center justify-center transition-colors"
+                style={{ color: theme === 'dark' ? '#f5f5f5' : '#333333' }}
                 aria-label="Toggle menu"
               >
                 {mobileMenuOpen ? (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 ) : (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M8 12h12M12 18h8" />
                   </svg>
                 )}
               </button>
@@ -155,30 +213,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-8">
+        <main className="flex-1 px-2 py-4 lg:p-8">
           <div className="max-w-6xl mx-auto w-full">
             <Suspense fallback={<PageLoadingSpinner />}>
               {children}
             </Suspense>
           </div>
         </main>
-
-        {/* Footer */}
-        <footer className="py-6 px-4 lg:px-8 text-center text-sm border-t transition-colors duration-300" style={{ color: 'var(--muted)', borderColor: 'var(--border)' }}>
-          <p>© 2024 CashOS · Smart Nigerian Tax Manager</p>
-        </footer>
       </div>
 
-      {/* Mobile Fixed ModeSelector */}
-      <div className={`
-        fixed z-50 lg:hidden
-        ${isChatPage
-          ? 'bottom-20 right-4'
-          : 'bottom-6 right-4'
-        }
-      `}>
-        <ModeSelector />
-      </div>
+      {/* Mobile Fixed ModeSelector - hidden on chat pages since they have ModuleButtonBar */}
+      {!isChatPage && (
+        <div className="fixed z-50 lg:hidden bottom-6 right-4">
+          <ModeSelector />
+        </div>
+      )}
     </div>
   );
 }

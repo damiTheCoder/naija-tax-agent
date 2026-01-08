@@ -20,7 +20,8 @@
   --error: #dc2626;
   --warning: #f59e0b;
   --success: #10b981;
-  --app-bg: #f5f5f7;
+  --app-bg: #ffffff;
+  --border-color: #e5e7eb;
 }
 
 /* Dark Mode */
@@ -34,6 +35,7 @@
   --soft-gray: #252525;
   --cream: #0a0a0a;
   --app-bg: #000000;
+  --border-color: #333333;
 }
 
 /* ============================================
@@ -4734,9 +4736,9 @@ tr:hover td {
   }
 
   .cashos-scroll-card {
-    flex: 0 0 85vw;
-    min-width: 85vw;
-    max-width: 85vw;
+    flex: 0 0 75vw;
+    min-width: 75vw;
+    max-width: 75vw;
   }
 
   .scroll-card-image-full img {

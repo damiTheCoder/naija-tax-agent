@@ -32,6 +32,7 @@ import {
     ChevronDown,
 } from "lucide-react";
 import ModeSelector from "@/components/ModeSelector";
+import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 // =============================================================================
 // TYPES
@@ -902,6 +903,11 @@ export default function WalletPage() {
     return (
         <>
             <div className="space-y-6 pb-32">
+                {/* Mobile Module Button Bar - Fixed at top below navbar */}
+                <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
+                    <ModuleButtonBar />
+                </div>
+
                 <main className="px-1 space-y-4">
                     {/* Wallet Balance */}
                     <div>
@@ -1009,13 +1015,15 @@ export default function WalletPage() {
             </div>
 
             {/* Fixed Bottom Composer */}
-            <div className="fixed bottom-4 left-0 right-0 lg:left-[252px] z-40 px-4 sm:px-6 pointer-events-none !bg-transparent">
-                <div className="mx-auto w-full max-w-3xl !bg-transparent">
-                    <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#e5e5e5] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
+            <div className="fixed bottom-0 left-0 right-0 lg:left-[252px] z-40 pointer-events-none">
+                <div className="absolute inset-0 pointer-events-none" />
+                <div className="relative mx-auto w-full max-w-3xl px-4 sm:px-6 pb-2 pt-3">
+
+                    <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#f3f4f6] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
                         <textarea
                             ref={textareaRef}
                             rows={1}
-                            placeholder="Send 500 naira to 9168961220 Opay..."
+                            placeholder="Ask anything..."
                             className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
                             value={composerInput}
                             onChange={(e) => setComposerInput(e.target.value)}

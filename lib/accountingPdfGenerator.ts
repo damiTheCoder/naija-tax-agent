@@ -22,7 +22,10 @@ const TABLE_BORDER: [number, number, number] = [180, 180, 180]; // Light border
  * Format number as Nigerian Naira currency
  * Uses simple string formatting to avoid character spacing issues in PDF
  */
-function formatCurrency(amount: number): string {
+function formatCurrency(amount: number | undefined | null): string {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+        return "N0.00";
+    }
     const absAmount = Math.abs(amount);
     // Format number with commas - simple approach
     const fixed = absAmount.toFixed(2);
@@ -900,9 +903,6 @@ export function generateEquityStatementPDF(
     doc.save(`equity-statement-${data.year}.pdf`);
 }
 
-/**
- * Generate complete accounting package PDF (all reports in one)
- */
 export function generateAccountingPackagePDF(
     statements: FinancialStatementData,
     journals: JournalEntry[],
@@ -914,3 +914,235 @@ export function generateAccountingPackagePDF(
     generateFinancialStatementsPDF(statements, businessName);
 }
 
+/**
+ * Tax Payables Data Interface - Based on 2026 Nigerian Tax Laws
+ */
+export interface TaxPayablesData {
+    year: number;
+    revenue: number;
+    payrollExpenses: number;
+    netProfit: number;
+    vatPayable: number;
+    whtPayable: number;
+    payePayable: number;
+    citPayable: number;
+    developmentLevy: number;
+    totalTaxPayable: number;
+}
+
+/**
+ * Generate PDF for Tax Payables Report
+ * Based on 2026 Nigerian Tax Laws:
+ * - VAT: 7.5% on taxable supplies
+ * - WHT: 5-10% on various payments
+ * - PAYE: Progressive rates (0% up to ₦800K, max 25%)
+ * - CIT: 30% on profits (small companies exempt)
+ * - Development Levy: 4% on assessable profits
+ */
+import { TaxPayablesSchedule } from "./accounting/transactionTaxAnalyzer";
+
+/**
+ * Generate PDF for Tax Payables Report
+ * Based on 2026 Nigerian Tax Laws with Traceable Schedule
+ */
+/**
+ * Generate PDF for Tax Payables Report
+ * Based on 2026 Nigerian Tax Laws with Traceable Schedule
+ */
+export function generateTaxPayablesPDF(
+    schedule: TaxPayablesSchedule,
+    businessName: string = "CashOS Business"
+): void {
+    const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - margin * 2;
+
+    let y = drawHeader(doc, businessName, "TAX PAYABLES SCHEDULE", margin);
+    y = drawPeriodField(doc, "As At", schedule.asAtDate, margin, y);
+
+    // Add legal reference
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(...LIGHT_GREY);
+    doc.text("Based on 2026 Nigerian Tax Laws (Nigeria Tax Reform Acts)", margin, y);
+    y += 8;
+
+    // Table columns for summaries
+    const col1 = margin;
+    const col1Width = contentWidth * 0.6;
+    const col2 = margin + col1Width;
+    const col2Width = contentWidth * 0.4;
+
+    // === SECTION 1: FINANCIAL PERIOD SUMMARY ===
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BLACK);
+    doc.text("1. Financial Period Summary (Accounting Basis)", margin, y);
+    y += 6;
+
+    const financialRows = [
+        { name: "Total Revenue", amount: formatCurrency(schedule.periodSummary.totalRevenue) },
+        { name: "Total Expenses", amount: formatCurrency(schedule.periodSummary.totalExpenses) },
+        { name: "Payroll Costs", amount: formatCurrency(schedule.periodSummary.payrollExpense) },
+        { name: "Net Profit (Before Tax)", amount: formatCurrency(schedule.periodSummary.netProfitBeforeTax) },
+    ];
+
+    doc.setFont("helvetica", "normal");
+    for (const row of financialRows) {
+        y = drawTableRow(doc, [
+            { text: row.name, x: col1, width: col1Width },
+            { text: row.amount, x: col2, width: col2Width },
+        ], y, margin, contentWidth);
+    }
+    y += 8;
+
+    // === SECTION 2: PERIOD TAX ASSESSMENT ===
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BLACK);
+    doc.text("2. Period Tax Assessment (Direct Taxes)", margin, y);
+    y += 6;
+
+    const periodRows = [
+        {
+            name: `Company Income Tax (CIT) ${schedule.periodTaxes.citAssessment.applies ? '' : '(Exempt/None)'}`,
+            amount: formatCurrency(schedule.summary.citPayable)
+        },
+        {
+            name: `Development Levy ${schedule.periodTaxes.devLevyAssessment.applies ? '' : '(Exempt/None)'}`,
+            amount: formatCurrency(schedule.summary.developmentLevy)
+        },
+        {
+            name: "PAYE Liability (Estimated)",
+            amount: formatCurrency(schedule.summary.payePayable)
+        },
+    ];
+
+    for (const row of periodRows) {
+        y = drawTableRow(doc, [
+            { text: row.name, x: col1, width: col1Width },
+            { text: row.amount, x: col2, width: col2Width },
+        ], y, margin, contentWidth);
+    }
+    y += 8;
+
+    // === SECTION 3: TRANSACTION TAX SUMMARY ===
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...BLACK);
+    doc.text("3. Transaction Tax Summary (Indirect Taxes)", margin, y);
+    y += 6;
+
+    const txSummaryRows = [
+        { name: "Value Added Tax (VAT)", amount: formatCurrency(schedule.summary.vatPayable) },
+        { name: "Withholding Tax (WHT)", amount: formatCurrency(schedule.summary.whtPayable) },
+        { name: "Capital Gains Tax (CGT)", amount: formatCurrency(schedule.summary.cgtPayable) },
+    ];
+
+    for (const row of txSummaryRows) {
+        y = drawTableRow(doc, [
+            { text: row.name, x: col1, width: col1Width },
+            { text: row.amount, x: col2, width: col2Width },
+        ], y, margin, contentWidth);
+    }
+    y += 4;
+
+    // Total Summary Row
+    y = drawTotalsRow(doc, [
+        { text: "TOTAL TAX LIABILITY", x: col1, width: col1Width },
+        { text: formatCurrency(schedule.summary.totalPayable), x: col2, width: col2Width },
+    ], y, margin, contentWidth);
+
+    y += 10;
+
+    // === SECTION 4: ASSUMPTIONS ===
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(...LIGHT_GREY);
+
+    for (const assumption of schedule.assumptions) {
+        doc.text(`• ${assumption}`, margin + 2, y);
+        y += 4;
+    }
+    y += 8;
+
+    // === SECTION 5: TRANSACTION TRACE ===
+    // If not enough space for header + 1 row, new page
+    if (y + 30 > pageHeight) {
+        doc.addPage();
+        y = margin;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(...BLACK);
+    doc.text("Transaction Tax Trace (VAT / WHT / CGT)", margin, y);
+    y += 6;
+
+    // Trace columns
+    const tCol1 = margin;
+    const tCol1Width = 20; // Date
+    const tCol2 = tCol1 + tCol1Width;
+    const tCol2Width = 45; // Narration
+    const tCol3 = tCol2 + tCol2Width;
+    const tCol3Width = 25; // Amount
+    const tCol4 = tCol3 + tCol3Width;
+    const tCol4Width = 65; // Tax Impact
+    const tCol5 = tCol4 + tCol4Width;
+    const tCol5Width = 25; // Payable
+
+    const traceColumns = [
+        { label: "Date", x: tCol1, width: tCol1Width },
+        { label: "Narration", x: tCol2, width: tCol2Width },
+        { label: "Amount", x: tCol3, width: tCol3Width },
+        { label: "Applicable Taxes", x: tCol4, width: tCol4Width },
+        { label: "Payable", x: tCol5, width: tCol5Width },
+    ];
+
+    y = drawTableHeader(doc, traceColumns, y, margin, contentWidth);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...LIGHT_GREY);
+
+    if (schedule.analyses.length === 0) {
+        y = drawTableRow(doc, [
+            { text: "No transactions found", x: tCol1, width: contentWidth }
+        ], y, margin, contentWidth);
+    } else {
+        for (const analysis of schedule.analyses) {
+            // Check for page break
+            if (y + 15 > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+                y = drawTableHeader(doc, traceColumns, y, margin, contentWidth);
+                doc.setFontSize(7);
+            }
+
+            const applicableTaxes = analysis.taxAssessments.filter(t => t.applies);
+            const totalTax = analysis.totalTaxForTransaction;
+
+            const taxImpact = applicableTaxes.length > 0
+                ? applicableTaxes.map(t => `${t.taxType} @ ${t.legalRate}`).join(", ")
+                : "None";
+
+            y = drawTableRow(doc, [
+                { text: new Date(analysis.transactionDate).toLocaleDateString("en-NG"), x: tCol1, width: tCol1Width },
+                { text: analysis.transactionNarration.substring(0, 30) + (analysis.transactionNarration.length > 30 ? "..." : ""), x: tCol2, width: tCol2Width },
+                { text: formatCurrency(analysis.transactionAmount), x: tCol3, width: tCol3Width },
+                { text: taxImpact, x: tCol4, width: tCol4Width },
+                { text: totalTax !== 0 ? formatCurrency(totalTax) : "-", x: tCol5, width: tCol5Width },
+            ], y, margin, contentWidth);
+        }
+    }
+
+    drawFooter(doc, pageWidth, pageHeight);
+    doc.save(`tax-payables-schedule-${schedule.asAtDate}.pdf`);
+}

@@ -1,6 +1,6 @@
-export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "inventory";
+export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet";
 
-export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "inventory";
+export type AppMode = "tax" | "accounting" | "intelligence" | "wallet";
 
 export interface TaxNavItem {
   label: string;
@@ -87,6 +87,20 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
+    label: "Invoice Management",
+    href: "/accounting/invoices",
+    icon: "receipt",
+    description: "Create and manage sales invoices",
+    mode: "accounting",
+  },
+  {
+    label: "Receipts Management",
+    href: "/accounting/receipts",
+    icon: "folder",
+    description: "Track and organize expense receipts",
+    mode: "accounting",
+  },
+  {
     label: "Chart of Accounts",
     href: "/accounting/reports",
     icon: "report",
@@ -152,55 +166,4 @@ export const WALLET_NAV_ITEMS: TaxNavItem[] = [
   },
 ];
 
-// Inventory Intelligence navigation
-export const INVENTORY_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Dashboard",
-    href: "/inventory",
-    icon: "chart",
-    description: "Inventory overview and KPIs",
-    mode: "inventory",
-  },
-  {
-    label: "Products",
-    href: "/inventory/products",
-    icon: "inventory",
-    description: "Manage product catalog",
-    mode: "inventory",
-  },
-  {
-    label: "Stock Levels",
-    href: "/inventory/stock",
-    icon: "ledger",
-    description: "View and adjust stock by location",
-    mode: "inventory",
-  },
-  {
-    label: "Purchase Orders",
-    href: "/inventory/purchase-orders",
-    icon: "receipt",
-    description: "Create POs and receive stock",
-    mode: "inventory",
-  },
-  {
-    label: "Transfers",
-    href: "/inventory/transfers",
-    icon: "trend",
-    description: "Move stock between locations",
-    mode: "inventory",
-  },
-  {
-    label: "Insights",
-    href: "/inventory/insights",
-    icon: "intelligence",
-    description: "Analytics and recommendations",
-    mode: "inventory",
-  },
-  {
-    label: "Charts",
-    href: "/inventory/charts",
-    icon: "cashflow",
-    description: "Visualize inventory trends",
-    mode: "inventory",
-  },
-];
+

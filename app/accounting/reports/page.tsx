@@ -358,8 +358,8 @@ export default function ChartOfAccountsPage() {
                             key={cls}
                             onClick={() => setSelectedClass(isSelected ? "all" : cls)}
                             className={`rounded-xl p-4 border-2 transition-all text-left ${isSelected
-                                    ? `${colors.bg} border-current ${colors.text}`
-                                    : "bg-white border-gray-100 hover:border-gray-200"
+                                ? `${colors.bg} border-current ${colors.text}`
+                                : "bg-white border-gray-100 hover:border-gray-200"
                                 }`}
                         >
                             <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center mb-3 ${colors.text}`}>
@@ -521,6 +521,186 @@ export default function ChartOfAccountsPage() {
                         <p className="font-semibold text-amber-700">5000-7999</p>
                         <p className="text-gray-600">Expenses</p>
                     </div>
+                </div>
+            </div>
+
+            {/* Tax Payables Section */}
+            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-rose-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900">Tax Payables</h2>
+                            <p className="text-sm text-gray-500">Computed tax liabilities from transactions</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-5">
+                    {(() => {
+                        // Compute tax payables from revenue transactions
+                        const revenueTotal = classTotals.revenue;
+                        const vatPayable = revenueTotal * 0.075; // 7.5% VAT
+                        const whtPayable = revenueTotal * 0.05; // 5% WHT estimate
+                        const payrollExpense = accountBalances.get("5400") || 0;
+                        const payePayable = payrollExpense * 0.10; // 10% PAYE estimate
+                        const netProfit = classTotals.revenue - classTotals.expense;
+                        const citPayable = netProfit > 0 ? netProfit * 0.30 : 0; // 30% CIT
+                        const totalTaxPayable = vatPayable + whtPayable + payePayable + citPayable;
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="rounded-xl p-4 bg-gray-50">
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide">VAT Payable</p>
+                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(vatPayable)}</p>
+                                        <p className="text-xs text-gray-400 mt-1">7.5% on revenue</p>
+                                    </div>
+                                    <div className="rounded-xl p-4 bg-gray-50">
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide">WHT Payable</p>
+                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(whtPayable)}</p>
+                                        <p className="text-xs text-gray-400 mt-1">5% withholding</p>
+                                    </div>
+                                    <div className="rounded-xl p-4 bg-gray-50">
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide">PAYE</p>
+                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(payePayable)}</p>
+                                        <p className="text-xs text-gray-400 mt-1">Est. on payroll</p>
+                                    </div>
+                                    <div className="rounded-xl p-4 bg-gray-50">
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide">CIT Provision</p>
+                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(citPayable)}</p>
+                                        <p className="text-xs text-gray-400 mt-1">30% on profit</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between p-4 bg-rose-50 rounded-xl border border-rose-100">
+                                    <span className="text-sm font-semibold text-rose-700">Total Tax Payables</span>
+                                    <span className="text-xl font-bold text-rose-700">{formatCurrency(totalTaxPayable)}</span>
+                                </div>
+                                {totalTaxPayable === 0 && (
+                                    <p className="text-sm text-gray-400 text-center py-4">
+                                        No tax liabilities computed. Post revenue transactions to see tax payables.
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+            </div>
+
+            {/* Cashbook Section */}
+            <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-emerald-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900">Cashbook</h2>
+                            <p className="text-sm text-gray-500">All receipts and payments</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="overflow-x-auto">
+                    {(() => {
+                        // Get all cash transactions (accounts 1000, 1010)
+                        const cashAccountCodes = ["1000", "1010"];
+                        const cashTransactions: Array<{
+                            date: string;
+                            description: string;
+                            receipt: number;
+                            payment: number;
+                            account: string;
+                            entryId: string;
+                        }> = [];
+
+                        journalEntries.forEach((entry) => {
+                            entry.lines.forEach((line) => {
+                                if (cashAccountCodes.includes(line.accountCode)) {
+                                    cashTransactions.push({
+                                        date: entry.date,
+                                        description: entry.narration,
+                                        receipt: line.debit,
+                                        payment: line.credit,
+                                        account: line.accountName,
+                                        entryId: entry.id,
+                                    });
+                                }
+                            });
+                        });
+
+                        // Sort by date
+                        cashTransactions.sort((a, b) => a.date.localeCompare(b.date));
+
+                        // Calculate running balance
+                        let runningBalance = 0;
+                        const transactionsWithBalance = cashTransactions.map((tx) => {
+                            runningBalance += tx.receipt - tx.payment;
+                            return { ...tx, balance: runningBalance };
+                        });
+
+                        return (
+                            <>
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-emerald-600 uppercase tracking-wider">Receipts</th>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-rose-600 uppercase tracking-wider">Payments</th>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {transactionsWithBalance.length > 0 ? (
+                                            transactionsWithBalance.slice(-15).map((tx, idx) => (
+                                                <tr key={`${tx.entryId}-${idx}`} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{tx.date}</td>
+                                                    <td className="px-4 py-3 text-gray-900 truncate max-w-[200px]">{tx.description}</td>
+                                                    <td className="px-4 py-3 text-right font-mono text-emerald-600">
+                                                        {tx.receipt > 0 ? formatCurrency(tx.receipt) : "—"}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-mono text-rose-600">
+                                                        {tx.payment > 0 ? formatCurrency(tx.payment) : "—"}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900">
+                                                        {formatCurrency(tx.balance)}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                                                    <p>No cash transactions yet</p>
+                                                    <p className="text-xs mt-1">Post entries with Cash or Bank accounts to see the cashbook</p>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                    {transactionsWithBalance.length > 0 && (
+                                        <tfoot className="bg-gray-50 border-t border-gray-200">
+                                            <tr>
+                                                <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-gray-700">Totals</td>
+                                                <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-600">
+                                                    {formatCurrency(cashTransactions.reduce((sum, tx) => sum + tx.receipt, 0))}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono font-semibold text-rose-600">
+                                                    {formatCurrency(cashTransactions.reduce((sum, tx) => sum + tx.payment, 0))}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">
+                                                    {formatCurrency(runningBalance)}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    )}
+                                </table>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
 

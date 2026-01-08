@@ -152,7 +152,7 @@ export default function CashIntelligencePage() {
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Cashflow Metrics</h3>
+                                <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Cashflow Metrics</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">Real-time financial health indicators</p>
                             </div>
                         </div>
@@ -269,7 +269,7 @@ export default function CashIntelligencePage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-900">Treasury Bills</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Treasury Bills</h3>
                                     <p className="text-xs text-gray-500">Nigerian T-Bills at {formatPercent(TBILLS_RATES.find(t => t.id === tbillsTenor)?.rate || 0)} p.a.</p>
                                 </div>
                             </div>
@@ -322,11 +322,11 @@ export default function CashIntelligencePage() {
                                 <div className="rounded-xl p-4 bg-purple-50 border border-purple-100 space-y-3">
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-gray-600">Monthly Investment</span>
-                                        <span className="font-semibold text-gray-900">{formatNaira(tbillsScenario.monthlyInvestment)}</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.monthlyInvestment)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-gray-600">12-Month Total Investment</span>
-                                        <span className="font-semibold text-gray-900">{formatNaira(tbillsScenario.monthlyInvestment * 12)}</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.monthlyInvestment * 12)}</span>
                                     </div>
                                     <div className="flex justify-between items-center pt-3 border-t border-purple-200">
                                         <span className="text-sm text-gray-600">Projected Return (12mo)</span>
@@ -351,7 +351,7 @@ export default function CashIntelligencePage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-900">Savings Account</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Savings Account</h3>
                                     <p className="text-xs text-gray-500">Nigerian bank average at {formatPercent(SAVINGS_RATE)} p.a.</p>
                                 </div>
                             </div>
@@ -396,11 +396,11 @@ export default function CashIntelligencePage() {
                                 <div className="rounded-xl p-4 bg-blue-50 border border-blue-100 space-y-3">
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-gray-600">Monthly Deposit</span>
-                                        <span className="font-semibold text-gray-900">{formatNaira(savingsScenario.monthlyInvestment)}</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(savingsScenario.monthlyInvestment)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-gray-600">12-Month Total Deposits</span>
-                                        <span className="font-semibold text-gray-900">{formatNaira(savingsScenario.monthlyInvestment * 12)}</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(savingsScenario.monthlyInvestment * 12)}</span>
                                     </div>
                                     <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                                         <span className="text-sm text-gray-600">Interest Earned (12mo)</span>
@@ -427,7 +427,7 @@ export default function CashIntelligencePage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-900">Scenario Comparison</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Scenario Comparison</h3>
                                     <p className="text-xs text-gray-500">Side-by-side investment analysis</p>
                                 </div>
                             </div>
@@ -445,8 +445,8 @@ export default function CashIntelligencePage() {
                                 <tbody className="divide-y divide-gray-100">
                                     <tr className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-5 py-3 text-gray-700">Annual Rate</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-gray-900">{formatPercent(tbillsScenario.annualRate)}</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-gray-900">{formatPercent(savingsScenario.annualRate)}</td>
+                                        <td className="text-right px-5 py-3 font-semibold text-gray-900 dark:text-white">{formatPercent(tbillsScenario.annualRate)}</td>
+                                        <td className="text-right px-5 py-3 font-semibold text-gray-900 dark:text-white">{formatPercent(savingsScenario.annualRate)}</td>
                                         <td className="text-right px-5 py-3 font-medium text-emerald-600">+{formatPercent(tbillsScenario.annualRate - savingsScenario.annualRate)}</td>
                                     </tr>
                                     <tr className="hover:bg-gray-50/50 transition-colors">
@@ -457,8 +457,8 @@ export default function CashIntelligencePage() {
                                     </tr>
                                     <tr className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-5 py-3 text-gray-700">Final Value</td>
-                                        <td className="text-right px-5 py-3 font-bold text-gray-900">{formatNaira(tbillsScenario.projectedValue12Months)}</td>
-                                        <td className="text-right px-5 py-3 font-bold text-gray-900">{formatNaira(savingsScenario.projectedValue12Months)}</td>
+                                        <td className="text-right px-5 py-3 font-bold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.projectedValue12Months)}</td>
+                                        <td className="text-right px-5 py-3 font-bold text-gray-900 dark:text-white">{formatNaira(savingsScenario.projectedValue12Months)}</td>
                                         <td className="text-right px-5 py-3 font-bold text-emerald-600">+{formatNaira(tbillsScenario.projectedValue12Months - savingsScenario.projectedValue12Months)}</td>
                                     </tr>
                                 </tbody>

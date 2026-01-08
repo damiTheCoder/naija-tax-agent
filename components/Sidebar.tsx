@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, INVENTORY_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -28,7 +28,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
-    if (pathname.startsWith("/inventory")) return "inventory";
+
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
     if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -39,9 +39,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Update mode when pathname changes
   useEffect(() => {
-    if (pathname.startsWith("/inventory")) {
-      setMode("inventory");
-    } else if (pathname.startsWith("/wallet")) {
+    if (pathname.startsWith("/wallet")) {
       setMode("wallet");
     } else if (pathname.startsWith("/cashflow-intelligence")) {
       setMode("intelligence");
@@ -58,9 +56,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       ? INTELLIGENCE_NAV_ITEMS
       : mode === "wallet"
         ? WALLET_NAV_ITEMS
-        : mode === "inventory"
-          ? INVENTORY_NAV_ITEMS
-          : ACCOUNTING_NAV_ITEMS;
+        : ACCOUNTING_NAV_ITEMS;
 
 
 
@@ -75,10 +71,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       )}
 
       {/* Sidebar - Desktop (left) */}
-      <aside className="hidden lg:flex fixed left-3 top-3 bottom-3 w-60 bg-[#0a0a0a] dark:!bg-[#1a1a1a] flex-col z-50 overflow-hidden rounded-2xl">
-        {/* Decorative gradient blurs */}
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#64B5F6]/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-20 -right-10 w-32 h-32 bg-[#818cf8]/15 rounded-full blur-3xl pointer-events-none"></div>
+      <aside
+        className="hidden lg:flex fixed left-0 top-0 bottom-0 w-60 flex-col z-50 overflow-hidden"
+        style={{
+          background: 'var(--app-bg)',
+          borderRight: '1px solid var(--border-color, #e5e7eb)'
+        }}
+      >
+        {/* Decorative gradient blurs - removed for cleaner look */}
 
         {/* Logo Section */}
         <div className="relative p-6">
@@ -86,7 +86,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="relative w-8 h-8 overflow-hidden rounded-lg ring-2 ring-[#64B5F6]/30 group-hover:ring-[#64B5F6]/60 transition-all">
               <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
             </div>
-            <h1 className="text-lg font-extrabold tracking-tight text-white dark:!text-white">CashOS</h1>
+            <h1 className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--foreground)' }}>CashOS</h1>
           </Link>
         </div>
 
@@ -94,7 +94,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <p className="px-3 py-2 text-xs font-semibold text-white/40 dark:!text-white/40 uppercase tracking-wider">
+          <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--foreground)', opacity: 0.5 }}>
             {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : mode === "wallet" ? "Wallet" : "Accounting"}
           </p>
           {navItems.map((item) => {
@@ -115,14 +115,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
                   ${isActive
                     ? "bg-[#64B5F6] text-[#0a0a0a]"
-                    : "text-white dark:!text-white"
+                    : ""
                   }
                 `}
+                style={!isActive ? { color: 'var(--foreground)' } : undefined}
               >
-                {isNavigating ? (
+                {isNavigating && (
                   <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                ) : (
-                  <NavIconBadge icon={item.icon} />
                 )}
                 <span>{item.label}</span>
                 {isNavigating && (
@@ -186,10 +185,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   }
                 `}
               >
-                {isNavigating ? (
+                {isNavigating && (
                   <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                ) : (
-                  <NavIconBadge icon={item.icon} />
                 )}
                 <span>{item.label}</span>
                 {isNavigating && (

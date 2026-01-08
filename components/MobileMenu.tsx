@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, INVENTORY_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -25,7 +25,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
 
     // Determine mode based on path (logic from Sidebar)
     const getInitialMode = (): AppMode => {
-        if (pathname.startsWith("/inventory")) return "inventory";
+
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -35,9 +35,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const [mode, setMode] = useState<AppMode>(getInitialMode);
 
     useEffect(() => {
-        if (pathname.startsWith("/inventory")) {
-            setMode("inventory");
-        } else if (pathname.startsWith("/wallet")) {
+        if (pathname.startsWith("/wallet")) {
             setMode("wallet");
         } else if (pathname.startsWith("/cashflow-intelligence")) {
             setMode("intelligence");
@@ -54,9 +52,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             ? TAX_NAV_ITEMS
             : mode === "intelligence"
                 ? INTELLIGENCE_NAV_ITEMS
-                : mode === "inventory"
-                    ? INVENTORY_NAV_ITEMS
-                    : ACCOUNTING_NAV_ITEMS;
+                : ACCOUNTING_NAV_ITEMS;
 
     if (!isOpen) return null;
 

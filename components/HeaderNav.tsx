@@ -28,7 +28,7 @@ export default function HeaderNav() {
 
   return (
     <header className="sticky top-0 z-50 bg-[#fafafa]/90 backdrop-blur-xl">
-      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="max-w-5xl mx-auto px-6 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative w-8 h-8 overflow-hidden rounded-xl">
             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
@@ -41,7 +41,7 @@ export default function HeaderNav() {
 
         <div className="relative">
           <button
-            className="w-8 h-8 rounded-2xl flex items-center justify-center text-[#0a0a0a] hover:bg-[#64B5F6]/30 transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#0a0a0a] hover:bg-[#64B5F6]/30 transition-colors bg-gray-200"
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label="Toggle navigation menu"
             aria-expanded={isMenuOpen}
