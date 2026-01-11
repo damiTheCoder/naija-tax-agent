@@ -84,7 +84,7 @@ export default function ModuleButtonBar() {
 
     return (
         <div
-            className="w-full overflow-x-auto mb-0 lg:hidden -mx-2"
+            className="w-full overflow-x-auto mb-0 hidden lg:block -mx-2"
             style={{
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none',

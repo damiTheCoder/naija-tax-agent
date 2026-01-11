@@ -18,7 +18,6 @@ import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { useTheme } from "@/lib/ThemeContext";
 import { Onboarding, EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
-import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 type ManualTransactionDraft = {
   date: string;
@@ -246,13 +245,42 @@ export default function AccountingPage() {
       setTimeout(loadEngine, 0);
     }
 
-    // Subscribe to updates
+    // Subscribe to updates from the engine
     const unsubscribe = accountingEngine.subscribe((state) => {
       setAccountingState(state);
       setJournalEntries(state.journalEntries);
     });
 
-    return () => unsubscribe();
+    // Listen for custom accounting-update events (from chat transactions)
+    const handleAccountingUpdate = () => {
+      console.log("[Accounting Page] Received accounting-update event, refreshing state...");
+      accountingEngine.load(); // Reload from localStorage to get latest data
+      const state = accountingEngine.getState();
+      setAccountingState(state);
+      setJournalEntries(state.journalEntries);
+
+      // Also regenerate financial statements
+      const statements = accountingEngine.generateStatements();
+      setGeneratedStatements(statements);
+      console.log("[Accounting Page] Statements regenerated:", statements);
+    };
+    window.addEventListener("accounting-update", handleAccountingUpdate);
+
+    // Also listen for storage events for cross-tab sync
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === "insight::accounting-engine") {
+        console.log("[Accounting Page] Storage event detected, reloading engine...");
+        accountingEngine.load();
+        handleAccountingUpdate();
+      }
+    };
+    window.addEventListener("storage", handleStorageEvent);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("accounting-update", handleAccountingUpdate);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
   }, []);
 
   useEffect(() => {
@@ -711,15 +739,28 @@ export default function AccountingPage() {
   };
 
   const handleDeleteEntry = (entryId: string) => {
+    console.log("[Delete] Attempting to delete entry:", entryId);
+
     if (!confirm("Are you sure you want to delete this journal entry? This will reverse all related ledger entries.")) {
+      console.log("[Delete] User cancelled");
       return;
     }
 
     try {
+      console.log("[Delete] Calling deleteJournalEntry...");
       accountingEngine.deleteJournalEntry(entryId);
+      console.log("[Delete] Entry deleted successfully, refreshing state...");
+
+      // Force refresh state from engine after delete
+      const updatedState = accountingEngine.getState();
+      setAccountingState(updatedState);
+      setJournalEntries(updatedState.journalEntries);
+
       appendMessage("assistant", `🗑️ Deleted journal entry ${entryId}`);
       pushAutomationActivity("Entry deleted", `Deleted: ${entryId}`);
+      console.log("[Delete] State refreshed, entries count:", updatedState.journalEntries.length);
     } catch (err: unknown) {
+      console.error("[Delete] Error:", err);
       appendMessage("assistant", `❌ Failed to delete entry: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   };
@@ -756,11 +797,6 @@ export default function AccountingPage() {
       <Onboarding />
 
       <div className="space-y-6 pb-32">
-        {/* Mobile Module Button Bar - Fixed at top below navbar */}
-        <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
-          <ModuleButtonBar />
-        </div>
-
         <section className="relative min-h-[75vh]">
           <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -785,23 +821,22 @@ export default function AccountingPage() {
                 <button
                   onClick={() => setShowPostEntry(true)}
                   className={`
-                    w-full rounded-2xl border-2 border-dashed transition-all p-5 flex items-center justify-center gap-3 group
+                    w-full rounded-2xl border transition-all p-5 flex items-center justify-center gap-3 group
                     ${theme === 'dark'
-                      ? 'border-purple-300 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-purple-400'
-                      : 'border-purple-300 bg-purple-50/50 hover:bg-purple-100/50 hover:border-purple-400'
+                      ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
+                      : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
                     }
                   `}
                 >
                   <div className={`
                     w-10 h-10 rounded-xl flex items-center justify-center transition-colors
                     ${theme === 'dark'
-                      ? 'bg-purple-100 group-hover:bg-purple-200'
-                      : 'bg-purple-100 group-hover:bg-purple-200'
+                      ? 'bg-gray-700 group-hover:bg-gray-600'
+                      : 'bg-gray-100 group-hover:bg-gray-200'
                     }
                   `}>
                     <svg
-                      className="w-5 h-5"
-                      style={{ color: theme === 'dark' ? '#c4b5fd' : '#9333ea' }}
+                      className="w-5 h-5 text-gray-500"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -811,16 +846,10 @@ export default function AccountingPage() {
                     </svg>
                   </div>
                   <div className="text-left">
-                    <h3
-                      className="text-sm font-semibold"
-                      style={{ color: theme === 'dark' ? '#c4b5fd' : '#581c87' }}
-                    >
+                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                       Post Journal Entry
                     </h3>
-                    <p
-                      className="text-xs"
-                      style={{ color: theme === 'dark' ? '#a78bfa' : '#9333ea' }}
-                    >
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
                       Manual double-entry with DR/CR columns
                     </p>
                   </div>
@@ -990,165 +1019,11 @@ export default function AccountingPage() {
                   </div>
                 )}
               </div>
-
-              <div ref={manualFormRef} id="manual-journal" className="rounded-lg border border-gray-200 bg-white p-4 md:p-5 space-y-3 md:space-y-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Manual journal entry</p>
-                {error && <div className="rounded-md border border-red-200 bg-red-50 text-xs text-red-600 px-3 py-2">{error}</div>}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                  <input type="date" value={manualTx.date} onChange={(e) => setManualTx((prev) => ({ ...prev, date: e.target.value }))} className="rounded-md border border-gray-200 px-3 py-2" />
-                  <input
-                    type="text"
-                    placeholder="Description"
-                    value={manualTx.description}
-                    onChange={(e) => setManualTx((prev) => ({ ...prev, description: e.target.value }))}
-                    className="rounded-md border border-gray-200 px-3 py-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Category"
-                    value={manualTx.category}
-                    onChange={(e) => setManualTx((prev) => ({ ...prev, category: e.target.value, type: normaliseCategory(e.target.value) }))}
-                    className="rounded-md border border-gray-200 px-3 py-2"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Amount"
-                    value={manualTx.amount}
-                    onChange={(e) => setManualTx((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="rounded-md border border-gray-200 px-3 py-2"
-                  />
-                </div>
-                <button className="w-full rounded-md bg-gray-900 text-white text-sm font-semibold py-2.5" onClick={handleManualTransactionAdd}>
-                  Save entry
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-400 text-center">
-                Accounting outputs are auto-generated summaries. Always rely on audited statements for statutory filings.
-              </p>
-
-              <div className="space-y-4">
-                {messages.map((msg, index) => (
-                  <div key={`bottom-${msg.timestamp}-${index}`} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed border ${msg.role === "user"
-                        ? "bg-blue-50 border-blue-100 text-blue-900"
-                        : "bg-slate-50 border-slate-200 text-slate-800"
-                        }`}
-                    >
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
-
-
           </div>
         </section>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 lg:left-[252px] z-40 pointer-events-none">
-        <div className="absolute inset-0 pointer-events-none" />
-        <div className="relative mx-auto w-full max-w-3xl px-4 sm:px-6 pb-2 pt-3">
-
-          {isActionMenuOpen && (
-            <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => fileUploadRef.current?.click()}>
-                <span className="text-slate-500">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M16.95 5.05a2.5 2.5 0 113.536 3.536L10.95 18.122a4.5 4.5 0 01-6.364-6.364L12.121 4.223" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Add documents</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={scrollToJournal}>
-                <span className="text-slate-500">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 20h9" strokeLinecap="round" />
-                    <path d="M5 20h1a2 2 0 002-2V6a2 2 0 012-2h9" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14 2l6 6" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Manual entry</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={handleGenerateStatements}>
-                <span className="text-slate-500">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M3 3h18v18H3z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M7 14l2.5-3 2 2L14.5 9 17 13" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Generate drafts</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => auditUploadRef.current?.click()}>
-                <span className="text-slate-500">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Upload audited pack</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={handleSendToTaxCalculator}>
-                <span className="text-slate-500">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Queue for tax</span>
-              </button>
-            </div>
-          )}
-
-          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#f3f4f6] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
-            <button
-              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-slate-600 dark:text-white mb-0.5"
-              onClick={() => setIsActionMenuOpen((prev) => !prev)}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-              </svg>
-            </button>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Ask anything..."
-              aria-label="Ask the accounting agent"
-              className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
-              value={composerInput}
-              onChange={(e) => setComposerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-            />
-            <button
-              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-gray-500 dark:text-white mb-0.5"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M12 3a3 3 0 013 3v6a3 3 0 11-6 0V6a3 3 0 013-3z" />
-                <path d="M5 10v2a7 7 0 0014 0v-2" strokeLinecap="round" />
-                <path d="M12 19v4" strokeLinecap="round" />
-                <path d="M8 23h8" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button
-              className="w-9 h-9 rounded-full bg-gray-900 dark:bg-[#64B5F6] text-white flex items-center justify-center mb-0.5 transition-colors"
-              onClick={handleSendMessage}
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M5 12h14" strokeLinecap="round" />
-                <path d="M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
 
       <input ref={fileUploadRef} type="file" multiple className="hidden" onChange={handleDocumentUpload} />
       <input ref={auditUploadRef} type="file" className="hidden" onChange={handleAuditedUpload} />
@@ -1340,8 +1215,8 @@ export default function AccountingPage() {
                 {/* Audit Results */}
                 {auditResult && (
                   <div className={`mt-3 p-3 rounded-lg text-sm border ${auditResult.isValid || auditResult.fixed
-                      ? "bg-green-50 border-green-100 text-green-800"
-                      : "bg-amber-50 border-amber-100 text-amber-800"
+                    ? "bg-green-50 border-green-100 text-green-800"
+                    : "bg-amber-50 border-amber-100 text-amber-800"
                     }`}>
                     <div className="flex items-start gap-2">
                       {auditResult.isValid || auditResult.fixed ? (

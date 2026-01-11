@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/lib/ThemeContext";
-import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 // =============================================================================
 // TYPES
@@ -357,11 +356,6 @@ export default function ReceiptsManagementPage() {
 
     return (
         <div className="space-y-6 pb-20">
-            {/* Mobile Module Button Bar */}
-            <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
-                <ModuleButtonBar />
-            </div>
-
             {/* Header */}
             <div
                 className="rounded-2xl border px-6 py-6"
@@ -474,10 +468,10 @@ export default function ReceiptsManagementPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${isDragging
-                        ? "border-[#64B5F6] bg-blue-50 dark:bg-blue-900/20"
-                        : theme === "dark"
-                            ? "border-gray-700 hover:border-gray-600 bg-gray-900/50"
-                            : "border-gray-300 hover:border-gray-400 bg-gray-50"
+                    ? "border-[#64B5F6] bg-blue-50 dark:bg-blue-900/20"
+                    : theme === "dark"
+                        ? "border-gray-700 hover:border-gray-600 bg-gray-900/50"
+                        : "border-gray-300 hover:border-gray-400 bg-gray-50"
                     }`}
             >
                 {isProcessing ? (
@@ -519,10 +513,10 @@ export default function ReceiptsManagementPage() {
                 <button
                     onClick={() => setFilterCategory("all")}
                     className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === "all"
-                            ? "bg-[#64B5F6] text-white"
-                            : theme === "dark"
-                                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        ? "bg-[#64B5F6] text-white"
+                        : theme === "dark"
+                            ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                         }`}
                 >
                     All Categories
@@ -532,10 +526,10 @@ export default function ReceiptsManagementPage() {
                         key={key}
                         onClick={() => setFilterCategory(key as ReceiptCategory)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === key
-                                ? "bg-[#64B5F6] text-white"
-                                : theme === "dark"
-                                    ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            ? "bg-[#64B5F6] text-white"
+                            : theme === "dark"
+                                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             }`}
                     >
                         {config.label}

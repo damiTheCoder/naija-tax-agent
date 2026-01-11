@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
-import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 // =============================================================================
 // TYPES
@@ -302,11 +301,6 @@ export default function InvoiceManagementPage() {
 
     return (
         <div className="space-y-6 pb-20">
-            {/* Mobile Module Button Bar */}
-            <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
-                <ModuleButtonBar />
-            </div>
-
             {/* Header */}
             <div
                 className="rounded-2xl border px-6 py-6"
@@ -410,10 +404,10 @@ export default function InvoiceManagementPage() {
                         key={status}
                         onClick={() => setFilterStatus(status)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === status
-                                ? "bg-[#64B5F6] text-white"
-                                : theme === "dark"
-                                    ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            ? "bg-[#64B5F6] text-white"
+                            : theme === "dark"
+                                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             }`}
                     >
                         {status.charAt(0).toUpperCase() + status.slice(1)}

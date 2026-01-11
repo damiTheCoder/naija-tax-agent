@@ -190,6 +190,21 @@ export default function WorkspacePage() {
       setFinancialStatements(accountingEngine.generateStatements());
     });
 
+    // Listen for custom accounting-update events (from chat transactions)
+    const handleAccountingUpdate = () => {
+      const state = accountingEngine.getState();
+      setJournalEntries(state.journalEntries);
+      setLedgerAccounts(state.ledgerAccounts);
+      setFinancialStatements(accountingEngine.generateStatements());
+    };
+    window.addEventListener("accounting-update", handleAccountingUpdate);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "insight::accounting-engine") {
+        accountingEngine.load();
+        handleAccountingUpdate();
+      }
+    });
+
     // Also load raw transactions for display
     const cachedTransactions = window.localStorage.getItem("insight::accounting-transactions");
     if (cachedTransactions) {
@@ -211,7 +226,10 @@ export default function WorkspacePage() {
       }
     }
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener("accounting-update", handleAccountingUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -493,9 +511,6 @@ export default function WorkspacePage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{entry.id}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded ${entry.isBalanced ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                              {entry.isBalanced ? '✓ Balanced' : '✗ Unbalanced'}
-                            </span>
                           </div>
                           <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
                         </div>
@@ -526,8 +541,8 @@ export default function WorkspacePage() {
                           ))}
                           <tr className="border-t border-gray-200 border-b-4 border-[#bfdbfe] font-semibold">
                             <td className="py-2 text-gray-600">Total</td>
-                            <td className="py-2 text-right font-mono">{formatCurrency(entry.totalDebits)}</td>
-                            <td className="py-2 text-right font-mono">{formatCurrency(entry.totalCredits)}</td>
+                            <td className="py-2 text-right font-mono">{formatCurrency(entry.lines.reduce((sum, l) => sum + (l.debit || 0), 0))}</td>
+                            <td className="py-2 text-right font-mono">{formatCurrency(entry.lines.reduce((sum, l) => sum + (l.credit || 0), 0))}</td>
                           </tr>
                         </tbody>
                       </table>

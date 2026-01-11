@@ -7,7 +7,6 @@ import { getClientTaxRuleMetadata, refreshClientTaxRules } from "@/lib/taxRules/
 import type { TaxRuleMetadata } from "@/lib/types";
 import type { TaxDraftPayload } from "@/lib/accounting/types";
 import { Plus, RefreshCw, ShieldCheck, CalendarDays, FileDown, Trash2, SendHorizontal } from "lucide-react";
-import ModuleButtonBar from "@/components/ModuleButtonBar";
 
 type ChatMessage = {
   id: string;
@@ -220,11 +219,6 @@ export default function TaxChatPage() {
   return (
     <>
       <div className="space-y-6 pb-32">
-        {/* Mobile Module Button Bar - Fixed at top below navbar */}
-        <div className="lg:hidden sticky top-0 z-30 px-1 py-1">
-          <ModuleButtonBar />
-        </div>
-
         <section className="relative min-h-[70vh]">
           <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -389,62 +383,9 @@ export default function TaxChatPage() {
               </div>
             </div>
 
+
           </div>
         </section>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 lg:left-[252px] z-40 pointer-events-none">
-        <div className="absolute inset-0 pointer-events-none" />
-        <div className="relative mx-auto w-full max-w-3xl px-4 sm:px-6 pb-2 pt-3">
-
-          {isActionMenuOpen && (
-            <div className="pointer-events-auto mb-3 w-full max-w-sm rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 shadow-sm">
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => { setIsActionMenuOpen(false); handleImportAccountingDraft(); }}>
-                <FileDown className="w-4 h-4 text-slate-500" />
-                <span>Pull accounting export</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => { setIsActionMenuOpen(false); handleRefreshRules(); }}>
-                <RefreshCw className="w-4 h-4 text-slate-500" />
-                <span>Refresh live rules</span>
-              </button>
-              <button className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3" onClick={() => { setIsActionMenuOpen(false); handleResetWorkspace(); }}>
-                <Trash2 className="w-4 h-4 text-slate-500" />
-                <span>Reset workspace</span>
-              </button>
-            </div>
-          )}
-
-          <div className="pointer-events-auto flex items-end gap-2 rounded-[32px] bg-[#f3f4f6] dark:bg-[#2a2a2a] px-3 py-1.5 shadow-lg transition-all">
-            <button
-              className="w-9 h-9 rounded-full bg-white dark:bg-[#3a3a3a] flex items-center justify-center text-slate-600 dark:text-white mb-0.5"
-              onClick={() => setIsActionMenuOpen((prev) => !prev)}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Ask anything..."
-              className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[44px] ml-1"
-              value={composerInput}
-              onChange={(e) => setComposerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-            />
-            <button
-              className={`w-9 h-9 rounded-full flex items-center justify-center mb-0.5 transition-colors ${canSend ? "bg-gray-900 dark:bg-[#64B5F6] text-white" : "bg-white dark:bg-[#3a3a3a] text-gray-400 cursor-not-allowed"
-                }`}
-              onClick={handleSendMessage}
-              disabled={!canSend}
-            >
-              <SendHorizontal className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
       </div>
     </>
   );

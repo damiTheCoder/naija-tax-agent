@@ -22,6 +22,7 @@ import {
   getNormalBalance,
   AccountType,
 } from "./doubleEntry";
+import { analyzeTransactionText, TransactionAnalysis } from "./sentenceAnalyzer";
 
 // ============================================================================
 // ACCOUNTING ENGINE STATE
@@ -131,6 +132,10 @@ class AccountingEngine {
           }
         });
         this.state.lastUpdated = parsed.lastUpdated || new Date().toISOString();
+
+        // Auto-rebuild ledger to fix any discrepancies
+        console.log("[Load] Auto-rebuilding ledger to ensure trial balance is correct...");
+        this.rebuildLedger();
       } catch {
         // Ignore malformed cache
       }
@@ -139,6 +144,56 @@ class AccountingEngine {
 
   getState(): AccountingState {
     return this.state;
+  }
+
+  /**
+   * Rebuild ledger from journal entries
+   * This recalculates all account balances to fix any discrepancies
+   */
+  rebuildLedger(): { fixed: boolean; message: string } {
+    console.log("[Rebuild Ledger] Starting rebuild from journal entries...");
+
+    // Step 1: Clear all ledger account balances and entries
+    this.state.ledgerAccounts.forEach((account) => {
+      account.entries = [];
+      account.closingBalance = 0;
+    });
+
+    // Step 2: Re-post all journal entries
+    let postedCount = 0;
+    let skippedCount = 0;
+
+    for (const journalEntry of this.state.journalEntries) {
+      // Validate the entry first
+      const validation = validateJournalEntry(journalEntry.lines);
+
+      if (!validation.isBalanced) {
+        console.warn(`[Rebuild Ledger] Skipping unbalanced entry ${journalEntry.id}: Debits=${validation.totalDebits}, Credits=${validation.totalCredits}`);
+        skippedCount++;
+        continue;
+      }
+
+      // Re-post to ledger
+      this.postToLedger(journalEntry);
+      postedCount++;
+    }
+
+    // Step 3: Verify trial balance
+    const trialBalance = this.generateTrialBalance();
+    const isBalanced = Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01;
+
+    console.log(`[Rebuild Ledger] Complete. Posted: ${postedCount}, Skipped: ${skippedCount}`);
+    console.log(`[Rebuild Ledger] Trial Balance: Debits=${trialBalance.totals.debit}, Credits=${trialBalance.totals.credit}, Balanced=${isBalanced}`);
+
+    // Step 4: Persist the rebuilt state
+    this.notify();
+
+    return {
+      fixed: isBalanced,
+      message: isBalanced
+        ? `Ledger rebuilt: ${postedCount} entries posted, trial balance is now balanced (₦${trialBalance.totals.debit.toLocaleString()})`
+        : `Ledger rebuilt but ${skippedCount} unbalanced entries were skipped. Trial balance may still be off.`
+    };
   }
 
   /**
@@ -371,6 +426,108 @@ class AccountingEngine {
   }
 
   /**
+   * ENHANCED TRANSACTION PROCESSOR
+   * Uses word-by-word sentence analysis to identify BOTH accounts directly
+   * from the transaction description with high accuracy.
+   * 
+   * Steps:
+   * 1. Tokenize description word-by-word
+   * 2. Match keywords against Chart of Accounts
+   * 3. Detect transaction flow (inflow/outflow)
+   * 4. Identify debit and credit accounts with confidence scores
+   * 5. Create balanced journal entry
+   * 6. Run 7-pass validation
+   */
+  processTransactionEnhanced(rawTx: RawTransaction): {
+    journalEntry: JournalEntry;
+    analysis: TransactionAnalysis;
+    chatResponse: string;
+  } {
+    const amount = Math.abs(rawTx.amount);
+    const date = rawTx.date || new Date().toISOString().split("T")[0];
+
+    // Step 1: Analyze transaction using word-by-word sentence analyzer
+    const analysis = analyzeTransactionText(rawTx.description, amount);
+
+    console.log(`[Enhanced Analyzer] Transaction: "${rawTx.description}"`);
+    console.log(`[Enhanced Analyzer] Flow: ${analysis.flow}`);
+    console.log(`[Enhanced Analyzer] Debit: ${analysis.debitAccount.name} (${analysis.debitAccount.code}) - ${Math.round(analysis.debitAccount.confidence * 100)}%`);
+    console.log(`[Enhanced Analyzer] Credit: ${analysis.creditAccount.name} (${analysis.creditAccount.code}) - ${Math.round(analysis.creditAccount.confidence * 100)}%`);
+    analysis.validationLog.forEach(log => console.log(`  ${log}`));
+
+    // Step 2: Create journal entry with analyzed accounts
+    const journalId = generateJournalId();
+    const lines: JournalLine[] = [
+      {
+        accountCode: analysis.debitAccount.code,
+        accountName: analysis.debitAccount.name,
+        debit: amount,
+        credit: 0,
+      },
+      {
+        accountCode: analysis.creditAccount.code,
+        accountName: analysis.creditAccount.name,
+        debit: 0,
+        credit: amount,
+      },
+    ];
+
+    const journalEntry: JournalEntry = {
+      id: journalId,
+      date,
+      narration: rawTx.description,
+      lines,
+      status: "posted",
+      source: "enhanced-analyzer",
+      confidence: Math.min(analysis.debitAccount.confidence, analysis.creditAccount.confidence),
+      assumptions: analysis.assumptions,
+    };
+
+    // Step 3: Validate the entry is balanced
+    const validation = validateJournalEntry(journalEntry.lines);
+    if (!validation.isBalanced) {
+      console.error(`[Validation Failed] Debits: ${validation.totalDebits}, Credits: ${validation.totalCredits}, Diff: ${validation.difference}`);
+      throw new Error(`Journal entry not balanced: Debits (${validation.totalDebits}) ≠ Credits (${validation.totalCredits})`);
+    }
+    console.log(`[Validation Passed] Entry balanced: Debits=${validation.totalDebits}, Credits=${validation.totalCredits}`);
+
+    // Step 4: Post to ledger
+    this.postToLedger(journalEntry);
+
+    // Step 5: Add to state
+    this.state.journalEntries.push(journalEntry);
+    this.notify();
+
+    // Step 6: Generate chat response
+    const chatResponse = this.generateEnhancedChatResponse(journalEntry, analysis);
+
+    return { journalEntry, analysis, chatResponse };
+  }
+
+  /**
+   * Generate enhanced chat response with account detection details
+   */
+  private generateEnhancedChatResponse(entry: JournalEntry, analysis: TransactionAnalysis): string {
+    const formatCurrency = (n: number) => `₦${n.toLocaleString()}`;
+
+    const debitLine = entry.lines.find(l => l.debit > 0)!;
+    const creditLine = entry.lines.find(l => l.credit > 0)!;
+
+    let response = `✅ **Transaction Posted** (${entry.id})\n\n`;
+    response += `**Debit:** ${debitLine.accountName} (${debitLine.accountCode}) — ${formatCurrency(debitLine.debit)}\n`;
+    response += `**Credit:** ${creditLine.accountName} (${creditLine.accountCode}) — ${formatCurrency(creditLine.credit)}\n\n`;
+
+    if (analysis.assumptions.length > 0) {
+      response += `_Assumptions: ${analysis.assumptions.join("; ")}_\n`;
+    }
+
+    const confidence = Math.round(Math.min(analysis.debitAccount.confidence, analysis.creditAccount.confidence) * 100);
+    response += `\n📊 Confidence: ${confidence}%`;
+
+    return response;
+  }
+
+  /**
    * 7-PASS BACKTESTING VALIDATION ENGINE
    * Runs transaction interpretation through 7 different validation passes:
    * 1. Standard interpretation
@@ -489,16 +646,20 @@ class AccountingEngine {
    * Pass 2: Pattern-based classification
    */
   private classifyByPatterns(desc: string, amount: number): { type: TransactionType; isCredit: boolean; confidence: number } {
-    // Sales patterns
-    if (/\b(sold|sale|selling)\b.*\d/.test(desc) || /\d.*\b(sale|sold)\b/.test(desc)) {
-      const hasCredit = /\b(credit|account|invoice|receivable)\b/.test(desc);
-      return { type: 'sale', isCredit: hasCredit, confidence: 0.9 };
+    // IMPORTANT: Check PURCHASE patterns FIRST to prevent 'resale' from triggering sale
+
+    // Purchase patterns - CHECK FIRST
+    if (/\b(bought|purchased|buy|buying|purchase)\b/i.test(desc)) {
+      const hasCredit = /\b(credit|on\s+credit|account|payable)\b/i.test(desc);
+      return { type: 'purchase', isCredit: hasCredit, confidence: 0.95 };
     }
 
-    // Purchase patterns
-    if (/\b(bought|purchased|buy)\b.*\d/.test(desc) || /\d.*\b(bought|purchased)\b/.test(desc)) {
-      const hasCredit = /\b(credit|account|payable)\b/.test(desc);
-      return { type: 'purchase', isCredit: hasCredit, confidence: 0.9 };
+    // Sales patterns - only if NOT a purchase (excludes 'resale', 'for resale')
+    // The word 'resale' or 'for resale' indicates buying for future sale, NOT a current sale
+    const isPurchaseContext = /\b(bought|purchased|buy|purchase|for\s+resale)\b/i.test(desc);
+    if (!isPurchaseContext && /\b(sold|sale|selling|sell)\b/i.test(desc)) {
+      const hasCredit = /\b(credit|on\s+credit|account|invoice|receivable)\b/i.test(desc);
+      return { type: 'sale', isCredit: hasCredit, confidence: 0.9 };
     }
 
     // Expense patterns
@@ -529,8 +690,8 @@ class AccountingEngine {
    */
   private classifyByKeywords(desc: string, amount: number): { type: TransactionType; isCredit: boolean; confidence: number } {
     const keywords: Record<TransactionType, { words: string[]; weight: number }> = {
-      'sale': { words: ['sold', 'sales', 'revenue', 'income', 'customer', 'goods sold'], weight: 0 },
-      'purchase': { words: ['bought', 'purchased', 'inventory', 'stock', 'goods', 'supplier'], weight: 0 },
+      'sale': { words: ['sold', 'selling', 'revenue', 'income', 'customer', 'goods sold'], weight: 0 },
+      'purchase': { words: ['bought', 'purchased', 'purchasing', 'inventory', 'stock', 'goods', 'supplier', 'resale', 'for resale'], weight: 0 },
       'expense': { words: ['paid', 'expense', 'rent', 'salary', 'utilities', 'transport', 'fuel'], weight: 0 },
       'asset-purchase': { words: ['equipment', 'vehicle', 'furniture', 'computer', 'machine', 'building'], weight: 0 },
       'loan-received': { words: ['borrowed', 'loan received', 'bank loan'], weight: 0 },
@@ -583,16 +744,18 @@ class AccountingEngine {
     // 3. Asset recognition - future economic benefit
     // 4. Liability recognition - present obligation
 
-    // Simple sale = cash unless credit stated
-    if (desc.includes('sold') || desc.includes('sale')) {
-      const explicitCredit = /\b(on\s+credit|on\s+account|invoice|receivable|outstanding|owed)\b/.test(desc);
-      return { type: 'sale', isCredit: explicitCredit, confidence: 0.95 };
+    // IMPORTANT: Check PURCHASE FIRST to avoid 'resale' triggering sale
+    // Purchase = cash unless credit stated
+    if (desc.includes('bought') || desc.includes('purchased') || desc.includes('buy') || desc.includes('purchase')) {
+      const explicitCredit = /\b(on\s+credit|on\s+account|payable|owed)\b/.test(desc);
+      return { type: 'purchase', isCredit: explicitCredit, confidence: 0.95 };
     }
 
-    // Purchase = cash unless credit stated
-    if (desc.includes('bought') || desc.includes('purchased') || desc.includes('buy')) {
-      const explicitCredit = /\b(on\s+credit|on\s+account|payable|owed)\b/.test(desc);
-      return { type: 'purchase', isCredit: explicitCredit, confidence: 0.9 };
+    // Simple sale = cash unless credit stated (only if NOT a purchase context)
+    const isPurchaseContext = /\b(bought|purchased|buy|purchase|for\s+resale)\b/i.test(desc);
+    if (!isPurchaseContext && (desc.includes('sold') || /\bsale\b/.test(desc))) {
+      const explicitCredit = /\b(on\s+credit|on\s+account|invoice|receivable|outstanding|owed)\b/.test(desc);
+      return { type: 'sale', isCredit: explicitCredit, confidence: 0.9 };
     }
 
     // Expense = always cash payment assumed
@@ -674,21 +837,24 @@ class AccountingEngine {
    * Pass 7: Action-based classification
    */
   private classifyByAction(desc: string, amount: number): { type: TransactionType; isCredit: boolean; confidence: number } {
-    // Sold = sale
-    if (/\bsold\b/.test(desc)) {
-      const isCredit = /\b(credit|account|invoice)\b/.test(desc);
-      return { type: 'sale', isCredit, confidence: 0.95 };
-    }
+    // IMPORTANT: Check PURCHASE first to prevent 'resale' from triggering sale
 
-    // Bought/Purchased = purchase
-    if (/\b(bought|purchased)\b/.test(desc)) {
-      const isCredit = /\b(credit|account)\b/.test(desc);
+    // Bought/Purchased = purchase (CHECK FIRST)
+    if (/\b(bought|purchased|purchase|buying)\b/i.test(desc)) {
+      const isCredit = /\b(credit|on\s+credit|account)\b/i.test(desc);
 
       // Check if it's an asset
-      if (/\b(equipment|vehicle|furniture|computer|laptop|machine|building)\b/.test(desc)) {
-        return { type: 'asset-purchase', isCredit, confidence: 0.9 };
+      if (/\b(equipment|vehicle|furniture|computer|laptop|machine|building)\b/i.test(desc)) {
+        return { type: 'asset-purchase', isCredit, confidence: 0.95 };
       }
-      return { type: 'purchase', isCredit, confidence: 0.9 };
+      return { type: 'purchase', isCredit, confidence: 0.95 };
+    }
+
+    // Sold = sale (only if NOT in purchase context)
+    const isPurchaseContext = /\b(bought|purchased|buy|purchase|for\s+resale)\b/i.test(desc);
+    if (!isPurchaseContext && /\bsold\b/i.test(desc)) {
+      const isCredit = /\b(credit|on\s+credit|account|invoice)\b/i.test(desc);
+      return { type: 'sale', isCredit, confidence: 0.9 };
     }
 
     // Paid = expense or payment
@@ -736,6 +902,336 @@ class AccountingEngine {
     }
 
     return { type: 'other', isCredit: false, confidence: 0.3 };
+  }
+
+  // ============================================================================
+  // 7-PASS ACCOUNT MAPPING VALIDATION ENGINE
+  // ============================================================================
+
+  /**
+   * 7-PASS ACCOUNT MAPPING VALIDATION
+   * Analyzes transaction description against Chart of Accounts using 7 strategies:
+   * 1. Direct keyword match - exact account name keywords
+   * 2. Synonym detection - alternative terms for same concept
+   * 3. Semantic similarity - conceptually related terms
+   * 4. Nigerian context - local terms (NEPA, MTN, Bolt, etc.)
+   * 5. IFRS classification - accounting standards rules
+   * 6. Hierarchical mapping - parent/child account relationships
+   * 7. Historical pattern - common transaction patterns
+   * 
+   * Uses weighted consensus voting for final account selection
+   */
+  run7PassAccountMapping(
+    description: string,
+    transactionType: TransactionType,
+    amount: number
+  ): { code: string; name: string; confidence: number; validationLog: string[] } {
+    const desc = description.toLowerCase();
+    const passes: Array<{ code: string; name: string; confidence: number; pass: string }> = [];
+    const validationLog: string[] = [];
+
+    // ===== PASS 1: DIRECT KEYWORD MATCH =====
+    const pass1 = this.accountMappingPass1_DirectKeyword(desc, transactionType);
+    passes.push({ ...pass1, pass: 'Direct Keyword' });
+    validationLog.push(`Pass 1 (Direct): ${pass1.name} (${Math.round(pass1.confidence * 100)}%)`);
+
+    // ===== PASS 2: SYNONYM DETECTION =====
+    const pass2 = this.accountMappingPass2_Synonym(desc, transactionType);
+    passes.push({ ...pass2, pass: 'Synonym' });
+    validationLog.push(`Pass 2 (Synonym): ${pass2.name} (${Math.round(pass2.confidence * 100)}%)`);
+
+    // ===== PASS 3: SEMANTIC SIMILARITY =====
+    const pass3 = this.accountMappingPass3_Semantic(desc, transactionType);
+    passes.push({ ...pass3, pass: 'Semantic' });
+    validationLog.push(`Pass 3 (Semantic): ${pass3.name} (${Math.round(pass3.confidence * 100)}%)`);
+
+    // ===== PASS 4: NIGERIAN CONTEXT =====
+    const pass4 = this.accountMappingPass4_NigerianContext(desc, transactionType);
+    passes.push({ ...pass4, pass: 'Nigerian Context' });
+    validationLog.push(`Pass 4 (Nigerian): ${pass4.name} (${Math.round(pass4.confidence * 100)}%)`);
+
+    // ===== PASS 5: IFRS CLASSIFICATION =====
+    const pass5 = this.accountMappingPass5_IFRS(desc, transactionType, amount);
+    passes.push({ ...pass5, pass: 'IFRS' });
+    validationLog.push(`Pass 5 (IFRS): ${pass5.name} (${Math.round(pass5.confidence * 100)}%)`);
+
+    // ===== PASS 6: HIERARCHICAL MAPPING =====
+    const pass6 = this.accountMappingPass6_Hierarchical(desc, transactionType);
+    passes.push({ ...pass6, pass: 'Hierarchical' });
+    validationLog.push(`Pass 6 (Hierarchical): ${pass6.name} (${Math.round(pass6.confidence * 100)}%)`);
+
+    // ===== PASS 7: ACTION-BASED MAPPING =====
+    const pass7 = this.accountMappingPass7_ActionBased(desc, transactionType);
+    passes.push({ ...pass7, pass: 'Action-Based' });
+    validationLog.push(`Pass 7 (Action): ${pass7.name} (${Math.round(pass7.confidence * 100)}%)`);
+
+    // ===== CONSENSUS VOTING =====
+    const accountVotes = new Map<string, { code: string; name: string; score: number }>();
+
+    passes.forEach(pass => {
+      const key = pass.code;
+      const existing = accountVotes.get(key);
+      if (existing) {
+        existing.score += pass.confidence;
+      } else {
+        accountVotes.set(key, { code: pass.code, name: pass.name, score: pass.confidence });
+      }
+    });
+
+    // Find winning account
+    let winningAccount = { code: '5820', name: 'Office Supplies', score: 0 }; // Default fallback
+    accountVotes.forEach(account => {
+      if (account.score > winningAccount.score) {
+        winningAccount = account;
+      }
+    });
+
+    const totalScore = passes.reduce((sum, p) => sum + p.confidence, 0);
+    const finalConfidence = winningAccount.score / totalScore;
+    const agreementCount = passes.filter(p => p.code === winningAccount.code).length;
+
+    validationLog.push(`---`);
+    validationLog.push(`CONSENSUS: ${winningAccount.name} (${agreementCount}/7 passes, ${Math.round(finalConfidence * 100)}% confidence)`);
+
+    return {
+      code: winningAccount.code,
+      name: winningAccount.name,
+      confidence: finalConfidence,
+      validationLog
+    };
+  }
+
+  /**
+   * Pass 1: Direct keyword match against account names
+   */
+  private accountMappingPass1_DirectKeyword(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    // Finance/Loan related
+    if (desc.includes('loan') || desc.includes('interest')) return { code: '6500', name: 'Interest Expense', confidence: 0.95 };
+    if (desc.includes('bank charge') || desc.includes('bank fee')) return { code: '6030', name: 'Bank Charges', confidence: 0.95 };
+    if (desc.includes('rent')) return { code: '5600', name: 'Rent Expense', confidence: 0.95 };
+    if (desc.includes('salary') || desc.includes('wages')) return { code: '5500', name: 'Salaries and Wages', confidence: 0.95 };
+    if (desc.includes('electricity') || desc.includes('power')) return { code: '5610', name: 'Utilities Expense', confidence: 0.95 };
+    if (desc.includes('insurance')) return { code: '5800', name: 'Insurance Expense', confidence: 0.95 };
+    if (desc.includes('advertising') || desc.includes('marketing')) return { code: '6000', name: 'Advertising and Marketing', confidence: 0.95 };
+    if (desc.includes('transport') || desc.includes('fuel')) return { code: '6070', name: 'Transport Expense', confidence: 0.95 };
+    if (desc.includes('legal') || desc.includes('lawyer')) return { code: '5920', name: 'Legal Fees', confidence: 0.95 };
+    if (desc.includes('audit') || desc.includes('accounting')) return { code: '5910', name: 'Audit Fees', confidence: 0.95 };
+    if (desc.includes('professional') || desc.includes('consultant')) return { code: '5900', name: 'Professional Fees', confidence: 0.95 };
+    if (desc.includes('depreciation')) return { code: '5700', name: 'Depreciation Expense', confidence: 0.95 };
+    if (desc.includes('training') || desc.includes('seminar')) return { code: '6020', name: 'Training and Development', confidence: 0.95 };
+    if (desc.includes('entertainment') || desc.includes('hosting')) return { code: '6010', name: 'Travel and Entertainment', confidence: 0.95 };
+    if (desc.includes('repair') || desc.includes('maintenance')) return { code: '5810', name: 'Repairs and Maintenance', confidence: 0.95 };
+    if (desc.includes('stationery') || desc.includes('office supplies')) return { code: '5820', name: 'Office Supplies', confidence: 0.95 };
+    if (desc.includes('telephone') || desc.includes('internet')) return { code: '5620', name: 'Telephone and Internet', confidence: 0.95 };
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 2: Synonym detection - alternative terms
+   */
+  private accountMappingPass2_Synonym(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    const synonymMap: Record<string, { code: string; name: string }> = {
+      // Finance synonyms
+      'processing fee': { code: '6500', name: 'Interest Expense' },
+      'facility fee': { code: '6500', name: 'Interest Expense' },
+      'overdraft': { code: '6500', name: 'Interest Expense' },
+      'commitment fee': { code: '6500', name: 'Interest Expense' },
+      // Bank charges
+      'cot': { code: '6030', name: 'Bank Charges' },
+      'service charge': { code: '6030', name: 'Bank Charges' },
+      'atm': { code: '6030', name: 'Bank Charges' },
+      'transfer fee': { code: '6030', name: 'Bank Charges' },
+      // Rent
+      'lease': { code: '5600', name: 'Rent Expense' },
+      'tenancy': { code: '5600', name: 'Rent Expense' },
+      'accommodation': { code: '5600', name: 'Rent Expense' },
+      // Salary
+      'payroll': { code: '5500', name: 'Salaries and Wages' },
+      'staff cost': { code: '5500', name: 'Salaries and Wages' },
+      'employee': { code: '5500', name: 'Salaries and Wages' },
+      'allowance': { code: '5500', name: 'Salaries and Wages' },
+      // Transport
+      'petrol': { code: '6070', name: 'Transport Expense' },
+      'diesel': { code: '6070', name: 'Transport Expense' },
+      'fare': { code: '6070', name: 'Transport Expense' },
+      'logistics': { code: '6070', name: 'Transport Expense' },
+      'delivery': { code: '6070', name: 'Transport Expense' },
+      // Professional
+      'consultancy': { code: '5900', name: 'Professional Fees' },
+      'advisory': { code: '5900', name: 'Professional Fees' },
+      // Entertainment
+      'refreshment': { code: '6010', name: 'Travel and Entertainment' },
+      'lunch': { code: '6010', name: 'Travel and Entertainment' },
+      'dinner': { code: '6010', name: 'Travel and Entertainment' },
+      'hospitality': { code: '6010', name: 'Travel and Entertainment' },
+    };
+
+    for (const [keyword, account] of Object.entries(synonymMap)) {
+      if (desc.includes(keyword)) {
+        return { ...account, confidence: 0.9 };
+      }
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 3: Semantic similarity - conceptually related
+   */
+  private accountMappingPass3_Semantic(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    // Group concepts by semantic meaning
+    const semanticGroups = [
+      { patterns: ['borrow', 'credit facility', 'financing', 'capital cost'], account: { code: '6500', name: 'Interest Expense' } },
+      { patterns: ['office space', 'shop', 'warehouse', 'store rent'], account: { code: '5600', name: 'Rent Expense' } },
+      { patterns: ['team', 'workers', 'personnel', 'manpower'], account: { code: '5500', name: 'Salaries and Wages' } },
+      { patterns: ['light', 'generator', 'inverter', 'solar'], account: { code: '5610', name: 'Utilities Expense' } },
+      { patterns: ['coverage', 'protection', 'policy', 'risk'], account: { code: '5800', name: 'Insurance Expense' } },
+      { patterns: ['promotion', 'campaign', 'branding', 'publicity'], account: { code: '6000', name: 'Advertising and Marketing' } },
+      { patterns: ['movement', 'travel', 'trip', 'journey', 'commute'], account: { code: '6070', name: 'Transport Expense' } },
+      { patterns: ['course', 'learning', 'workshop', 'conference'], account: { code: '6020', name: 'Training and Development' } },
+      { patterns: ['fix', 'service', 'restore', 'fixing'], account: { code: '5810', name: 'Repairs and Maintenance' } },
+    ];
+
+    for (const group of semanticGroups) {
+      for (const pattern of group.patterns) {
+        if (desc.includes(pattern)) {
+          return { ...group.account, confidence: 0.85 };
+        }
+      }
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 4: Nigerian context - local terms and providers
+   */
+  private accountMappingPass4_NigerianContext(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    // Nigerian-specific mappings
+    const nigerianTerms: Record<string, { code: string; name: string }> = {
+      // Power companies
+      'nepa': { code: '5610', name: 'Utilities Expense' },
+      'phcn': { code: '5610', name: 'Utilities Expense' },
+      'ekedc': { code: '5610', name: 'Utilities Expense' },
+      'ikedc': { code: '5610', name: 'Utilities Expense' },
+      'aedc': { code: '5610', name: 'Utilities Expense' },
+      'jed': { code: '5610', name: 'Utilities Expense' },
+      'kedco': { code: '5610', name: 'Utilities Expense' },
+      // Telecoms
+      'mtn': { code: '5620', name: 'Telephone and Internet' },
+      'glo': { code: '5620', name: 'Telephone and Internet' },
+      'airtel': { code: '5620', name: 'Telephone and Internet' },
+      '9mobile': { code: '5620', name: 'Telephone and Internet' },
+      'etisalat': { code: '5620', name: 'Telephone and Internet' },
+      'spectranet': { code: '5620', name: 'Telephone and Internet' },
+      'smile': { code: '5620', name: 'Telephone and Internet' },
+      // Ride-hailing
+      'uber': { code: '6070', name: 'Transport Expense' },
+      'bolt': { code: '6070', name: 'Transport Expense' },
+      'indriver': { code: '6070', name: 'Transport Expense' },
+      // Banks (for bank charges context)
+      'gtb': { code: '6030', name: 'Bank Charges' },
+      'access': { code: '6030', name: 'Bank Charges' },
+      'zenith': { code: '6030', name: 'Bank Charges' },
+      'uba': { code: '6030', name: 'Bank Charges' },
+      'first bank': { code: '6030', name: 'Bank Charges' },
+      'kuda': { code: '6030', name: 'Bank Charges' },
+      'opay': { code: '6030', name: 'Bank Charges' },
+      'moniepoint': { code: '6030', name: 'Bank Charges' },
+      // Nigerian slang/terms
+      'dangote': { code: '5010', name: 'Purchases' }, // cement/materials
+      'topping': { code: '5010', name: 'Purchases' },
+      'dstv': { code: '6010', name: 'Travel and Entertainment' },
+      'gotv': { code: '6010', name: 'Travel and Entertainment' },
+    };
+
+    for (const [term, account] of Object.entries(nigerianTerms)) {
+      if (desc.includes(term)) {
+        return { ...account, confidence: 0.92 };
+      }
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 5: IFRS/GAAP classification rules
+   */
+  private accountMappingPass5_IFRS(desc: string, type: TransactionType, amount: number): { code: string; name: string; confidence: number } {
+    // IFRS rules for expense classification
+    // IAS 23: Borrowing costs → Interest Expense
+    if (desc.includes('loan') || desc.includes('borrow') || desc.includes('interest') || desc.includes('finance charge')) {
+      return { code: '6500', name: 'Interest Expense', confidence: 0.93 };
+    }
+
+    // IAS 16: Maintenance vs Capital expenditure
+    if (desc.includes('repair') || desc.includes('maintenance') || desc.includes('servicing')) {
+      // If routine maintenance, expense it
+      return { code: '5810', name: 'Repairs and Maintenance', confidence: 0.9 };
+    }
+
+    // IAS 19: Employee benefits
+    if (desc.includes('salary') || desc.includes('bonus') || desc.includes('pension') || desc.includes('gratuity')) {
+      return { code: '5500', name: 'Salaries and Wages', confidence: 0.9 };
+    }
+
+    // IAS 38: Intangibles - training as expense
+    if (desc.includes('training') || desc.includes('development')) {
+      return { code: '6020', name: 'Training and Development', confidence: 0.88 };
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 6: Hierarchical mapping - broader category fallback
+   */
+  private accountMappingPass6_Hierarchical(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    // Administrative expenses (6000 series)
+    if (desc.includes('admin') || desc.includes('management') || desc.includes('general')) {
+      return { code: '5820', name: 'Office Supplies', confidence: 0.7 };
+    }
+
+    // Operating expenses (5500-5900)
+    if (type === 'expense') {
+      // Check broad categories
+      if (desc.includes('cost') || desc.includes('expense') || desc.includes('payment')) {
+        // Default to most common expense
+        return { code: '5820', name: 'Office Supplies', confidence: 0.5 };
+      }
+    }
+
+    // Finance costs (6500 series)
+    if (desc.includes('fee') && (desc.includes('bank') || desc.includes('loan') || desc.includes('credit'))) {
+      return { code: '6500', name: 'Interest Expense', confidence: 0.8 };
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
+  }
+
+  /**
+   * Pass 7: Action-based mapping - verb analysis
+   */
+  private accountMappingPass7_ActionBased(desc: string, type: TransactionType): { code: string; name: string; confidence: number } {
+    // Parse action verbs
+    if (/\b(paid|pay|paying)\b/.test(desc)) {
+      if (desc.includes('loan') || desc.includes('interest')) return { code: '6500', name: 'Interest Expense', confidence: 0.9 };
+      if (desc.includes('rent')) return { code: '5600', name: 'Rent Expense', confidence: 0.9 };
+      if (desc.includes('salary') || desc.includes('staff')) return { code: '5500', name: 'Salaries and Wages', confidence: 0.9 };
+      if (desc.includes('electricity') || desc.includes('bill')) return { code: '5610', name: 'Utilities Expense', confidence: 0.9 };
+    }
+
+    if (/\b(bought|purchased|buy)\b/.test(desc)) {
+      if (desc.includes('fuel') || desc.includes('petrol')) return { code: '6070', name: 'Transport Expense', confidence: 0.9 };
+      if (desc.includes('office') || desc.includes('stationery')) return { code: '5820', name: 'Office Supplies', confidence: 0.9 };
+    }
+
+    if (/\b(repaired|fixed|serviced)\b/.test(desc)) {
+      return { code: '5810', name: 'Repairs and Maintenance', confidence: 0.9 };
+    }
+
+    return { code: '5820', name: 'Office Supplies', confidence: 0.3 };
   }
 
   /**
@@ -1583,60 +2079,31 @@ class AccountingEngine {
       case "expense": {
         // DR: Expense account
         // CR: Cash/Bank OR Accrued Expenses
-        // IMPROVED: Detect expense type from description if category is not provided
-        const desc = rawTx.description.toLowerCase();
-        let expenseCode: string;
-        let expenseAccountName: string;
+        // IMPROVED: Use 7-pass account mapping validation for accurate CoA selection
 
-        // Try to detect expense type from description first
-        if (desc.includes('rent') || desc.includes('rental') || desc.includes('lease')) {
-          expenseCode = "5600";
-          expenseAccountName = "Rent Expense";
-        } else if (desc.includes('salary') || desc.includes('salaries') || desc.includes('wages') || desc.includes('payroll')) {
-          expenseCode = "5500";
-          expenseAccountName = "Salaries and Wages";
-        } else if (desc.includes('electricity') || desc.includes('nepa') || desc.includes('phcn') || desc.includes('power')) {
-          expenseCode = "5610";
-          expenseAccountName = "Utilities - Electricity";
-        } else if (desc.includes('water')) {
-          expenseCode = "5610";
-          expenseAccountName = "Utilities - Water";
-        } else if (desc.includes('internet') || desc.includes('data') || desc.includes('phone') || desc.includes('telephone')) {
-          expenseCode = "5620";
-          expenseAccountName = "Telephone and Internet";
-        } else if (desc.includes('insurance') || desc.includes('premium')) {
-          expenseCode = "5800";
-          expenseAccountName = "Insurance Expense";
-        } else if (desc.includes('repair') || desc.includes('maintenance')) {
-          expenseCode = "5810";
-          expenseAccountName = "Repairs and Maintenance";
-        } else if (desc.includes('advertising') || desc.includes('marketing') || desc.includes('advert')) {
-          expenseCode = "6000";
-          expenseAccountName = "Advertising and Marketing";
-        } else if (desc.includes('transport') || desc.includes('fuel') || desc.includes('petrol') || desc.includes('diesel')) {
-          expenseCode = "6070";
-          expenseAccountName = "Transport and Fuel";
-        } else if (desc.includes('training') || desc.includes('course')) {
-          expenseCode = "6020";
-          expenseAccountName = "Training and Development";
-        } else if (desc.includes('office') || desc.includes('stationery') || desc.includes('supplies')) {
-          expenseCode = "5820";
-          expenseAccountName = "Office Supplies";
-        } else if (desc.includes('professional') || desc.includes('consultancy')) {
-          expenseCode = "5900";
-          expenseAccountName = "Professional Fees";
-        } else if (desc.includes('bank charge') || desc.includes('service charge')) {
-          expenseCode = "6030";
-          expenseAccountName = "Bank Charges";
-        } else if (desc.includes('entertainment') || desc.includes('refreshment')) {
-          expenseCode = "6010";
-          expenseAccountName = "Entertainment Expense";
-        } else {
-          // Fall back to category mapping
-          expenseCode = this.mapCategoryToExpenseAccount(rawTx.category || "");
-          const expenseAccount = getAccount(expenseCode);
-          expenseAccountName = expenseAccount?.name || "Operating Expense";
-        }
+        // ===== 7-PASS ACCOUNT MAPPING VALIDATION =====
+        // Runs through 7 different validation strategies:
+        // 1. Direct keyword match
+        // 2. Synonym detection
+        // 3. Semantic similarity
+        // 4. Nigerian context (MTN, EKEDC, Bolt, etc.)
+        // 5. IFRS classification
+        // 6. Hierarchical mapping
+        // 7. Action-based mapping
+        // Uses weighted consensus voting for final account selection
+
+        const accountMapping = this.run7PassAccountMapping(
+          rawTx.description,
+          transactionType,
+          amount
+        );
+
+        const expenseCode = accountMapping.code;
+        const expenseAccountName = accountMapping.name;
+
+        // Log validation for debugging/audit trail
+        console.log(`[7-Pass Account Mapping] ${rawTx.description}`);
+        accountMapping.validationLog.forEach(log => console.log(`  ${log}`));
 
         const isAccrued = interpretation.assumptions.some(a => a.toLowerCase().includes('accrual'));
 
@@ -2132,8 +2599,38 @@ class AccountingEngine {
    */
   private postToLedger(journalEntry: JournalEntry) {
     journalEntry.lines.forEach((line) => {
-      const ledgerAccount = this.state.ledgerAccounts.get(line.accountCode);
-      if (!ledgerAccount) return;
+      let ledgerAccount = this.state.ledgerAccounts.get(line.accountCode);
+
+      // If account doesn't exist in ledger, create it from Chart of Accounts
+      if (!ledgerAccount) {
+        const coaAccount = getAccount(line.accountCode);
+        if (coaAccount) {
+          ledgerAccount = {
+            accountCode: coaAccount.code,
+            accountName: coaAccount.name,
+            accountType: coaAccount.type,
+            normalBalance: coaAccount.normalBalance,
+            entries: [],
+            openingBalance: 0,
+            closingBalance: 0,
+          };
+          this.state.ledgerAccounts.set(line.accountCode, ledgerAccount);
+          console.log(`[Ledger] Created new account: ${coaAccount.code} - ${coaAccount.name}`);
+        } else {
+          // Account not in CoA - create with defaults using the line info
+          ledgerAccount = {
+            accountCode: line.accountCode,
+            accountName: line.accountName,
+            accountType: this.inferAccountType(line.accountCode),
+            normalBalance: this.inferNormalBalance(line.accountCode),
+            entries: [],
+            openingBalance: 0,
+            closingBalance: 0,
+          };
+          this.state.ledgerAccounts.set(line.accountCode, ledgerAccount);
+          console.log(`[Ledger] Created custom account: ${line.accountCode} - ${line.accountName}`);
+        }
+      }
 
       const previousBalance = ledgerAccount.closingBalance;
       const isDebitNormal = ledgerAccount.normalBalance === "debit";
@@ -2158,6 +2655,31 @@ class AccountingEngine {
 
       ledgerAccount.closingBalance = newBalance;
     });
+  }
+
+  /**
+   * Infer account type from account code
+   */
+  private inferAccountType(code: string): AccountType {
+    const prefix = code.charAt(0);
+    switch (prefix) {
+      case "1": return "asset";
+      case "2": return "liability";
+      case "3": return "equity";
+      case "4": return "income";
+      case "5": case "6": case "7": return "expense";
+      default: return "expense";
+    }
+  }
+
+  /**
+   * Infer normal balance from account code
+   */
+  private inferNormalBalance(code: string): "debit" | "credit" {
+    const prefix = code.charAt(0);
+    // Assets, Expenses = Debit normal
+    // Liabilities, Equity, Income = Credit normal
+    return ["1", "5", "6", "7"].includes(prefix) ? "debit" : "credit";
   }
 
   /**

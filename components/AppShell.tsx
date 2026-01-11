@@ -6,7 +6,9 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-import ModeSelector from "@/components/ModeSelector";
+import BottomNav from "@/components/BottomNav";
+import FloatingChatButton from "@/components/FloatingChatButton";
+import ModuleButtonBar from "@/components/ModuleButtonBar";
 import GlobalSearch from "@/components/GlobalSearch";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
@@ -164,12 +166,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="lg:ml-60 min-h-screen flex flex-col">
+      <div className="lg:ml-60 min-h-screen flex flex-col pb-20 lg:pb-0"> {/* pb-20 for mobile BottomNav, lg:pb-0 for desktop */}
         {/* Desktop Header */}
         <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-end items-center pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-3">
+            {/* Module Buttons - Desktop Only */}
+            <ModuleButtonBar />
             <ThemeToggle />
-            <ModeSelector />
           </div>
         </header>
 
@@ -181,13 +184,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-3 flex items-center justify-between">
             {/* Mobile Logo */}
             <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="relative w-8 h-8 overflow-hidden rounded-full border-2 border-[#1a8cff]">
+              <div className="relative w-7 h-7 overflow-hidden rounded-full border-2 border-[#1a8cff]">
                 <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
               </div>
-              <span className="text-base font-extrabold" style={{ color: 'var(--foreground)' }}>CashOS</span>
+              <span className="text-sm font-extrabold" style={{ color: 'var(--foreground)' }}>CashOS</span>
             </Link>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 -mr-2">
               {/* Search Bar */}
               <GlobalSearch />
               <ThemeToggle />
@@ -222,12 +225,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* Mobile Fixed ModeSelector - hidden on chat pages since they have ModuleButtonBar */}
-      {!isChatPage && (
-        <div className="fixed z-50 lg:hidden bottom-6 right-4">
-          <ModeSelector />
-        </div>
-      )}
+      {/* Fixed Bottom Navigation - Visible on ALL screens as requested */}
+      <BottomNav />
+
+
+      {/* Floating Chat Button for transaction input */}
+      <FloatingChatButton />
     </div>
   );
 }

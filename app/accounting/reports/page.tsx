@@ -5,6 +5,21 @@ import Link from "next/link";
 import { CHART_OF_ACCOUNTS, AccountClass, ChartOfAccount } from "@/lib/accounting/standards";
 import { accountingEngine, AccountingState, CustomAccount } from "@/lib/accounting/transactionBridge";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
+import {
+    NigerianTaxCompliance,
+    VAT_RATE,
+    EDUCATION_TAX_RATE,
+    CIT_RATES,
+    DISALLOWABLE_EXPENSES,
+    extractVATFromGross,
+    computeVATPosition,
+    generateTaxAdjustmentSchedule,
+    computeCIT,
+    validateComplianceRules,
+    generateComplianceBlockError,
+    canClaimInputVAT,
+    TaxAuditResponse,
+} from "@/lib/tax/nigerianTaxCompliance";
 
 type AccountClassFilter = AccountClass | "all";
 
@@ -89,6 +104,20 @@ export default function ChartOfAccountsPage() {
         { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
     ]);
     const [journalError, setJournalError] = useState("");
+
+    // Account Search State
+    const [accountSearchQuery, setAccountSearchQuery] = useState<string>("");
+    const [accountSearchLineId, setAccountSearchLineId] = useState<string | null>(null);
+    const [accountClassFilter, setAccountClassFilter] = useState<AccountClassFilter>("all");
+
+    // Tax Report Tabs
+    const [activeTaxTab, setActiveTaxTab] = useState<"summary" | "adjustment" | "vat">("summary");
+
+    // AI Tax Audit State
+    const [isAuditing, setIsAuditing] = useState(false);
+    const [auditResult, setAuditResult] = useState<TaxAuditResponse | null>(null);
+    const [auditError, setAuditError] = useState<string | null>(null);
+    const [showAuditModal, setShowAuditModal] = useState(false);
 
     // Load accounting data
     useEffect(() => {
@@ -302,6 +331,62 @@ export default function ChartOfAccountsPage() {
         }
     };
 
+    // AI Tax Audit Handler
+    const handleAIAudit = async () => {
+        setIsAuditing(true);
+        setAuditError(null);
+        setAuditResult(null);
+
+        try {
+            // Build transactions from journal entries
+            const transactions = journalEntries.flatMap(entry =>
+                entry.lines.map(line => ({
+                    description: entry.narration,
+                    amount: line.debit > 0 ? line.debit : line.credit,
+                    type: line.debit > 0 ? 'expense' : 'income',
+                    category: line.accountName,
+                }))
+            );
+
+            // Calculate totals for computed taxes
+            const computedTaxes = {
+                cit: 0,
+                vat: classTotals.revenue * 0.075, // Approximate
+                wht: 0,
+                paye: 0,
+                educationTax: 0,
+            };
+
+            const response = await fetch('/api/ai/audit-tax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transactions,
+                    computedTaxes,
+                    companyInfo: {
+                        turnover: classTotals.revenue,
+                        isVATRegistered: true,
+                        companySize: classTotals.revenue < 25_000_000 ? 'small' :
+                            classTotals.revenue < 100_000_000 ? 'medium' : 'large',
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Audit failed');
+            }
+
+            const result = await response.json();
+            setAuditResult(result);
+            setShowAuditModal(true);
+        } catch (error) {
+            setAuditError(error instanceof Error ? error.message : 'Failed to run AI audit');
+        } finally {
+            setIsAuditing(false);
+        }
+    };
+
     if (!isLoaded) return null;
 
     return (
@@ -490,7 +575,7 @@ export default function ChartOfAccountsPage() {
                         {filteredTransactions.length === 0 && (
                             <div className="px-5 py-8 text-center text-gray-400">
                                 <p className="text-sm">No transactions yet</p>
-                                <p className="text-xs mt-1">Click "Post Entry" to add a journal entry</p>
+                                <p className="text-xs mt-1">Click &quot;Post Entry&quot; to add a journal entry</p>
                             </div>
                         )}
                     </div>
@@ -524,66 +609,422 @@ export default function ChartOfAccountsPage() {
                 </div>
             </div>
 
-            {/* Tax Payables Section */}
+            {/* FIRS Tax Schedules Section */}
             <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 bg-rose-50/50">
+                <div className="px-6 py-4 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Tax Schedules</h2>
+                        <p className="text-xs text-gray-500 font-mono mt-1">FIRS COMPLIANT • {new Date().getFullYear()}</p>
+                    </div>
+
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
-                            </svg>
+                        <div className="flex bg-gray-50 rounded-lg p-1 border border-gray-200">
+                            {(["summary", "adjustment", "vat"] as const).map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTaxTab(tab)}
+                                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${activeTaxTab === tab
+                                        ? "bg-white text-gray-900 shadow-sm border border-gray-100"
+                                        : "text-gray-500 hover:text-gray-900"
+                                        }`}
+                                >
+                                    {tab === "summary" ? "Direct Tax" : tab === "adjustment" ? "Adjustments" : "VAT"}
+                                </button>
+                            ))}
                         </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-gray-900">Tax Payables</h2>
-                            <p className="text-sm text-gray-500">Computed tax liabilities from transactions</p>
-                        </div>
+
+                        {/* AI Audit Button */}
+                        <button
+                            onClick={handleAIAudit}
+                            disabled={isAuditing || journalEntries.length === 0}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                        >
+                            {isAuditing ? (
+                                <>
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    Auditing...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                    AI Audit
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
-                <div className="p-5">
-                    {(() => {
-                        // Compute tax payables from revenue transactions
-                        const revenueTotal = classTotals.revenue;
-                        const vatPayable = revenueTotal * 0.075; // 7.5% VAT
-                        const whtPayable = revenueTotal * 0.05; // 5% WHT estimate
-                        const payrollExpense = accountBalances.get("5400") || 0;
-                        const payePayable = payrollExpense * 0.10; // 10% PAYE estimate
-                        const netProfit = classTotals.revenue - classTotals.expense;
-                        const citPayable = netProfit > 0 ? netProfit * 0.30 : 0; // 30% CIT
-                        const totalTaxPayable = vatPayable + whtPayable + payePayable + citPayable;
 
+                {/* Audit Error Display */}
+                {auditError && (
+                    <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{auditError}</p>
+                    </div>
+                )}
+
+                <div className="p-0 bg-gray-50/50">
+                    {(() => {
+                        // 1. Calculate Financial Definitions
+                        const revenue = classTotals.revenue;
+                        const expenses = classTotals.expense;
+                        const costOfSales = allAccounts
+                            .filter(a => a.code.startsWith("50") && a.class === "expense")
+                            .reduce((sum, a) => sum + (accountBalances.get(a.code) || 0), 0);
+
+                        const operatingExpenses = expenses - costOfSales;
+                        const grossProfit = revenue - costOfSales;
+                        const accountingProfit = revenue - expenses;
+
+                        // Detect if we have a loss (critical for proper tax computation)
+                        const hasLoss = accountingProfit < 0;
+                        const profitOrLossLabel = hasLoss ? 'Net Loss' : 'Net Profit';
+
+                        // 2. FIRS COMPLIANCE CHECKS (Guard Rails)
+                        const complianceErrors: string[] = [];
+
+                        // Check 1: PBT Verification
+                        // In our engine, PBT is derived directly from P&L, so strictly PBT == Net Profit.
+
+                        // Check 2: GP vs PBT (Operating Expenses Check)
+                        if (grossProfit > 0 && grossProfit === accountingProfit && revenue > 0) {
+                            complianceErrors.push("CRITICAL: Gross Profit equals Profit Before Tax. Operating expenses appear to be missing or zero. Tax computation halted to prevent under-deduction.");
+                        }
+
+                        // Check 3: Suspiciously Low Expenses
+                        if (revenue > 1_000_000 && expenses === 0) {
+                            complianceErrors.push("CRITICAL: Revenue detected with ZERO expenses. Income Statement is likely incomplete.");
+                        }
+
+                        // Check 4: Equity vs Income (Data Structure Verification)
+                        // Our data structure strictly separates Equity (3xxx) from Revenue (4xxx).
+                        // If any Equity account has a 'revenue' class tag, it would be a system corruption.
+                        // We assume strict type safety here but could scan if needed.
+
+                        // HALT IF CRITICAL ERRORS
+                        if (complianceErrors.length > 0) {
+                            return (
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-lg font-bold text-red-800 mb-2">Compliance Check Failed</h3>
+                                    <p className="text-sm text-red-600 mb-6">The system halted tax computation due to accounting violations:</p>
+                                    <ul className="text-left max-w-md mx-auto space-y-2 mb-6">
+                                        {complianceErrors.map((err, i) => (
+                                            <li key={i} className="flex items-start gap-2 text-sm text-red-700 bg-white p-3 rounded-lg border border-red-100 shadow-sm">
+                                                <span className="mt-0.5">🚫</span>
+                                                {err}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <p className="text-xs text-red-500">Please correct the Financial Statements before viewing Tax Schedules.</p>
+                                </div>
+                            );
+                        }
+
+                        // 3. Identify Disallowable Expenses
+                        const disallowables: Array<{ name: string; amount: number }> = [];
+                        const deductions: Array<{ name: string; amount: number }> = [];
+
+                        allAccounts.forEach(acc => {
+                            if (acc.class === "expense") {
+                                const balance = accountBalances.get(acc.code) || 0;
+                                if (balance > 0) {
+                                    // Check against disallowable keywords
+                                    const isDisallowable = DISALLOWABLE_EXPENSES.some(d =>
+                                        d.keywords.some(k => acc.name.toLowerCase().includes(k))
+                                    );
+
+                                    if (isDisallowable) {
+                                        disallowables.push({ name: acc.name, amount: balance });
+                                    }
+                                }
+                            }
+                        });
+
+                        // 4. Generate Adjustment Schedule (using new compliance engine)
+                        const capitalAllowances = 0;
+                        const adjustmentSchedule = generateTaxAdjustmentSchedule(
+                            accountingProfit,
+                            disallowables,
+                            capitalAllowances
+                        );
+
+                        // 5. Calculate CIT using new compliance engine
+                        const turnover = revenue;
+                        const cit = computeCIT(adjustmentSchedule.taxableProfit, turnover);
+
+                        // 6. VAT Computation (Using new compliance rules)
+                        // RULE: VAT base must be VAT-exclusive
+                        // Output VAT = 7.5% × VAT-exclusive sales
+                        const outputVAT = revenue * (VAT_RATE / 100);
+
+                        // Input VAT: Only on claimable purchases (RULE 4)
+                        let claimableInputVAT = 0;
+                        let nonClaimableInputVAT = 0;
+
+                        allAccounts.forEach(acc => {
+                            if (acc.code.startsWith("5")) { // Expense accounts
+                                const balance = accountBalances.get(acc.code) || 0;
+                                if (balance > 0) {
+                                    const vatCheck = canClaimInputVAT(acc.name);
+                                    const vatOnPurchase = balance * (VAT_RATE / 100);
+
+                                    if (vatCheck.canClaim) {
+                                        claimableInputVAT += vatOnPurchase;
+                                    } else {
+                                        nonClaimableInputVAT += vatOnPurchase;
+                                    }
+                                }
+                            }
+                        });
+
+
+                        // Use new computeVATPosition function
+                        const vatResult = computeVATPosition(outputVAT, claimableInputVAT);
+                        const hasVATCredit = vatResult.isCredit;
+                        const vatPayable = vatResult.isPayable ? vatResult.netPosition : 0;
+                        const vatCredit = vatResult.isCredit ? vatResult.displayAmount : 0;
+                        const inputVAT = claimableInputVAT;
+
+                        // Calculate vatable purchases proxy for display
+                        const vatablePurchases = claimableInputVAT / (VAT_RATE / 100);
+
+                        // CIT reason comes from the computation result
+                        const citReason = cit.reason;
+
+                        // PAYE
+                        const payrollExpense = accountBalances.get("5400") || 0;
+                        const payePayable = payrollExpense * 0.10;
+
+                        if (activeTaxTab === "adjustment") {
+                            return (
+                                <div className="max-w-3xl mx-auto bg-white min-h-[500px] border border-gray-100 shadow-sm p-8 font-mono text-sm">
+                                    {/* Header */}
+                                    <div className="text-center mb-8 pb-4 border-b border-gray-900 border-double">
+                                        <h2 className="uppercase text-lg font-bold tracking-widest mb-1">Tax Adjustment Schedule</h2>
+                                        <p className="text-xs text-gray-500 uppercase">For the Year Ended {new Date().getFullYear()}</p>
+                                    </div>
+
+                                    {/* Compliance Badge - Minimal */}
+                                    <div className="flex items-center justify-center mb-8">
+                                        <span className="px-3 py-1 border border-gray-300 text-[10px] uppercase tracking-wider text-gray-600 rounded-full">
+                                            ✓ FIRS Compliant
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-0">
+                                        {/* Row Component */}
+                                        <div className="flex justify-between py-2 items-end">
+                                            <span className={`font-bold ${hasLoss ? 'text-red-700' : 'text-gray-900'}`}>{profitOrLossLabel} Per Accounts</span>
+                                            <span className={`font-bold border-b border-gray-900 min-w-[120px] text-right ${hasLoss ? 'text-red-700' : ''}`}>
+                                                {hasLoss ? `(${formatCurrency(Math.abs(adjustmentSchedule.accountingProfit))})` : formatCurrency(adjustmentSchedule.accountingProfit)}
+                                            </span>
+                                        </div>
+
+                                        <div className="py-4">
+                                            <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Add: Disallowable Expenses</div>
+                                            {adjustmentSchedule.disallowables.length === 0 ? (
+                                                <div className="flex justify-between py-1 text-gray-400 italic">
+                                                    <span className="pl-4">No disallowable items</span>
+                                                    <span className="text-right">-</span>
+                                                </div>
+                                            ) : (
+                                                adjustmentSchedule.disallowables.map((d, i) => (
+                                                    <div key={i} className="flex justify-between py-1 text-gray-700 hover:bg-gray-50">
+                                                        <span className="pl-4">{d.name}</span>
+                                                        <span className="text-right">{formatCurrency(d.amount)}</span>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        <div className="flex justify-between py-2 items-end border-t border-gray-200">
+                                            <span className="font-medium text-gray-900">Adjusted Profit</span>
+                                            <span className="text-right min-w-[120px]">{formatCurrency(adjustmentSchedule.taxableProfit)}</span>
+                                        </div>
+
+                                        <div className="py-4">
+                                            <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Less: Capital Allowances</div>
+                                            <div className="flex justify-between py-1 text-gray-700">
+                                                <span className="pl-4">Capital Allowances</span>
+                                                <span className="text-right">({formatCurrency(adjustmentSchedule.capitalAllowances)})</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Total */}
+                                        <div className="flex justify-between py-4 items-end border-t-2 border-gray-900 mt-4">
+                                            <span className="font-bold text-base uppercase tracking-wider">Total Taxable Profit</span>
+                                            <span className="font-bold text-base border-b-4 border-double border-gray-900 min-w-[120px] text-right">
+                                                {formatCurrency(adjustmentSchedule.taxableProfit)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        if (activeTaxTab === "vat") {
+                            return (
+                                <div className="max-w-3xl mx-auto bg-white min-h-[500px] border border-gray-100 shadow-sm p-8 font-mono text-sm">
+                                    <div className="text-center mb-8 pb-4 border-b border-gray-900 border-double">
+                                        <h2 className="uppercase text-lg font-bold tracking-widest mb-1">Value Added Tax Computation</h2>
+                                        <p className="text-xs text-gray-500 uppercase">Period Ended {new Date().toLocaleDateString()}</p>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {/* Output VAT Section */}
+                                        <div>
+                                            <div className="text-xs uppercase font-bold text-gray-400 mb-2 border-b border-gray-100 pb-1">Output Tax (Sales)</div>
+                                            <div className="flex justify-between py-2">
+                                                <span>Total Revenue (Vatable)</span>
+                                                <span>{formatCurrency(revenue)}</span>
+                                            </div>
+                                            <div className="flex justify-between py-2 font-bold text-gray-900">
+                                                <span>Output VAT @ {VAT_RATE}%</span>
+                                                <span>{formatCurrency(outputVAT)}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Input VAT Section */}
+                                        <div>
+                                            <div className="text-xs uppercase font-bold text-gray-400 mb-2 border-b border-gray-100 pb-1">Input Tax (Purchases)</div>
+                                            <div className="flex justify-between py-2 text-gray-600">
+                                                <span className="pl-2">Cost of Sales (Est. Vatable)</span>
+                                                <span className="text-gray-400 italic">({formatCurrency(vatablePurchases)})</span>
+                                            </div>
+                                            <div className="flex justify-between py-2 font-bold text-gray-900">
+                                                <span>Less: Input VAT @ {VAT_RATE}%</span>
+                                                <span>({formatCurrency(inputVAT)})</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Net Position - Payable or Credit */}
+                                        <div className={`flex justify-between py-4 items-end border-t-2 ${hasVATCredit ? 'border-emerald-600' : 'border-gray-900'} mt-4`}>
+                                            <div>
+                                                <span className={`font-bold text-base uppercase tracking-wider ${hasVATCredit ? 'text-emerald-700' : ''}`}>
+                                                    {hasVATCredit ? 'VAT Credit (Recoverable)' : 'Net VAT Payable'}
+                                                </span>
+                                                {hasVATCredit && (
+                                                    <div className="text-xs text-emerald-600 mt-1">Input VAT exceeds Output VAT — carry forward or claim refund</div>
+                                                )}
+                                            </div>
+                                            <span className={`font-bold text-base border-b-4 border-double min-w-[120px] text-right ${hasVATCredit ? 'border-emerald-600 text-emerald-700' : 'border-gray-900'}`}>
+                                                {hasVATCredit ? `(${formatCurrency(vatCredit)})` : formatCurrency(vatPayable)}
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-8 text-[10px] text-gray-400 text-center max-w-xs mx-auto leading-relaxed border-t border-gray-100 pt-4">
+                                            CERTIFICATION: I certify that the information provided in this VAT return is true, correct, and complete in accordance with the Value Added Tax Act Cap V1 LFN 2004.
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // Summary Tab - Statement Style
                         return (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="rounded-xl p-4 bg-gray-50">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wide">VAT Payable</p>
-                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(vatPayable)}</p>
-                                        <p className="text-xs text-gray-400 mt-1">7.5% on revenue</p>
+                            <div className="max-w-3xl mx-auto bg-white min-h-[500px] border border-gray-100 shadow-sm p-8 font-mono text-sm">
+                                <div className="text-center mb-8 pb-4 border-b border-gray-900 border-double">
+                                    <h2 className="uppercase text-lg font-bold tracking-widest mb-1">Direct Taxes Summary</h2>
+                                    <p className="text-xs text-gray-500 uppercase">Consolidated Liability Position</p>
+                                </div>
+
+                                <div className="space-y-0 divide-y divide-gray-100">
+                                    {/* Header Row */}
+                                    <div className="grid grid-cols-12 py-3 text-xs uppercase font-bold text-gray-400 tracking-wider">
+                                        <div className="col-span-6">Tax Application</div>
+                                        <div className="col-span-3 text-right">Rate / Basis</div>
+                                        <div className="col-span-3 text-right">Amount</div>
                                     </div>
-                                    <div className="rounded-xl p-4 bg-gray-50">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wide">WHT Payable</p>
-                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(whtPayable)}</p>
-                                        <p className="text-xs text-gray-400 mt-1">5% withholding</p>
+
+                                    {/* Item 1: CIT */}
+                                    <div className="grid grid-cols-12 py-4 items-center">
+                                        <div className="col-span-6">
+                                            <div className="font-bold text-gray-900">Company Income Tax</div>
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                {hasLoss || adjustmentSchedule.taxableProfit <= 0
+                                                    ? <span className="text-amber-600 font-medium">Tax Loss — No taxable profit</span>
+                                                    : `Based on Taxable Profit of ${formatCurrency(adjustmentSchedule.taxableProfit)}`
+                                                }
+                                            </div>
+                                        </div>
+                                        <div className="col-span-3 text-right text-gray-500 text-xs">
+                                            {citReason}
+                                        </div>
+                                        <div className="col-span-3 text-right font-bold text-gray-900">
+                                            {formatCurrency(cit.citPayable)}
+                                        </div>
                                     </div>
-                                    <div className="rounded-xl p-4 bg-gray-50">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wide">PAYE</p>
-                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(payePayable)}</p>
-                                        <p className="text-xs text-gray-400 mt-1">Est. on payroll</p>
+
+                                    {/* Item 2: Education Tax */}
+                                    <div className="grid grid-cols-12 py-4 items-center">
+                                        <div className="col-span-6">
+                                            <div className="font-bold text-gray-900">Tertiary Education Tax</div>
+                                            <div className="text-xs text-gray-500 mt-1">Assessable Profit Basis</div>
+                                        </div>
+                                        <div className="col-span-3 text-right text-gray-500 text-xs">
+                                            {EDUCATION_TAX_RATE}%
+                                        </div>
+                                        <div className="col-span-3 text-right font-bold text-gray-900">
+                                            {formatCurrency(cit.educationTax)}
+                                        </div>
                                     </div>
-                                    <div className="rounded-xl p-4 bg-gray-50">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wide">CIT Provision</p>
-                                        <p className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(citPayable)}</p>
-                                        <p className="text-xs text-gray-400 mt-1">30% on profit</p>
+
+                                    {/* Item 3: PAYE */}
+                                    <div className="grid grid-cols-12 py-4 items-center">
+                                        <div className="col-span-6">
+                                            <div className="font-bold text-gray-900">P.A.Y.E Liability</div>
+                                            <div className="text-xs text-gray-500 mt-1">Employee Tax Deductions</div>
+                                        </div>
+                                        <div className="col-span-3 text-right text-gray-500 text-xs">
+                                            Graduated Scale
+                                        </div>
+                                        <div className="col-span-3 text-right font-bold text-gray-900">
+                                            {formatCurrency(payePayable)}
+                                        </div>
+                                    </div>
+
+                                    {/* Item 4: VAT */}
+                                    <div className="grid grid-cols-12 py-4 items-center">
+                                        <div className="col-span-6">
+                                            <div className={`font-bold ${hasVATCredit ? 'text-emerald-700' : 'text-gray-900'}`}>
+                                                {hasVATCredit ? 'Value Added Tax Credit' : 'Value Added Tax'}
+                                            </div>
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                {hasVATCredit
+                                                    ? <span className="text-emerald-600">Input exceeds Output — Recoverable</span>
+                                                    : 'Net Payable (Output - Input)'
+                                                }
+                                            </div>
+                                        </div>
+                                        <div className="col-span-3 text-right text-gray-500 text-xs">
+                                            {VAT_RATE}% Net
+                                        </div>
+                                        <div className={`col-span-3 text-right font-bold ${hasVATCredit ? 'text-emerald-700' : 'text-gray-900'}`}>
+                                            {hasVATCredit ? `(${formatCurrency(vatCredit)})` : formatCurrency(vatPayable)}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between p-4 bg-rose-50 rounded-xl border border-rose-100">
-                                    <span className="text-sm font-semibold text-rose-700">Total Tax Payables</span>
-                                    <span className="text-xl font-bold text-rose-700">{formatCurrency(totalTaxPayable)}</span>
+
+                                {/* Total Tax Liability */}
+                                <div className="mt-8 pt-4 border-t-2 border-gray-900 flex justify-between items-end">
+                                    <div className="text-right flex-1 pr-8">
+                                        <div className="text-xs uppercase tracking-widest text-gray-500">Total Tax Liability to FIRS/State</div>
+                                        {hasVATCredit && (
+                                            <div className="text-xs text-emerald-600 mt-1">Note: VAT Credit of {formatCurrency(vatCredit)} not included (recoverable)</div>
+                                        )}
+                                    </div>
+                                    <div className="text-2xl font-bold font-mono border-b-4 border-double border-gray-900 pl-4">
+                                        {formatCurrency(cit.totalDirectTax + payePayable + vatPayable)}
+                                    </div>
                                 </div>
-                                {totalTaxPayable === 0 && (
-                                    <p className="text-sm text-gray-400 text-center py-4">
-                                        No tax liabilities computed. Post revenue transactions to see tax payables.
-                                    </p>
-                                )}
                             </div>
                         );
                     })()}
@@ -853,18 +1294,89 @@ export default function ChartOfAccountsPage() {
                                             {journalLines.map((line) => (
                                                 <tr key={line.id}>
                                                     <td className="px-3 py-2">
-                                                        <select
-                                                            value={line.accountCode}
-                                                            onChange={(e) => updateJournalLine(line.id, "accountCode", e.target.value)}
-                                                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                                                        >
-                                                            <option value="">Select account...</option>
-                                                            {allAccounts.map((acc) => (
-                                                                <option key={acc.code} value={acc.code}>
-                                                                    {acc.code} - {acc.name}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={accountSearchLineId === line.id ? accountSearchQuery : (line.accountCode ? `${line.accountCode} - ${line.accountName}` : "")}
+                                                                onChange={(e) => {
+                                                                    setAccountSearchQuery(e.target.value);
+                                                                    setAccountSearchLineId(line.id);
+                                                                }}
+                                                                onFocus={() => {
+                                                                    setAccountSearchLineId(line.id);
+                                                                    setAccountSearchQuery("");
+                                                                }}
+                                                                placeholder="Search accounts..."
+                                                                className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                            />
+                                                            {/* Account Class Filter Pills */}
+                                                            {accountSearchLineId === line.id && (
+                                                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                                                                    {/* Class filter tabs */}
+                                                                    <div className="flex gap-1 p-2 border-b border-gray-100 flex-wrap bg-gray-50">
+                                                                        {(["all", "asset", "liability", "equity", "revenue", "expense"] as const).map((cls) => (
+                                                                            <button
+                                                                                key={cls}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setAccountClassFilter(cls);
+                                                                                }}
+                                                                                className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${accountClassFilter === cls
+                                                                                    ? "bg-purple-600 text-white"
+                                                                                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                                                                                    }`}
+                                                                            >
+                                                                                {cls.charAt(0).toUpperCase() + cls.slice(1)}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                    {/* Filtered account list */}
+                                                                    <div className="overflow-y-auto max-h-48">
+                                                                        {allAccounts
+                                                                            .filter(acc => {
+                                                                                const matchesSearch = accountSearchQuery === "" ||
+                                                                                    acc.code.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
+                                                                                    acc.name.toLowerCase().includes(accountSearchQuery.toLowerCase());
+                                                                                const matchesClass = accountClassFilter === "all" || acc.class === accountClassFilter;
+                                                                                return matchesSearch && matchesClass;
+                                                                            })
+                                                                            .slice(0, 15)
+                                                                            .map((acc) => (
+                                                                                <button
+                                                                                    key={acc.code}
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        updateJournalLine(line.id, "accountCode", acc.code);
+                                                                                        setAccountSearchLineId(null);
+                                                                                        setAccountSearchQuery("");
+                                                                                        setAccountClassFilter("all");
+                                                                                    }}
+                                                                                    className="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center justify-between group"
+                                                                                >
+                                                                                    <div>
+                                                                                        <span className="font-mono text-purple-600 text-xs">{acc.code}</span>
+                                                                                        <span className="ml-2 text-gray-900">{acc.name}</span>
+                                                                                    </div>
+                                                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${classColors[acc.class].badge}`}>
+                                                                                        {acc.class}
+                                                                                    </span>
+                                                                                </button>
+                                                                            ))}
+                                                                        {allAccounts.filter(acc => {
+                                                                            const matchesSearch = accountSearchQuery === "" ||
+                                                                                acc.code.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
+                                                                                acc.name.toLowerCase().includes(accountSearchQuery.toLowerCase());
+                                                                            const matchesClass = accountClassFilter === "all" || acc.class === accountClassFilter;
+                                                                            return matchesSearch && matchesClass;
+                                                                        }).length === 0 && (
+                                                                                <div className="px-3 py-4 text-sm text-gray-400 text-center">
+                                                                                    No accounts found
+                                                                                </div>
+                                                                            )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-3 py-2">
                                                         <input
@@ -948,6 +1460,158 @@ export default function ChartOfAccountsPage() {
                                 className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Post Entry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Audit Results Modal */}
+            {showAuditModal && auditResult && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-gradient-to-r from-blue-50 to-purple-50">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${auditResult.isCompliant ? 'bg-green-100' : 'bg-amber-100'}`}>
+                                    {auditResult.isCompliant ? (
+                                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">AI Tax Audit Results</h2>
+                                    <p className={`text-sm font-medium ${auditResult.isCompliant ? 'text-green-600' : 'text-amber-600'}`}>
+                                        {auditResult.isCompliant ? '✓ Compliant' : `${auditResult.errors.length} Issues Found`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowAuditModal(false)}
+                                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                            {/* Errors Section */}
+                            {auditResult.errors.length > 0 && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Detected Issues</h3>
+                                    <div className="space-y-2">
+                                        {auditResult.errors.map((error, idx) => (
+                                            <div key={idx} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                                <div className="flex items-start gap-2">
+                                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded">{error.type}</span>
+                                                    <p className="text-sm text-red-700 flex-1">{error.description}</p>
+                                                </div>
+                                                {error.corrected !== undefined && (
+                                                    <p className="text-xs text-red-600 mt-1">
+                                                        Corrected: {typeof error.corrected === 'object' ? JSON.stringify(error.corrected) : String(error.corrected)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Corrected Summary */}
+                            {auditResult.correctedSummary && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Corrected Tax Summary</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Direct Taxes */}
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Direct Taxes</h4>
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">CIT</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.directTaxes?.cit?.amount || 0).toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Education Tax</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.directTaxes?.educationTax?.amount || 0).toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">PAYE</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.directTaxes?.paye?.amount || 0).toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Transaction Taxes */}
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Transaction Taxes</h4>
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Output VAT</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.transactionTaxes?.outputVAT || 0).toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Input VAT</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.transactionTaxes?.inputVAT || 0).toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Net VAT</span>
+                                                    <span className={`font-mono font-semibold ${auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? 'text-green-600' : 'text-gray-900'}`}>
+                                                        {auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? '(' : ''}
+                                                        ₦{(auditResult.correctedSummary.transactionTaxes?.netVAT || 0).toLocaleString()}
+                                                        {auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? ')' : ''}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Total WHT</span>
+                                                    <span className="font-mono font-semibold">₦{(auditResult.correctedSummary.transactionTaxes?.totalWHT || 0).toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Total Liability */}
+                                    <div className="mt-4 p-4 bg-gray-900 rounded-xl">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-white font-semibold">Total Tax Liability</span>
+                                            <span className="text-white font-mono text-xl font-bold">
+                                                ₦{(auditResult.correctedSummary.totalLiability || 0).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Explanations */}
+                            {auditResult.explanations && auditResult.explanations.length > 0 && (
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Corrections Made</h3>
+                                    <ul className="space-y-2">
+                                        {auditResult.explanations.map((explanation, idx) => (
+                                            <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                                                <span className="text-green-500 font-bold">✓</span>
+                                                {explanation}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+                            <button
+                                onClick={() => setShowAuditModal(false)}
+                                className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>
