@@ -167,7 +167,7 @@ function extractAmountFromText(text: string): number {
 
     for (const pattern of patterns) {
         const match = text.match(pattern);
-        if (match) {
+        if (match && match[1]) {
             const numStr = match[1].replace(/,/g, "");
             const num = parseFloat(numStr);
             if (!isNaN(num) && num > 0) {
@@ -277,7 +277,7 @@ function determineAccounts(
     if (flow === "outflow") {
         // Money going OUT
         // Check if buying goods for resale (purchase)
-        if (text.includes("purchased") || text.includes("bought") || text.includes("resale") || text.includes("goods")) {
+        if (text.includes("purchase") || text.includes("purchased") || text.includes("bought") || text.includes("resale") || text.includes("goods") || text.includes("inventory") || text.includes("stock")) {
             if (isCredit) {
                 // Purchased on credit: DR Purchases, CR Accounts Payable
                 const debit = expenseMatches.find(m => m.account.code === "5010")

@@ -21,6 +21,7 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^5.22.0",
     "@tanstack/react-table": "^8.21.3",

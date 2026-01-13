@@ -153,10 +153,17 @@ export const ACCOUNT_KEYWORD_MAP: Record<string, AccountMapping> = {
     // REVENUE ACCOUNTS (4000-4999) - Normally Credit
     // ============================================================================
 
+    // CRITICAL: Sales keywords with highest priority to prevent misclassification
+    "cash sale": { code: "4000", name: "Sales", normalSide: "credit", priority: 100 },
+    "credit sale": { code: "4000", name: "Sales", normalSide: "credit", priority: 100 },
+    "sale of goods": { code: "4000", name: "Sales", normalSide: "credit", priority: 100 },
+    "sales of goods": { code: "4000", name: "Sales", normalSide: "credit", priority: 100 },
+    "sold goods": { code: "4000", name: "Sales", normalSide: "credit", priority: 100 },
     "sales": { code: "4000", name: "Sales", normalSide: "credit", priority: 90 },
     "revenue": { code: "4000", name: "Sales", normalSide: "credit", priority: 85 },
     "income": { code: "4000", name: "Sales", normalSide: "credit", priority: 75 },
     "sold": { code: "4000", name: "Sales", normalSide: "credit", priority: 85 },
+    "sale": { code: "4000", name: "Sales", normalSide: "credit", priority: 88 },
     "service revenue": { code: "4010", name: "Service Revenue", normalSide: "credit", priority: 90 },
     "service income": { code: "4010", name: "Service Revenue", normalSide: "credit", priority: 85 },
     "contract revenue": { code: "4020", name: "Contract Revenue", normalSide: "credit", priority: 90 },
@@ -178,11 +185,27 @@ export const ACCOUNT_KEYWORD_MAP: Record<string, AccountMapping> = {
     // EXPENSE ACCOUNTS (5000-6999) - Normally Debit
     // ============================================================================
 
-    // Cost of Sales
+    // CRITICAL: Purchase keywords with highest priority to prevent misclassification
+    // Cost of Sales / Purchases
+    "credit purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "cash purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "purchase of inventory": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "inventory purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "bought inventory": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "purchased inventory": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "purchase of goods": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "bought goods": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "stock purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "bought stock": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "purchase of stock": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "raw materials purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+    "bought raw materials": { code: "5010", name: "Purchases", normalSide: "debit", priority: 100 },
+
     "cost of goods sold": { code: "5000", name: "Cost of Goods Sold", normalSide: "debit", priority: 95 },
     "cogs": { code: "5000", name: "Cost of Goods Sold", normalSide: "debit", priority: 90 },
     "cost of sales": { code: "5000", name: "Cost of Goods Sold", normalSide: "debit", priority: 95 },
     "purchases": { code: "5010", name: "Purchases", normalSide: "debit", priority: 90 },
+    "purchase": { code: "5010", name: "Purchases", normalSide: "debit", priority: 88 },
     "purchased": { code: "5010", name: "Purchases", normalSide: "debit", priority: 85 },
     "bought": { code: "5010", name: "Purchases", normalSide: "debit", priority: 80 },
     "resale": { code: "5010", name: "Purchases", normalSide: "debit", priority: 85 },
@@ -361,12 +384,13 @@ export const ACTION_VERBS = {
     // Money IN (we receive) - Debit cash, Credit revenue/liability
     inflow: [
         "received", "receive", "receiving",
-        "sold", "sell", "selling",
+        "sold", "sell", "selling", "sale", "sales",  // Added 'sale', 'sales'
         "earned", "earn",
         "collected", "collect",
         "borrowed", "borrow",
         "deposited", "deposit",
         "got", "get",
+        "income", "revenue",  // Added 'income', 'revenue'
     ],
 
     // Transfers (internal movement)

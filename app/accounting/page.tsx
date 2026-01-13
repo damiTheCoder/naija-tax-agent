@@ -17,7 +17,7 @@ import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
 import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { useTheme } from "@/lib/ThemeContext";
-import { Onboarding, EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
+import { EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
 
 type ManualTransactionDraft = {
   date: string;
@@ -104,7 +104,7 @@ export default function AccountingPage() {
   ]);
   const [postEntryError, setPostEntryError] = useState("");
   const [isAuditing, setIsAuditing] = useState(false);
-  const [auditResult, setAuditResult] = useState<any>(null); // AuditResult type
+  const [auditResult, setAuditResult] = useState<{ isValid?: boolean; suggestedCorrections?: { lines: Array<{ accountCode: string; accountName: string; debit: number; credit: number }> } } | null>(null);
 
 
   // Edit Entry Section State
@@ -202,7 +202,7 @@ export default function AccountingPage() {
   const applyAISuggestion = () => {
     if (auditResult && auditResult.suggestedCorrections) {
       // Map back to UI lines
-      const newLines = auditResult.suggestedCorrections.lines.map((l: any, idx: number) => ({
+      const newLines = auditResult.suggestedCorrections.lines.map((l: { accountCode: string; accountName: string; debit: number; credit: number }, idx: number) => ({
         id: Date.now().toString() + idx,
         accountCode: l.accountCode,
         accountName: l.accountName,
@@ -380,85 +380,173 @@ export default function AccountingPage() {
     setMessages((prev) => [...prev, { role, content, timestamp: Date.now() }]);
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const trimmed = composerInput.trim();
     if (!trimmed) return;
     appendMessage("user", trimmed);
     setComposerInput("");
     setIsWorkspaceCollapsed(true);
 
-    // Try to parse transaction from natural language
-    const parsedTx = parseTransactionFromChat(trimmed);
+    // First, try local parsing for immediate feedback
+    const localParsed = parseTransactionFromChat(trimmed);
 
-    if (parsedTx && parsedTx.amount && parsedTx.amount > 0) {
-      // Map parsedType to transaction type
-      const typeMap: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
-        'sale': 'income',
-        'receipt': 'income',
-        'purchase': 'expense',
-        'expense': 'expense',
-        'payment': 'liability',  // Payment to supplier reduces liability
-        'transfer': 'asset',
-        'asset': 'asset',
-        'equity': 'equity',
-        'loan': 'liability',
-        'other': 'expense',
-      };
-
-      // Map category to proper transaction categorization
-      const categoryToType: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
-        'sales': 'income',
-        'service': 'income',
-        'receipt': 'income',
-        'purchases': 'expense',
-        'rent': 'expense',
-        'salary': 'expense',
-        'utilities': 'expense',
-        'transport': 'expense',
-        'expense': 'expense',
-        'asset': 'asset',
-        'capital': 'equity',
-        'drawing': 'equity',
-        'loan-received': 'liability',
-        'loan-repayment': 'liability',
-        'supplier-payment': 'liability',  // Key: paid supplier
-        'payment': 'liability',
-        'transfer': 'asset',
-      };
-
-      // Use category-based mapping if available, otherwise fall back to parsedType
-      const transactionType = categoryToType[parsedTx.category || ''] || typeMap[parsedTx.parsedType] || 'expense';
-
-      const newTransaction: RawTransaction = {
-        id: `chat-${Date.now()}`,
-        date: new Date().toISOString().split("T")[0],
-        description: parsedTx.description || trimmed.substring(0, 150),
-        category: parsedTx.category || "other",
-        amount: parsedTx.amount,
-        type: transactionType,
-      };
-
-      // Show confidence indicator if available
-      const confidenceText = parsedTx.confidence >= 0.9 ? "✓ High confidence" :
-        parsedTx.confidence >= 0.7 ? "⚡ Medium confidence" : "⚠️ Low confidence";
-
+    // If we have an amount, try AI validation
+    if (localParsed && localParsed.amount && localParsed.amount > 0) {
       try {
-        const result = accountingEngine.processTransaction(newTransaction);
-        setTransactions((prev) => [...prev, newTransaction]);
+        // Call AI validation API
+        const response = await fetch('/api/accounting/validate-transaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionText: trimmed,
+            amount: localParsed.amount
+          })
+        });
 
-        // Enhanced response with confidence and parsed type
-        const enhancedResponse = `${result.chatResponse}\n\n_${confidenceText} (${parsedTx.parsedType} detected)_`;
-        appendMessage("assistant", enhancedResponse);
-        pushAutomationActivity("Chat journal", `Parsed and posted: ${result.journalEntry.id}`);
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
 
-        // Auto-update statements
-        const engineStatements = accountingEngine.generateStatements();
-        setGeneratedStatements(engineStatements);
-      } catch {
-        appendMessage(
-          "assistant",
-          `I detected a ${parsedTx.parsedType} transaction (₦${parsedTx.amount.toLocaleString()}). ${confidenceText}.\n\nUse the manual form above for full control, or I can journal it with assumptions.`,
-        );
+        const data = await response.json();
+
+        if (data.success && data.result) {
+          const aiResult = data.result;
+
+          // Map parsedType to transaction type
+          const typeMap: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
+            'sale': 'income',
+            'receipt': 'income',
+            'purchase': 'expense',
+            'expense': 'expense',
+            'payment': 'liability',
+            'transfer': 'asset',
+            'asset': 'asset',
+            'equity': 'equity',
+            'loan': 'liability',
+            'other': 'expense',
+          };
+
+          const transactionType = typeMap[aiResult.parsedType] || 'expense';
+
+          const newTransaction: RawTransaction = {
+            id: `chat-ai-${Date.now()}`,
+            date: new Date().toISOString().split("T")[0],
+            description: aiResult.description || trimmed.substring(0, 150),
+            category: aiResult.category || "other",
+            amount: aiResult.amount,
+            type: transactionType,
+          };
+
+          // Show AI validation info
+          const aiStatusIcon = aiResult.aiCorrected ? "🤖✓" : "✓";
+          const confidenceText = aiResult.confidence >= 0.9 ? `${aiStatusIcon} AI High confidence` :
+            aiResult.confidence >= 0.7 ? `${aiStatusIcon} AI Medium confidence` : `⚠️ Low confidence`;
+
+          // Show account info
+          const accountInfo = aiResult.debitAccount && aiResult.creditAccount ?
+            `\n📘 **DR ${aiResult.debitAccount.code}** ${aiResult.debitAccount.name}\n📕 **CR ${aiResult.creditAccount.code}** ${aiResult.creditAccount.name}` : '';
+
+          // Show AI corrections if any
+          const correctionInfo = aiResult.aiCorrected ?
+            `\n\n🤖 _AI Correction Applied: ${aiResult.aiReasoning}_` : '';
+
+          // Show tax implications if any
+          const taxInfo = [];
+          if (aiResult.taxImplications.outputVAT > 0) taxInfo.push(`VAT: ₦${aiResult.taxImplications.outputVAT.toLocaleString()}`);
+          if (aiResult.taxImplications.wht > 0) taxInfo.push(`WHT: ₦${aiResult.taxImplications.wht.toLocaleString()}`);
+          if (aiResult.taxImplications.paye > 0) taxInfo.push(`PAYE: ₦${aiResult.taxImplications.paye.toLocaleString()}`);
+          if (aiResult.taxImplications.cgt > 0) taxInfo.push(`CGT: ₦${aiResult.taxImplications.cgt.toLocaleString()}`);
+          const taxLine = taxInfo.length > 0 ? `\n💰 Tax: ${taxInfo.join(' | ')}` : '';
+
+          try {
+            const result = accountingEngine.processTransaction(newTransaction);
+            setTransactions((prev) => [...prev, newTransaction]);
+
+            // Enhanced response with AI validation info
+            const enhancedResponse = `${result.chatResponse}${accountInfo}${taxLine}${correctionInfo}\n\n_${confidenceText} (${aiResult.processingTimeMs}ms)_`;
+            appendMessage("assistant", enhancedResponse);
+            pushAutomationActivity("AI-Validated Journal", `Parsed and posted: ${result.journalEntry.id}`);
+
+            // Auto-update statements
+            const engineStatements = accountingEngine.generateStatements();
+            setGeneratedStatements(engineStatements);
+          } catch {
+            appendMessage(
+              "assistant",
+              `I detected a ${aiResult.parsedType} transaction (₦${aiResult.amount.toLocaleString()}).${accountInfo}${taxLine}\n\n${confidenceText}.\n\nUse the manual form above for full control, or I can journal it with assumptions.`,
+            );
+          }
+        } else {
+          // AI validation didn't return a result, fall back to local parsing
+          throw new Error('No AI result');
+        }
+      } catch (aiError) {
+        console.log('[AI Validation] Falling back to local parsing:', aiError);
+
+        // Fall back to original local parsing logic
+        const typeMap: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
+          'sale': 'income',
+          'receipt': 'income',
+          'purchase': 'expense',
+          'expense': 'expense',
+          'payment': 'liability',
+          'transfer': 'asset',
+          'asset': 'asset',
+          'equity': 'equity',
+          'loan': 'liability',
+          'other': 'expense',
+        };
+
+        const categoryToType: Record<string, "income" | "expense" | "asset" | "liability" | "equity"> = {
+          'sales': 'income',
+          'service': 'income',
+          'receipt': 'income',
+          'purchases': 'expense',
+          'rent': 'expense',
+          'salary': 'expense',
+          'utilities': 'expense',
+          'transport': 'expense',
+          'expense': 'expense',
+          'asset': 'asset',
+          'capital': 'equity',
+          'drawing': 'equity',
+          'loan-received': 'liability',
+          'loan-repayment': 'liability',
+          'supplier-payment': 'liability',
+          'payment': 'liability',
+          'transfer': 'asset',
+        };
+
+        const transactionType = categoryToType[localParsed.category || ''] || typeMap[localParsed.parsedType] || 'expense';
+
+        const newTransaction: RawTransaction = {
+          id: `chat-${Date.now()}`,
+          date: new Date().toISOString().split("T")[0],
+          description: localParsed.description || trimmed.substring(0, 150),
+          category: localParsed.category || "other",
+          amount: localParsed.amount,
+          type: transactionType,
+        };
+
+        const confidenceText = localParsed.confidence >= 0.9 ? "✓ High confidence" :
+          localParsed.confidence >= 0.7 ? "⚡ Medium confidence" : "⚠️ Low confidence";
+
+        try {
+          const result = accountingEngine.processTransaction(newTransaction);
+          setTransactions((prev) => [...prev, newTransaction]);
+
+          const enhancedResponse = `${result.chatResponse}\n\n_${confidenceText} (${localParsed.parsedType} detected - local only)_`;
+          appendMessage("assistant", enhancedResponse);
+          pushAutomationActivity("Chat journal", `Parsed and posted: ${result.journalEntry.id}`);
+
+          const engineStatements = accountingEngine.generateStatements();
+          setGeneratedStatements(engineStatements);
+        } catch {
+          appendMessage(
+            "assistant",
+            `I detected a ${localParsed.parsedType} transaction (₦${localParsed.amount.toLocaleString()}). ${confidenceText}.\n\nUse the manual form above for full control, or I can journal it with assumptions.`,
+          );
+        }
       }
     } else {
       // General chat message
@@ -793,8 +881,6 @@ export default function AccountingPage() {
 
   return (
     <>
-      {/* Onboarding Modal for First-Time Users */}
-      <Onboarding />
 
       <div className="space-y-6 pb-32">
         <section className="relative min-h-[75vh]">

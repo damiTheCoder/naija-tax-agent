@@ -3894,3 +3894,140 @@ export function calculateDashboardMetrics(statements: StatementDraft): {
     currentRatio: statements.liabilities > 0 ? statements.assets / statements.liabilities : 0,
   };
 }
+
+// ============================================================================
+// AI-ENHANCED TRANSACTION PARSING (2-Layer Validation)
+// ============================================================================
+
+import { processTransaction, IntegratedTransactionResult } from './integratedTransactionProcessor';
+
+/**
+ * AI-Enhanced Transaction Parsing
+ * 
+ * Combines Layer 1 (rule-based) + Layer 2 (AI validation) for maximum accuracy.
+ * 
+ * @param message - The transaction text from chat (e.g., "Cash Sale of Goods 107,500")
+ * @returns Promise with enhanced parsing result including AI corrections
+ */
+export async function parseTransactionFromChatWithAI(message: string): Promise<{
+  // Original parsed data (for compatibility)
+  amount: number;
+  description: string;
+  category: string;
+  confidence: number;
+  parsedType: 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+  debitAccount?: { code: string; name: string };
+  creditAccount?: { code: string; name: string };
+
+  // AI-enhanced data
+  aiValidated: boolean;
+  aiCorrected: boolean;
+  aiConfidence: number;
+  aiReasoning: string;
+  taxImplications: {
+    outputVAT: number;
+    inputVAT: number;
+    wht: number;
+    paye: number;
+    cgt: number;
+    isDisallowable: boolean;
+  };
+  auditLog: string[];
+  processingTimeMs: number;
+} | null> {
+  const msg = message.trim();
+  if (!msg) return null;
+
+  try {
+    // Run the 2-layer integrated processor
+    const result: IntegratedTransactionResult = await processTransaction(msg);
+
+    if (!result || result.amount <= 0) {
+      return null;
+    }
+
+    // Map nature to parsedType for backwards compatibility
+    const natureToTypeMap: Record<string, 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other'> = {
+      'sale_of_goods': 'sale',
+      'sale_of_services': 'sale',
+      'purchase_goods': 'purchase',
+      'purchase_services': 'expense',
+      'payroll': 'expense',
+      'entertainment': 'expense',
+      'capital_injection': 'equity',
+      'capital_expenditure': 'asset',
+      'asset_sale': 'sale',
+      'interest_income': 'receipt',
+      'dividend_income': 'receipt',
+      'rent_income': 'receipt',
+      'other': 'other'
+    };
+
+    // Map nature to category for backwards compatibility
+    const natureToCategoryMap: Record<string, string> = {
+      'sale_of_goods': 'sales',
+      'sale_of_services': 'service',
+      'purchase_goods': 'purchases',
+      'purchase_services': 'expense',
+      'payroll': 'salary',
+      'entertainment': 'expense',
+      'capital_injection': 'capital',
+      'capital_expenditure': 'asset',
+      'asset_sale': 'sales',
+      'interest_income': 'receipt',
+      'dividend_income': 'receipt',
+      'rent_income': 'rent',
+      'other': 'other'
+    };
+
+    return {
+      amount: result.amount,
+      description: result.transactionText,
+      category: natureToCategoryMap[result.final.nature] || 'other',
+      confidence: result.final.confidence,
+      parsedType: natureToTypeMap[result.final.nature] || 'other',
+      debitAccount: result.final.debitAccount,
+      creditAccount: result.final.creditAccount,
+
+      // AI-enhanced data
+      aiValidated: result.layer2?.validated ?? false,
+      aiCorrected: result.aiCorrectionsMade,
+      aiConfidence: result.layer2?.confidence ?? result.layer1.confidence,
+      aiReasoning: result.layer2?.reasoning ?? 'AI validation not performed',
+      taxImplications: result.final.taxImplications,
+      auditLog: result.auditLog,
+      processingTimeMs: result.processingTimeMs
+    };
+  } catch (error) {
+    console.error('[AI Parser] Error:', error);
+
+    // Fallback to basic parsing without AI
+    const basicResult = parseTransactionFromChat(message);
+    if (!basicResult) return null;
+
+    return {
+      amount: basicResult.amount || 0,
+      description: basicResult.description || message,
+      category: basicResult.category || 'other',
+      confidence: basicResult.confidence,
+      parsedType: basicResult.parsedType,
+      debitAccount: basicResult.debitAccount ? { code: basicResult.debitAccount, name: 'Unknown' } : undefined,
+      creditAccount: basicResult.creditAccount ? { code: basicResult.creditAccount, name: 'Unknown' } : undefined,
+
+      aiValidated: false,
+      aiCorrected: false,
+      aiConfidence: basicResult.confidence,
+      aiReasoning: `AI validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      taxImplications: {
+        outputVAT: 0,
+        inputVAT: 0,
+        wht: 0,
+        paye: 0,
+        cgt: 0,
+        isDisallowable: false
+      },
+      auditLog: [`Error: ${error instanceof Error ? error.message : 'Unknown'}`],
+      processingTimeMs: 0
+    };
+  }
+}
