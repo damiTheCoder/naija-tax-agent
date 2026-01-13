@@ -1,9 +1,12 @@
 import type { NextConfig } from "next";
+import path from "path";
+
 const projectRoot = process.cwd();
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   devIndicators: false,
+
   images: {
     remotePatterns: [
       {

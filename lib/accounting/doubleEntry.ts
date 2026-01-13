@@ -214,8 +214,13 @@ export interface JournalEntry {
   totalCredits: number;
   transactionType: TransactionType;
   createdAt: string;
+  updatedAt?: string;
   postedAt?: string;
   status: "draft" | "posted" | "voided";
+  source?: string;
+  confidence?: number;
+  reasoning?: string;
+  assumptions?: string[];
 }
 
 export type TransactionType =

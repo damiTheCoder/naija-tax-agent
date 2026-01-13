@@ -8,16 +8,17 @@ import React from "react";
 
 interface SkeletonProps {
     className?: string;
+    style?: React.CSSProperties;
 }
 
 /**
  * Base skeleton with shimmer animation
  */
-export function Skeleton({ className = "" }: SkeletonProps) {
+export function Skeleton({ className = "", style }: SkeletonProps) {
     return (
         <div
             className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 bg-[length:200%_100%] rounded ${className}`}
-            style={{ animation: "shimmer 1.5s ease-in-out infinite" }}
+            style={{ animation: "shimmer 1.5s ease-in-out infinite", ...style }}
         />
     );
 }

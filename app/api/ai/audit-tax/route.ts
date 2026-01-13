@@ -8,9 +8,7 @@ import {
     VAT_RATE,
 } from '@/lib/tax/nigerianTaxCompliance';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+
 
 /**
  * POST /api/ai/audit-tax
@@ -76,6 +74,11 @@ ${referenceRates}
 
 Please audit this tax computation and provide corrections.
 `;
+
+        // Initialize OpenAI
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        });
 
         // Call OpenAI
         const completion = await openai.chat.completions.create({

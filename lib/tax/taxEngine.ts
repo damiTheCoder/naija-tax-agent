@@ -10,13 +10,12 @@ import { calculateTaxForNigeria } from "../taxRules/ng";
 import { calculateWHT, WHTInput, WHTResult, getAvailableWHTTypes } from "../taxRules/wht";
 import { calculateCGT, CGTInput, CGTResult, calculateTotalCGT } from "../taxRules/cgt";
 import { calculateStampDuty, StampDutyInput, StampDutyResult } from "../taxRules/stampDuty";
-import { 
-  calculatePoliceLevy, 
-  calculateNASENILevy, 
-  calculateTertiaryEducationTax,
+import { calculateTET } from "../taxRules/tet";
+import {
+  calculatePoliceLevy,
+  calculateNASENILevy,
   calculateNSITF,
   calculateITF,
-  calculatePension,
   PoliceLevyResult,
   NASENILevyResult,
 } from "../taxRules/levies";
@@ -26,7 +25,7 @@ import { getClientVATRate } from "../taxRules/liveRatesClient";
 // TAX TRANSACTION TYPES
 // ============================================================================
 
-export type TaxTransactionType = 
+export type TaxTransactionType =
   | "income"           // PIT/CIT applicable
   | "expense"          // Deductible
   | "sale"             // VAT applicable
@@ -108,7 +107,7 @@ interface TaxTypeDetection {
 function detectTaxType(description: string, amount: number, category?: string): TaxTypeDetection {
   const desc = description.toLowerCase();
   const cat = (category || "").toLowerCase();
-  
+
   const applicableTaxes: Array<{ taxType: string; reason: string }> = [];
   const assumptions: string[] = [];
   const questionsNeeded: string[] = [];
@@ -121,8 +120,8 @@ function detectTaxType(description: string, amount: number, category?: string): 
     assumptions.push("Applied 7.5% VAT on sale");
   }
   // Service payments (WHT applicable)
-  else if (desc.includes("professional") || desc.includes("consultancy") || desc.includes("legal") || 
-           desc.includes("accounting") || desc.includes("technical") || cat === "professional-fees") {
+  else if (desc.includes("professional") || desc.includes("consultancy") || desc.includes("legal") ||
+    desc.includes("accounting") || desc.includes("technical") || cat === "professional-fees") {
     transactionType = "service-payment";
     applicableTaxes.push({ taxType: "WHT", reason: "Professional/technical services - 10% WHT" });
     assumptions.push("Applied 10% WHT for professional services");
@@ -241,7 +240,7 @@ function computeTaxForTransaction(
       // WHT on payments
       let whtRate = 0.10; // Default 10%
       let whtNote = "WHT @ 10%";
-      
+
       if (tx.type === "contract-payment") {
         whtRate = 0.05;
         whtNote = "WHT on contracts @ 5%";
@@ -427,7 +426,7 @@ class TaxEngine {
   } {
     // Detect tax type if not provided
     const detection = detectTaxType(tx.description, tx.amount, tx.category);
-    
+
     // Create transaction with ID
     const transaction: TaxTransaction = {
       ...tx,
@@ -458,7 +457,7 @@ class TaxEngine {
 
     for (const tax of computation.taxesApplied) {
       if (tax.taxAmount <= 0) continue; // Skip credits
-      
+
       const taxType = tax.taxType as TaxScheduleEntry["taxType"];
       let schedule = this.state.schedules.find(
         s => s.taxType === taxType && s.period === period
@@ -487,7 +486,7 @@ class TaxEngine {
   private getDueDate(taxType: string, period: string): string {
     const [year, quarter] = period.split("-");
     const q = parseInt(quarter.replace("Q", ""));
-    
+
     // VAT due 21st of following month
     if (taxType === "VAT") {
       const month = q * 3;
@@ -508,7 +507,7 @@ class TaxEngine {
       today.setDate(today.getDate() + 30);
       return today.toISOString().split("T")[0];
     }
-    
+
     return `${year}-12-31`;
   }
 
@@ -519,7 +518,7 @@ class TaxEngine {
     detection: TaxTypeDetection
   ): string {
     const parts: string[] = [];
-    
+
     parts.push(`📝 Recorded: **${tx.description}** for ₦${Math.abs(tx.amount).toLocaleString()}`);
     parts.push("");
 
@@ -626,7 +625,7 @@ class TaxEngine {
 
     // Calculate summary for the year
     let totalVAT = 0, totalWHT = 0, totalCGT = 0, totalStampDuty = 0, totalOtherTaxes = 0, inputVATCredit = 0;
-    
+
     for (const comp of computations) {
       for (const tax of comp.taxesApplied) {
         switch (tax.taxType) {
@@ -661,11 +660,11 @@ class TaxEngine {
   // Parse natural language transaction
   parseTransactionFromChat(message: string): Partial<TaxTransaction> | null {
     const lower = message.toLowerCase();
-    
+
     // Common patterns
     const amountMatch = message.match(/₦?\s*([0-9,]+(?:\.[0-9]+)?)/);
     const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : 0;
-    
+
     if (amount <= 0) return null;
 
     // Date detection

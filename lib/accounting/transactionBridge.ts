@@ -481,6 +481,12 @@ class AccountingEngine {
       source: "enhanced-analyzer",
       confidence: Math.min(analysis.debitAccount.confidence, analysis.creditAccount.confidence),
       assumptions: analysis.assumptions,
+      // Required fields from doubleEntry.ts
+      isBalanced: true, // Assuming analysis logic ensures this or step 3 validates it
+      totalDebits: amount,
+      totalCredits: amount,
+      transactionType: "other", // Defaulting to other, or should be mapped from analysis
+      createdAt: new Date().toISOString(),
     };
 
     // Step 3: Validate the entry is balanced
@@ -706,6 +712,8 @@ class AccountingEngine {
       'sale-return': { words: ['return from customer', 'sales return'], weight: 0 },
       'purchase-return': { words: ['return to supplier', 'purchase return'], weight: 0 },
       'closing': { words: ['closing entry', 'year end'], weight: 0 },
+      'asset-disposal': { words: ['sold asset', 'disposed asset', 'asset sale'], weight: 0 },
+      'opening-balance': { words: ['opening balance', 'brought forward'], weight: 0 },
       'other': { words: [], weight: 0 }
     };
 

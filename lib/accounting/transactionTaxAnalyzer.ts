@@ -409,7 +409,7 @@ function assessWHT(entry: JournalEntry, nature: TransactionNature, amount: numbe
     if (rate > 0) {
         const wht = amount * rate;
         return createAssessment('WHT', true, 'WHT Deducted at Source', rate, amount, wht, 'business',
-            `WHT Credit = ${formatCurrency(amount)} × ${rate * 100}%`, undefined, 'Payer');
+            `WHT Credit = ${formatCurrency(amount)} × ${rate * 100}%`, 'Payer');
     }
 
     if (nature === 'purchase_services') {

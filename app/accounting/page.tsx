@@ -104,7 +104,7 @@ export default function AccountingPage() {
   ]);
   const [postEntryError, setPostEntryError] = useState("");
   const [isAuditing, setIsAuditing] = useState(false);
-  const [auditResult, setAuditResult] = useState<{ isValid?: boolean; suggestedCorrections?: { lines: Array<{ accountCode: string; accountName: string; debit: number; credit: number }> } } | null>(null);
+  const [auditResult, setAuditResult] = useState<{ isValid?: boolean; fixed?: boolean; reasoning?: string; suggestedCorrections?: { lines: Array<{ accountCode: string; accountName: string; debit: number; credit: number }> } } | null>(null);
 
 
   // Edit Entry Section State

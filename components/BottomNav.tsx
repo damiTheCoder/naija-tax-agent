@@ -10,7 +10,6 @@ export default function BottomNav() {
 
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {
-        if (pathname.startsWith("/inventory")) return "inventory";
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -28,8 +27,6 @@ export default function BottomNav() {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {
             navigateTo("/wallet");
-        } else if (newMode === "inventory") {
-            navigateTo("/inventory");
         } else {
             navigateTo("/accounting");
         }

@@ -11,14 +11,10 @@
  * 4. Final result used for journal posting
  */
 
-import { analyzeTransactionText, TransactionAnalysis } from './sentenceAnalyzer';
-import {
-    AITransactionValidator,
-    SystemInterpretation,
-    AIValidationResult,
-    getAIValidator,
-    validateWithAI
-} from './aiTransactionValidator';
+import { analyzeTransactionText } from './sentenceAnalyzer';
+import type { TransactionAnalysis } from './sentenceAnalyzer';
+import { AITransactionValidator, getAIValidator, validateWithAI } from './aiTransactionValidator';
+import type { SystemInterpretation, AIValidationResult } from './aiTransactionValidator';
 import { identifyTransactionNature } from './transactionTaxAnalyzer';
 
 // ============================================================================
@@ -198,7 +194,15 @@ export async function processTransaction(
         lines: [
             { accountCode: layer1Result.debitAccount.code, accountName: layer1Result.debitAccount.name, debit: extractedAmount, credit: 0 },
             { accountCode: layer1Result.creditAccount.code, accountName: layer1Result.creditAccount.name, debit: 0, credit: extractedAmount }
-        ]
+        ],
+        // Required JournalEntry fields
+        isBalanced: true,
+        totalDebits: extractedAmount,
+        totalCredits: extractedAmount,
+        transactionType: 'other' as const,
+        status: 'posted' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     };
 
     const nature = identifyTransactionNature(mockEntry);
@@ -306,10 +310,8 @@ export async function processTransaction(
 // EXPORTS
 // ============================================================================
 
-export {
-    AITransactionValidator,
-    getAIValidator,
-    validateWithAI,
-    SystemInterpretation,
-    AIValidationResult
-};
+// Re-export values
+export { AITransactionValidator, getAIValidator, validateWithAI };
+
+// Re-export types (must use 'export type' for interfaces)
+export type { SystemInterpretation, AIValidationResult };

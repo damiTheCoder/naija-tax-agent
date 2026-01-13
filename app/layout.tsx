@@ -1,28 +1,10 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 import { APP_LOGO_SRC } from "@/lib/constants";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { NavigationProvider } from "@/lib/NavigationContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
-
-const glacial = localFont({
-  src: [
-    {
-      path: "./fonts/GlacialIndifference-Regular.woff",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "./fonts/GlacialIndifference-Bold.woff",
-      weight: "700",
-      style: "normal",
-    },
-  ],
-  variable: "--font-glacial",
-  display: "swap",
-});
 
 const siteTitle = "CashOS - Smart Nigerian Tax Manager";
 const siteDescription =
@@ -56,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${glacial.variable} antialiased`}>
+      <body className="font-sans antialiased">
         <ThemeProvider>
           <NavigationProvider>
             <GlobalSpinner />
@@ -67,4 +49,3 @@ export default function RootLayout({
     </html>
   );
 }
-

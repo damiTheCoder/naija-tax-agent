@@ -41,10 +41,7 @@ type LevyEntry = CompanyLeviesResult["policeLevy"]
     | CompanyLeviesResult["itf"];
 
 function levyIsApplicable(data: LevyEntry): boolean {
-    if ("isApplicable" in data) {
-        return data.isApplicable;
-    }
-    return data.contributionPayable > 0;
+    return data.isApplicable;
 }
 
 function levyAmountPayable(data: LevyEntry): number {

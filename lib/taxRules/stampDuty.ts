@@ -29,7 +29,9 @@ export interface StampDutyInput {
 
 export interface StampDutyResult {
     documentType: StampDutyDocumentType;
+    documentDescription: string;
     transactionValue: number;
+    rate: string;
     stampDuty: number;
     reconciliationReport: ReconciliationRow[];
     note: string;
@@ -47,6 +49,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
     let stampDuty = 0;
     let ruleKey = "";
     let label = "";
+    let rateDescription = "";
     let formula = "";
     let citation = "SDA Schedule";
 
@@ -54,13 +57,15 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
         case 'agreement':
             ruleKey = "STAMP_AGREEMENT_FIXED";
             label = "Fixed Duty on Agreement";
+            rateDescription = "Fixed";
             stampDuty = evaluateFormula(rulebook.rules[ruleKey].formula, {});
             formula = `Fixed: ${stampDuty.toLocaleString()}`;
             break;
 
         case 'deed':
             ruleKey = "STAMP_DEED_RATE";
-            label = "Ad Valorem Duty on Deed (1.5%)";
+            label = "Ad Valorem Duty on Deed";
+            rateDescription = "1.5%";
             const deedRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
             stampDuty = input.transactionValue * deedRate;
             formula = `${input.transactionValue.toLocaleString()} * ${deedRate}`;
@@ -68,7 +73,8 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
 
         case 'mortgage':
             ruleKey = "STAMP_MORTGAGE_RATE";
-            label = "Ad Valorem Duty on Mortgage (0.375%)";
+            label = "Ad Valorem Duty on Mortgage";
+            rateDescription = "0.375%";
             const mortgageRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
             stampDuty = input.transactionValue * mortgageRate;
             formula = `${input.transactionValue.toLocaleString()} * ${mortgageRate}`;
@@ -77,7 +83,8 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
         default:
             // Fallback for other types using fixed 500
             stampDuty = 500;
-            label = "General Fixed duty";
+            label = "General Fixed Duty";
+            rateDescription = "Fixed";
             formula = "500";
     }
 
@@ -94,7 +101,9 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
 
     return {
         documentType: input.documentType,
+        documentDescription: label,
         transactionValue: input.transactionValue,
+        rate: rateDescription,
         stampDuty,
         reconciliationReport,
         note: `Stamp duty calculated per rulebook ${rulebook.metadata.version}`

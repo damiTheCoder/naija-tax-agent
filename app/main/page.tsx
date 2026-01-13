@@ -2622,8 +2622,8 @@ export default function HomePage() {
                       {result.validationIssues?.map((issue) => (
                         <div key={issue.id} className="flex flex-col bg-white/50 backdrop-blur-sm border border-white/50 p-4 rounded-xl transition-all hover:bg-white">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded ${issue.severity === 'high' ? 'bg-rose-100 text-rose-600' :
-                              issue.severity === 'medium' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded ${issue.severity === 'error' ? 'bg-rose-100 text-rose-600' :
+                              issue.severity === 'warning' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
                               }`}>
                               {issue.severity}
                             </span>

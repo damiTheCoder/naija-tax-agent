@@ -2,9 +2,7 @@
 
 import { NavIcon } from "@/lib/navigation";
 
-export function NavIconBadge({ icon }: { icon: NavIcon }) {
-  const className = "w-4 h-4";
-
+export function NavIconBadge({ icon, className = "w-4 h-4" }: { icon: NavIcon; className?: string }) {
   switch (icon) {
     case "home":
       return (
@@ -100,13 +98,6 @@ export function NavIconBadge({ icon }: { icon: NavIcon }) {
           <rect x="2" y="6" width="20" height="14" rx="2" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M22 10H18a2 2 0 0 0 0 4h4" />
           <circle cx="18" cy="12" r="1" fill="currentColor" />
-        </svg>
-      );
-    case "inventory":
-      return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4v10l8 4 8-4V7z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 17V7M4 7l8 4 8-4" />
         </svg>
       );
     default:
