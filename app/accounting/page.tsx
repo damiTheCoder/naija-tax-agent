@@ -1009,7 +1009,7 @@ export default function AccountingPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[280px] overflow-y-auto">
+                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50">
                       {journalEntries.slice(-10).reverse().map((entry) => (
                         <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors group">
                           <div className="flex items-start justify-between gap-3 mb-3">

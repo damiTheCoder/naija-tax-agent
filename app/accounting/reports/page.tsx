@@ -390,7 +390,7 @@ export default function ChartOfAccountsPage() {
     if (!isLoaded) return null;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 px-2 md:px-0">
             {/* Header */}
             <div className="rounded-2xl bg-white border border-gray-200 px-6 py-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -618,7 +618,7 @@ export default function ChartOfAccountsPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="flex bg-gray-50 rounded-lg p-1 border border-gray-200">
+                        <div className="flex bg-gray-50 rounded-lg p-1 border border-gray-200 overflow-x-auto hide-scrollbar">
                             {(["summary", "adjustment", "vat"] as const).map((tab) => (
                                 <button
                                     key={tab}

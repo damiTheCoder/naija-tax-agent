@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-import BottomNav from "@/components/BottomNav";
+
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -226,7 +226,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Fixed Bottom Navigation - Visible on ALL screens as requested */}
-      <BottomNav />
+
 
 
       {/* Floating Chat Button for transaction input */}

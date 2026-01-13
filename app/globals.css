@@ -351,7 +351,7 @@ body {
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  display: none;
+  display: none !important;
 }
 
 /* Subtle scrollbar that appears on hover */
@@ -6210,4 +6210,41 @@ tr:hover td {
 
 .onboarding-modal {
   animation: modalFadeIn 0.3s ease-out;
+}
+
+/* Chat Modal Animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spinBorder {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeBorder {
+  0% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
