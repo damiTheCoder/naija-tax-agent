@@ -3893,7 +3893,7 @@ tr:hover td {
 }
 
 .nav-logo-img {
-  border-radius: 12px;
+  border-radius: 6px;
 }
 
 .nav-brand-text {
@@ -4103,11 +4103,11 @@ tr:hover td {
 .cta-primary-modern {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 2rem;
+  gap: 0.4rem;
+  padding: 0.7rem 1.4rem;
   background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   border-radius: 100px;
   text-decoration: none;
@@ -4122,11 +4122,11 @@ tr:hover td {
 .cta-secondary-modern {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
+  gap: 0.4rem;
+  padding: 0.7rem 1.4rem;
   background: transparent;
   color: #0a0a0a;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;

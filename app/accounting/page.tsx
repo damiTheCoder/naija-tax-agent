@@ -1009,13 +1009,13 @@ export default function AccountingPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50">
+                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[500px] overflow-y-auto">
                       {journalEntries.slice(-10).reverse().map((entry) => (
-                        <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors group">
+                        <div key={entry.id} className="px-2 py-4 hover:bg-gray-50/50 transition-colors group">
                           <div className="flex items-start justify-between gap-3 mb-3">
-                            <div>
+                            <div className="min-w-0 flex-1">
                               <span className="text-xs font-mono text-purple-600">{entry.id}</span>
-                              <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
+                              <p className="text-sm font-medium text-gray-900 mt-1 whitespace-nowrap overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing">{entry.narration}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 font-mono">{entry.date}</span>

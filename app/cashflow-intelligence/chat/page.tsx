@@ -493,30 +493,7 @@ export default function CashflowChatPage() {
                         </div>
                     )}
 
-                    {/* Chat Messages */}
-                    <div className="rounded-2xl overflow-hidden">
-                        <div className="px-3 py-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Conversation</p>
-                        </div>
-                        <div className="p-2 space-y-3 max-h-[400px] overflow-y-auto">
-                            {messages.map((msg) => (
-                                <div
-                                    key={msg.id}
-                                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                                >
-                                    <div
-                                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "user"
-                                            ? "bg-gray-200 text-gray-900"
-                                            : "bg-gray-100 text-gray-800"
-                                            }`}
-                                    >
-                                        {msg.content}
-                                    </div>
-                                </div>
-                            ))}
-                            <div ref={chatEndRef} />
-                        </div>
-                    </div>
+
                 </main>
             </div>
         </>

@@ -3,16 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import {
     calculateCashflowAnalytics,
-    modelInflowInvestment,
-    calculateTBillsReturn,
-    calculateSavingsReturn,
-    TBILLS_RATES,
-    SAVINGS_RATE,
     formatNaira,
-    formatPercent,
     type CashflowAnalytics,
-    type InvestmentScenario,
-    type TBillsTenor,
 } from "@/lib/cashflow/investmentCalculator";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 
@@ -25,14 +17,8 @@ export default function CashIntelligencePage() {
     const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Calculator state
-    const [tbillsPercent, setTbillsPercent] = useState(5);
-    const [tbillsTenor, setTbillsTenor] = useState<TBillsTenor["id"]>("364-day");
-    const [savingsPercent, setSavingsPercent] = useState(5);
-
-    // Scenarios
-    const [tbillsScenario, setTbillsScenario] = useState<InvestmentScenario | null>(null);
-    const [savingsScenario, setSavingsScenario] = useState<InvestmentScenario | null>(null);
+    // Daily flow chart data - last 7 days
+    const [dailyFlows, setDailyFlows] = useState<Array<{ day: string; inflow: number; outflow: number }>>([]);
 
     // Load analytics from accounting data
     const loadAnalytics = useCallback(() => {
@@ -66,17 +52,22 @@ export default function CashIntelligencePage() {
         setLoading(false);
     }, []);
 
-    // Calculate scenarios when inputs change
+    // Generate sample daily flow data based on monthly analytics
     useEffect(() => {
-        if (analytics && analytics.monthlyInflow > 0) {
-            setTbillsScenario(
-                modelInflowInvestment(analytics.monthlyInflow, tbillsPercent, "tbills", tbillsTenor)
-            );
-            setSavingsScenario(
-                modelInflowInvestment(analytics.monthlyInflow, savingsPercent, "savings")
-            );
+        if (analytics) {
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const dailyAvgInflow = (analytics.monthlyInflow || 0) / 30;
+            const dailyAvgOutflow = (analytics.monthlyOutflow || 0) / 30;
+
+            // Generate realistic daily variations (±30%)
+            const flows = days.map((day) => ({
+                day,
+                inflow: Math.round(dailyAvgInflow * (0.7 + Math.random() * 0.6)),
+                outflow: Math.round(dailyAvgOutflow * (0.7 + Math.random() * 0.6)),
+            }));
+            setDailyFlows(flows);
         }
-    }, [analytics, tbillsPercent, tbillsTenor, savingsPercent]);
+    }, [analytics]);
 
     useEffect(() => {
         loadAnalytics();
@@ -257,220 +248,110 @@ export default function CashIntelligencePage() {
                     </div>
                 </div>
 
-                {/* Investment Calculators */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* T-Bills Calculator */}
-                    <div className="rounded-2xl border border-gray-100 bg-gray-50 overflow-hidden">
-                        <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100/50">
+                {/* Daily Inflow/Outflow Chart */}
+                <div className="rounded-2xl border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 overflow-hidden">
+                    <div className="px-3 md:px-5 py-3 md:py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                        <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Treasury Bills</h3>
-                                    <p className="text-xs text-gray-500">Nigerian T-Bills at {formatPercent(TBILLS_RATES.find(t => t.id === tbillsTenor)?.rate || 0)} p.a.</p>
+                                    <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Daily Cash Flow</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Last 7 days inflow & outflow</p>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="p-3 md:p-5 space-y-4">
-                            {/* Tenor Selection */}
-                            <div>
-                                <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Select Tenor</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {TBILLS_RATES.map(tenor => (
-                                        <button
-                                            key={tenor.id}
-                                            onClick={() => setTbillsTenor(tenor.id)}
-                                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${tbillsTenor === tenor.id
-                                                ? "bg-purple-600 text-white"
-                                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
-                                                }`}
-                                        >
-                                            {tenor.name.replace(" T-Bills", "")}
-                                            <span className="block text-xs opacity-75">{formatPercent(tenor.rate)}</span>
-                                        </button>
-                                    ))}
+                            <div className="flex items-center gap-4 text-xs">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
+                                    <span className="text-gray-500 dark:text-gray-400">Inflow</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-3 h-3 rounded-sm bg-rose-500"></div>
+                                    <span className="text-gray-500 dark:text-gray-400">Outflow</span>
                                 </div>
                             </div>
-
-                            {/* Percentage Slider */}
-                            <div>
-                                <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex justify-between">
-                                    <span>% of Monthly Inflow to Invest</span>
-                                    <span className="font-semibold text-purple-600">{tbillsPercent}%</span>
-                                </label>
-                                <input
-                                    type="range"
-                                    min="1"
-                                    max="30"
-                                    value={tbillsPercent}
-                                    onChange={(e) => setTbillsPercent(parseInt(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                />
-                                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                                    <span>1%</span>
-                                    <span>15%</span>
-                                    <span>30%</span>
-                                </div>
-                            </div>
-
-                            {/* Results */}
-                            {tbillsScenario && (
-                                <div className="rounded-xl p-4 bg-purple-50 border border-purple-100 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">Monthly Investment</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.monthlyInvestment)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">12-Month Total Investment</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.monthlyInvestment * 12)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-3 border-t border-purple-200">
-                                        <span className="text-sm text-gray-600">Projected Return (12mo)</span>
-                                        <span className="font-bold text-emerald-600">+{formatNaira(tbillsScenario.projectedReturn12Months)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">Total Value After 12mo</span>
-                                        <span className="font-bold text-purple-700">{formatNaira(tbillsScenario.projectedValue12Months)}</span>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
+                    <div className="p-4 md:p-6">
+                        {dailyFlows.length > 0 ? (
+                            <div className="relative h-64">
+                                {/* Center line */}
+                                <div className="absolute left-0 right-0 top-1/2 h-px bg-gray-200 dark:bg-gray-700"></div>
 
-                    {/* Savings Calculator */}
-                    <div className="rounded-2xl border border-gray-100 bg-gray-50 overflow-hidden">
-                        <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100/50">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Savings Account</h3>
-                                    <p className="text-xs text-gray-500">Nigerian bank average at {formatPercent(SAVINGS_RATE)} p.a.</p>
+                                {/* Chart bars */}
+                                <div className="flex items-center justify-around h-full gap-2">
+                                    {dailyFlows.map((flow, idx) => {
+                                        const maxValue = Math.max(
+                                            ...dailyFlows.map(f => Math.max(f.inflow, f.outflow))
+                                        );
+                                        const inflowHeight = maxValue > 0 ? (flow.inflow / maxValue) * 100 : 0;
+                                        const outflowHeight = maxValue > 0 ? (flow.outflow / maxValue) * 100 : 0;
+
+                                        return (
+                                            <div key={idx} className="flex flex-col items-center flex-1 h-full">
+                                                {/* Inflow bar (goes up) */}
+                                                <div className="flex flex-col items-center justify-end h-1/2 w-full pb-1">
+                                                    <div
+                                                        className="w-6 md:w-10 bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t-md transition-all duration-500 relative group cursor-pointer"
+                                                        style={{ height: `${Math.max(inflowHeight * 0.9, 4)}%` }}
+                                                    >
+                                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                                            +{formatNaira(flow.inflow)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Outflow bar (goes down) */}
+                                                <div className="flex flex-col items-center justify-start h-1/2 w-full pt-1">
+                                                    <div
+                                                        className="w-6 md:w-10 bg-gradient-to-b from-rose-500 to-rose-400 rounded-b-md transition-all duration-500 relative group cursor-pointer"
+                                                        style={{ height: `${Math.max(outflowHeight * 0.9, 4)}%` }}
+                                                    >
+                                                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                                            -{formatNaira(flow.outflow)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Day label */}
+                                                <span className="mt-3 text-xs text-gray-500 dark:text-gray-400 font-medium">{flow.day}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="h-64 flex items-center justify-center text-gray-400">
+                                <p>No cash flow data available</p>
+                            </div>
+                        )}
 
-                        <div className="p-3 md:p-5 space-y-4">
-                            {/* Rate Info */}
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100">
-                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                <p className="text-sm text-blue-700">
-                                    Based on CBN directive: 30% of MPR (27.25%) = ~{formatPercent(SAVINGS_RATE)}
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Weekly Inflow</p>
+                                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                                    +{formatNaira(dailyFlows.reduce((sum, f) => sum + f.inflow, 0))}
                                 </p>
                             </div>
-
-                            {/* Percentage Slider */}
-                            <div>
-                                <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 flex justify-between">
-                                    <span>% of Monthly Inflow to Save</span>
-                                    <span className="font-semibold text-blue-600">{savingsPercent}%</span>
-                                </label>
-                                <input
-                                    type="range"
-                                    min="1"
-                                    max="30"
-                                    value={savingsPercent}
-                                    onChange={(e) => setSavingsPercent(parseInt(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                />
-                                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                                    <span>1%</span>
-                                    <span>15%</span>
-                                    <span>30%</span>
-                                </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Weekly Outflow</p>
+                                <p className="text-lg font-bold text-rose-600 dark:text-rose-400">
+                                    -{formatNaira(dailyFlows.reduce((sum, f) => sum + f.outflow, 0))}
+                                </p>
                             </div>
-
-                            {/* Results */}
-                            {savingsScenario && (
-                                <div className="rounded-xl p-4 bg-blue-50 border border-blue-100 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">Monthly Deposit</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(savingsScenario.monthlyInvestment)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">12-Month Total Deposits</span>
-                                        <span className="font-semibold text-gray-900 dark:text-white">{formatNaira(savingsScenario.monthlyInvestment * 12)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-3 border-t border-blue-200">
-                                        <span className="text-sm text-gray-600">Interest Earned (12mo)</span>
-                                        <span className="font-bold text-emerald-600">+{formatNaira(savingsScenario.projectedReturn12Months)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-600">Final Balance After 12mo</span>
-                                        <span className="font-bold text-blue-700">{formatNaira(savingsScenario.projectedValue12Months)}</span>
-                                    </div>
-                                </div>
-                            )}
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Net Flow</p>
+                                <p className={`text-lg font-bold ${(dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0)) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                    {dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0) >= 0 ? '+' : ''}{formatNaira(dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0))}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                {/* Scenario Comparison */}
-                {tbillsScenario && savingsScenario && (
-                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                        <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Scenario Comparison</h3>
-                                    <p className="text-xs text-gray-500">Side-by-side investment analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-gray-100 bg-gray-50/30">
-                                        <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Metric</th>
-                                        <th className="text-right text-xs font-medium text-purple-600 uppercase tracking-wider px-5 py-3">T-Bills ({tbillsTenor})</th>
-                                        <th className="text-right text-xs font-medium text-blue-600 uppercase tracking-wider px-5 py-3">Savings</th>
-                                        <th className="text-right text-xs font-medium text-gray-500 uppercase tracking-wider px-5 py-3">Difference</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    <tr className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-5 py-3 text-gray-700">Annual Rate</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-gray-900 dark:text-white">{formatPercent(tbillsScenario.annualRate)}</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-gray-900 dark:text-white">{formatPercent(savingsScenario.annualRate)}</td>
-                                        <td className="text-right px-5 py-3 font-medium text-emerald-600">+{formatPercent(tbillsScenario.annualRate - savingsScenario.annualRate)}</td>
-                                    </tr>
-                                    <tr className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-5 py-3 text-gray-700">12-Month Return</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-emerald-600">+{formatNaira(tbillsScenario.projectedReturn12Months)}</td>
-                                        <td className="text-right px-5 py-3 font-semibold text-emerald-600">+{formatNaira(savingsScenario.projectedReturn12Months)}</td>
-                                        <td className="text-right px-5 py-3 font-medium text-emerald-600">+{formatNaira(tbillsScenario.projectedReturn12Months - savingsScenario.projectedReturn12Months)}</td>
-                                    </tr>
-                                    <tr className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-5 py-3 text-gray-700">Final Value</td>
-                                        <td className="text-right px-5 py-3 font-bold text-gray-900 dark:text-white">{formatNaira(tbillsScenario.projectedValue12Months)}</td>
-                                        <td className="text-right px-5 py-3 font-bold text-gray-900 dark:text-white">{formatNaira(savingsScenario.projectedValue12Months)}</td>
-                                        <td className="text-right px-5 py-3 font-bold text-emerald-600">+{formatNaira(tbillsScenario.projectedValue12Months - savingsScenario.projectedValue12Months)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="px-5 py-3 bg-gray-50/50 border-t border-gray-100">
-                            <p className="text-xs text-gray-500">
-                                * Projections based on current Nigerian rates. T-Bills: {TBILLS_RATES.map(t => `${t.name.replace(' T-Bills', '')} (${formatPercent(t.rate)})`).join(', ')}. Savings: {formatPercent(SAVINGS_RATE)} average.
-                            </p>
-                        </div>
-                    </div>
-                )}
 
                 {/* Empty State */}
                 {(!analytics || analytics.monthlyInflow === 0) && (

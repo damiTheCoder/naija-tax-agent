@@ -107,7 +107,7 @@ export default function LandingPage() {
       <nav className={`nav-modern ${scrolled ? "nav-scrolled" : ""}`}>
         <div className="nav-inner">
           <Link href="/" className="nav-brand">
-            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} className="nav-logo-img" />
+            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={32} height={32} className="nav-logo-img" />
             <span className="nav-brand-text">CashOS</span>
           </Link>
 
