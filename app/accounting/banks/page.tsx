@@ -287,7 +287,7 @@ export default function BankConnectionsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-2 border-[#64B5F6] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -320,7 +320,7 @@ export default function BankConnectionsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Connected Banks", value: stats.connectedBanks.toString(), icon: icons.link, color: "text-blue-600", bg: "bg-blue-100" },
-          { label: "Total Accounts", value: stats.totalAccounts.toString(), icon: icons.card, color: "text-green-600", bg: "bg-green-100" },
+          { label: "Total Accounts", value: stats.totalAccounts.toString(), icon: icons.card, color: "text-blue-600", bg: "bg-blue-100" },
           { label: "Transactions", value: stats.totalTransactions.toLocaleString(), icon: icons.document, color: "text-purple-600", bg: "bg-purple-100" },
           { label: "Total Balance", value: formatCurrency(stats.totalBalance), icon: icons.chart, color: "text-amber-600", bg: "bg-amber-100" },
         ].map((stat, i) => (
@@ -355,7 +355,7 @@ export default function BankConnectionsPage() {
             </p>
             <button
               onClick={() => setShowConnectModal(true)}
-              className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+              className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
             >
               {icons.plus}
               Connect Your First Bank
@@ -381,10 +381,10 @@ export default function BankConnectionsPage() {
                         <h3 className="font-semibold text-gray-900">{connection.bankName}</h3>
                         <div className="flex items-center gap-3 mt-1">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${connection.status === "connected"
-                              ? "bg-green-50 text-green-700"
+                              ? "bg-blue-50 text-blue-700"
                               : "bg-amber-50 text-amber-700"
                             }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${connection.status === "connected" ? "bg-green-500" : "bg-amber-500"
+                            <span className={`w-1.5 h-1.5 rounded-full ${connection.status === "connected" ? "bg-blue-500" : "bg-amber-500"
                               }`} />
                             {connection.status === "connected" ? "Connected" : "Pending"}
                           </span>
@@ -449,7 +449,7 @@ export default function BankConnectionsPage() {
         <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2>
-            <Link href="/accounting/workspace" className="text-sm text-[#64B5F6] hover:underline font-medium">
+            <Link href="/accounting/workspace" className="text-sm text-[#2264ff] hover:underline font-medium">
               View all →
             </Link>
           </div>
@@ -457,9 +457,9 @@ export default function BankConnectionsPage() {
             {recentTransactions.slice(0, 5).map((tx) => (
               <div key={tx.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "credit" ? "bg-green-50" : "bg-red-50"
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "credit" ? "bg-blue-50" : "bg-red-50"
                     }`}>
-                    <svg className={`w-5 h-5 ${tx.type === "credit" ? "text-green-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className={`w-5 h-5 ${tx.type === "credit" ? "text-blue-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={tx.type === "credit" ? "M12 4v16m0-16l-4 4m4-4l4 4" : "M12 20V4m0 16l-4-4m4 4l4-4"} />
                     </svg>
                   </div>
@@ -468,7 +468,7 @@ export default function BankConnectionsPage() {
                     <p className="text-xs text-gray-400">{formatDate(tx.date)}</p>
                   </div>
                 </div>
-                <span className={`font-semibold ${tx.type === "credit" ? "text-green-600" : "text-gray-900"}`}>
+                <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
                   {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
                 </span>
               </div>
@@ -492,14 +492,14 @@ export default function BankConnectionsPage() {
                 onClick={() => !isConnected && bank.supported && handleConnectBank(bank)}
                 disabled={!bank.supported || isConnected}
                 className={`relative rounded-xl p-4 text-center transition-all ${isConnected
-                    ? "bg-green-50 border-2 border-green-200"
+                    ? "bg-blue-50 border-2 border-green-200"
                     : bank.supported
                       ? "bg-gray-50 hover:bg-gray-100 border border-gray-200"
                       : "bg-gray-50 border border-gray-100 opacity-50"
                   }`}
               >
                 {isConnected && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center">
+                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center">
                     {icons.check}
                   </div>
                 )}
@@ -587,15 +587,15 @@ export default function BankConnectionsPage() {
                   <p className="text-gray-900 font-medium mb-2">Connecting to {selectedBank.name}...</p>
                   <p className="text-sm text-gray-500">Establishing secure connection</p>
                   <div className="mt-6 flex justify-center">
-                    <div className="w-8 h-8 border-2 border-[#64B5F6] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
                   </div>
                 </div>
               )}
 
               {connectStep === "success" && selectedBank && (
                 <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -613,8 +613,8 @@ export default function BankConnectionsPage() {
         <div className="fixed bottom-6 right-6 z-50">
           <div className="bg-gray-900 text-white rounded-2xl shadow-2xl p-5 max-w-sm">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
@@ -622,7 +622,7 @@ export default function BankConnectionsPage() {
                 <h4 className="font-semibold text-white mb-1">Imported to Accounting</h4>
                 <p className="text-sm text-gray-400 mb-2">{importResult.imported} journal entries created</p>
                 <div className="flex items-center gap-4 text-sm">
-                  <span className="text-green-400">+₦{importResult.income.toLocaleString()}</span>
+                  <span className="text-blue-400">+₦{importResult.income.toLocaleString()}</span>
                   <span className="text-red-400">-₦{importResult.expenses.toLocaleString()}</span>
                 </div>
               </div>

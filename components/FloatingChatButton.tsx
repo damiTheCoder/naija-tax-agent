@@ -436,16 +436,16 @@ export default function FloatingChatButton() {
             {/* Floating Chat Button */}
             <button
                 onClick={() => setIsModalOpen(true)}
-                className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-gradient-to-r from-[#4285F4] via-[#EA4335] via-[#FBBC05] to-[#34A853] text-white px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${isExpanded ? "gap-2" : "gap-0"}`}
                 aria-label="Open chat"
             >
                 <img
                     src="/google-logo.jpg"
                     alt="Google"
-                    className="w-5 h-5 flex-shrink-0 rounded-full"
+                    className="w-8 h-8 flex-shrink-0 rounded-full"
                 />
                 <span
-                    className={`font-semibold text-xs overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? "max-w-16 opacity-100" : "max-w-0 opacity-0"}`}
+                    className={`font-semibold text-sm overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? "max-w-16 opacity-100" : "max-w-0 opacity-0"}`}
                 >
                     Chat
                 </span>

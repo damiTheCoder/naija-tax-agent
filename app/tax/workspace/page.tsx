@@ -308,7 +308,7 @@ export default function TaxWorkspacePage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-xs">
-            <span className={`w-2 h-2 rounded-full ${isRefreshingRules ? "bg-amber-500 animate-pulse" : "bg-green-500"}`}></span>
+            <span className={`w-2 h-2 rounded-full ${isRefreshingRules ? "bg-amber-500 animate-pulse" : "bg-blue-500"}`}></span>
             <span className="text-gray-600">Engine Online</span>
           </div>
           <button
@@ -367,7 +367,7 @@ export default function TaxWorkspacePage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             >
               {availableYears.map((year) => (
                 <option key={year} value={year}>{year}</option>
@@ -380,7 +380,7 @@ export default function TaxWorkspacePage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export default function TaxWorkspacePage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
           </div>
           {(dateFrom || dateTo) && (
@@ -416,7 +416,7 @@ export default function TaxWorkspacePage() {
               onClick={() => setActiveTab(tab.id)}
               className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap rounded-t-md ${
                 activeTab === tab.id
-                  ? "border-[#64B5F6] text-[#64B5F6] bg-[#E8F4FF]"
+                  ? "border-[#2264ff] text-[#2264ff] bg-[#E8F4FF]"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
@@ -442,7 +442,7 @@ export default function TaxWorkspacePage() {
             {filteredComputations.length === 0 ? (
               <div className="px-6 py-12 text-center text-gray-400">
                 <p>No tax computations found for this period</p>
-                <button onClick={() => setActiveTab("documents")} className="text-xs mt-2 text-[#64B5F6] hover:underline">Upload documents to start</button>
+                <button onClick={() => setActiveTab("documents")} className="text-xs mt-2 text-[#2264ff] hover:underline">Upload documents to start</button>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
@@ -507,7 +507,7 @@ export default function TaxWorkspacePage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.taxAmount)}</p>
-                      <button className="text-xs text-[#64B5F6] hover:underline font-medium mt-1">Generate Remittance</button>
+                      <button className="text-xs text-[#2264ff] hover:underline font-medium mt-1">Generate Remittance</button>
                     </div>
                   </div>
                 ))}
@@ -613,7 +613,7 @@ export default function TaxWorkspacePage() {
             </button>
 
             {statusMessage && (
-              <div className="mt-6 p-4 rounded-lg bg-green-50 border border-green-100 text-green-700 text-sm max-w-md text-center">
+              <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-sm max-w-md text-center">
                 {statusMessage}
               </div>
             )}
@@ -638,7 +638,7 @@ export default function TaxWorkspacePage() {
                           <p className="text-xs text-gray-500">{formatFileSize(doc.size)} • {new Date(doc.uploadedAt).toLocaleTimeString()}</p>
                         </div>
                       </div>
-                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-medium">Parsed</span>
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">Parsed</span>
                     </div>
                   ))}
                 </div>

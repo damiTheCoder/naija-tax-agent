@@ -349,7 +349,7 @@ export default function ReceiptsManagementPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="w-8 h-8 border-2 border-[#64B5F6] border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -386,7 +386,7 @@ export default function ReceiptsManagementPage() {
                     </div>
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+                        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -468,7 +468,7 @@ export default function ReceiptsManagementPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${isDragging
-                    ? "border-[#64B5F6] bg-blue-50 dark:bg-blue-900/20"
+                    ? "border-[#2264ff] bg-blue-50 dark:bg-blue-900/20"
                     : theme === "dark"
                         ? "border-gray-700 hover:border-gray-600 bg-gray-900/50"
                         : "border-gray-300 hover:border-gray-400 bg-gray-50"
@@ -476,7 +476,7 @@ export default function ReceiptsManagementPage() {
             >
                 {isProcessing ? (
                     <div className="flex flex-col items-center gap-3">
-                        <div className="w-10 h-10 border-2 border-[#64B5F6] border-t-transparent rounded-full animate-spin" />
+                        <div className="w-10 h-10 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
                         <p style={{ color: theme === "dark" ? "#fff" : "#111827" }} className="font-medium">
                             Processing receipt...
                         </p>
@@ -513,7 +513,7 @@ export default function ReceiptsManagementPage() {
                 <button
                     onClick={() => setFilterCategory("all")}
                     className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === "all"
-                        ? "bg-[#64B5F6] text-white"
+                        ? "bg-[#2264ff] text-white"
                         : theme === "dark"
                             ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
                             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -526,7 +526,7 @@ export default function ReceiptsManagementPage() {
                         key={key}
                         onClick={() => setFilterCategory(key as ReceiptCategory)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === key
-                            ? "bg-[#64B5F6] text-white"
+                            ? "bg-[#2264ff] text-white"
                             : theme === "dark"
                                 ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -580,7 +580,7 @@ export default function ReceiptsManagementPage() {
                         </p>
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+                            className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -777,7 +777,7 @@ export default function ReceiptsManagementPage() {
                                     </p>
                                     <p
                                         className="text-xs"
-                                        style={{ color: theme === "dark" ? "#6b7280" : "#4ade80" }}
+                                        style={{ color: theme === "dark" ? "#6b7280" : "#2264ff" }}
                                     >
                                         Please verify and correct any details below
                                     </p>
@@ -916,7 +916,7 @@ export default function ReceiptsManagementPage() {
                             <button
                                 onClick={handleSaveReceipt}
                                 disabled={!uploadForm.vendor || !uploadForm.amount}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#64B5F6] text-white hover:bg-[#4A9FD9] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2264ff] text-white hover:bg-[#1a50cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Save Receipt
                             </button>
@@ -1084,7 +1084,7 @@ export default function ReceiptsManagementPage() {
                             <button
                                 onClick={handleSaveEdit}
                                 disabled={!editForm.vendor || !editForm.amount}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#64B5F6] text-white hover:bg-[#4A9FD9] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2264ff] text-white hover:bg-[#1a50cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Save Changes
                             </button>

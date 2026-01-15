@@ -9,26 +9,58 @@ import MobileMenu from "@/components/MobileMenu";
 
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
-import GlobalSearch from "@/components/GlobalSearch";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
 
-// Loading spinner component
+// Skeleton loading component - shows placeholder shapes instead of spinner
 function PageLoadingSpinner() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative w-10 h-10">
-          <div className="absolute inset-0 rounded-full border-2 border-gray-200"></div>
-          <div className="absolute inset-0 rounded-full border-2 border-t-[#64B5F6] animate-spin"></div>
+    <div className="min-h-[60vh] px-4 py-6 space-y-5">
+      {/* Header pill - centered */}
+      <div className="flex justify-center">
+        <div className="h-6 w-24 rounded-full bg-gray-300 dark:bg-gray-600" />
+      </div>
+
+      {/* Row with circle, text lines, and circle */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 w-28 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="h-2 w-16 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
         </div>
-        <p className="text-sm text-gray-500">Loading page...</p>
+        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+      </div>
+
+      {/* Content bars - varying widths */}
+      <div className="space-y-3 pt-2">
+        <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="h-3 w-3/4 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="h-3 w-1/3 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+      </div>
+
+      {/* Search/input bar skeleton */}
+      <div className="h-12 w-full rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+
+      {/* Large card skeleton */}
+      <div className="h-32 w-full rounded-2xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+
+      {/* Bottom row - label and two cards */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <div className="h-3 w-20 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="h-3 w-16 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-20 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          <div className="h-20 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        </div>
       </div>
     </div>
   );
 }
+
 
 // Theme toggle switch component (Desktop)
 function ThemeToggle() {
@@ -53,7 +85,7 @@ function ThemeToggle() {
 
       {/* Moon icon (right) */}
       <svg
-        className={`w-4 h-4 absolute right-1.5 transition-opacity ${isDark ? 'opacity-100 text-[#64B5F6]' : 'opacity-30'}`}
+        className={`w-4 h-4 absolute right-1.5 transition-opacity ${isDark ? 'opacity-100 text-[#2264ff]' : 'opacity-30'}`}
         fill="currentColor"
         viewBox="0 0 20 20"
       >
@@ -182,17 +214,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           style={{ background: theme === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' }}
         >
           <div className="px-4 py-3 flex items-center justify-between">
-            {/* Mobile Logo */}
-            <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="relative w-7 h-7 overflow-hidden rounded-full border-2 border-[#1a8cff]">
+            {/* Logo and Name - Left Side */}
+            <Link href="/" className="flex items-center gap-2">
+              <div className="relative w-7 h-7 overflow-hidden rounded-lg">
                 <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
               </div>
-              <span className="text-sm font-extrabold" style={{ color: 'var(--foreground)' }}>CashOS</span>
+              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>CashOS</span>
             </Link>
 
             <div className="flex items-center gap-2 flex-shrink-0 -mr-2">
-              {/* Search Bar */}
-              <GlobalSearch />
               <ThemeToggle />
               {/* Mobile Menu Toggle */}
               <button

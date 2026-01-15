@@ -112,7 +112,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
             <button
               onClick={() => updateAISettings("enabled", !config.aiSettings.enabled)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                config.aiSettings.enabled ? "bg-[#64B5F6]" : "bg-gray-300"
+                config.aiSettings.enabled ? "bg-[#2264ff]" : "bg-gray-300"
               }`}
             >
               <span
@@ -133,7 +133,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               value={config.aiSettings.apiEndpoint || ""}
               onChange={(e) => updateAISettings("apiEndpoint", e.target.value)}
               placeholder="https://api.openai.com/v1/chat/completions"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
             <p className="mt-1 text-xs text-gray-500">
               OpenAI-compatible endpoint for AI classification
@@ -150,7 +150,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               value={config.aiSettings.apiKey || ""}
               onChange={(e) => updateAISettings("apiKey", e.target.value)}
               placeholder="sk-..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
           </div>
 
@@ -162,7 +162,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
             <select
               value={config.aiSettings.model || "gpt-4"}
               onChange={(e) => updateAISettings("model", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             >
               <option value="gpt-4">GPT-4</option>
               <option value="gpt-4-turbo">GPT-4 Turbo</option>
@@ -201,7 +201,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               <button
                 onClick={() => updateAISettings("autoClassify", !config.aiSettings.autoClassify)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${
-                  config.aiSettings.autoClassify ? "bg-[#64B5F6]" : "bg-gray-300"
+                  config.aiSettings.autoClassify ? "bg-[#2264ff]" : "bg-gray-300"
                 }`}
               >
                 <span
@@ -220,7 +220,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               <button
                 onClick={() => updateAISettings("autoGenerateJournals", !config.aiSettings.autoGenerateJournals)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${
-                  config.aiSettings.autoGenerateJournals ? "bg-[#64B5F6]" : "bg-gray-300"
+                  config.aiSettings.autoGenerateJournals ? "bg-[#2264ff]" : "bg-gray-300"
                 }`}
               >
                 <span
@@ -244,7 +244,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
                   onClick={() => updateAISettings("complianceMode", mode)}
                   className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
                     config.aiSettings.complianceMode === mode
-                      ? "border-[#64B5F6] bg-blue-50 text-[#64B5F6]"
+                      ? "border-[#2264ff] bg-blue-50 text-[#2264ff]"
                       : "border-gray-300 text-gray-600 hover:bg-gray-50"
                   }`}
                 >
@@ -259,7 +259,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
 
           {/* Info Box */}
           <div className="bg-blue-50 rounded-lg p-4 flex gap-3">
-            <Info className="w-5 h-5 text-[#64B5F6] flex-shrink-0 mt-0.5" />
+            <Info className="w-5 h-5 text-[#2264ff] flex-shrink-0 mt-0.5" />
             <div className="text-sm text-gray-700">
               <p className="font-medium text-gray-900 mb-1">Dual Classification System</p>
               <p>
@@ -272,7 +272,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
           {/* Save Button */}
           <button
             onClick={handleSave}
-            className="w-full py-2.5 bg-[#64B5F6] text-white rounded-lg font-medium hover:bg-[#42A5F5] transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-[#2264ff] text-white rounded-lg font-medium hover:bg-[#2264ff] transition-colors flex items-center justify-center gap-2"
           >
             {isSaved ? (
               <>

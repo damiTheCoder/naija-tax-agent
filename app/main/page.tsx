@@ -1157,7 +1157,7 @@ export default function HomePage() {
                     type="button"
                     onClick={() => statementFileInputRef.current?.click()}
                     disabled={isAnalyzingStatement}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-emerald-600 text-white text-sm font-medium rounded-lg hover:from-blue-600 hover:to-emerald-700 transition-all shadow-sm disabled:opacity-50"
                   >
                     {isAnalyzingStatement ? (
                       <>
@@ -1194,12 +1194,12 @@ export default function HomePage() {
 
                 {/* Statement Analysis Result */}
                 {statementAnalysisResult && (
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-3 flex items-center justify-between">
+                  <div className="bg-gradient-to-r from-blue-50 to-emerald-50 rounded-lg border border-green-200 p-3 flex items-center justify-between">
                     <p className="text-sm text-green-800">{statementAnalysisResult}</p>
                     <button
                       type="button"
                       onClick={() => setStatementAnalysisResult(null)}
-                      className="text-green-400 hover:text-green-600 ml-2"
+                      className="text-blue-400 hover:text-blue-600 ml-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1253,7 +1253,7 @@ export default function HomePage() {
                           >
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${suggestion.confidence === 'high' ? 'bg-green-100 text-green-700' :
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${suggestion.confidence === 'high' ? 'bg-blue-100 text-blue-700' :
                                   suggestion.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                                     'bg-gray-100 text-gray-600'
                                   }`}>
@@ -1340,7 +1340,7 @@ export default function HomePage() {
                       <p className="text-xs text-gray-500">Break down income by month or project. Auto-updates totals above.</p>
                     </div>
                     {inputs.incomeEntries && inputs.incomeEntries.length > 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-green-800">
                         Auto-calcs active
                       </span>
                     )}
@@ -1751,7 +1751,7 @@ export default function HomePage() {
                               <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{formatCurrency(cert.amount)}</td>
                               <td className="px-3 py-2 whitespace-nowrap text-center text-xs">
                                 {cert.fileData ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-green-800">
                                     PDF
                                   </span>
                                 ) : (
@@ -2101,7 +2101,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 text-center">
                         <div className="text-xs font-medium text-gray-500 uppercase">Net VAT Position</div>
-                        <div className={`text-xl font-bold mt-2 ${computedNetVAT < 0 ? "text-green-600" : "text-gray-900"}`}>
+                        <div className={`text-xl font-bold mt-2 ${computedNetVAT < 0 ? "text-blue-600" : "text-gray-900"}`}>
                           {formatCurrency(Math.abs(computedNetVAT))}
                           {computedNetVAT < 0 ? " (Refund)" : ""}
                         </div>
@@ -2201,7 +2201,7 @@ export default function HomePage() {
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
                                     Cost: {formatCurrency(disposal.acquisitionCost)} → Proceeds: {formatCurrency(disposal.disposalProceeds)} •{" "}
-                                    <span className={gain > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                    <span className={gain > 0 ? "text-blue-600 font-medium" : "text-red-600 font-medium"}>
                                       {gain > 0 ? "Gain" : "Loss"}: {formatCurrency(Math.abs(gain))}
                                     </span>
                                   </div>
@@ -2574,7 +2574,7 @@ export default function HomePage() {
                   </div>
 
                   {/* Net Tax Due Card (Highlighted) */}
-                  <div className="group p-8 bg-gradient-to-br from-[#64B5F6] to-[#4A9FD9] rounded-2xl transition-all duration-300 relative overflow-hidden">
+                  <div className="group p-8 bg-gradient-to-br from-[#2264ff] to-[#1a50cc] rounded-2xl transition-all duration-300 relative overflow-hidden">
                     <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700" />
                     <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center mb-6 border border-white/30 text-white">
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -2675,7 +2675,7 @@ export default function HomePage() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-[#64B5F6]/5">
+                      <tr className="bg-[#2264ff]/5">
                         <td colSpan={2} className="px-8 py-6 text-xs font-black text-gray-600 uppercase tracking-[0.2em] text-right">Aggregate PIT Liability</td>
                         <td className="px-8 py-6 text-lg font-black text-[#0a0a0a] text-right">{formatCurrency(result.totalTaxDue)}</td>
                       </tr>

@@ -50,39 +50,70 @@ type ModalType = "link-card" | "send" | "fund" | "receive" | "withdraw" | null;
 // CARD NETWORK BADGE
 // =============================================================================
 
-function CardNetworkBadge({ card, onRemove }: { card: LinkedCard; onRemove?: () => void }) {
-    const networkImages: Record<string, string> = {
-        visa: "/Visa.png",
-        mastercard: "/Mastercard.png",
-        verve: "/Verve.png",
+function CashAppCard({ card, onRemove }: { card: LinkedCard; onRemove?: () => void }) {
+    // Different background colors for different card networks
+    const networkStyles: Record<string, { bg: string; logo: string; name: string }> = {
+        visa: { bg: "linear-gradient(135deg, #2264ff 0%, #0066cc 100%)", logo: "VISA", name: "VISA" },
+        mastercard: { bg: "linear-gradient(135deg, #2264ff 0%, #1a50cc 100%)", logo: "mastercard", name: "Mastercard" },
+        verve: { bg: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)", logo: "verve", name: "Verve" },
     };
 
-    const imageSrc = networkImages[card.network] || "/Mastercard.png";
+    const style = networkStyles[card.network] || networkStyles.mastercard;
 
     return (
-        <div className={`flex-shrink-0 flex flex-col items-center gap-2 p-2 group relative`}>
-            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
-                <img
-                    src={imageSrc}
-                    alt={card.network}
-                    className="w-12 h-12 object-cover rounded-full"
-                />
+        <div className="relative flex-shrink-0 w-full min-w-[300px] max-w-[340px]">
+            <div
+                className="relative h-52 rounded-2xl p-5 flex flex-col justify-between overflow-hidden shadow-lg"
+                style={{ background: style.bg }}
+            >
+                {/* Remove button */}
+                {onRemove && (
+                    <button
+                        onClick={onRemove}
+                        className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                )}
+
+                {/* Top row - Currency symbol and Network logo */}
+                <div className="flex items-start justify-between">
+                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <span className="text-white text-lg font-bold">₦</span>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-white text-xl font-bold tracking-wider">{style.name}</p>
+                        <p className="text-white/70 text-xs uppercase tracking-widest">DEBIT</p>
+                    </div>
+                </div>
+
+                {/* Card number */}
+                <div className="mt-auto">
+                    <p className="text-white/70 text-sm tracking-widest">•••• {card.last4}</p>
+                </div>
             </div>
-            <div className="text-center">
-                <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>•••• {card.last4}</p>
-                <p className="text-[10px] text-gray-500">{card.expiry}</p>
-            </div>
-            {onRemove && (
-                <button
-                    onClick={onRemove}
-                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                    <X className="w-3 h-3" />
-                </button>
-            )}
         </div>
     );
 }
+
+// Add Card button in Cash App style
+function AddCardButtonCashApp({ onClick }: { onClick: () => void }) {
+    return (
+        <div className="flex-shrink-0 w-full min-w-[300px] max-w-[340px]">
+            <button
+                onClick={onClick}
+                className="w-full h-52 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center gap-3 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all"
+            >
+                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Plus className="w-6 h-6 text-gray-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-500">Add Card</p>
+            </button>
+        </div>
+    );
+}
+
+
 
 // =============================================================================
 // ADD CARD BUTTON
@@ -171,35 +202,38 @@ function TransactionItem({ txn }: { txn: WalletTransaction }) {
     };
 
     return (
-        <div
-            className="flex items-center justify-between py-3 last:border-0"
-            style={{ borderBottom: '1px solid #e5e5e5' }}
-        >
-            <div className="flex items-center gap-3">
-                <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: bgColor }}
-                >
-                    <TypeIcon className="w-5 h-5" style={{ color }} />
-                </div>
-                <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{getLabel()}</p>
-                    <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500">
-                            {new Date(txn.createdAt).toLocaleDateString("en-NG", {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                            })}
-                        </p>
-                        <StatusIcon className="w-3 h-3" style={{ color: statusColor }} />
+        <div className="relative">
+            <div
+                className="flex items-center justify-between py-3"
+            >
+                <div className="flex items-center gap-3">
+                    <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: bgColor }}
+                    >
+                        <TypeIcon className="w-5 h-5" style={{ color }} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{getLabel()}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-xs text-gray-500">
+                                {new Date(txn.createdAt).toLocaleDateString("en-NG", {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                })}
+                            </p>
+                            <StatusIcon className="w-3 h-3" style={{ color: statusColor }} />
+                        </div>
                     </div>
                 </div>
+                <p className="text-sm font-semibold" style={{ color }}>
+                    {prefix}{formatNaira(txn.amount)}
+                </p>
             </div>
-            <p className="text-sm font-semibold" style={{ color }}>
-                {prefix}{formatNaira(txn.amount)}
-            </p>
+            {/* Centered separator line - 90% width */}
+            <div className="w-[90%] mx-auto h-px bg-gray-200 dark:bg-gray-700 last:hidden" />
         </div>
     );
 }
@@ -903,33 +937,33 @@ export default function WalletPage() {
         <>
             <div className="space-y-6 pb-32">
                 <main className="px-1 space-y-4">
-                    {/* Wallet Balance */}
-                    <div>
+                    {/* Linked Cards - Full Width Horizontal Scroll (Cash App Style) */}
+                    <div className="rounded-2xl overflow-hidden">
+                        <div className="overflow-x-auto hide-scrollbar snap-x snap-mandatory">
+                            <div className="flex gap-4 px-2 py-2" style={{ width: 'max-content' }}>
+                                {walletState.cards.map((card) => (
+                                    <div key={card.id} className="snap-center">
+                                        <CashAppCard
+                                            card={card}
+                                            onRemove={() => walletEngine.removeCard(card.id)}
+                                        />
+                                    </div>
+                                ))}
+                                <div className="snap-center">
+                                    <AddCardButtonCashApp onClick={() => setActiveModal("link-card")} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Wallet Balance - Moved below cards */}
+                    <div className="px-2">
                         <p className="text-xs font-medium text-gray-500 mb-0.5">Wallet Balance</p>
                         <p className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>
                             {formatNaira(walletState.balance)}
                         </p>
                     </div>
 
-                    {/* Linked Cards - Horizontal Scroll */}
-                    <div className="rounded-2xl overflow-hidden">
-                        <div className="py-2">
-                            <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Linked Cards</h3>
-                            <p className="text-xs text-gray-500">Your payment sources</p>
-                        </div>
-                        <div className="overflow-x-auto hide-scrollbar">
-                            <div className="flex gap-1 px-2 py-2 min-w-max">
-                                {walletState.cards.map((card) => (
-                                    <CardNetworkBadge
-                                        key={card.id}
-                                        card={card}
-                                        onRemove={() => walletEngine.removeCard(card.id)}
-                                    />
-                                ))}
-                                <AddCardButton onClick={() => setActiveModal("link-card")} />
-                            </div>
-                        </div>
-                    </div>
 
                     {/* Quick Actions */}
                     <div className="rounded-2xl overflow-hidden">

@@ -1422,7 +1422,7 @@ export default function ChartOfAccountsPage() {
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     {journalTotals.isBalanced ? (
-                                                        <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                                         </svg>
                                                     ) : journalTotals.totalDebit > 0 || journalTotals.totalCredit > 0 ? (
@@ -1473,9 +1473,9 @@ export default function ChartOfAccountsPage() {
                         {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-gradient-to-r from-blue-50 to-purple-50">
                             <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${auditResult.isCompliant ? 'bg-green-100' : 'bg-amber-100'}`}>
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${auditResult.isCompliant ? 'bg-blue-100' : 'bg-amber-100'}`}>
                                     {auditResult.isCompliant ? (
-                                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     ) : (
@@ -1486,7 +1486,7 @@ export default function ChartOfAccountsPage() {
                                 </div>
                                 <div>
                                     <h2 className="text-lg font-bold text-gray-900">AI Tax Audit Results</h2>
-                                    <p className={`text-sm font-medium ${auditResult.isCompliant ? 'text-green-600' : 'text-amber-600'}`}>
+                                    <p className={`text-sm font-medium ${auditResult.isCompliant ? 'text-blue-600' : 'text-amber-600'}`}>
                                         {auditResult.isCompliant ? '✓ Compliant' : `${auditResult.errors.length} Issues Found`}
                                     </p>
                                 </div>
@@ -1563,7 +1563,7 @@ export default function ChartOfAccountsPage() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">Net VAT</span>
-                                                    <span className={`font-mono font-semibold ${auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? 'text-green-600' : 'text-gray-900'}`}>
+                                                    <span className={`font-mono font-semibold ${auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? 'text-blue-600' : 'text-gray-900'}`}>
                                                         {auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? '(' : ''}
                                                         ₦{(auditResult.correctedSummary.transactionTaxes?.netVAT || 0).toLocaleString()}
                                                         {auditResult.correctedSummary.transactionTaxes?.vatStatus === 'CREDIT' ? ')' : ''}
@@ -1596,7 +1596,7 @@ export default function ChartOfAccountsPage() {
                                     <ul className="space-y-2">
                                         {auditResult.explanations.map((explanation, idx) => (
                                             <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                                                <span className="text-green-500 font-bold">✓</span>
+                                                <span className="text-blue-500 font-bold">✓</span>
                                                 {explanation}
                                             </li>
                                         ))}

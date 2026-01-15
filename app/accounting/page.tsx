@@ -1247,8 +1247,8 @@ export default function AccountingPage() {
                         </td>
                         <td className="px-3 py-3">
                           {postEntryTotals.isBalanced ? (
-                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             </div>
@@ -1301,12 +1301,12 @@ export default function AccountingPage() {
                 {/* Audit Results */}
                 {auditResult && (
                   <div className={`mt-3 p-3 rounded-lg text-sm border ${auditResult.isValid || auditResult.fixed
-                    ? "bg-green-50 border-green-100 text-green-800"
+                    ? "bg-blue-50 border-blue-100 text-green-800"
                     : "bg-amber-50 border-amber-100 text-amber-800"
                     }`}>
                     <div className="flex items-start gap-2">
                       {auditResult.isValid || auditResult.fixed ? (
-                        <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       ) : (
@@ -1514,8 +1514,8 @@ export default function AccountingPage() {
                         </td>
                         <td className="px-3 py-3">
                           {editEntryTotals.isBalanced ? (
-                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             </div>

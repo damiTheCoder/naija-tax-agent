@@ -321,7 +321,7 @@ export default function WorkspacePage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             >
               {availableYears.map((year) => (
                 <option key={year} value={year}>{year}</option>
@@ -336,7 +336,7 @@ export default function WorkspacePage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -345,7 +345,7 @@ export default function WorkspacePage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#64B5F6] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
             />
           </div>
 
@@ -373,14 +373,14 @@ export default function WorkspacePage() {
                   key={year}
                   onClick={() => setSelectedYear(year)}
                   className={`p-3 rounded-lg border text-left transition-all ${isSelected
-                    ? 'border-[#64B5F6] bg-blue-50 ring-2 ring-[#64B5F6]/20'
+                    ? 'border-[#2264ff] bg-blue-50 ring-2 ring-[#2264ff]/20'
                     : 'border-gray-200 hover:border-gray-300 bg-white'
                     }`}
                 >
-                  <p className={`text-lg font-bold ${isSelected ? 'text-[#64B5F6]' : 'text-gray-900'}`}>{year}</p>
+                  <p className={`text-lg font-bold ${isSelected ? 'text-[#2264ff]' : 'text-gray-900'}`}>{year}</p>
                   <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
                   {yearStatement && (
-                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                       ₦{Math.abs(yearStatement.netIncome).toLocaleString()}
                     </p>
                   )}
@@ -442,7 +442,7 @@ export default function WorkspacePage() {
                       </svg>
                       <p>No journal entries for {selectedYear}</p>
                       <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
-                      <Link href="/accounting" className="mt-2 text-[#64B5F6] text-sm font-medium hover:underline">
+                      <Link href="/accounting" className="mt-2 text-[#2264ff] text-sm font-medium hover:underline">
                         Go to Accounting Studio →
                       </Link>
                     </div>
@@ -524,7 +524,7 @@ export default function WorkspacePage() {
                             <span className={`text-xs px-2 py-0.5 rounded capitalize ${account.accountType === 'asset' ? 'bg-blue-50 text-blue-600' :
                               account.accountType === 'liability' ? 'bg-orange-50 text-orange-600' :
                                 account.accountType === 'equity' ? 'bg-purple-50 text-purple-600' :
-                                  account.accountType === 'income' ? 'bg-green-50 text-green-600' :
+                                  account.accountType === 'income' ? 'bg-blue-50 text-blue-600' :
                                     'bg-red-50 text-red-600'
                               }`}>{account.accountType}</span>
                           </div>
@@ -532,7 +532,7 @@ export default function WorkspacePage() {
                         </div>
                         <div className={`text-lg font-semibold ${account.accountType === 'asset' || account.accountType === 'expense'
                           ? (account.closingBalance >= 0 ? 'text-gray-900' : 'text-red-600')
-                          : (account.closingBalance >= 0 ? 'text-green-600' : 'text-red-600')
+                          : (account.closingBalance >= 0 ? 'text-blue-600' : 'text-red-600')
                           }`}>
                           {formatCurrency(account.closingBalance)}
                         </div>
@@ -605,7 +605,7 @@ export default function WorkspacePage() {
                       Download PDF
                     </button>
                   )}
-                  <div className={`text-xs font-medium px-2 py-1 rounded ${Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  <div className={`text-xs font-medium px-2 py-1 rounded ${Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
                     {Math.abs(trialBalance.totals.debit - trialBalance.totals.credit) < 0.01 ? "✓ Balanced" : "⚠ Unbalanced"}
                   </div>
                 </div>
@@ -669,7 +669,7 @@ export default function WorkspacePage() {
                 {yearlyStatements[selectedYear] && (
                   <button
                     onClick={() => handleDownloadYearlyStatement(selectedYear)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#64B5F6] rounded-lg hover:bg-[#4A9FD9] transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -727,7 +727,7 @@ export default function WorkspacePage() {
                       </div>
                       <div className="flex justify-between py-3 bg-gray-50 px-3 rounded-lg">
                         <span className="text-sm font-semibold text-gray-900">Net Income</span>
-                        <span className={`text-sm font-mono font-bold ${yearlyStatements[selectedYear].netIncome >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        <span className={`text-sm font-mono font-bold ${yearlyStatements[selectedYear].netIncome >= 0 ? "text-blue-600" : "text-red-600"}`}>
                           {formatCurrency(yearlyStatements[selectedYear].netIncome)}
                         </span>
                       </div>
@@ -922,7 +922,7 @@ export default function WorkspacePage() {
                           key={year}
                           onClick={() => handleDownloadYearlyStatement(year)}
                           disabled={!yearlyStatements[year]}
-                          className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#64B5F6] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#2264ff] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="text-left">
                             <p className="text-sm font-semibold text-gray-900">{year}</p>
@@ -981,7 +981,7 @@ export default function WorkspacePage() {
                             alert("Failed to generate PDF. Please try again or check console for details.");
                           }
                         }}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#64B5F6] rounded-lg hover:bg-[#4A9FD9] transition-colors shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] transition-colors shadow-sm"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1060,7 +1060,7 @@ export default function WorkspacePage() {
                             <div className="flex justify-between py-2 border-b border-gray-100">
                               <div className="flex flex-col">
                                 <span className="text-sm text-gray-600">Company Income Tax (CIT)</span>
-                                <span className={`text-[10px] ${taxSchedule.periodTaxes.citAssessment.applies ? 'text-gray-400' : 'text-green-600'}`}>
+                                <span className={`text-[10px] ${taxSchedule.periodTaxes.citAssessment.applies ? 'text-gray-400' : 'text-blue-600'}`}>
                                   {taxSchedule.periodTaxes.citAssessment.reason}
                                 </span>
                               </div>
@@ -1069,7 +1069,7 @@ export default function WorkspacePage() {
                             <div className="flex justify-between py-2 border-b border-gray-100">
                               <div className="flex flex-col">
                                 <span className="text-sm text-gray-600">Development Levy</span>
-                                <span className={`text-[10px] ${taxSchedule.periodTaxes.devLevyAssessment.applies ? 'text-gray-400' : 'text-green-600'}`}>
+                                <span className={`text-[10px] ${taxSchedule.periodTaxes.devLevyAssessment.applies ? 'text-gray-400' : 'text-blue-600'}`}>
                                   {taxSchedule.periodTaxes.devLevyAssessment.reason}
                                 </span>
                               </div>
@@ -1171,7 +1171,7 @@ export default function WorkspacePage() {
                                     </td>
                                     <td className="px-6 py-3 text-sm font-medium text-right align-top font-mono">
                                       {totalTaxForTx !== 0 ? (
-                                        <span className={totalTaxForTx > 0 ? "text-rose-600" : "text-green-600"}>
+                                        <span className={totalTaxForTx > 0 ? "text-rose-600" : "text-blue-600"}>
                                           {formatCurrency(totalTaxForTx)}
                                         </span>
                                       ) : (

@@ -74,7 +74,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 relative">
                     <Link href="/" className="flex items-center gap-2" onClick={onClose}>
-                        <div className="relative w-6 h-6 overflow-hidden rounded-full border-2 border-[#1a8cff]">
+                        <div className="relative w-6 h-6 overflow-hidden rounded-full border-2 border-[#2264ff]">
                             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
                         </div>
                         <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>CashOS</span>
@@ -101,7 +101,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                 <button
                                     onClick={() => toggleModule(module.id)}
                                     className="w-full flex items-center justify-between px-5 py-4 text-left text-sm font-semibold transition-colors"
-                                    style={{ color: isExpanded ? '#64B5F6' : (isDark ? '#ffffff' : '#000000') }}
+                                    style={{ color: isExpanded ? '#2264ff' : (isDark ? '#ffffff' : '#000000') }}
                                 >
                                     <span>{module.label}</span>
                                     <svg
@@ -137,11 +137,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                                     className={`
                                                         w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all
                                                         hover:bg-gray-100 dark:hover:bg-white/10
-                                                        ${isActive ? "bg-[#64B5F6]/10 font-medium" : ""}
+                                                        ${isActive ? "bg-[#2264ff]/10 font-medium" : ""}
                                                     `}
                                                     style={{
                                                         color: isActive
-                                                            ? '#64B5F6'
+                                                            ? '#2264ff'
                                                             : (isDark ? '#e5e5e5' : '#000000')
                                                     }}
                                                 >

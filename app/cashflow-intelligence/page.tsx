@@ -79,7 +79,7 @@ export default function CashIntelligencePage() {
             critical: "bg-red-500",
             low: "bg-orange-500",
             moderate: "bg-yellow-500",
-            healthy: "bg-green-500",
+            healthy: "bg-blue-500",
             strong: "bg-emerald-500",
         };
         return colors[status] || "bg-gray-500";
@@ -90,7 +90,7 @@ export default function CashIntelligencePage() {
             critical: { bg: "bg-red-100", text: "text-red-700", label: "Critical" },
             low: { bg: "bg-orange-100", text: "text-orange-700", label: "Low" },
             moderate: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Moderate" },
-            healthy: { bg: "bg-green-100", text: "text-green-700", label: "Healthy" },
+            healthy: { bg: "bg-blue-100", text: "text-blue-700", label: "Healthy" },
             strong: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Strong" },
         };
         return badges[status] || badges.moderate;

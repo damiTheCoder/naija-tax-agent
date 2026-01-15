@@ -50,7 +50,7 @@ const icons = {
 };
 
 // Color palette for charts
-const CHART_COLORS = ["#64B5F6", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
+const CHART_COLORS = ["#2264ff", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
 
 // Pie Chart Component
 function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
@@ -127,7 +127,7 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
               className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 relative group"
               style={{
                 height: Math.max(barHeight, 4),
-                background: item.value > 0 ? `linear-gradient(180deg, #64B5F6 0%, #4A9FD9 100%)` : '#e5e7eb',
+                background: item.value > 0 ? `linear-gradient(180deg, #2264ff 0%, #1a50cc 100%)` : '#e5e7eb',
                 minWidth: "20px",
               }}
             >
@@ -150,7 +150,7 @@ function MetricCardComponent({ metric }: { metric: MetricCard }) {
   return (
     <div className="bg-white rounded-2xl p-6 border border-gray-100">
       <div className="flex items-start justify-between">
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-[#64B5F6]">
+        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-[#2264ff]">
           {metric.icon}
         </div>
         <span
@@ -187,7 +187,7 @@ function EmptyState() {
       </p>
       <Link
         href="/accounting"
-        className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
       >
         Go to Accounting Studio
         {icons.arrowRight}
@@ -567,7 +567,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-500">Revenue trend by month</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-3 h-3 rounded-full bg-[#64B5F6]"></span>
+                  <span className="w-3 h-3 rounded-full bg-[#2264ff]"></span>
                   <span className="text-gray-500">Revenue (₦)</span>
                 </div>
               </div>

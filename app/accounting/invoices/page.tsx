@@ -284,7 +284,7 @@ export default function InvoiceManagementPage() {
         const styles: Record<InvoiceStatus, { bg: string; text: string; dot: string }> = {
             draft: { bg: "bg-gray-100", text: "text-gray-700", dot: "bg-gray-500" },
             sent: { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" },
-            paid: { bg: "bg-green-100", text: "text-green-700", dot: "bg-green-500" },
+            paid: { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" },
             overdue: { bg: "bg-red-100", text: "text-red-700", dot: "bg-red-500" },
             cancelled: { bg: "bg-gray-100", text: "text-gray-500", dot: "bg-gray-400" },
         };
@@ -294,7 +294,7 @@ export default function InvoiceManagementPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="w-8 h-8 border-2 border-[#64B5F6] border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -331,7 +331,7 @@ export default function InvoiceManagementPage() {
                     </div>
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+                        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
                     >
                         {icons.plus}
                         Create Invoice
@@ -353,8 +353,8 @@ export default function InvoiceManagementPage() {
                         label: "Paid This Month",
                         value: formatCurrency(stats.paidThisMonth),
                         icon: icons.money,
-                        color: "text-green-600",
-                        bg: "bg-green-100",
+                        color: "text-blue-600",
+                        bg: "bg-blue-100",
                     },
                     {
                         label: "Overdue",
@@ -404,7 +404,7 @@ export default function InvoiceManagementPage() {
                         key={status}
                         onClick={() => setFilterStatus(status)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === status
-                            ? "bg-[#64B5F6] text-white"
+                            ? "bg-[#2264ff] text-white"
                             : theme === "dark"
                                 ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -455,7 +455,7 @@ export default function InvoiceManagementPage() {
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center gap-2 bg-[#64B5F6] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#4A9FD9] transition-colors"
+                            className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
                         >
                             {icons.plus}
                             Create Your First Invoice
@@ -478,7 +478,7 @@ export default function InvoiceManagementPage() {
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span
                                                     className="font-mono font-semibold text-sm"
-                                                    style={{ color: theme === "dark" ? "#64B5F6" : "#2563eb" }}
+                                                    style={{ color: theme === "dark" ? "#2264ff" : "#2563eb" }}
                                                 >
                                                     {invoice.invoiceNumber}
                                                 </span>
@@ -533,7 +533,7 @@ export default function InvoiceManagementPage() {
                                                 {(invoice.status === "sent" || invoice.status === "overdue") && (
                                                     <button
                                                         onClick={() => updateStatus(invoice.id, "paid")}
-                                                        className="p-2 rounded-lg hover:bg-green-50 text-green-600 transition-colors"
+                                                        className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
                                                         title="Mark as Paid"
                                                     >
                                                         {icons.check}
@@ -754,7 +754,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <button
                                     onClick={addLineItem}
-                                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#64B5F6] hover:text-[#4A9FD9] transition-colors"
+                                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#2264ff] hover:text-[#1a50cc] transition-colors"
                                 >
                                     {icons.plus}
                                     Add Line Item
@@ -798,7 +798,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t" style={{ borderColor: theme === "dark" ? "#333" : "#e5e7eb" }}>
                                     <span style={{ color: theme === "dark" ? "#fff" : "#111827" }}>Total</span>
-                                    <span style={{ color: "#64B5F6" }}>{formatCurrency(invoiceTotals.total)}</span>
+                                    <span style={{ color: "#2264ff" }}>{formatCurrency(invoiceTotals.total)}</span>
                                 </div>
                             </div>
                         </div>
@@ -824,7 +824,7 @@ export default function InvoiceManagementPage() {
                             <button
                                 onClick={handleCreateInvoice}
                                 disabled={!formData.customerName || !formData.dueDate || invoiceTotals.subtotal <= 0}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#64B5F6] text-white hover:bg-[#4A9FD9] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2264ff] text-white hover:bg-[#1a50cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Create Invoice
                             </button>
@@ -917,7 +917,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <div className="flex justify-between text-lg font-bold pt-2">
                                     <span style={{ color: theme === "dark" ? "#fff" : "#111827" }}>Total</span>
-                                    <span style={{ color: "#64B5F6" }}>{formatCurrency(selectedInvoice.total)}</span>
+                                    <span style={{ color: "#2264ff" }}>{formatCurrency(selectedInvoice.total)}</span>
                                 </div>
                             </div>
 

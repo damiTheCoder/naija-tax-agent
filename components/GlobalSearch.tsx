@@ -206,10 +206,10 @@ export default function GlobalSearch() {
 
             {/* Search Modal */}
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
-                    {/* Backdrop */}
+                <div className="fixed inset-0 z-[200] flex items-start justify-center pt-16 px-4">
+                    {/* Backdrop with strong blur */}
                     <div
-                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/30 backdrop-blur-xl"
                         onClick={() => setIsOpen(false)}
                     />
 
@@ -252,7 +252,7 @@ export default function GlobalSearch() {
                                     key={cat}
                                     onClick={() => setCategory(cat)}
                                     className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${category === cat
-                                        ? "bg-[#1a8cff] text-white"
+                                        ? "bg-[#2264ff] text-white"
                                         : isDark
                                             ? "bg-gray-800 text-gray-300"
                                             : "bg-gray-100 text-gray-600"
@@ -267,7 +267,7 @@ export default function GlobalSearch() {
                         <div className="max-h-[300px] overflow-y-auto">
                             {isSearching ? (
                                 <div className="flex items-center justify-center py-8">
-                                    <div className="w-5 h-5 border-2 border-[#1a8cff] border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-5 h-5 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
                                 </div>
                             ) : results.length > 0 ? (
                                 <div className="py-2">

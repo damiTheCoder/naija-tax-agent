@@ -402,7 +402,7 @@ export default function CashflowChatPage() {
                     {analytics && (
                         <div>
                             <p className="text-xs font-medium text-gray-500 mb-0.5">Inflow</p>
-                            <p className="text-2xl font-bold text-green-500" style={{ color: '#22c55e' }}>
+                            <p className="text-2xl font-bold text-blue-500" style={{ color: '#2264ff' }}>
                                 {formatNaira(analytics.monthlyInflow)}<span className="text-sm text-gray-400 font-normal ml-1">/mo</span>
                             </p>
                         </div>

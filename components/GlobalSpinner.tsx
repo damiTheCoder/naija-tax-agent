@@ -17,7 +17,7 @@ export default function GlobalSpinner() {
                     ></div>
                     <div
                         className="absolute inset-0 rounded-full animate-spin"
-                        style={{ border: '2px solid transparent', borderTopColor: '#64B5F6' }}
+                        style={{ border: '2px solid transparent', borderTopColor: '#2264ff' }}
                     ></div>
                 </div>
                 <p className="text-sm font-medium text-gray-500 dark:!text-gray-300 animate-pulse">

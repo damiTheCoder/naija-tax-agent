@@ -110,7 +110,7 @@ export default function ModuleButtonBar() {
                                 ${isNavigating ? 'cursor-wait' : 'cursor-pointer'}
                             `}
                             style={{
-                                backgroundColor: isActive ? '#1a8cff' : (isDark ? '#0a0a0a' : '#e5e5e5'),
+                                backgroundColor: isActive ? '#2264ff' : (isDark ? '#0a0a0a' : '#e5e5e5'),
                                 color: isActive ? '#ffffff' : (isDark ? '#d1d5db' : '#374151'),
                             }}
                         >
