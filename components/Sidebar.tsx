@@ -83,7 +83,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo Section */}
         <div className="px-2 py-3">
           <Link href="/" className="flex items-center gap-3 group px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors">
-            <div className="relative w-7 h-7 overflow-hidden rounded-xl transition-all">
+            <div className="relative w-9 h-9 overflow-hidden rounded-full transition-all">
               <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
             </div>
             <h1 className="text-lg font-semibold tracking-tight text-white">CashOS</h1>

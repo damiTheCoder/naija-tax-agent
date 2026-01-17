@@ -219,10 +219,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-3 flex items-center justify-between">
             {/* Logo and Name - Left Side */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="relative w-8 h-8 rounded-full p-[2px] bg-gradient-to-tr from-[#2264ff] to-[#00c6ff]">
-                <div className="relative w-full h-full rounded-full overflow-hidden bg-white">
-                  <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
-                </div>
+              <div className="relative w-9 h-9 overflow-hidden rounded-full">
+                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
               </div>
               <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>CashOS</span>
             </Link>

@@ -74,10 +74,8 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 relative">
                     <Link href="/" className="flex items-center gap-2" onClick={onClose}>
-                        <div className="relative w-8 h-8 rounded-full p-[2px] bg-gradient-to-tr from-[#2264ff] to-[#00c6ff]">
-                            <div className="relative w-full h-full rounded-full overflow-hidden bg-white">
-                                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
-                            </div>
+                        <div className="relative w-9 h-9 overflow-hidden rounded-full">
+                            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
                         </div>
                         <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>CashOS</span>
                     </Link>
