@@ -4,6 +4,7 @@
 
 :root {
   /* Brand Colors - Blue & Black */
+  --font-glacial: "Glacial Indifference", sans-serif;
   --background: #ffffff;
   --foreground: #0a0a0a;
   --primary: #2264ff;
@@ -314,7 +315,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Glacial Indifference", var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-glacial), system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
