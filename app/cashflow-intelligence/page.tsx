@@ -52,20 +52,51 @@ export default function CashIntelligencePage() {
         setLoading(false);
     }, []);
 
-    // Generate sample daily flow data based on monthly analytics
+    // Candlestick chart data - last 30 days
+    const [candleData, setCandleData] = useState<Array<{
+        date: string;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        isGreen: boolean;
+    }>>([]);
+
+    // Generate realistic candlestick data based on monthly analytics
     useEffect(() => {
         if (analytics) {
-            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            const dailyAvgInflow = (analytics.monthlyInflow || 0) / 30;
-            const dailyAvgOutflow = (analytics.monthlyOutflow || 0) / 30;
+            const baseValue = analytics.cashBalance || 100000;
+            const volatility = 0.08; // 8% daily volatility
+            const candles: typeof candleData = [];
 
-            // Generate realistic daily variations (±30%)
-            const flows = days.map((day) => ({
-                day,
-                inflow: Math.round(dailyAvgInflow * (0.7 + Math.random() * 0.6)),
-                outflow: Math.round(dailyAvgOutflow * (0.7 + Math.random() * 0.6)),
-            }));
-            setDailyFlows(flows);
+            let currentPrice = baseValue;
+
+            // Generate 30 days of candlestick data
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                // Random price movement
+                const change = (Math.random() - 0.48) * volatility; // Slight upward bias
+                const open = currentPrice;
+                const close = currentPrice * (1 + change);
+                const high = Math.max(open, close) * (1 + Math.random() * 0.02);
+                const low = Math.min(open, close) * (1 - Math.random() * 0.02);
+
+                candles.push({
+                    date: dateStr,
+                    open: Math.round(open),
+                    high: Math.round(high),
+                    low: Math.round(low),
+                    close: Math.round(close),
+                    isGreen: close >= open
+                });
+
+                currentPrice = close;
+            }
+
+            setCandleData(candles);
         }
     }, [analytics]);
 
@@ -248,109 +279,160 @@ export default function CashIntelligencePage() {
                     </div>
                 </div>
 
-                {/* Daily Inflow/Outflow Chart */}
-                <div className="rounded-2xl border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 overflow-hidden">
-                    <div className="px-3 md:px-5 py-3 md:py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                {/* Cash Position Chart - Matching Accounting Dashboard Style */}
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                    {/* Header */}
+                    <div className="px-3 md:px-5 py-3 md:py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
                                     <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Daily Cash Flow</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Last 7 days inflow & outflow</p>
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Cash Position</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">30-day candlestick chart</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 text-xs">
                                 <div className="flex items-center gap-1.5">
                                     <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
-                                    <span className="text-gray-500 dark:text-gray-400">Inflow</span>
+                                    <span className="text-gray-500 dark:text-gray-400">Gain</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <div className="w-3 h-3 rounded-sm bg-rose-500"></div>
-                                    <span className="text-gray-500 dark:text-gray-400">Outflow</span>
+                                    <span className="text-gray-500 dark:text-gray-400">Loss</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div className="p-4 md:p-6">
-                        {dailyFlows.length > 0 ? (
-                            <div className="relative h-64">
-                                {/* Center line */}
-                                <div className="absolute left-0 right-0 top-1/2 h-px bg-gray-200 dark:bg-gray-700"></div>
 
-                                {/* Chart bars */}
-                                <div className="flex items-center justify-around h-full gap-2">
-                                    {dailyFlows.map((flow, idx) => {
-                                        const maxValue = Math.max(
-                                            ...dailyFlows.map(f => Math.max(f.inflow, f.outflow))
-                                        );
-                                        const inflowHeight = maxValue > 0 ? (flow.inflow / maxValue) * 100 : 0;
-                                        const outflowHeight = maxValue > 0 ? (flow.outflow / maxValue) * 100 : 0;
+                    {/* Chart Body */}
+                    <div className="relative p-4 md:p-6">
+                        {/* Price axis on right */}
+                        <div className="absolute right-4 md:right-6 top-4 md:top-6 bottom-14 w-16 flex flex-col justify-between text-right z-10">
+                            {candleData.length > 0 && (() => {
+                                const prices = candleData.flatMap(c => [c.high, c.low]);
+                                const maxPrice = Math.max(...prices);
+                                const minPrice = Math.min(...prices);
+                                const range = maxPrice - minPrice;
+                                return [0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
+                                    <span key={i} className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                                        {formatNaira(maxPrice - range * pct)}
+                                    </span>
+                                ));
+                            })()}
+                        </div>
 
-                                        return (
-                                            <div key={idx} className="flex flex-col items-center flex-1 h-full">
-                                                {/* Inflow bar (goes up) */}
-                                                <div className="flex flex-col items-center justify-end h-1/2 w-full pb-1">
+                        {/* Chart area */}
+                        <div className="h-64 pr-20">
+                            {candleData.length > 0 ? (
+                                <div className="relative h-full">
+                                    {/* Horizontal grid lines */}
+                                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                                        {[...Array(5)].map((_, i) => (
+                                            <div key={i} className="w-full h-px bg-gray-100 dark:bg-gray-800"></div>
+                                        ))}
+                                    </div>
+
+                                    {/* Candlesticks */}
+                                    <div className="flex items-stretch h-full gap-[2px]">
+                                        {candleData.map((candle, idx) => {
+                                            const prices = candleData.flatMap(c => [c.high, c.low]);
+                                            const maxPrice = Math.max(...prices);
+                                            const minPrice = Math.min(...prices);
+                                            const range = maxPrice - minPrice || 1;
+
+                                            // Calculate positions as percentages from top
+                                            const highPct = ((maxPrice - candle.high) / range) * 100;
+                                            const lowPct = ((maxPrice - candle.low) / range) * 100;
+                                            const openPct = ((maxPrice - candle.open) / range) * 100;
+                                            const closePct = ((maxPrice - candle.close) / range) * 100;
+
+                                            const bodyTop = Math.min(openPct, closePct);
+                                            const bodyHeight = Math.abs(closePct - openPct);
+                                            const wickTop = highPct;
+                                            const wickHeight = lowPct - highPct;
+
+                                            const color = candle.isGreen ? '#10b981' : '#f43f5e';
+
+                                            return (
+                                                <div key={idx} className="flex-1 relative group">
+                                                    {/* Wick (thin line) */}
                                                     <div
-                                                        className="w-6 md:w-10 bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t-md transition-all duration-500 relative group cursor-pointer"
-                                                        style={{ height: `${Math.max(inflowHeight * 0.9, 4)}%` }}
-                                                    >
-                                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                            +{formatNaira(flow.inflow)}
+                                                        className="absolute left-1/2 -translate-x-1/2"
+                                                        style={{
+                                                            top: `${wickTop}%`,
+                                                            height: `${Math.max(wickHeight, 0.5)}%`,
+                                                            width: '1px',
+                                                            background: color
+                                                        }}
+                                                    />
+
+                                                    {/* Body (thick rectangle) */}
+                                                    <div
+                                                        className="absolute left-1/2 -translate-x-1/2 rounded-[1px]"
+                                                        style={{
+                                                            top: `${bodyTop}%`,
+                                                            height: `${Math.max(bodyHeight, 0.5)}%`,
+                                                            width: '60%',
+                                                            minWidth: '3px',
+                                                            maxWidth: '8px',
+                                                            background: color
+                                                        }}
+                                                    />
+
+                                                    {/* Hover tooltip */}
+                                                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg px-3 py-2 text-[11px] whitespace-nowrap">
+                                                            <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">{candle.date}</div>
+                                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
+                                                                <span className="text-gray-400">Open:</span>
+                                                                <span className="text-right font-mono">{formatNaira(candle.open)}</span>
+                                                                <span className="text-gray-400">High:</span>
+                                                                <span className="text-right font-mono">{formatNaira(candle.high)}</span>
+                                                                <span className="text-gray-400">Low:</span>
+                                                                <span className="text-right font-mono">{formatNaira(candle.low)}</span>
+                                                                <span className="text-gray-400">Close:</span>
+                                                                <span className={`text-right font-mono font-medium ${candle.isGreen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                                                    {formatNaira(candle.close)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-
-                                                {/* Outflow bar (goes down) */}
-                                                <div className="flex flex-col items-center justify-start h-1/2 w-full pt-1">
-                                                    <div
-                                                        className="w-6 md:w-10 bg-gradient-to-b from-rose-500 to-rose-400 rounded-b-md transition-all duration-500 relative group cursor-pointer"
-                                                        style={{ height: `${Math.max(outflowHeight * 0.9, 4)}%` }}
-                                                    >
-                                                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                            -{formatNaira(flow.outflow)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Day label */}
-                                                <span className="mt-3 text-xs text-gray-500 dark:text-gray-400 font-medium">{flow.day}</span>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="h-64 flex items-center justify-center text-gray-400">
-                                <p>No cash flow data available</p>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                                    <p>No data available</p>
+                                </div>
+                            )}
+                        </div>
 
-                        {/* Summary stats */}
-                        <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-                            <div className="text-center">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Weekly Inflow</p>
-                                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                                    +{formatNaira(dailyFlows.reduce((sum, f) => sum + f.inflow, 0))}
-                                </p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Weekly Outflow</p>
-                                <p className="text-lg font-bold text-rose-600 dark:text-rose-400">
-                                    -{formatNaira(dailyFlows.reduce((sum, f) => sum + f.outflow, 0))}
-                                </p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Net Flow</p>
-                                <p className={`text-lg font-bold ${(dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0)) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                    {dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0) >= 0 ? '+' : ''}{formatNaira(dailyFlows.reduce((sum, f) => sum + f.inflow - f.outflow, 0))}
-                                </p>
-                            </div>
+                        {/* Time axis */}
+                        <div className="h-8 pr-20 flex justify-between items-center mt-2 border-t border-gray-100 dark:border-gray-800 pt-2">
+                            {candleData.filter((_, i) => i % 5 === 0).map((candle, idx) => (
+                                <span key={idx} className="text-[10px] text-gray-400 dark:text-gray-500">{candle.date}</span>
+                            ))}
                         </div>
                     </div>
+
+                    {/* Footer with current value */}
+                    {candleData.length > 0 && (
+                        <div className="px-4 md:px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Current Position</span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${candleData[candleData.length - 1].isGreen
+                                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'
+                                    : 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400'
+                                }`}>
+                                {formatNaira(candleData[candleData.length - 1].close)}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Empty State */}

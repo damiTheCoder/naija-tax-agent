@@ -9,7 +9,7 @@ import MobileMenu from "@/components/MobileMenu";
 
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
-import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
+import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
@@ -200,10 +200,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Content Area - offset by sidebar width on desktop */}
       <div className="lg:ml-60 min-h-screen flex flex-col pb-20 lg:pb-0"> {/* pb-20 for mobile BottomNav, lg:pb-0 for desktop */}
         {/* Desktop Header */}
-        <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-end items-center pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-3">
-            {/* Module Buttons - Desktop Only */}
+        <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-between items-center pointer-events-none">
+          {/* Module Buttons - Left Side */}
+          <div className="pointer-events-auto">
             <ModuleButtonBar />
+          </div>
+          {/* Theme Toggle - Right Side */}
+          <div className="pointer-events-auto">
             <ThemeToggle />
           </div>
         </header>
@@ -216,8 +219,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-4 py-3 flex items-center justify-between">
             {/* Logo and Name - Left Side */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="relative w-7 h-7 overflow-hidden rounded-lg">
-                <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+              <div className="relative w-8 h-8 rounded-full p-[2px] bg-gradient-to-tr from-[#2264ff] to-[#00c6ff]">
+                <div className="relative w-full h-full rounded-full overflow-hidden bg-white">
+                  <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+                </div>
               </div>
               <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>CashOS</span>
             </Link>

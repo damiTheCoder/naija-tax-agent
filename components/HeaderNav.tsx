@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
+import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { TAX_NAV_ITEMS } from "@/lib/navigation";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -30,8 +30,10 @@ export default function HeaderNav() {
     <header className="sticky top-0 z-50 bg-[#fafafa]/90 backdrop-blur-xl">
       <div className="max-w-5xl mx-auto px-6 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative w-8 h-8 overflow-hidden rounded-xl">
-            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+          <div className="relative w-8 h-8 rounded-full p-[2px] bg-gradient-to-tr from-[#2264ff] to-[#00c6ff]">
+            <div className="relative w-full h-full rounded-full overflow-hidden bg-white">
+              <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+            </div>
           </div>
           <div>
             <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">CashOS</h1>

@@ -884,25 +884,111 @@ export default function AccountingPage() {
 
       <div className="space-y-6 pb-32">
         <section className="relative min-h-[75vh]">
-          <div className="flex flex-col gap-2 md:gap-3 px-2 md:px-6 py-3 md:py-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className={`px-3 py-1 rounded-md ${documents.length ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-                  Docs {documents.length}
-                </span>
-                <span className={`px-3 py-1 rounded-md ${generatedStatements ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
-                  Draft {generatedStatements ? "ready" : "pending"}
-                </span>
-                <span className={`px-3 py-1 rounded-md ${auditedPacket ? "bg-purple-50 text-purple-600" : "bg-rose-50 text-rose-500"}`}>
-                  Audit {auditedPacket ? "attached" : "waiting"}
-                </span>
-              </div>
-            </div>
-          </div>
 
           <div className="chat-feed flex flex-col min-h-[60vh]">
             <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
               <div className="space-y-4">
+                {/* Inflow Section */}
+                <div>
+                  <p className={`text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Inflow</p>
+                  <p className="text-2xl font-bold" style={{ color: '#2264ff' }}>
+                    ₦{accountingState?.journalEntries
+                      ?.filter(e => e.lines.some(l => l.accountCode.startsWith('4')))
+                      ?.reduce((sum, e) => sum + e.lines.filter(l => l.accountCode.startsWith('4')).reduce((s, l) => s + l.credit, 0), 0)
+                      ?.toLocaleString() || '0'}
+                    <span className={`text-sm font-normal ml-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>/mo</span>
+                  </p>
+                </div>
+
+                {/* Embedded Finance Products - Horizontal Scroll */}
+                <div className="rounded-2xl overflow-hidden">
+                  <div className="py-2">
+                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Embedded Finance</h3>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Explore investment products</p>
+                  </div>
+                  <div className="overflow-x-auto hide-scrollbar">
+                    <div className="flex gap-1 px-2 py-2 min-w-max">
+                      {/* Piggyvest */}
+                      <a href="https://piggyvest.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="relative">
+                          <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                            <img src="/Piggyvest.png" alt="Piggyvest" className="w-16 h-16 object-cover rounded-full" />
+                          </div>
+                          {/* Verified badge */}
+                          <div className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white">
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Piggyvest</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Save & Invest</p>
+                          <p className="text-[10px] font-medium text-emerald-600">13.00% p.a.</p>
+                        </div>
+                      </a>
+
+                      {/* Cowrywise */}
+                      <a href="https://cowrywise.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                          <img src="/Cowrywise.png" alt="Cowrywise" className="w-16 h-16 object-cover rounded-full" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Cowrywise</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Wealth Management</p>
+                          <p className="text-[10px] font-medium text-emerald-600">15.00% p.a.</p>
+                        </div>
+                      </a>
+
+                      {/* Risevest */}
+                      <a href="https://risevest.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                          <img src="/Rise.png" alt="Risevest" className="w-16 h-16 object-cover rounded-full" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Risevest</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Dollar Investments</p>
+                          <p className="text-[10px] font-medium text-emerald-600">12.00% p.a.</p>
+                        </div>
+                      </a>
+
+                      {/* Bamboo */}
+                      <a href="https://investbamboo.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                          <img src="/Bamboo.png" alt="Bamboo" className="w-16 h-16 object-cover rounded-full" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Bamboo</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>US Stocks</p>
+                        </div>
+                      </a>
+
+                      {/* Kuda */}
+                      <a href="https://kuda.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                          <img src="/Kuda.png" alt="Kuda" className="w-16 h-16 object-cover rounded-full" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Kuda</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Digital Banking</p>
+                          <p className="text-[10px] font-medium text-emerald-600">4.00% p.a.</p>
+                        </div>
+                      </a>
+
+                      {/* FairMoney */}
+                      <a href="https://fairmoney.io" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
+                          <img src="/fairmoney.png" alt="FairMoney" className="w-16 h-16 object-cover rounded-full" />
+                        </div>
+                        <div className="text-center">
+                          <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>FairMoney</p>
+                          <p className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Quick Loans</p>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Post Journal Entry Button */}
                 <button
                   onClick={() => setShowPostEntry(true)}

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
+import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
@@ -72,7 +72,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar - Desktop (left) */}
       <aside
-        className="hidden lg:flex fixed left-3 top-3 bottom-2 w-60 flex-col z-50 overflow-hidden rounded-2xl"
+        className="hidden lg:flex fixed left-3 top-3 bottom-0 w-60 flex-col z-50 overflow-hidden rounded-t-2xl"
         style={{
           background: '#000000',
           border: '1px solid rgba(255, 255, 255, 0.1)'
@@ -83,8 +83,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo Section */}
         <div className="px-2 py-3">
           <Link href="/" className="flex items-center gap-3 group px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors">
-            <div className="relative w-7 h-7 overflow-hidden rounded-md ring-1 ring-[#2264ff]/30 group-hover:ring-[#2264ff]/60 transition-all">
-              <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+            <div className="relative w-7 h-7 overflow-hidden rounded-xl transition-all">
+              <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
             </div>
             <h1 className="text-lg font-semibold tracking-tight text-white">CashOS</h1>
           </Link>
