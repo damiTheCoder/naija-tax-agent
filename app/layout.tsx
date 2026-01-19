@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
-import { APP_LOGO_SRC } from "@/lib/constants";
+import { APP_LOGO_SRC, APP_LOGO_ROUNDED_SRC } from "@/lib/constants";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { NavigationProvider } from "@/lib/NavigationContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   keywords: ["Nigerian tax", "FIRS", "CashOS", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
   authors: [{ name: "CashOS" }],
   icons: {
-    icon: APP_LOGO_SRC,
-    shortcut: APP_LOGO_SRC,
-    apple: APP_LOGO_SRC,
+    icon: APP_LOGO_ROUNDED_SRC,
+    shortcut: APP_LOGO_ROUNDED_SRC,
+    apple: APP_LOGO_ROUNDED_SRC,
   },
   openGraph: {
     title: siteTitle,

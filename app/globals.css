@@ -322,8 +322,9 @@ body {
 }
 
 /* Landing page font override */
-.landing-modern {
-  font-family: "League Spartan", var(--font-sans), system-ui, -apple-system, sans-serif;
+.landing-modern,
+.landing-modern * {
+  font-family: var(--font-glacial), system-ui, -apple-system, sans-serif !important;
 }
 
 /* Custom scrollbar - Modern thin style */
@@ -6249,4 +6250,12 @@ tr:hover td {
   100% {
     opacity: 0;
   }
+}
+/* Utility to hide scrollbars */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }

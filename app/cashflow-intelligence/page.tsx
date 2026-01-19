@@ -60,45 +60,121 @@ export default function CashIntelligencePage() {
         low: number;
         close: number;
         isGreen: boolean;
-    }>>([]);
+    } & { txCount?: number }>>([]);
 
-    // Generate realistic candlestick data based on monthly analytics
+    // Generate REAL candlestick data from accounting engine
     useEffect(() => {
-        if (analytics) {
-            const baseValue = analytics.cashBalance || 100000;
-            const volatility = 0.08; // 8% daily volatility
-            const candles: typeof candleData = [];
+        const entries = accountingEngine.getState().journalEntries;
+        const cashAccountCodes = ['1000', '1010', '1020', '1021']; // Cash & Bank codes
 
-            let currentPrice = baseValue;
+        // 1. Group transactions by date
+        const dailyTransactions = new Map<string, Array<{ amount: number, type: 'debit' | 'credit', narration: string }>>();
 
-            // Generate 30 days of candlestick data
-            for (let i = 29; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-                // Random price movement
-                const change = (Math.random() - 0.48) * volatility; // Slight upward bias
-                const open = currentPrice;
-                const close = currentPrice * (1 + change);
-                const high = Math.max(open, close) * (1 + Math.random() * 0.02);
-                const low = Math.min(open, close) * (1 - Math.random() * 0.02);
-
-                candles.push({
-                    date: dateStr,
-                    open: Math.round(open),
-                    high: Math.round(high),
-                    low: Math.round(low),
-                    close: Math.round(close),
-                    isGreen: close >= open
-                });
-
-                currentPrice = close;
-            }
-
-            setCandleData(candles);
+        // Initialize last 30 days
+        const today = new Date();
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            dailyTransactions.set(dateStr, []);
         }
-    }, [analytics]);
+
+        // Process all entries to find cash impact
+        entries.forEach(entry => {
+            const dateStr = entry.date;
+
+            entry.lines.forEach(line => {
+                if (cashAccountCodes.includes(line.accountCode)) {
+                    if (!dailyTransactions.has(dateStr)) {
+                        dailyTransactions.set(dateStr, []);
+                    }
+                    dailyTransactions.get(dateStr)?.push({
+                        amount: line.debit > 0 ? line.debit : line.credit,
+                        type: line.debit > 0 ? 'debit' : 'credit', // Debit increases asset (cash), Credit decreases
+                        narration: entry.narration
+                    });
+                }
+            });
+        });
+
+        // 2. Calculate OHLC
+        const candles: typeof candleData = [];
+        let currentBalance = 0; // Should ideally start from opening balance of 30 days ago
+
+        // Calculate initial balance (pro-rated for demo, or sum all prior)
+        // For simplicity in this view, we'll start with the analytics.cashBalance and work backwards? 
+        // Or cleaner: calculate accumulated balance from day 0 of system if possible.
+        // Let's rely on analytics.cashBalance as the "Current" and work backwards if needed.
+        // Actually, let's just run forward from the first day of the 30-day window.
+        // We need the opening balance 30 days ago. 
+        // Let's approximate starting balance = Current Cash - Net Flow of last 30 days.
+
+        const sortedDates = Array.from(dailyTransactions.keys()).sort();
+        const last30Days = sortedDates.filter(d => {
+            const date = new Date(d);
+            const diffTime = Math.abs(today.getTime() - date.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays <= 30;
+        });
+
+        // Calculate opening balance for the period
+        // For now, we'll assume a base if no history, or trace back.
+        // Let's use analytics.cashBalance as the anchor at the END.
+        // But doing forward pass is easier for candlesticks.
+        // Let's assume start = current - sum(flows).
+
+        let totalFlow = 0;
+        last30Days.forEach(date => {
+            const txs = dailyTransactions.get(date) || [];
+            txs.forEach(tx => {
+                if (tx.type === 'debit') totalFlow += tx.amount;
+                else totalFlow -= tx.amount;
+            });
+        });
+
+        let runningBalance = (analytics?.cashBalance || 250000) - totalFlow;
+        if (runningBalance < 0 && (analytics?.cashBalance || 0) > 0) runningBalance = 100000; // Fallback if calc is weird
+
+        sortedDates.forEach(date => {
+            const dateObj = new Date(date);
+            // data only for last 30 days
+            if ((today.getTime() - dateObj.getTime()) / (1000 * 3600 * 24) > 30) return;
+
+            const txs = dailyTransactions.get(date) || [];
+            const open = runningBalance;
+            let high = open;
+            let low = open;
+
+            txs.forEach(tx => {
+                if (tx.type === 'debit') runningBalance += tx.amount;
+                else runningBalance -= tx.amount;
+
+                if (runningBalance > high) high = runningBalance;
+                if (runningBalance < low) low = runningBalance;
+            });
+
+            const close = runningBalance;
+
+            candles.push({
+                date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                open,
+                high,
+                low,
+                close,
+                isGreen: close >= open,
+                // Add extra data for tooltip if needed
+                txCount: txs.length
+            });
+        });
+
+        // If no data, show empty state or single candle? 
+        // If empty, we keep the array empty or minimal.
+        // Fill gaps?
+        // Better to show gaps as gaps.
+
+        setCandleData(candles);
+
+    }, [analytics, loading]);
 
     useEffect(() => {
         loadAnalytics();
@@ -174,7 +250,7 @@ export default function CashIntelligencePage() {
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Cashflow Metrics</h3>
+                                <h3 className="text-sm font-semibold !text-black dark:!text-white">Cashflow Metrics</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">Real-time financial health indicators</p>
                             </div>
                         </div>
@@ -182,7 +258,7 @@ export default function CashIntelligencePage() {
                     <div className="">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                             {/* Cash Balance */}
-                            <div className="rounded-xl p-4">
+                            <div className="rounded-xl pt-2 pb-4">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Balance</p>
                                 <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold mt-1">
                                     {formatNaira(analytics?.cashBalance || 0)}
@@ -190,7 +266,7 @@ export default function CashIntelligencePage() {
                             </div>
 
                             {/* Monthly Inflow */}
-                            <div className="rounded-xl p-4">
+                            <div className="rounded-xl pt-2 pb-4">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Inflow</p>
                                 <p className="text-xl md:text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                                     +{formatNaira(analytics?.monthlyInflow || 0)}
@@ -198,7 +274,7 @@ export default function CashIntelligencePage() {
                             </div>
 
                             {/* Monthly Outflow */}
-                            <div className="rounded-xl p-4">
+                            <div className="rounded-xl pt-2 pb-4">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Outflow</p>
                                 <p className="text-xl md:text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
                                     -{formatNaira(analytics?.monthlyOutflow || 0)}
@@ -206,7 +282,7 @@ export default function CashIntelligencePage() {
                             </div>
 
                             {/* Runway */}
-                            <div className="rounded-xl p-4">
+                            <div className="rounded-xl pt-2 pb-4">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Runway</p>
                                 <div className="flex items-end gap-2 mt-1">
                                     <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold">
@@ -231,14 +307,14 @@ export default function CashIntelligencePage() {
                                 </svg>
                             </div>
                             <div>
-                                <h3 style={{ color: 'var(--foreground)' }} className="text-sm font-semibold">Burn Rate Analysis</h3>
+                                <h3 className="text-sm font-semibold !text-black dark:!text-white">Burn Rate Analysis</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">Cash consumption & sustainability metrics</p>
                             </div>
                         </div>
                     </div>
                     <div className="">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                            <div className="flex items-center gap-3 p-3 rounded-xl">
+                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
                                 <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                                     <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
@@ -249,7 +325,7 @@ export default function CashIntelligencePage() {
                                     <p style={{ color: 'var(--foreground)' }} className="text-lg font-semibold">{formatNaira(analytics?.burnRate || 0)}<span className="text-sm font-normal text-gray-500 dark:text-gray-400">/day</span></p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 rounded-xl">
+                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${(analytics?.netCashflow || 0) >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
                                     <svg className={`w-5 h-5 ${(analytics?.netCashflow || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
@@ -262,7 +338,7 @@ export default function CashIntelligencePage() {
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 rounded-xl">
+                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
                                 <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
                                     <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -280,9 +356,9 @@ export default function CashIntelligencePage() {
                 </div>
 
                 {/* Cash Position Chart - Matching Accounting Dashboard Style */}
-                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                <div className="rounded-2xl bg-transparent overflow-hidden">
                     {/* Header */}
-                    <div className="px-3 md:px-5 py-3 md:py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+                    <div className="py-3 md:py-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
@@ -291,25 +367,16 @@ export default function CashIntelligencePage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Cash Position</h3>
+                                    <h3 className="text-sm font-semibold !text-black dark:!text-white">Cash Position</h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">30-day candlestick chart</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 text-xs">
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
-                                    <span className="text-gray-500 dark:text-gray-400">Gain</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-3 h-3 rounded-sm bg-rose-500"></div>
-                                    <span className="text-gray-500 dark:text-gray-400">Loss</span>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
 
                     {/* Chart Body */}
-                    <div className="relative p-4 md:p-6">
+                    <div className="relative pt-4 pb-0 md:pt-6">
                         {/* Price axis on right */}
                         <div className="absolute right-4 md:right-6 top-4 md:top-6 bottom-14 w-16 flex flex-col justify-between text-right z-10">
                             {candleData.length > 0 && (() => {
@@ -318,7 +385,7 @@ export default function CashIntelligencePage() {
                                 const minPrice = Math.min(...prices);
                                 const range = maxPrice - minPrice;
                                 return [0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
-                                    <span key={i} className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                                    <span key={i} className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
                                         {formatNaira(maxPrice - range * pct)}
                                     </span>
                                 ));
@@ -332,7 +399,7 @@ export default function CashIntelligencePage() {
                                     {/* Horizontal grid lines */}
                                     <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                                         {[...Array(5)].map((_, i) => (
-                                            <div key={i} className="w-full h-px bg-gray-100 dark:bg-gray-800"></div>
+                                            <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-800"></div>
                                         ))}
                                     </div>
 
@@ -398,6 +465,9 @@ export default function CashIntelligencePage() {
                                                                 <span className={`text-right font-mono font-medium ${candle.isGreen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                                                     {formatNaira(candle.close)}
                                                                 </span>
+                                                                <span className="col-span-2 text-xs text-gray-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-1">
+                                                                    {candle.txCount || 0} transactions
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -423,11 +493,11 @@ export default function CashIntelligencePage() {
 
                     {/* Footer with current value */}
                     {candleData.length > 0 && (
-                        <div className="px-4 md:px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between">
+                        <div className="px-4 md:px-6 py-3 flex items-center justify-between">
                             <span className="text-xs text-gray-500 dark:text-gray-400">Current Position</span>
                             <span className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${candleData[candleData.length - 1].isGreen
-                                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'
-                                    : 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400'
+                                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'
+                                : 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400'
                                 }`}>
                                 {formatNaira(candleData[candleData.length - 1].close)}
                             </span>
@@ -436,35 +506,37 @@ export default function CashIntelligencePage() {
                 </div>
 
                 {/* Empty State */}
-                {(!analytics || analytics.monthlyInflow === 0) && (
-                    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
-                        <div className="p-5">
-                            <div className="flex items-start gap-4">
-                                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold text-amber-800">No Cashflow Data Yet</h3>
-                                    <p className="text-sm text-amber-700 mt-1">
-                                        Add transactions in Accounting Studio to see your cashflow metrics and run investment scenarios.
-                                    </p>
-                                    <a
-                                        href="/accounting"
-                                        className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                {
+                    (!analytics || analytics.monthlyInflow === 0) && (
+                        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
+                            <div className="p-5">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                         </svg>
-                                        Go to Accounting Studio
-                                    </a>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-amber-800">No Cashflow Data Yet</h3>
+                                        <p className="text-sm text-amber-700 mt-1">
+                                            Add transactions in Accounting Studio to see your cashflow metrics and run investment scenarios.
+                                        </p>
+                                        <a
+                                            href="/accounting"
+                                            className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                            </svg>
+                                            Go to Accounting Studio
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </main>
-        </div>
+                    )
+                }
+            </main >
+        </div >
     );
 }

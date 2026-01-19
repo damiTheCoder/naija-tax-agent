@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   RawTransaction,
   StatementDraft,
@@ -115,6 +116,104 @@ export default function AccountingPage() {
   type EditEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
+
+  // POS Connection State - Retail/Sales POS Software
+  type POSProvider = { id: string; name: string; color: string; description: string; logo?: string };
+  const POS_PROVIDERS: POSProvider[] = [
+    { id: "loyverse", name: "Loyverse", color: "#4CAF50", description: "Free POS for retail & restaurants", logo: "/pos-loyverse.png" },
+    { id: "square", name: "Square POS", color: "#3E4348", description: "All-in-one retail solution", logo: "/pos-square.png" },
+    { id: "vend", name: "Vend", color: "#4CAF50", description: "Lightspeed retail POS", logo: "/pos-vend.png" },
+    { id: "shopify", name: "Shopify POS", color: "#96BF48", description: "Omnichannel retail", logo: "/pos-shopify.png" },
+    { id: "custom", name: "Custom POS", color: "#6366F1", description: "Your own POS system" },
+  ];
+  const [connectedPOS, setConnectedPOS] = useState<string | null>(null);
+  const [posConnectionStatus, setPosConnectionStatus] = useState<"idle" | "connecting" | "connected">("idle");
+
+  // POS Transactions State
+  type POSTransactionDisplay = {
+    id: string;
+    timestamp: string;
+    total: number;
+    itemCount: number;
+    paymentMethod: string;
+    journalEntryId: string;
+  };
+  const [posTransactions, setPosTransactions] = useState<POSTransactionDisplay[]>([]);
+  const [posApiKey, setPosApiKey] = useState<string>("");
+
+  // Load POS transactions from localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("insight::pos-transactions");
+    if (stored) {
+      try {
+        setPosTransactions(JSON.parse(stored));
+      } catch {
+        // ignore
+      }
+    }
+    const storedKey = localStorage.getItem("insight::pos-api-key");
+    if (storedKey) setPosApiKey(storedKey);
+    const storedProvider = localStorage.getItem("insight::pos-connected-provider");
+    if (storedProvider) {
+      setConnectedPOS(storedProvider);
+      setPosConnectionStatus("connected");
+    }
+  }, []);
+
+  // Save POS transactions to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("insight::pos-transactions", JSON.stringify(posTransactions));
+  }, [posTransactions]);
+
+  const handleConnectPOS = async (providerId: string) => {
+    setPosConnectionStatus("connecting");
+    appendMessage("assistant", `🔌 Connecting to ${POS_PROVIDERS.find(p => p.id === providerId)?.name}...`);
+    pushAutomationActivity("Connecting POS", `Authorising ${POS_PROVIDERS.find(p => p.id === providerId)?.name}...`);
+
+    // Simulate connection delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Generate API key for this connection
+    const newApiKey = `pos_${providerId}_${Date.now().toString(36)}`;
+    setPosApiKey(newApiKey);
+    localStorage.setItem("insight::pos-api-key", newApiKey);
+    localStorage.setItem("insight::pos-connected-provider", providerId);
+
+    setConnectedPOS(providerId);
+    setPosConnectionStatus("connected");
+
+    const providerName = POS_PROVIDERS.find(p => p.id === providerId)?.name;
+    appendMessage("assistant", `✅ Successfully connected to ${providerName}!\n\n**Your API Key:** \`${newApiKey}\`\n\nPOS systems can now send transactions to:\n\`POST /api/pos/transactions\`\n\nTransactions will be automatically journaled.`);
+    pushAutomationActivity("POS Connected", `${providerName} is now linked.`);
+
+    // Simulate a demo transaction after connection
+    setTimeout(() => {
+      const demoTx: POSTransactionDisplay = {
+        id: `DEMO-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        total: 2500,
+        itemCount: 3,
+        paymentMethod: "card",
+        journalEntryId: `POS-${Date.now()}`,
+      };
+      setPosTransactions(prev => [demoTx, ...prev].slice(0, 10));
+      appendMessage("assistant", `📦 **New POS Sale:** ₦2,500 (3 items) via card\n\n_Auto-journaled as ${demoTx.journalEntryId}_`);
+      pushAutomationActivity("POS Sale", `₦2,500 - 3 items`);
+    }, 3000);
+  };
+
+  const handleDisconnectPOS = () => {
+    const providerName = POS_PROVIDERS.find(p => p.id === connectedPOS)?.name;
+    setConnectedPOS(null);
+    setPosConnectionStatus("idle");
+    setPosApiKey("");
+    localStorage.removeItem("insight::pos-api-key");
+    localStorage.removeItem("insight::pos-connected-provider");
+    appendMessage("assistant", `🔌 Disconnected from ${providerName}.`);
+    pushAutomationActivity("POS Disconnected", `${providerName} has been unlinked.`);
+  };
 
   const customAccounts = accountingState?.customAccounts || [];
 
@@ -1027,47 +1126,112 @@ export default function AccountingPage() {
                   </div>
                 </button>
 
-                {/* Documents Section */}
-                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                  <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                          <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                {/* Connect Sales POS Section */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-0.5">Connect Sales POS</h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    {connectedPOS ? `Connected to ${POS_PROVIDERS.find(p => p.id === connectedPOS)?.name}` : 'Link your retail POS system'}
+                  </p>
+
+                  {connectedPOS ? (
+                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden p-3 md:p-5">
+                      <div className="space-y-4">
+                        {/* Connected Provider Card */}
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                          <div
+                            className="w-10 h-10 flex items-center justify-center font-bold text-2xl"
+                            style={{ color: POS_PROVIDERS.find(p => p.id === connectedPOS)?.color }}
+                          >
+                            {POS_PROVIDERS.find(p => p.id === connectedPOS)?.name.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{POS_PROVIDERS.find(p => p.id === connectedPOS)?.name}</p>
+                            <p className="text-xs text-emerald-600">Transactions syncing automatically</p>
+                          </div>
+                          <button
+                            onClick={handleDisconnectPOS}
+                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            Disconnect
+                          </button>
                         </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900">Uploaded Documents</h3>
-                          <p className="text-xs text-gray-500">{documents.length} file{documents.length !== 1 ? 's' : ''} attached</p>
-                        </div>
+
+                        {/* API Key Display */}
+                        {posApiKey && (
+                          <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                            <p className="text-xs text-gray-500 mb-1">API Key for POS integration:</p>
+                            <code className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-700 break-all">{posApiKey}</code>
+                          </div>
+                        )}
+
+                        {/* Recent Transactions */}
+                        {posTransactions.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-medium text-gray-700">Recent Sales</p>
+                              <span className="text-xs text-gray-400">{posTransactions.length} transactions</span>
+                            </div>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {posTransactions.slice(0, 5).map((tx) => (
+                                <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-100">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                                      <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium text-gray-900">₦{tx.total.toLocaleString()}</p>
+                                      <p className="text-[10px] text-gray-400">{tx.itemCount} items • {tx.paymentMethod}</p>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-gray-400">
+                                    {new Date(tx.timestamp).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-gray-500 text-center">
+                          POS sales will be auto-journaled as they occur.
+                        </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="p-3 md:p-5">
-                    {documents.length === 0 ? (
-                      <div className="text-center py-6">
-                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
-                          <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                          </svg>
-                        </div>
-                        <p className="text-sm text-gray-500">No documents yet</p>
-                        <p className="text-xs text-gray-400 mt-1">Use the + button to attach files</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {documents.map((doc) => (
-                          <div key={`${doc.name}-${doc.uploadedAt}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100">
-                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-xs text-gray-700 truncate">{doc.name}</span>
+                  ) : (
+                    <div className="flex gap-4 overflow-x-auto -mx-1 px-1 scrollbar-hide">
+                      {POS_PROVIDERS.map((provider) => (
+                        <button
+                          key={provider.id}
+                          onClick={() => handleConnectPOS(provider.id)}
+                          disabled={posConnectionStatus === 'connecting'}
+                          className="flex-shrink-0 flex flex-col items-center gap-3 p-4 rounded-2xl min-w-[140px] hover:bg-gray-50/50 transition-all disabled:opacity-50 disabled:cursor-wait"
+                        >
+                          {provider.logo ? (
+                            <Image
+                              src={provider.logo}
+                              alt={provider.name}
+                              width={48}
+                              height={48}
+                              className="w-12 h-12 object-contain rounded-lg border border-gray-200 p-1"
+                            />
+                          ) : (
+                            <div
+                              className="w-12 h-12 flex items-center justify-center font-bold text-2xl rounded-xl"
+                              style={{ color: provider.color }}
+                            >
+                              {provider.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="text-center">
+                            <span className="text-sm font-medium text-gray-900 block mb-1">{provider.name}</span>
+                            <span className="text-xs text-gray-400 block max-w-[120px] leading-tight">{provider.description}</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Transactions Section */}
@@ -1192,481 +1356,485 @@ export default function AccountingPage() {
                 )}
               </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </div >
+        </section >
+      </div >
 
 
       <input ref={fileUploadRef} type="file" multiple className="hidden" onChange={handleDocumentUpload} />
       <input ref={auditUploadRef} type="file" className="hidden" onChange={handleAuditedUpload} />
 
       {/* Post Journal Entry Modal */}
-      {showPostEntry && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+      {
+        showPostEntry && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Post Journal Entry</h2>
+                    <p className="text-sm text-gray-500">Create a double-entry transaction</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPostEntry(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Post Journal Entry</h2>
-                  <p className="text-sm text-gray-500">Create a double-entry transaction</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowPostEntry(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-                  <input
-                    type="date"
-                    value={postEntryDate}
-                    onChange={(e) => setPostEntryDate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
-                  <input
-                    type="text"
-                    value={postEntryNarration}
-                    onChange={(e) => setPostEntryNarration(e.target.value)}
-                    placeholder="e.g., Purchased office equipment"
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
+                </button>
               </div>
 
-              {/* Entry Lines */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
-                  <button
-                    onClick={addPostEntryLine}
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium"
-                  >
-                    + Add Line
-                  </button>
+              {/* Modal Content */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                    <input
+                      type="date"
+                      value={postEntryDate}
+                      onChange={(e) => setPostEntryDate(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
+                    <input
+                      type="text"
+                      value={postEntryNarration}
+                      onChange={(e) => setPostEntryNarration(e.target.value)}
+                      placeholder="e.g., Purchased office equipment"
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
                 </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
-                        <th className="w-12"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {postEntryLines.map((line) => (
-                        <tr key={line.id}>
-                          <td className="px-4 py-3">
-                            <select
-                              value={line.accountCode}
-                              onChange={(e) => updatePostEntryLine(line.id, "accountCode", e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            >
-                              <option value="">Select account...</option>
-                              {allAccountsForSelect.map((acc) => (
-                                <option key={acc.code} value={acc.code}>
-                                  {acc.code} - {acc.name}
-                                </option>
-                              ))}
-                            </select>
+
+                {/* Entry Lines */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
+                    <button
+                      onClick={addPostEntryLine}
+                      className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      + Add Line
+                    </button>
+                  </div>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
+                          <th className="w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {postEntryLines.map((line) => (
+                          <tr key={line.id}>
+                            <td className="px-4 py-3">
+                              <select
+                                value={line.accountCode}
+                                onChange={(e) => updatePostEntryLine(line.id, "accountCode", e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                              >
+                                <option value="">Select account...</option>
+                                {allAccountsForSelect.map((acc) => (
+                                  <option key={acc.code} value={acc.code}>
+                                    {acc.code} - {acc.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={line.debit}
+                                onChange={(e) => updatePostEntryLine(line.id, "debit", e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={line.credit}
+                                onChange={(e) => updatePostEntryLine(line.id, "credit", e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              {postEntryLines.length > 2 && (
+                                <button
+                                  onClick={() => removePostEntryLine(line.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50 border-t border-gray-200">
+                        <tr>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                          <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                            ₦{postEntryTotals.totalDebit.toLocaleString()}
                           </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              value={line.debit}
-                              onChange={(e) => updatePostEntryLine(line.id, "debit", e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              value={line.credit}
-                              onChange={(e) => updatePostEntryLine(line.id, "credit", e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            />
+                          <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                            ₦{postEntryTotals.totalCredit.toLocaleString()}
                           </td>
                           <td className="px-3 py-3">
-                            {postEntryLines.length > 2 && (
-                              <button
-                                onClick={() => removePostEntryLine(line.id)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            {postEntryTotals.isBalanced ? (
+                              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                            ) : postEntryTotals.totalDebit > 0 || postEntryTotals.totalCredit > 0 ? (
+                              <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                                <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
-                              </button>
-                            )}
+                              </div>
+                            ) : null}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t border-gray-200">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
-                          ₦{postEntryTotals.totalDebit.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
-                          ₦{postEntryTotals.totalCredit.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3">
-                          {postEntryTotals.isBalanced ? (
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          ) : postEntryTotals.totalDebit > 0 || postEntryTotals.totalCredit > 0 ? (
-                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              {/* AI Verification Section */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900">AI Accountant</h3>
-                      <p className="text-xs text-gray-500">Verify your entry against accounting standards</p>
-                    </div>
+                      </tfoot>
+                    </table>
                   </div>
-                  <button
-                    onClick={handleAIAudit}
-                    disabled={isAuditing}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
-                  >
-                    {isAuditing ? (
-                      <>
-                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Analysing...
-                      </>
-                    ) : (
-                      <>Verify Entry</>
-                    )}
-                  </button>
                 </div>
 
-                {/* Audit Results */}
-                {auditResult && (
-                  <div className={`mt-3 p-3 rounded-lg text-sm border ${auditResult.isValid || auditResult.fixed
-                    ? "bg-blue-50 border-blue-100 text-green-800"
-                    : "bg-amber-50 border-amber-100 text-amber-800"
-                    }`}>
-                    <div className="flex items-start gap-2">
-                      {auditResult.isValid || auditResult.fixed ? (
-                        <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                {/* AI Verification Section */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                      )}
-                      <div className="flex-1">
-                        <p className="font-medium">
-                          {auditResult.fixed ? "Entry corrected based on AI suggestions." : auditResult.reasoning}
-                        </p>
-
-                        {!auditResult.isValid && !auditResult.fixed && auditResult.suggestedCorrections && (
-                          <div className="mt-2">
-                            <button
-                              onClick={applyAISuggestion}
-                              className="text-xs font-semibold bg-white border border-amber-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-amber-50 transition-colors"
-                            >
-                              Apply Suggested Fix
-                            </button>
-                          </div>
-                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">AI Accountant</h3>
+                        <p className="text-xs text-gray-500">Verify your entry against accounting standards</p>
                       </div>
                     </div>
+                    <button
+                      onClick={handleAIAudit}
+                      disabled={isAuditing}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
+                    >
+                      {isAuditing ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Analysing...
+                        </>
+                      ) : (
+                        <>Verify Entry</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Audit Results */}
+                  {auditResult && (
+                    <div className={`mt-3 p-3 rounded-lg text-sm border ${auditResult.isValid || auditResult.fixed
+                      ? "bg-blue-50 border-blue-100 text-green-800"
+                      : "bg-amber-50 border-amber-100 text-amber-800"
+                      }`}>
+                      <div className="flex items-start gap-2">
+                        {auditResult.isValid || auditResult.fixed ? (
+                          <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium">
+                            {auditResult.fixed ? "Entry corrected based on AI suggestions." : auditResult.reasoning}
+                          </p>
+
+                          {!auditResult.isValid && !auditResult.fixed && auditResult.suggestedCorrections && (
+                            <div className="mt-2">
+                              <button
+                                onClick={applyAISuggestion}
+                                className="text-xs font-semibold bg-white border border-amber-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-amber-50 transition-colors"
+                              >
+                                Apply Suggested Fix
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {postEntryError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {postEntryError}
+                  </div>
+                )}
+
+                {!postEntryTotals.isBalanced && postEntryTotals.totalDebit > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Entry not balanced: DR ₦{postEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{postEntryTotals.totalCredit.toLocaleString()}
                   </div>
                 )}
               </div>
 
-              {postEntryError && (
-                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  {postEntryError}
-                </div>
-              )}
-
-              {!postEntryTotals.isBalanced && postEntryTotals.totalDebit > 0 && (
-                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Entry not balanced: DR ₦{postEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{postEntryTotals.totalCredit.toLocaleString()}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  onClick={() => setShowPostEntry(false)}
-                  className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    handlePostEntry();
-                    if (postEntryTotals.isBalanced && postEntryNarration.trim()) {
-                      setShowPostEntry(false);
-                    }
-                  }}
-                  disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim()}
-                  className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Post Entry
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Journal Entry Modal */}
-      {showEditEntry && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Edit Journal Entry</h2>
-                  <p className="text-sm text-gray-500">Modify entry {editingEntryId}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowEditEntry(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-                  <input
-                    type="date"
-                    value={editEntryDate}
-                    onChange={(e) => setEditEntryDate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
-                  <input
-                    type="text"
-                    value={editEntryNarration}
-                    onChange={(e) => setEditEntryNarration(e.target.value)}
-                    placeholder="e.g., Purchased office equipment"
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              {/* Entry Lines */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+                <div className="flex items-center justify-end gap-3">
                   <button
-                    onClick={addEditEntryLine}
-                    className="text-sm text-amber-600 hover:text-amber-700 font-medium"
-                  >
-                    + Add Line
-                  </button>
-                </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
-                        <th className="w-12"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {editEntryLines.map((line) => (
-                        <tr key={line.id}>
-                          <td className="px-4 py-3">
-                            <select
-                              value={line.accountCode}
-                              onChange={(e) => updateEditEntryLine(line.id, "accountCode", e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                            >
-                              <option value="">Select account...</option>
-                              {allAccountsForSelect.map((acc) => (
-                                <option key={acc.code} value={acc.code}>
-                                  {acc.code} - {acc.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              value={line.debit}
-                              onChange={(e) => updateEditEntryLine(line.id, "debit", e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <input
-                              type="number"
-                              value={line.credit}
-                              onChange={(e) => updateEditEntryLine(line.id, "credit", e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3">
-                            {editEntryLines.length > 2 && (
-                              <button
-                                onClick={() => removeEditEntryLine(line.id)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t border-gray-200">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
-                          ₦{editEntryTotals.totalDebit.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
-                          ₦{editEntryTotals.totalCredit.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3">
-                          {editEntryTotals.isBalanced ? (
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          ) : editEntryTotals.totalDebit > 0 || editEntryTotals.totalCredit > 0 ? (
-                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              {editEntryError && (
-                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  {editEntryError}
-                </div>
-              )}
-
-              {!editEntryTotals.isBalanced && editEntryTotals.totalDebit > 0 && (
-                <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Entry not balanced: DR ₦{editEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{editEntryTotals.totalCredit.toLocaleString()}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => editingEntryId && handleDeleteEntry(editingEntryId)}
-                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  Delete Entry
-                </button>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowEditEntry(false)}
+                    onClick={() => setShowPostEntry(false)}
                     className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleSaveEditEntry}
-                    disabled={!editEntryTotals.isBalanced || !editEntryNarration.trim()}
-                    className="px-5 py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      handlePostEntry();
+                      if (postEntryTotals.isBalanced && postEntryNarration.trim()) {
+                        setShowPostEntry(false);
+                      }
+                    }}
+                    disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim()}
+                    className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Save Changes
+                    Post Entry
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
+
+      {/* Edit Journal Entry Modal */}
+      {
+        showEditEntry && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Edit Journal Entry</h2>
+                    <p className="text-sm text-gray-500">Modify entry {editingEntryId}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEditEntry(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                    <input
+                      type="date"
+                      value={editEntryDate}
+                      onChange={(e) => setEditEntryDate(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Narration</label>
+                    <input
+                      type="text"
+                      value={editEntryNarration}
+                      onChange={(e) => setEditEntryNarration(e.target.value)}
+                      placeholder="e.g., Purchased office equipment"
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Entry Lines */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
+                    <button
+                      onClick={addEditEntryLine}
+                      className="text-sm text-amber-600 hover:text-amber-700 font-medium"
+                    >
+                      + Add Line
+                    </button>
+                  </div>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Debit</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Credit</th>
+                          <th className="w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {editEntryLines.map((line) => (
+                          <tr key={line.id}>
+                            <td className="px-4 py-3">
+                              <select
+                                value={line.accountCode}
+                                onChange={(e) => updateEditEntryLine(line.id, "accountCode", e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                              >
+                                <option value="">Select account...</option>
+                                {allAccountsForSelect.map((acc) => (
+                                  <option key={acc.code} value={acc.code}>
+                                    {acc.code} - {acc.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={line.debit}
+                                onChange={(e) => updateEditEntryLine(line.id, "debit", e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={line.credit}
+                                onChange={(e) => updateEditEntryLine(line.id, "credit", e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              {editEntryLines.length > 2 && (
+                                <button
+                                  onClick={() => removeEditEntryLine(line.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50 border-t border-gray-200">
+                        <tr>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                          <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                            ₦{editEntryTotals.totalDebit.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-bold text-right text-gray-900">
+                            ₦{editEntryTotals.totalCredit.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-3">
+                            {editEntryTotals.isBalanced ? (
+                              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                            ) : editEntryTotals.totalDebit > 0 || editEntryTotals.totalCredit > 0 ? (
+                              <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                                <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </div>
+                            ) : null}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {editEntryError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {editEntryError}
+                  </div>
+                )}
+
+                {!editEntryTotals.isBalanced && editEntryTotals.totalDebit > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Entry not balanced: DR ₦{editEntryTotals.totalDebit.toLocaleString()} ≠ CR ₦{editEntryTotals.totalCredit.toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => editingEntryId && handleDeleteEntry(editingEntryId)}
+                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Delete Entry
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowEditEntry(false)}
+                      className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveEditEntry}
+                      disabled={!editEntryTotals.isBalanced || !editEntryNarration.trim()}
+                      className="px-5 py-2.5 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
     </>
   );
 }
