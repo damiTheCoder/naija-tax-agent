@@ -231,6 +231,20 @@ export default function BankConnectionsPage() {
         setShowConnectModal(false);
         setConnectStep("select");
         setSelectedBank(null);
+
+        // Trigger clarification request for demonstration
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("accounting-clarification-request", {
+            detail: {
+              transaction: {
+                amount: 45000,
+                date: new Date().toISOString().split('T')[0],
+                description: "POS TRANSFER TO UNKNOWN VENDOR",
+                bankName: bank.name
+              }
+            }
+          }));
+        }
       }, 2000);
     } catch (error) {
       console.error(error);
@@ -381,8 +395,8 @@ export default function BankConnectionsPage() {
                         <h3 className="font-semibold text-gray-900">{connection.bankName}</h3>
                         <div className="flex items-center gap-3 mt-1">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${connection.status === "connected"
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-amber-50 text-amber-700"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-amber-50 text-amber-700"
                             }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${connection.status === "connected" ? "bg-blue-500" : "bg-amber-500"
                               }`} />
@@ -482,40 +496,46 @@ export default function BankConnectionsPage() {
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Supported Banks</h2>
         </div>
-        <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {SUPPORTED_BANKS.map((bank) => {
-            const isConnected = connections.some(c => c.bankCode === bank.code);
+        <div className="p-6">
+          <div className="flex gap-4 overflow-x-auto -mx-1 px-1 hide-scrollbar pb-2">
+            {SUPPORTED_BANKS.map((bank) => {
+              const isConnected = connections.some(c => c.bankCode === bank.code);
 
-            return (
-              <button
-                key={bank.code}
-                onClick={() => !isConnected && bank.supported && handleConnectBank(bank)}
-                disabled={!bank.supported || isConnected}
-                className={`relative rounded-xl p-4 text-center transition-all ${isConnected
-                    ? "bg-blue-50 border-2 border-green-200"
+              return (
+                <button
+                  key={bank.code}
+                  onClick={() => !isConnected && bank.supported && handleConnectBank(bank)}
+                  disabled={!bank.supported || isConnected}
+                  className={`relative flex-shrink-0 flex flex-col items-center gap-3 p-4 rounded-2xl min-w-[140px] transition-all ${isConnected
+                    ? "bg-blue-50/50 border border-blue-100" // Light blue bg for connected
                     : bank.supported
-                      ? "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+                      ? "bg-white hover:bg-gray-50 border border-gray-200"
                       : "bg-gray-50 border border-gray-100 opacity-50"
-                  }`}
-              >
-                {isConnected && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center">
-                    {icons.check}
-                  </div>
-                )}
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm mx-auto mb-2"
-                  style={{ backgroundColor: bank.color }}
+                    }`}
                 >
-                  {bank.shortName.slice(0, 2)}
-                </div>
-                <p className="font-medium text-gray-900 text-sm">{bank.shortName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {isConnected ? "Connected" : bank.supported ? bank.connectionType.replace("_", " ") : "Coming soon"}
-                </p>
-              </button>
-            );
-          })}
+                  {isConnected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm z-10">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm"
+                    style={{ backgroundColor: bank.color }}
+                  >
+                    {bank.shortName.slice(0, 2)}
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-medium text-gray-900 block mb-1">{bank.shortName}</span>
+                    <span className="text-xs text-gray-400 block max-w-[120px] leading-tight loading-tight">
+                      {isConnected ? "Connected" : bank.supported ? bank.connectionType.replace("_", " ") : "Coming soon"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

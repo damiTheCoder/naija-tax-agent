@@ -147,6 +147,7 @@ export default function FloatingChatButton() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [clarificationData, setClarificationData] = useState<any | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -163,6 +164,24 @@ export default function FloatingChatButton() {
             timestamp: Date.now(),
         }]);
     }, [pathname]);
+
+    // Listen for clarification requests
+    useEffect(() => {
+        const handleClarification = (e: CustomEvent) => {
+            console.log("Clarification request received", e.detail);
+            setClarificationData(e.detail);
+        };
+
+        if (typeof window !== "undefined") {
+            window.addEventListener("accounting-clarification-request", handleClarification as EventListener);
+        }
+
+        return () => {
+            if (typeof window !== "undefined") {
+                window.removeEventListener("accounting-clarification-request", handleClarification as EventListener);
+            }
+        };
+    }, []);
 
     // Load engines on mount
     useEffect(() => {
@@ -194,12 +213,36 @@ export default function FloatingChatButton() {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // Focus input when modal opens
+    // Focus input when modal opens and handle clarification message
     useEffect(() => {
-        if (isModalOpen && textareaRef.current) {
-            setTimeout(() => textareaRef.current?.focus(), 100);
+        if (isModalOpen) {
+            if (textareaRef.current) {
+                setTimeout(() => textareaRef.current?.focus(), 100);
+            }
+
+            // Inject clarification message if available
+            if (clarificationData) {
+                const { transaction } = clarificationData;
+                const clarificationMsg = `Pls clarify transaction\n\n**Details:**\nAmount: ₦${transaction.amount.toLocaleString()}\nDate: ${transaction.date}\nDesc: ${transaction.description}\nBank: ${transaction.bankName}\n\nI need more context to categorise this correctly. What was this for?`;
+
+                // Add message only if it's not already the last message
+                setMessages(prev => {
+                    if (prev[prev.length - 1]?.content !== clarificationMsg) {
+                        return [...prev, {
+                            id: `clarify-${Date.now()}`,
+                            role: "assistant",
+                            content: clarificationMsg,
+                            timestamp: Date.now()
+                        }];
+                    }
+                    return prev;
+                });
+
+                // Clear the clarification flag so it doesn't trigger again for the same event
+                setClarificationData(null);
+            }
         }
-    }, [isModalOpen]);
+    }, [isModalOpen, clarificationData]);
 
     const appendMessage = useCallback((role: ChatMessage["role"], content: string) => {
         setMessages(prev => [
@@ -439,6 +482,12 @@ export default function FloatingChatButton() {
                 className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${isExpanded ? "gap-2" : "gap-0"}`}
                 aria-label="Open chat"
             >
+                {/* Red badge for clarification */}
+                {clarificationData && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm z-50 animate-bounce">
+                        1
+                    </div>
+                )}
                 <img
                     src="/google-logo.jpg"
                     alt="Google"
@@ -452,121 +501,123 @@ export default function FloatingChatButton() {
             </button>
 
             {/* Chat Modal */}
-            {isModalOpen && (
-                <div
-                    className="fixed inset-0 z-[100] flex flex-col"
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setIsModalOpen(false);
-                    }}
-                >
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-
+            {
+                isModalOpen && (
                     <div
-                        className="relative mt-auto mx-2 mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
-                        style={{ animation: "slideUp 0.3s ease-out forwards", maxHeight: "85vh" }}
+                        className="fixed inset-0 z-[100] flex flex-col"
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) setIsModalOpen(false);
+                        }}
                     >
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
                         <div
-                            className="absolute inset-0 rounded-[28px] pointer-events-none"
-                            style={{
-                                background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
-                                animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
-                            }}
-                        />
-                        <div className="relative m-[3px] rounded-[25px] bg-gray-100 dark:bg-[#1a1a1a] flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
-                            {/* Header */}
-                            <div className="flex items-center gap-3 px-5 py-4">
-                                <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
-                                    {currentModule.title}
-                                </h3>
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
-                                    {currentModule.name}
-                                </span>
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            {/* Messages */}
-                            <div className="flex-1 overflow-y-auto px-5 pb-4">
-                                {messages.map((msg) => (
-                                    <div
-                                        key={msg.id}
-                                        className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
-                                    >
-                                        {msg.role === "user" ? (
-                                            <div className="inline-block max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-blue-500 text-white">
-                                                {msg.content}
-                                            </div>
-                                        ) : (
-                                            <div className="text-sm leading-relaxed text-gray-900 dark:text-gray-200 whitespace-pre-wrap">
-                                                {msg.content}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                                {isLoading && (
-                                    <div className="mb-4">
-                                        <div className="flex gap-1">
-                                            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                            <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                        </div>
-                                    </div>
-                                )}
-                                <div ref={chatEndRef} />
-                            </div>
-
-                            {/* Input */}
-                            <div className="px-4 py-4">
-                                <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
-                                    <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                    </button>
-
-                                    <textarea
-                                        ref={textareaRef}
-                                        rows={1}
-                                        placeholder={currentModule.placeholder}
-                                        className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[40px]"
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                    />
-
-                                    <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                        </svg>
-                                    </button>
-
+                            className="relative mt-auto mx-2 mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
+                            style={{ animation: "slideUp 0.3s ease-out forwards", maxHeight: "85vh" }}
+                        >
+                            <div
+                                className="absolute inset-0 rounded-[28px] pointer-events-none"
+                                style={{
+                                    background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
+                                    animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
+                                }}
+                            />
+                            <div className="relative m-[3px] rounded-[25px] bg-gray-100 dark:bg-[#1a1a1a] flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
+                                {/* Header */}
+                                <div className="flex items-center gap-3 px-5 py-4">
+                                    <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
+                                        {currentModule.title}
+                                    </h3>
+                                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
+                                        {currentModule.name}
+                                    </span>
                                     <button
-                                        onClick={handleSend}
-                                        disabled={!inputValue.trim() || isLoading}
-                                        className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-gray-50 dark:hover:bg-gray-600"
+                                        onClick={() => setIsModalOpen(false)}
+                                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                     >
-                                        {inputValue.trim() ? (
-                                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                            </svg>
-                                        )}
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
                                     </button>
+                                </div>
+
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto px-5 pb-4">
+                                    {messages.map((msg) => (
+                                        <div
+                                            key={msg.id}
+                                            className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                                        >
+                                            {msg.role === "user" ? (
+                                                <div className="inline-block max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-blue-500 text-white">
+                                                    {msg.content}
+                                                </div>
+                                            ) : (
+                                                <div className="text-sm leading-relaxed text-gray-900 dark:text-gray-200 whitespace-pre-wrap">
+                                                    {msg.content}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {isLoading && (
+                                        <div className="mb-4">
+                                            <div className="flex gap-1">
+                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div ref={chatEndRef} />
+                                </div>
+
+                                {/* Input */}
+                                <div className="px-4 py-4">
+                                    <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
+                                        <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                            </svg>
+                                        </button>
+
+                                        <textarea
+                                            ref={textareaRef}
+                                            rows={1}
+                                            placeholder={currentModule.placeholder}
+                                            className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[40px]"
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                        />
+
+                                        <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                            </svg>
+                                        </button>
+
+                                        <button
+                                            onClick={handleSend}
+                                            disabled={!inputValue.trim() || isLoading}
+                                            className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-gray-50 dark:hover:bg-gray-600"
+                                        >
+                                            {inputValue.trim() ? (
+                                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                                                </svg>
+                                            ) : (
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </>
     );
 }
