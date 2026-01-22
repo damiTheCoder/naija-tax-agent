@@ -38,6 +38,19 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "purple"
     },
+    reconciliation: {
+        id: "reconciliation",
+        name: "Reconciliation",
+        title: "Bank Reconciliation Assistant",
+        placeholder: "Ask about reconciliation...",
+        greeting: "Hi! I can help you with bank reconciliation. Upload your files above, or ask me questions about the reconciliation process.",
+        examples: [
+            '"What are common discrepancy types?"',
+            '"How do I match transactions?"',
+            '"Explain timing differences"'
+        ],
+        color: "blue"
+    },
     "cashflow-intelligence": {
         id: "cashflow",
         name: "Cashflow",
@@ -122,6 +135,12 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     // Remove leading slash and get first segment
     const segments = pathname.split('/').filter(Boolean);
     const firstSegment = segments[0] || '';
+    const secondSegment = segments[1] || '';
+
+    // Check for reconciliation path specifically
+    if (firstSegment === 'accounting' && secondSegment === 'reconciliation') {
+        return moduleConfigs.reconciliation;
+    }
 
     // Check for exact match first
     if (moduleConfigs[firstSegment]) {
@@ -415,6 +434,137 @@ export default function FloatingChatButton() {
         return "💼 **Wallet Overview**\n\nYour fintech wallet is ready!\n\nAsk about:\n• Wallet balance\n• Recent transfers\n• Savings progress";
     }, []);
 
+    // Handle reconciliation module
+    const handleReconciliationMessage = useCallback(async (message: string) => {
+        const lowerMessage = message.toLowerCase();
+
+        // Help with discrepancy types
+        if (lowerMessage.includes('discrepanc') || lowerMessage.includes('difference')) {
+            return `📋 **Common Discrepancy Types**
+
+• **Unmatched Bank**: Transaction in bank statement but not in ledger
+• **Unmatched Ledger**: Entry in books but not in bank statement
+• **Timing Difference**: Cheques/transfers not yet cleared
+• **Duplicate**: Same transaction recorded twice
+• **Amount Difference**: Matched transactions with different amounts
+
+_Upload your files above to detect discrepancies automatically!_`;
+        }
+
+        // Help with matching
+        if (lowerMessage.includes('match') || lowerMessage.includes('pair')) {
+            return `🔗 **Transaction Matching**
+
+The system automatically matches transactions by:
+1. **Exact Amount** - Most important factor
+2. **Date** - Same day or within 3 days
+3. **Reference** - Cheque numbers, transfer IDs
+4. **Description** - Similar keywords
+
+**Match Confidence Scores:**
+• 90%+ = Exact match
+• 70-89% = Fuzzy match (review recommended)
+• Below 70% = Manual review needed
+
+_Upload your bank statement and ledger to start matching!_`;
+        }
+
+        // Help with timing differences
+        if (lowerMessage.includes('timing') || lowerMessage.includes('outstanding') || lowerMessage.includes('cheque')) {
+            return `⏱️ **Timing Differences**
+
+Common timing differences include:
+
+• **Outstanding Cheques**: Cheques written but not yet cleared
+• **Deposits in Transit**: Deposits made but not yet credited
+• **Bank Charges**: Deducted automatically but not yet recorded
+• **Interest**: Credited by bank but not yet recorded
+
+**Resolution:**
+1. Add to reconciliation adjustments
+2. Create journal entries if needed
+3. Follow up on items older than 30 days`;
+        }
+
+        // Help with process
+        if (lowerMessage.includes('how') || lowerMessage.includes('start') || lowerMessage.includes('process') || lowerMessage.includes('step')) {
+            return `📝 **Bank Reconciliation Process**
+
+**Step 1:** Upload Bank Statement (CSV)
+**Step 2:** Upload Ledger/Journal (CSV)
+**Step 3:** Click "Start Reconciliation"
+**Step 4:** Review matched transactions
+**Step 5:** Investigate discrepancies
+**Step 6:** Click "AI Analysis" for insights
+
+**File Format Required:**
+• Bank: Date, Description, Debit, Credit
+• Ledger: Date, Narration, Debit, Credit
+
+_Ready to begin? Upload your files above!_`;
+        }
+
+        // AI-powered complex queries
+        if (lowerMessage.includes('analyze') || lowerMessage.includes('insight') || lowerMessage.includes('explain') || lowerMessage.includes('why')) {
+            try {
+                const response = await fetch('/api/ai/bank-reconciliation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reconciliationResult: {
+                            id: 'chat-query',
+                            reconciliationDate: new Date().toISOString().split('T')[0],
+                            bankStatementPeriod: { start: '', end: '' },
+                            bankOpeningBalance: 0,
+                            bankClosingBalance: 0,
+                            ledgerOpeningBalance: 0,
+                            ledgerClosingBalance: 0,
+                            totalBankTransactions: 0,
+                            totalLedgerTransactions: 0,
+                            matchedPairs: [],
+                            discrepancies: [],
+                            unmatchedBankTransactions: [],
+                            unmatchedLedgerTransactions: [],
+                            summary: {
+                                matchedCount: 0,
+                                unmatchedBankCount: 0,
+                                unmatchedLedgerCount: 0,
+                                discrepancyCount: 0,
+                                balanceDifference: 0,
+                                reconciliationStatus: 'pending'
+                            }
+                        },
+                        additionalContext: `User question: ${message}`
+                    }),
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    return `🤖 **AI Insights**\n\n${result.summary || 'Upload your files and run reconciliation first for detailed insights.'}\n\n${result.recommendations?.slice(0, 3).map((r: string, i: number) => `${i + 1}. ${r}`).join('\n') || ''}`;
+                }
+            } catch {
+                // Fall through to default
+            }
+        }
+
+        // Default response
+        return `🏦 **Bank Reconciliation Help**
+
+I can help you with:
+• "What are common discrepancy types?"
+• "How do I match transactions?"
+• "Explain timing differences"
+• "How to start reconciliation?"
+
+**Quick Start:**
+1. Upload your bank statement CSV
+2. Upload your ledger/journal CSV
+3. Click 'Start Reconciliation'
+4. Use 'AI Analysis' for insights
+
+_Ask me anything about bank reconciliation!_`;
+    }, []);
+
     // Handle dashboard/general queries
     const handleDashboardMessage = useCallback((message: string) => {
         try {
@@ -455,6 +605,9 @@ export default function FloatingChatButton() {
                 case "wallet":
                     response = handleWalletMessage(trimmed);
                     break;
+                case "reconciliation":
+                    response = await handleReconciliationMessage(trimmed);
+                    break;
                 default:
                     response = handleDashboardMessage(trimmed);
             }
@@ -465,7 +618,7 @@ export default function FloatingChatButton() {
         } finally {
             setIsLoading(false);
         }
-    }, [inputValue, isLoading, currentModule.id, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleDashboardMessage]);
+    }, [inputValue, isLoading, currentModule.id, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleDashboardMessage]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {

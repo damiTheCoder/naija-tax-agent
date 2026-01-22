@@ -1034,6 +1034,44 @@ export default function AccountingPage() {
                   </div>
                 </button>
 
+                {/* Bank Reconciliation Button */}
+                <Link
+                  href="/accounting/reconciliation"
+                  className={`
+                    w-full rounded-2xl border transition-all p-5 flex items-center justify-center gap-3 group
+                    ${theme === 'dark'
+                      ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
+                      : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
+                    }
+                  `}
+                >
+                  <div className={`
+                    w-10 h-10 rounded-xl flex items-center justify-center transition-colors
+                    ${theme === 'dark'
+                      ? 'bg-gray-700 group-hover:bg-gray-600'
+                      : 'bg-blue-100 group-hover:bg-blue-200'
+                    }
+                  `}>
+                    <svg
+                      className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-blue-600'}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Bank Reconciliation
+                    </h3>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Match bank statements with ledger entries
+                    </p>
+                  </div>
+                </Link>
+
                 {/* Connect Sales POS Section */}
 
 

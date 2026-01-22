@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { generateOptimizations } from "../taxOptimizer";
-import { UserProfile, TaxInputs, TaxResult } from "./types";
+import { UserProfile, TaxInputs, TaxResult } from "../types";
 
 describe("generateOptimizations", () => {
     describe("Freelancer optimizations", () => {
@@ -32,6 +32,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.14,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 400000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -66,6 +72,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.20,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 1500000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -98,6 +110,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.20,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 4000000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -130,6 +148,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.20,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 4000000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -166,6 +190,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.20,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 6000000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -199,6 +229,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 0,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
@@ -233,6 +269,12 @@ describe("generateOptimizations", () => {
                 effectiveRate: 0.20,
                 bands: [],
                 notes: [],
+                taxBeforeCredits: 5000000,
+                taxCreditsApplied: 0,
+                validationIssues: [],
+                statutoryReferences: [],
+                calculationTrace: [],
+                taxRuleMetadata: { version: "1.0", source: "test" },
             };
 
             const optimizations = generateOptimizations(profile, inputs, result);
