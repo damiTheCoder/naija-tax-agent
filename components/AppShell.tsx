@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-
+import BottomSidebar from "@/components/BottomSidebar";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
@@ -225,8 +225,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>CashOS</span>
             </Link>
 
-            <div className="flex items-center gap-2 flex-shrink-0 -mr-2">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <ThemeToggle />
+              {/* Profile Icon - Mobile */}
+              <Link
+                href="/profile"
+                className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+                style={{
+                  background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                }}
+                aria-label="Profile"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke={theme === 'dark' ? '#ffffff' : '#333333'}
+                  strokeWidth={1.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </Link>
               {/* Mobile Menu Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -264,6 +283,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Floating Chat Button for transaction input */}
       <FloatingChatButton />
+
+      {/* Bottom-right sidebar with Profile and Workspace links */}
+      <BottomSidebar />
     </div>
   );
 }

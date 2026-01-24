@@ -4,6 +4,7 @@ import AppShell from "@/components/AppShell";
 import { APP_LOGO_SRC, APP_LOGO_ROUNDED_SRC } from "@/lib/constants";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { NavigationProvider } from "@/lib/NavigationContext";
+import { WorkspaceProvider } from "@/lib/WorkspaceContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
 
 const siteTitle = "CashOS - Smart Nigerian Tax Manager";
@@ -40,12 +41,15 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <NavigationProvider>
-            <GlobalSpinner />
-            <AppShell>{children}</AppShell>
-          </NavigationProvider>
+          <WorkspaceProvider>
+            <NavigationProvider>
+              <GlobalSpinner />
+              <AppShell>{children}</AppShell>
+            </NavigationProvider>
+          </WorkspaceProvider>
         </ThemeProvider>
       </body>
     </html>
   );
 }
+
