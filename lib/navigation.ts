@@ -1,4 +1,4 @@
-export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users";
+export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop";
 
 export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace";
 
@@ -182,14 +182,14 @@ export const MARKETPLACE_NAV_ITEMS: TaxNavItem[] = [
   {
     label: "Browse Professionals",
     href: "/marketplace",
-    icon: "users",
+    icon: "shop",
     description: "Find accountants and tax consultants",
     mode: "marketplace",
   },
   {
     label: "My Profile",
     href: "/marketplace/profile",
-    icon: "shield",
+    icon: "shop",
     description: "Manage your professional listing",
     mode: "marketplace",
   },
