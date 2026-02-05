@@ -84,13 +84,26 @@ export const ACCOUNT_KEYWORD_MAP: Record<string, AccountMapping> = {
     // LIABILITY ACCOUNTS (2000-2999) - Normally Credit
     // ============================================================================
 
-    // Payables
+    // Payables - CRITICAL: Multi-word phrases for supplier/creditor payments
+    "paid suppliers": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "paid creditors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "paid vendor": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "paid vendors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "pay suppliers": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "pay creditors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "paying suppliers": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "paying creditors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "settled creditors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
+    "settled suppliers": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 100 },
     "accounts payable": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 95 },
     "trade payable": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 90 },
     "payable": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 80 },
     "creditor": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 85 },
     "creditors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 85 },
-    "supplier": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 80 },
+    "supplier": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 85 },
+    "suppliers": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 85 },
+    "vendor": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 80 },
+    "vendors": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 80 },
     "we owe": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 90 },
     "on credit": { code: "2000", name: "Accounts Payable", normalSide: "credit", priority: 75 },
 

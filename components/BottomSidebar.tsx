@@ -59,14 +59,14 @@ export default function BottomSidebar() {
     const getWorkspaceGradient = (workspaceId: string): string => {
         const index = workspaces.findIndex(w => w.id === workspaceId);
         const gradients = [
-            "from-green-500 to-yellow-400", // 1st workspace: green and yellow
-            "from-blue-500 to-yellow-400",  // 2nd workspace: blue and yellow
-            "from-gray-100 to-amber-700",   // 3rd workspace: white and brown
+            "from-blue-400 to-blue-600",
+            "from-indigo-400 to-blue-500",
+            "from-cyan-400 to-blue-600",
         ];
         return gradients[index % gradients.length] || gradients[0];
     };
 
-    const currentGradient = currentWorkspace ? getWorkspaceGradient(currentWorkspace.id) : "from-green-500 to-yellow-400";
+    const currentGradient = currentWorkspace ? getWorkspaceGradient(currentWorkspace.id) : "from-blue-400 to-blue-600";
 
     return (
         <>
@@ -150,10 +150,10 @@ export default function BottomSidebar() {
                     {/* Profile Link */}
                     <button
                         onClick={handleProfileClick}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors group/item"
                     >
                         <svg
-                            className="w-4 h-4"
+                            className="w-4 h-4 text-blue-500"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"

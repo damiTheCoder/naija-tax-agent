@@ -1,0 +1,172 @@
+{
+    "name": "cashos",
+    "version": "1.0.0",
+    "description": "Insight accounting integration for Clawdbot",
+    "author": "Insight",
+    "tools": [
+        {
+            "name": "cashos_record_transaction",
+            "description": "Record a financial transaction (income, expense, transfer) in Insight. Use this when the user wants to record sales, purchases, payments, receipts, or any financial transaction.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Natural language description of the transaction, e.g., 'Sold goods for ₦5000 cash' or 'Paid rent ₦100000'"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Transaction amount in Naira (optional if included in description)"
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Transaction date in YYYY-MM-DD format (optional, defaults to today)"
+                    }
+                },
+                "required": [
+                    "description"
+                ]
+            },
+            "endpoint": "/api/transactions",
+            "method": "POST"
+        },
+        {
+            "name": "cashos_get_report",
+            "description": "Generate a financial report from Insight. Use this when the user asks about P&L, balance sheet, profit, loss, assets, liabilities, or financial position.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "pl",
+                            "balance_sheet",
+                            "cashflow",
+                            "trial_balance",
+                            "summary"
+                        ],
+                        "description": "Type of report: 'pl' for Profit & Loss, 'balance_sheet' for Statement of Financial Position, 'cashflow' for Cash Flow Statement"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Report period (e.g., 'current', 'last_month', 'this_year')"
+                    }
+                },
+                "required": [
+                    "type"
+                ]
+            },
+            "endpoint": "/api/reports",
+            "method": "GET"
+        },
+        {
+            "name": "cashos_compute_tax",
+            "description": "Compute Nigerian taxes (VAT, WHT, CIT, PAYE, CGT). Use this when the user asks about tax calculations, tax payable, tax liabilities, or FIRS compliance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "taxType": {
+                        "type": "string",
+                        "enum": [
+                            "vat",
+                            "wht",
+                            "cit",
+                            "paye",
+                            "cgt",
+                            "all"
+                        ],
+                        "description": "Type of tax to compute: 'vat' for Value Added Tax, 'wht' for Withholding Tax, 'cit' for Company Income Tax, 'all' for comprehensive summary"
+                    },
+                    "year": {
+                        "type": "number",
+                        "description": "Tax year (optional, defaults to current year)"
+                    },
+                    "turnover": {
+                        "type": "number",
+                        "description": "Company turnover for CIT calculation (optional, uses recorded revenue if not provided)"
+                    }
+                },
+                "required": []
+            },
+            "endpoint": "/api/tax/compute",
+            "method": "POST"
+        },
+        {
+            "name": "cashos_get_cashflow",
+            "description": "Get cashflow metrics and analysis from Insight. Use this when the user asks about cash position, burn rate, runway, how long money will last, or safe-to-save amounts.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "metric": {
+                        "type": "string",
+                        "enum": [
+                            "position",
+                            "burnrate",
+                            "runway",
+                            "trends",
+                            "safetosave",
+                            "forecast",
+                            "all"
+                        ],
+                        "description": "Specific metric to retrieve: 'position' for current cash, 'burnrate' for daily/monthly expenses, 'runway' for days of cash remaining, 'safetosave' for recommended savings"
+                    },
+                    "period": {
+                        "type": "number",
+                        "description": "Number of days to analyze (default: 30)"
+                    }
+                },
+                "required": []
+            },
+            "endpoint": "/api/cashflow/metrics",
+            "method": "GET"
+        },
+        {
+            "name": "cashos_validate_transaction",
+            "description": "Validate a transaction interpretation using AI. Use this to verify correct accounting treatment for complex transactions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "transactionText": {
+                        "type": "string",
+                        "description": "The original transaction description"
+                    },
+                    "debitAccount": {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Proposed debit account"
+                    },
+                    "creditAccount": {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Proposed credit account"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Transaction amount"
+                    }
+                },
+                "required": [
+                    "transactionText",
+                    "amount"
+                ]
+            },
+            "endpoint": "/api/ai/validate-transaction",
+            "method": "POST"
+        }
+    ],
+    "system_prompt": "You are a Nigerian Chartered Accountant and Tax Expert integrated with Insight accounting software. You help users record transactions, generate financial reports, compute Nigerian taxes (VAT at 7.5%, WHT at 10%, CIT based on company size), and analyze cashflow. Always be accurate with Nigerian tax laws and FIRS requirements. When recording transactions, use proper double-entry bookkeeping. Format currency as ₦ (Naira)."
+}

@@ -7,15 +7,15 @@ import { NavigationProvider } from "@/lib/NavigationContext";
 import { WorkspaceProvider } from "@/lib/WorkspaceContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
 
-const siteTitle = "CashOS - Smart Nigerian Tax Manager";
+const siteTitle = "Insight - Smart Nigerian Tax Manager";
 const siteDescription =
-  "Estimate your Nigerian taxes (CGT, CIT, PIT, VAT) with CashOS. Your personal AI tax assistant.";
+  "Estimate your Nigerian taxes (CGT, CIT, PIT, VAT) with Insight. Your personal AI tax assistant.";
 
 export const metadata: Metadata = {
   title: siteTitle,
   description: siteDescription,
-  keywords: ["Nigerian tax", "FIRS", "CashOS", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
-  authors: [{ name: "CashOS" }],
+  keywords: ["Nigerian tax", "FIRS", "Insight", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
+  authors: [{ name: "Insight" }],
   icons: {
     icon: APP_LOGO_ROUNDED_SRC,
     shortcut: APP_LOGO_ROUNDED_SRC,

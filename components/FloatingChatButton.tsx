@@ -6,6 +6,59 @@ import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/tra
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
 
+// ============================================================================
+// CLAWDBOT INTEGRATION
+// ============================================================================
+// Set to true to route all chat messages through Clawdbot AI (requires clawdbot daemon)
+// Set to false to use Gemini for AI validation layer only
+const USE_CLAWDBOT = process.env.NEXT_PUBLIC_USE_CLAWDBOT === "true";
+
+interface ClawdbotResponse {
+    reply: string;
+    actions?: Array<{
+        tool: string;
+        result: unknown;
+    }>;
+    fallback?: boolean;
+    error?: string;
+}
+
+/**
+ * Send a message to Clawdbot AI and get a response
+ */
+async function sendToClawdbot(
+    message: string,
+    moduleId: string,
+    userId?: string
+): Promise<ClawdbotResponse> {
+    try {
+        const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message,
+                userId: userId || "default_user",
+                context: {
+                    module: moduleId,
+                },
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("[Clawdbot] Error:", error);
+        return {
+            reply: "I'm having trouble connecting to my AI brain. Please check that Clawdbot is running and try again.",
+            fallback: true,
+            error: error instanceof Error ? error.message : "Unknown error",
+        };
+    }
+}
+
 type ChatMessage = {
     id: string;
     role: "user" | "assistant";
@@ -116,11 +169,24 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "gray"
     },
+    supersheet: {
+        id: "supersheet",
+        name: "SuperSheet",
+        title: "Spreadsheet Assistant",
+        placeholder: "Ask about your spreadsheet...",
+        greeting: "Hi! I can help you with formulas, data analysis, and spreadsheet operations.",
+        examples: [
+            '"How do I sum a column?"',
+            '"Create an IF formula"',
+            '"Analyze my data"'
+        ],
+        color: "green"
+    },
     default: {
         id: "general",
-        name: "CashOS",
-        title: "CashOS Assistant",
-        placeholder: "Ask CashOS...",
+        name: "Insight",
+        title: "Insight Assistant",
+        placeholder: "Ask Insight...",
         greeting: "Hi! I'm your AI financial assistant. How can I help you today?",
         examples: [
             '"Record a transaction"',
@@ -576,9 +642,49 @@ _Ask me anything about bank reconciliation!_`;
 
             return `📊 **Business Overview**\n\nRevenue: ₦${revenue.toLocaleString()}\nExpenses: ₦${expenses.toLocaleString()}\nProfit: ${profit >= 0 ? '+' : ''}₦${profit.toLocaleString()}\nProfit Margin: ${profitMargin}%\n\n_Navigate to specific modules for detailed analysis._`;
         } catch {
-            return "Welcome to CashOS! Start by recording transactions in the Accounting module.";
+            return "Welcome to Insight! Start by recording transactions in the Accounting module.";
         }
     }, []);
+
+    // Handle supersheet queries
+    const handleSupersheetMessage = useCallback((message: string) => {
+        const lowerMessage = message.toLowerCase();
+
+        if (lowerMessage.includes('sum') || lowerMessage.includes('add')) {
+            return `📝 **SUM Formula**\n\nTo sum values, use:\n\`=SUM(A1:A10)\` - Sum range A1 to A10\n\`=SUM(A1,B1,C1)\` - Sum specific cells\n\n_Just type the formula in a cell starting with = sign!_`;
+        }
+
+        if (lowerMessage.includes('average') || lowerMessage.includes('avg') || lowerMessage.includes('mean')) {
+            return `📊 **AVERAGE Formula**\n\nTo calculate average:\n\`=AVG(B1:B20)\` - Average of B1 to B20\n\`=AVERAGE(A1:A10)\` - Same function\n\n_Works with any range of numeric values._`;
+        }
+
+        if (lowerMessage.includes('if') || lowerMessage.includes('condition')) {
+            return `🔀 **IF Formula**\n\nConditional logic:\n\`=IF(A1>100,"High","Low")\`\n\`=IF(B1=0,"Empty","Has Value")\`\n\n**Syntax:** IF(condition, true_value, false_value)`;
+        }
+
+        if (lowerMessage.includes('max') || lowerMessage.includes('highest')) {
+            return `📈 **MAX Formula**\n\nFind the maximum:\n\`=MAX(A1:A100)\` - Highest in range\n\`=MAX(A1,B1,C1)\` - Highest of cells\n\n_Returns the largest numeric value._`;
+        }
+
+        if (lowerMessage.includes('min') || lowerMessage.includes('lowest')) {
+            return `📉 **MIN Formula**\n\nFind the minimum:\n\`=MIN(A1:A100)\` - Lowest in range\n\`=MIN(A1,B1,C1)\` - Lowest of cells\n\n_Returns the smallest numeric value._`;
+        }
+
+        if (lowerMessage.includes('count')) {
+            return `🔢 **COUNT Formula**\n\nCount numeric values:\n\`=COUNT(A1:A50)\` - Count numbers\n\`=COUNTA(A1:A50)\` - Count non-empty\n\n_COUNT only counts numbers, COUNTA counts any value._`;
+        }
+
+        if (lowerMessage.includes('formula') || lowerMessage.includes('function')) {
+            return `📋 **Available Formulas**\n\n**Math:** SUM, AVG, MIN, MAX, COUNT, ROUND, ABS, SQRT, POWER\n\n**Text:** CONCAT, LEFT, RIGHT, LEN, UPPER, LOWER, TRIM\n\n**Logic:** IF\n\n**Financial:** PMT, FV, NPV\n\n**Date:** NOW, TODAY\n\n_Type = in a cell to start a formula!_`;
+        }
+
+        if (lowerMessage.includes('analyze') || lowerMessage.includes('insight')) {
+            return `🔍 **Data Analysis**\n\nI can help you analyze your data! Try:\n• Click on a range of cells\n• Ask "What's the trend?"\n• Or "Give me statistics"\n\n_The AI chat in the bottom-right can provide deeper insights._`;
+        }
+
+        return `📊 **SuperSheet Help**\n\nI can help you with:\n• "How do I sum a column?"\n• "Create an IF formula"\n• "What formulas are available?"\n• "Analyze my data"\n\n_Use the chat button in SuperSheet for contextual AI assistance!_`;
+    }, []);
+
 
     const handleSend = useCallback(async () => {
         const trimmed = inputValue.trim();
@@ -591,25 +697,29 @@ _Ask me anything about bank reconciliation!_`;
         try {
             let response: string;
 
-            // Route to appropriate handler based on current module
-            switch (currentModule.id) {
-                case "accounting":
-                    response = await handleAccountingMessage(trimmed);
-                    break;
-                case "cashflow":
-                    response = handleCashflowMessage(trimmed);
-                    break;
-                case "tax":
-                    response = handleTaxMessage(trimmed);
-                    break;
-                case "wallet":
-                    response = handleWalletMessage(trimmed);
-                    break;
-                case "reconciliation":
-                    response = await handleReconciliationMessage(trimmed);
-                    break;
-                default:
-                    response = handleDashboardMessage(trimmed);
+            // Use Clawdbot AI if enabled
+            if (USE_CLAWDBOT) {
+                const clawdbotResult = await sendToClawdbot(trimmed, currentModule.id);
+
+                // If Clawdbot failed or returned fallback, use local handlers
+                if (clawdbotResult.fallback || clawdbotResult.error) {
+                    console.log("[Clawdbot] Falling back to local handlers");
+                    response = await getLocalResponse(trimmed);
+                } else {
+                    response = clawdbotResult.reply;
+
+                    // Handle any actions returned by Clawdbot
+                    if (clawdbotResult.actions && clawdbotResult.actions.length > 0) {
+                        console.log("[Clawdbot] Actions executed:", clawdbotResult.actions);
+                        // Trigger UI updates if transactions were recorded
+                        if (typeof window !== "undefined") {
+                            window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "clawdbot" } }));
+                        }
+                    }
+                }
+            } else {
+                // Use local handlers
+                response = await getLocalResponse(trimmed);
             }
 
             appendMessage("assistant", response);
@@ -618,7 +728,28 @@ _Ask me anything about bank reconciliation!_`;
         } finally {
             setIsLoading(false);
         }
-    }, [inputValue, isLoading, currentModule.id, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleDashboardMessage]);
+
+        // Local handler router
+        async function getLocalResponse(message: string): Promise<string> {
+            switch (currentModule.id) {
+                case "accounting":
+                    return await handleAccountingMessage(message);
+                case "cashflow":
+                    return handleCashflowMessage(message);
+                case "tax":
+                    return handleTaxMessage(message);
+                case "wallet":
+                    return handleWalletMessage(message);
+                case "reconciliation":
+                    return await handleReconciliationMessage(message);
+                case "supersheet":
+                    return handleSupersheetMessage(message);
+                default:
+                    return handleDashboardMessage(message);
+            }
+        }
+    }, [inputValue, isLoading, currentModule.id, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage]);
+
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !e.shiftKey) {

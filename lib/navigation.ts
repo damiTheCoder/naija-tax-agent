@@ -1,6 +1,6 @@
-export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet";
+export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users";
 
-export type AppMode = "tax" | "accounting" | "intelligence" | "wallet";
+export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace";
 
 export interface TaxNavItem {
   label: string;
@@ -119,7 +119,7 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
 // Intelligence/Cash Management navigation (standalone)
 export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
   {
-    label: "Cash Intelligence",
+    label: "Treasury Management",
     href: "/cashflow-intelligence",
     icon: "intelligence",
     description: "Cashflow analytics, modelling & investment tools",
@@ -166,4 +166,31 @@ export const WALLET_NAV_ITEMS: TaxNavItem[] = [
   },
 ];
 
+// SuperSheet navigation
+export const SUPERSHEET_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "SuperSheet",
+    href: "/supersheet",
+    icon: "spreadsheet",
+    description: "AI-powered spreadsheet for calculations and analysis",
+    mode: "supersheet",
+  },
+];
 
+// Marketplace navigation
+export const MARKETPLACE_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Browse Professionals",
+    href: "/marketplace",
+    icon: "users",
+    description: "Find accountants and tax consultants",
+    mode: "marketplace",
+  },
+  {
+    label: "My Profile",
+    href: "/marketplace/profile",
+    icon: "shield",
+    description: "Manage your professional listing",
+    mode: "marketplace",
+  },
+];

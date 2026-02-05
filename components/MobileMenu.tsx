@@ -8,6 +8,7 @@ import {
     ACCOUNTING_NAV_ITEMS,
     INTELLIGENCE_NAV_ITEMS,
     WALLET_NAV_ITEMS,
+    MARKETPLACE_NAV_ITEMS,
     AppMode
 } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
@@ -39,6 +40,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             if (pathname.startsWith("/wallet")) setExpandedModule("wallet");
             else if (pathname.startsWith("/cashflow-intelligence")) setExpandedModule("intelligence");
             else if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) setExpandedModule("accounting");
+            else if (pathname.startsWith("/marketplace")) setExpandedModule("marketplace");
             else setExpandedModule("tax");
         }
     }, [pathname, isOpen]);
@@ -50,8 +52,9 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = [
         { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
         { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
-        { id: "intelligence", label: "Intelligence", items: INTELLIGENCE_NAV_ITEMS },
+        { id: "intelligence", label: "Treasury Management", items: INTELLIGENCE_NAV_ITEMS },
         { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
+        { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
     ];
 
     return (
@@ -77,7 +80,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                         <div className="relative w-9 h-9 overflow-hidden rounded-full">
                             <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
                         </div>
-                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>CashOS</span>
+                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>Insight</span>
                     </Link>
                     <button
                         onClick={onClose}
@@ -166,7 +169,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     {/* Top Border */}
                     <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: isDark ? '#333333' : '#e5e5e5' }} />
                     <p className="text-xs text-center" style={{ color: isDark ? '#a0a0a0' : '#9ca3af' }}>
-                        © 2025 CashOS
+                        © 2025 Insight
                     </p>
                 </div>
             </div>

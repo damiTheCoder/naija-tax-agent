@@ -1,5 +1,5 @@
 /**
- * CASHOS — NIGERIAN TAX & ACCOUNTING COMPLIANCE ENGINE
+ * INSIGHT — NIGERIAN TAX & ACCOUNTING COMPLIANCE ENGINE
  * 
  * This module implements the core non-negotiable rules for Nigerian tax compliance
  * under CITA, VAT Act, and FIRS practice notes.

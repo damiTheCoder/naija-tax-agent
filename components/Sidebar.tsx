@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -28,7 +28,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
-
+    if (pathname.startsWith("/marketplace")) return "marketplace";
+    if (pathname.startsWith("/supersheet")) return "supersheet";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
     if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -39,7 +40,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Update mode when pathname changes
   useEffect(() => {
-    if (pathname.startsWith("/wallet")) {
+    if (pathname.startsWith("/marketplace")) {
+      setMode("marketplace");
+    } else if (pathname.startsWith("/supersheet")) {
+      setMode("supersheet");
+    } else if (pathname.startsWith("/wallet")) {
       setMode("wallet");
     } else if (pathname.startsWith("/cashflow-intelligence")) {
       setMode("intelligence");
@@ -56,7 +61,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       ? INTELLIGENCE_NAV_ITEMS
       : mode === "wallet"
         ? WALLET_NAV_ITEMS
-        : ACCOUNTING_NAV_ITEMS;
+        : mode === "supersheet"
+          ? SUPERSHEET_NAV_ITEMS
+          : mode === "marketplace"
+            ? MARKETPLACE_NAV_ITEMS
+            : ACCOUNTING_NAV_ITEMS;
 
 
 
@@ -81,19 +90,33 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Decorative gradient blurs - removed for cleaner look */}
 
         {/* Logo Section */}
-        <div className="px-2 py-3">
+        <div className="px-2 py-3 space-y-2">
           <Link href="/" className="flex items-center gap-3 group px-2 py-1.5 rounded-md hover:bg-white/5 transition-colors">
             <div className="relative w-9 h-9 overflow-hidden rounded-full transition-all">
               <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
             </div>
-            <h1 className="text-lg font-semibold tracking-tight text-white">CashOS</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-white">Insight</h1>
+          </Link>
+
+          {/* Quick Access Marketplace */}
+          <Link
+            href="/marketplace"
+            className={`
+              flex items-center gap-3 px-2 py-1.5 mx-2 rounded-md text-[13px] transition-all duration-200 group
+              ${pathname === "/marketplace" ? "bg-[#2264ff] text-white" : "text-white/60 hover:text-white hover:bg-white/5"}
+            `}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              <NavIconBadge icon="users" className="w-4 h-4" />
+            </span>
+            <span className="font-semibold">Marketplace</span>
           </Link>
         </div>
 
         {/* Navigation Items */}
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto mt-2">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : mode === "wallet" ? "Wallet" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : "Accounting"}
           </p>
           {navItems.map((item) => {
             // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
@@ -162,7 +185,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-hidden">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Cash Intelligence" : mode === "wallet" ? "Wallet" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : "Accounting"}
           </p>
           {navItems.map((item) => {
             const isActive = pathname === item.href;

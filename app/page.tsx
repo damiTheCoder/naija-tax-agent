@@ -32,6 +32,7 @@ function useScrollAnimation() {
 const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
+  { label: "Marketplace", href: "/marketplace" },
   { label: "About", href: "#about" },
 ];
 
@@ -107,8 +108,12 @@ export default function LandingPage() {
       <nav className={`nav-modern ${scrolled ? "nav-scrolled" : ""}`}>
         <div className="nav-inner">
           <Link href="/" className="nav-brand">
-            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={32} height={32} className="nav-logo-img rounded-full" />
-            <span className="nav-brand-text">CashOS</span>
+            <div className="relative p-[1.5px] rounded-full bg-gradient-to-b from-blue-400 to-blue-700 shadow-sm transition-all">
+              <div className="relative w-7 h-7 overflow-hidden rounded-full bg-white">
+                <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
+              </div>
+            </div>
+            <span className="nav-brand-text">Insight</span>
           </Link>
 
           <div className="nav-links-modern">
@@ -276,7 +281,7 @@ export default function LandingPage() {
             {/* Hero Image */}
             <div className="why-matters-image">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/why-matters-hero.png" alt="CashOS Financial Visibility" />
+              <img src="/why-matters-hero.png" alt="Insight Financial Visibility" />
             </div>
           </div>
 
@@ -322,7 +327,7 @@ export default function LandingPage() {
             <h2 className="section-title-modern">
               Introducing
               <br />
-              <span className="title-highlight">Cash Operating System</span>
+              <span className="title-highlight">Insight</span>
             </h2>
           </div>
         </div>
@@ -332,7 +337,7 @@ export default function LandingPage() {
 
         {/* CashOS Features List - Horizontal Scroll */}
         <div className="cashos-features-section section-container">
-          <h2 className="cashos-brand-title">CashOS</h2>
+          <h2 className="cashos-brand-title">Insight</h2>
           <p className="cashos-intro">
             is an AI-powered financial operating system that helps business owners:
           </p>
@@ -461,7 +466,7 @@ export default function LandingPage() {
               Stop guessing. <span className="title-highlight">Start knowing.</span>
             </h2>
             <p className="final-cta-subtitle">
-              Join thousands of SMEs building financial clarity with CashOS.
+              Join thousands of SMEs building financial clarity with Insight.
             </p>
             <Link href="/accounting" className="final-cta-btn">
               Get Started
@@ -477,8 +482,12 @@ export default function LandingPage() {
           <div className="footer-main-modern">
             <div className="footer-brand-modern">
               <Link href="/" className="footer-brand-link">
-                <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={40} height={40} />
-                <span>CashOS</span>
+                <div className="relative p-[1.5px] rounded-full bg-gradient-to-b from-blue-400 to-blue-700 shadow-sm transition-all">
+                  <div className="relative w-9 h-9 overflow-hidden rounded-full bg-white">
+                    <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" />
+                  </div>
+                </div>
+                <span>Insight</span>
               </Link>
               <p className="footer-tagline">AI Accounting for Nigerian Businesses</p>
             </div>
@@ -506,7 +515,7 @@ export default function LandingPage() {
           </div>
 
           <div className="footer-bottom-modern">
-            <p>© 2024 CashOS. Built with ❤️ for Nigerian businesses.</p>
+            <p>© 2024 Insight. Built with ❤️ for Nigerian businesses.</p>
             <div className="footer-socials">
               <a href="#" aria-label="Twitter">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>

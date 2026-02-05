@@ -400,15 +400,21 @@ export default function AccountingPage() {
     // If we have an amount, try AI validation
     if (localParsed && localParsed.amount && localParsed.amount > 0) {
       try {
-        // Call AI validation API
+        // Call AI validation API with 90-second timeout (Gemini AI takes 30-60 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
+
         const response = await fetch('/api/accounting/validate-transaction', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             transactionText: trimmed,
             amount: localParsed.amount
-          })
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);
@@ -430,6 +436,7 @@ export default function AccountingPage() {
             'asset': 'asset',
             'equity': 'equity',
             'loan': 'liability',
+            'refund_from_supplier': 'liability',
             'other': 'expense',
           };
 
@@ -449,9 +456,11 @@ export default function AccountingPage() {
           const confidenceText = aiResult.confidence >= 0.9 ? `${aiStatusIcon} AI High confidence` :
             aiResult.confidence >= 0.7 ? `${aiStatusIcon} AI Medium confidence` : `⚠️ Low confidence`;
 
-          // Show account info
-          const accountInfo = aiResult.debitAccount && aiResult.creditAccount ?
-            `\n📘 **DR ${aiResult.debitAccount.code}** ${aiResult.debitAccount.name}\n📕 **CR ${aiResult.creditAccount.code}** ${aiResult.creditAccount.name}` : '';
+          // Show account info - USE AI-CORRECTED ACCOUNTS
+          const debitAccount = aiResult.debitAccount;
+          const creditAccount = aiResult.creditAccount;
+          const accountInfo = debitAccount && creditAccount ?
+            `\n📘 **DR ${debitAccount.code}** ${debitAccount.name}\n📕 **CR ${creditAccount.code}** ${creditAccount.name}` : '';
 
           // Show AI corrections if any
           const correctionInfo = aiResult.aiCorrected ?
@@ -459,25 +468,36 @@ export default function AccountingPage() {
 
           // Show tax implications if any
           const taxInfo = [];
-          if (aiResult.taxImplications.outputVAT > 0) taxInfo.push(`VAT: ₦${aiResult.taxImplications.outputVAT.toLocaleString()}`);
-          if (aiResult.taxImplications.wht > 0) taxInfo.push(`WHT: ₦${aiResult.taxImplications.wht.toLocaleString()}`);
-          if (aiResult.taxImplications.paye > 0) taxInfo.push(`PAYE: ₦${aiResult.taxImplications.paye.toLocaleString()}`);
-          if (aiResult.taxImplications.cgt > 0) taxInfo.push(`CGT: ₦${aiResult.taxImplications.cgt.toLocaleString()}`);
+          if (aiResult.taxImplications?.outputVAT > 0) taxInfo.push(`VAT: ₦${aiResult.taxImplications.outputVAT.toLocaleString()}`);
+          if (aiResult.taxImplications?.wht > 0) taxInfo.push(`WHT: ₦${aiResult.taxImplications.wht.toLocaleString()}`);
+          if (aiResult.taxImplications?.paye > 0) taxInfo.push(`PAYE: ₦${aiResult.taxImplications.paye.toLocaleString()}`);
+          if (aiResult.taxImplications?.cgt > 0) taxInfo.push(`CGT: ₦${aiResult.taxImplications.cgt.toLocaleString()}`);
           const taxLine = taxInfo.length > 0 ? `\n💰 Tax: ${taxInfo.join(' | ')}` : '';
 
           try {
-            const result = accountingEngine.processTransaction(newTransaction);
+            // USE AI-VALIDATED ACCOUNTS - not local backtesting
+            const result = accountingEngine.processTransactionWithAIAccounts(
+              newTransaction,
+              {
+                debitCode: debitAccount.code,
+                debitName: debitAccount.name,
+                creditCode: creditAccount.code,
+                creditName: creditAccount.name,
+                confidence: aiResult.confidence
+              }
+            );
             setTransactions((prev) => [...prev, newTransaction]);
 
-            // Enhanced response with AI validation info
-            const enhancedResponse = `${result.chatResponse}${accountInfo}${taxLine}${correctionInfo}\n\n_${confidenceText} (${aiResult.processingTimeMs}ms)_`;
+            // Enhanced response with AI-CORRECTED account info
+            const enhancedResponse = `${result.chatResponse}${taxLine}${correctionInfo}\n\n_${confidenceText} (${aiResult.processingTimeMs}ms)_`;
             appendMessage("assistant", enhancedResponse);
             pushAutomationActivity("AI-Validated Journal", `Parsed and posted: ${result.journalEntry.id}`);
 
             // Auto-update statements
             const engineStatements = accountingEngine.generateStatements();
             setGeneratedStatements(engineStatements);
-          } catch {
+          } catch (postError) {
+            console.error('[AI Processing] Error posting journal:', postError);
             appendMessage(
               "assistant",
               `I detected a ${aiResult.parsedType} transaction (₦${aiResult.amount.toLocaleString()}).${accountInfo}${taxLine}\n\n${confidenceText}.\n\nUse the manual form above for full control, or I can journal it with assumptions.`,
@@ -829,7 +849,17 @@ export default function AccountingPage() {
       setEditEntryDate("");
       setEditEntryLines([]);
     } catch (err: unknown) {
-      setEditEntryError(err instanceof Error ? err.message : "Failed to update entry");
+      // If entry not found, refresh state and close modal
+      if (err instanceof Error && err.message.includes("not found")) {
+        const updatedState = accountingEngine.getState();
+        setAccountingState(updatedState);
+        setJournalEntries(updatedState.journalEntries);
+        setShowEditEntry(false);
+        setEditingEntryId(null);
+        appendMessage("assistant", `ℹ️ Entry ${editingEntryId} no longer exists. View has been refreshed.`);
+      } else {
+        setEditEntryError(err instanceof Error ? err.message : "Failed to update entry");
+      }
     }
   };
 
@@ -856,7 +886,17 @@ export default function AccountingPage() {
       console.log("[Delete] State refreshed, entries count:", updatedState.journalEntries.length);
     } catch (err: unknown) {
       console.error("[Delete] Error:", err);
-      appendMessage("assistant", `❌ Failed to delete entry: ${err instanceof Error ? err.message : "Unknown error"}`);
+
+      // If entry not found, just refresh state to clean up stale entries
+      if (err instanceof Error && err.message.includes("not found")) {
+        console.log("[Delete] Entry not found - refreshing state to remove stale data");
+        const updatedState = accountingEngine.getState();
+        setAccountingState(updatedState);
+        setJournalEntries(updatedState.journalEntries);
+        appendMessage("assistant", `ℹ️ Entry ${entryId} was already removed or doesn't exist. Refreshed the view.`);
+      } else {
+        appendMessage("assistant", `❌ Failed to delete entry: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
     }
   };
 
@@ -996,81 +1036,84 @@ export default function AccountingPage() {
                   </div>
                 </div>
 
-                {/* Post Journal Entry Button */}
-                <button
-                  onClick={() => setShowPostEntry(true)}
-                  className={`
-                    w-full rounded-2xl border transition-all p-5 flex items-center justify-center gap-3 group
-                    ${theme === 'dark'
-                      ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
-                      : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
-                    }
-                  `}
-                >
-                  <div className={`
-                    w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                    ${theme === 'dark'
-                      ? 'bg-gray-700 group-hover:bg-gray-600'
-                      : 'bg-gray-100 group-hover:bg-gray-200'
-                    }
-                  `}>
-                    <svg
-                      className="w-5 h-5 text-gray-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </div>
-                  <div className="text-left">
-                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Post Journal Entry
-                    </h3>
-                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Manual double-entry with DR/CR columns
-                    </p>
-                  </div>
-                </button>
+                {/* Action Buttons Grid - 2 columns on desktop */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Post Journal Entry Button */}
+                  <button
+                    onClick={() => setShowPostEntry(true)}
+                    className={`
+                      w-full rounded-2xl border transition-all p-5 group
+                      ${theme === 'dark'
+                        ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
+                        : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
+                      } flex items-center justify-center gap-3
+                    `}
+                  >
+                    <div className={`
+                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
+                      ${theme === 'dark'
+                        ? 'bg-gray-700 group-hover:bg-gray-600'
+                        : 'bg-purple-100 group-hover:bg-purple-200'
+                      }
+                    `}>
+                      <svg
+                        className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-purple-600'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Post Journal Entry
+                      </h3>
+                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                        Manual double-entry with DR/CR columns
+                      </p>
+                    </div>
+                  </button>
 
-                {/* Bank Reconciliation Button */}
-                <Link
-                  href="/accounting/reconciliation"
-                  className={`
-                    w-full rounded-2xl border transition-all p-5 flex items-center justify-center gap-3 group
-                    ${theme === 'dark'
-                      ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
-                      : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
-                    }
-                  `}
-                >
-                  <div className={`
-                    w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                    ${theme === 'dark'
-                      ? 'bg-gray-700 group-hover:bg-gray-600'
-                      : 'bg-blue-100 group-hover:bg-blue-200'
-                    }
-                  `}>
-                    <svg
-                      className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-blue-600'}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="text-left">
-                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Bank Reconciliation
-                    </h3>
-                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Match bank statements with ledger entries
-                    </p>
-                  </div>
-                </Link>
+                  {/* Bank Reconciliation Button */}
+                  <Link
+                    href="/accounting/reconciliation"
+                    className={`
+                      w-full rounded-2xl border transition-all p-5 group
+                      ${theme === 'dark'
+                        ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
+                        : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
+                      } flex items-center justify-center gap-3
+                    `}
+                  >
+                    <div className={`
+                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
+                      ${theme === 'dark'
+                        ? 'bg-gray-700 group-hover:bg-gray-600'
+                        : 'bg-blue-100 group-hover:bg-blue-200'
+                      }
+                    `}>
+                      <svg
+                        className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-blue-600'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Bank Reconciliation
+                      </h3>
+                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                        Match bank statements with ledger entries
+                      </p>
+                    </div>
+                  </Link>
+                </div>
 
                 {/* Connect Sales POS Section */}
 

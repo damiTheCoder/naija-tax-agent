@@ -108,7 +108,7 @@ export function Onboarding({ onComplete, forceShow = false }: OnboardingProps) {
                     <div className="w-16 h-16 mx-auto bg-white rounded-2xl flex items-center justify-center shadow-lg mb-4">
                         <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={48} height={48} className="rounded-xl" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white">Welcome to CashOS</h2>
+                    <h2 className="text-2xl font-bold text-white">Welcome to Insight</h2>
                     <p className="text-blue-100 text-sm mt-1">Your AI-powered financial operating system</p>
                 </div>
 
@@ -133,10 +133,10 @@ export function Onboarding({ onComplete, forceShow = false }: OnboardingProps) {
                                 key={index}
                                 onClick={() => setCurrentStep(index)}
                                 className={`w-2 h-2 rounded-full transition-all ${index === currentStep
-                                        ? "bg-blue-600 w-6"
-                                        : index < currentStep
-                                            ? "bg-blue-300"
-                                            : "bg-gray-300 dark:bg-gray-600"
+                                    ? "bg-blue-600 w-6"
+                                    : index < currentStep
+                                        ? "bg-blue-300"
+                                        : "bg-gray-300 dark:bg-gray-600"
                                     }`}
                             />
                         ))}

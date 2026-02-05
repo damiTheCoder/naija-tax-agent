@@ -31,7 +31,7 @@ const MODULES: {
         },
         {
             mode: "intelligence",
-            label: "Cash Intelligence",
+            label: "Treasury Management",
             icon: (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -47,6 +47,18 @@ const MODULES: {
                 </svg>
             ),
         },
+        {
+            mode: "marketplace",
+            label: "Marketplace",
+            icon: (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
+                </svg>
+            ),
+        },
+
 
     ];
 
@@ -59,6 +71,7 @@ export default function ModuleButtonBar() {
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {
 
+        if (pathname.startsWith("/marketplace")) return "marketplace";
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -76,7 +89,8 @@ export default function ModuleButtonBar() {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {
             navigateTo("/wallet");
-
+        } else if (newMode === "marketplace") {
+            navigateTo("/marketplace");
         } else {
             navigateTo("/accounting");
         }

@@ -25,6 +25,7 @@ export default function ModeSelector() {
 
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {
+        if (pathname.startsWith("/marketplace")) return "marketplace";
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
@@ -43,6 +44,8 @@ export default function ModeSelector() {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {
             navigateTo("/wallet");
+        } else if (newMode === "marketplace") {
+            navigateTo("/marketplace");
         } else {
             navigateTo("/accounting");
         }
@@ -54,6 +57,7 @@ export default function ModeSelector() {
             case "intelligence": return "Cash Intelligence";
             case "accounting": return "Accounting";
             case "wallet": return "Wallet";
+            case "marketplace": return "Marketplace";
             default: return "Tax Manager";
         }
     };
@@ -107,6 +111,12 @@ export default function ModeSelector() {
                             label="Wallet"
                             currentMode={mode}
                             onClick={() => handleModeSwitch("wallet")}
+                        />
+                        <ModeOption
+                            mode="marketplace"
+                            label="Marketplace"
+                            currentMode={mode}
+                            onClick={() => handleModeSwitch("marketplace")}
                         />
 
                     </div>

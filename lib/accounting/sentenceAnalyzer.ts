@@ -276,6 +276,26 @@ function determineAccounts(
     // Determine based on flow
     if (flow === "outflow") {
         // Money going OUT
+
+        // CRITICAL: Check if paying off creditors/suppliers (liability payment)
+        // This is NOT an expense - it's reducing a liability
+        const isPayingCreditors =
+            /\b(paid|pay|paying|settled)\s+(supplier|suppliers|creditor|creditors|vendor|vendors)\b/i.test(text) ||
+            liabilityMatches.some(m => m.account.code === "2000");
+
+        if (isPayingCreditors) {
+            // Settle creditors: DR Accounts Payable, CR Cash/Bank
+            const creditAccount = text.toLowerCase().includes("cash")
+                ? { code: "1000", name: "Cash", confidence: 0.95, matchedKeyword: "cash" }
+                : { ...defaultCash, confidence: 0.9 };
+
+            log.push(`Creditor/Supplier payment detected - DR Accounts Payable, CR ${creditAccount.name}`);
+            return {
+                debitAccount: { code: "2000", name: "Accounts Payable", confidence: 0.95, matchedKeyword: "supplier" },
+                creditAccount,
+            };
+        }
+
         // Check if buying goods for resale (purchase)
         if (text.includes("purchase") || text.includes("purchased") || text.includes("bought") || text.includes("resale") || text.includes("goods") || text.includes("inventory") || text.includes("stock")) {
             if (isCredit) {

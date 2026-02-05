@@ -426,6 +426,70 @@ class AccountingEngine {
   }
 
   /**
+   * Process a transaction with AI-validated accounts
+   * This method accepts pre-validated debit/credit accounts from AI Layer 2
+   * and creates a journal entry without running local backtesting
+   */
+  processTransactionWithAIAccounts(
+    rawTx: RawTransaction,
+    aiAccounts: {
+      debitCode: string;
+      debitName: string;
+      creditCode: string;
+      creditName: string;
+      confidence: number;
+    }
+  ): {
+    journalEntry: JournalEntry;
+    chatResponse: string;
+  } {
+    const journalId = generateJournalId();
+    const amount = rawTx.amount;
+
+    // Create journal entry with AI-validated accounts
+    const journalEntry: JournalEntry = {
+      id: journalId,
+      date: rawTx.date,
+      reference: rawTx.id,
+      narration: rawTx.description,
+      lines: [
+        {
+          accountCode: aiAccounts.debitCode,
+          accountName: aiAccounts.debitName,
+          debit: amount,
+          credit: 0,
+        },
+        {
+          accountCode: aiAccounts.creditCode,
+          accountName: aiAccounts.creditName,
+          debit: 0,
+          credit: amount,
+        },
+      ],
+      isBalanced: true,
+      totalDebits: amount,
+      totalCredits: amount,
+      transactionType: rawTx.type as TransactionType || 'other',
+      status: "posted",
+      createdAt: new Date().toISOString(),
+      postedAt: new Date().toISOString(),
+    };
+
+    // Post to ledger
+    this.postToLedger(journalEntry);
+
+    // Add to state
+    this.state.journalEntries.push(journalEntry);
+    this.notify();
+
+    // Generate chat response with AI accounts
+    const formatCurrency = (n: number) => `₦${n.toLocaleString()}`;
+    const chatResponse = `Transaction processed!\n\n📚 **Accounting** (${Math.round(aiAccounts.confidence * 100)}% confidence): ${journalId}\n   DR: ${aiAccounts.debitName} ${formatCurrency(amount)}\n   CR: ${aiAccounts.creditName} ${formatCurrency(amount)}`;
+
+    return { journalEntry, chatResponse };
+  }
+
+  /**
    * ENHANCED TRANSACTION PROCESSOR
    * Uses word-by-word sentence analysis to identify BOTH accounts directly
    * from the transaction description with high accuracy.
