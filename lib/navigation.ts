@@ -1,6 +1,6 @@
 export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop";
 
-export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace";
+export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll";
 
 export interface TaxNavItem {
   label: string;
@@ -107,14 +107,26 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     description: "View accounts and post manual entries",
     mode: "accounting",
   },
+];
+
+// Payroll & Compliance navigation
+export const PAYROLL_NAV_ITEMS: TaxNavItem[] = [
   {
-    label: "AI Chat",
-    href: "/accounting/chat",
-    icon: "chat",
-    description: "Talk to your accounting records",
-    mode: "accounting",
+    label: "Staff List",
+    href: "/accounting/employees",
+    icon: "users",
+    description: "Manage employee records",
+    mode: "payroll",
+  },
+  {
+    label: "Run Payroll",
+    href: "/accounting/payroll",
+    icon: "report",
+    description: "Process monthly salaries",
+    mode: "payroll",
   },
 ];
+
 
 // Intelligence/Cash Management navigation (standalone)
 export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [

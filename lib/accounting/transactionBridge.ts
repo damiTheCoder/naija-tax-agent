@@ -191,7 +191,7 @@ class AccountingEngine {
     return {
       fixed: isBalanced,
       message: isBalanced
-        ? `Ledger rebuilt: ${postedCount} entries posted, trial balance is now balanced (₦${trialBalance.totals.debit.toLocaleString()})`
+        ? `Ledger rebuilt: ${postedCount} entries posted, trial balance is now balanced (₦${(trialBalance?.totals?.debit || 0).toLocaleString()})`
         : `Ledger rebuilt but ${skippedCount} unbalanced entries were skipped. Trial balance may still be off.`
     };
   }
@@ -2772,8 +2772,8 @@ class AccountingEngine {
     response += `| Account | Debit | Credit |\n|---------|-------|--------|\n`;
 
     journalEntry.lines.forEach((line) => {
-      const debit = line.debit > 0 ? `₦${line.debit.toLocaleString()}` : "-";
-      const credit = line.credit > 0 ? `₦${line.credit.toLocaleString()}` : "-";
+      const debit = (line.debit || 0) > 0 ? `₦${(line.debit || 0).toLocaleString()}` : "-";
+      const credit = (line.credit || 0) > 0 ? `₦${(line.credit || 0).toLocaleString()}` : "-";
       response += `| ${line.accountName} | ${debit} | ${credit} |\n`;
     });
 

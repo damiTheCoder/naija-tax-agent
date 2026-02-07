@@ -30,6 +30,8 @@ model Company {
   sales          Sale[]
   stockMovements StockMovement[]
   menuItems      MenuItem[]
+  employees      Employee[]
+  payrollRuns    PayrollRun[]
 }
 
 model Location {
@@ -250,3 +252,70 @@ model BomLine {
   menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   product  Product  @relation(fields: [productId], references: [id])
 }
+
+// ============================================================================
+// PAYROLL & COMPLIANCE - Employee & Monthly Payroll Management
+// ============================================================================
+
+model Employee {
+  id              String   @id @default(cuid())
+  companyId       String
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  role            String   @default("STAFF")
+  tin             String?  // Tax Identification Number
+  pensionPin      String?  // Pension PIN
+  nhfNumber       String?  // NHF Number
+  bankName        String?
+  accountNumber   String?
+  basicSalary     Float    @default(0)
+  housingAllowance Float   @default(0)
+  transportAllowance Float @default(0)
+  otherAllowances  Float   @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company        Company        @relation(fields: [companyId], references: [id])
+  payrollEntries PayrollEntry[]
+}
+
+model PayrollRun {
+  id          String   @id @default(cuid())
+  companyId   String
+  month       Int      // 1-12
+  year        Int
+  status      String   @default("DRAFT") // DRAFT | APPROVED | PAID
+  totalGross  Float    @default(0)
+  totalNet    Float    @default(0)
+  totalTax    Float    @default(0) // Total PAYE
+  totalPension Float   @default(0)
+  totalNHF    Float    @default(0)
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company        Company        @relation(fields: [companyId], references: [id])
+  payrollEntries PayrollEntry[]
+
+  @@unique([companyId, month, year])
+}
+
+model PayrollEntry {
+  id           String @id @default(cuid())
+  payrollRunId String
+  employeeId   String
+  grossSalary  Float
+  netSalary    Float
+  taxAmount    Float  // PAYE
+  pensionAmount Float
+  nhfAmount    Float
+  otherDeductions Float @default(0)
+  notes        String?
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+}
+

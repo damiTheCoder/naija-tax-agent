@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -32,6 +32,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     if (pathname.startsWith("/supersheet")) return "supersheet";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
+    if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) return "payroll";
     if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
     return "tax";
   };
@@ -48,6 +49,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       setMode("wallet");
     } else if (pathname.startsWith("/cashflow-intelligence")) {
       setMode("intelligence");
+    } else if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) {
+      setMode("payroll");
     } else if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
       setMode("accounting");
     } else if (pathname.startsWith("/main") || pathname.startsWith("/tax-tools") || pathname.startsWith("/tax")) {
@@ -65,7 +68,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           ? SUPERSHEET_NAV_ITEMS
           : mode === "marketplace"
             ? MARKETPLACE_NAV_ITEMS
-            : ACCOUNTING_NAV_ITEMS;
+            : mode === "payroll"
+              ? PAYROLL_NAV_ITEMS
+              : ACCOUNTING_NAV_ITEMS;
 
 
 
@@ -116,7 +121,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto mt-2">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           {navItems.map((item) => {
             // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
@@ -185,7 +190,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-hidden">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : "Accounting"}
+            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           {navItems.map((item) => {
             const isActive = pathname === item.href;

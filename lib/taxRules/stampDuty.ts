@@ -59,7 +59,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
             label = "Fixed Duty on Agreement";
             rateDescription = "Fixed";
             stampDuty = evaluateFormula(rulebook.rules[ruleKey].formula, {});
-            formula = `Fixed: ${stampDuty.toLocaleString()}`;
+            formula = `Fixed: ${(stampDuty || 0).toLocaleString()}`;
             break;
 
         case 'deed':
@@ -68,7 +68,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
             rateDescription = "1.5%";
             const deedRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
             stampDuty = input.transactionValue * deedRate;
-            formula = `${input.transactionValue.toLocaleString()} * ${deedRate}`;
+            formula = `${(input.transactionValue || 0).toLocaleString()} * ${deedRate}`;
             break;
 
         case 'mortgage':
@@ -77,7 +77,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
             rateDescription = "0.375%";
             const mortgageRate = evaluateFormula(rulebook.rules[ruleKey].formula, {});
             stampDuty = input.transactionValue * mortgageRate;
-            formula = `${input.transactionValue.toLocaleString()} * ${mortgageRate}`;
+            formula = `${(input.transactionValue || 0).toLocaleString()} * ${mortgageRate}`;
             break;
 
         default:

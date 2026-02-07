@@ -60,10 +60,10 @@ export default function MarketplacePage() {
 
             <div className="max-w-6xl mx-auto relative z-10">
                 <div className="mb-12 text-center lg:text-left">
-                    <h1 className="text-4xl lg:text-5xl font-extrabold text-[#000000] dark:text-white mb-4 tracking-tight">
+                    <h1 className="text-4xl lg:text-5xl font-extrabold text-black dark:text-white mb-4 tracking-tight">
                         Marketplace
                     </h1>
-                    <p className="text-gray-700 dark:text-gray-400 max-w-2xl text-lg lg:text-xl font-medium">
+                    <p className="text-black dark:text-gray-400 max-w-2xl text-lg lg:text-xl font-medium">
                         Connect with certified accountants and tax consultants to help manage your business finances.
                     </p>
                 </div>
@@ -148,8 +148,8 @@ export default function MarketplacePage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">No professionals found</h3>
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">Try adjusting your search query or filters.</p>
+                        <h3 className="text-2xl font-bold text-black dark:text-white mb-3">No professionals found</h3>
+                        <p className="text-black dark:text-gray-400 text-lg">Try adjusting your search query or filters.</p>
                     </div>
                 )}
             </div>
