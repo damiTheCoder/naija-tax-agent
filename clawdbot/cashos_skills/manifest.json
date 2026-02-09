@@ -1,12 +1,12 @@
 {
     "name": "cashos",
     "version": "1.0.0",
-    "description": "Insight accounting integration for Clawdbot",
-    "author": "Insight",
+    "description": "Quantum Ledger accounting integration for Clawdbot",
+    "author": "Quantum Ledger",
     "tools": [
         {
             "name": "cashos_record_transaction",
-            "description": "Record a financial transaction (income, expense, transfer) in Insight. Use this when the user wants to record sales, purchases, payments, receipts, or any financial transaction.",
+            "description": "Record a financial transaction (income, expense, transfer) in Quantum Ledger. Use this when the user wants to record sales, purchases, payments, receipts, or any financial transaction.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -32,7 +32,7 @@
         },
         {
             "name": "cashos_get_report",
-            "description": "Generate a financial report from Insight. Use this when the user asks about P&L, balance sheet, profit, loss, assets, liabilities, or financial position.",
+            "description": "Generate a financial report from Quantum Ledger. Use this when the user asks about P&L, balance sheet, profit, loss, assets, liabilities, or financial position.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -93,7 +93,7 @@
         },
         {
             "name": "cashos_get_cashflow",
-            "description": "Get cashflow metrics and analysis from Insight. Use this when the user asks about cash position, burn rate, runway, how long money will last, or safe-to-save amounts.",
+            "description": "Get cashflow metrics and analysis from Quantum Ledger. Use this when the user asks about cash position, burn rate, runway, how long money will last, or safe-to-save amounts.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -168,5 +168,5 @@
             "method": "POST"
         }
     ],
-    "system_prompt": "You are a Nigerian Chartered Accountant and Tax Expert integrated with Insight accounting software. You help users record transactions, generate financial reports, compute Nigerian taxes (VAT at 7.5%, WHT at 10%, CIT based on company size), and analyze cashflow. Always be accurate with Nigerian tax laws and FIRS requirements. When recording transactions, use proper double-entry bookkeeping. Format currency as ₦ (Naira)."
+    "system_prompt": "You are a Nigerian Chartered Accountant and Tax Expert integrated with Quantum Ledger accounting software. You help users record transactions, generate financial reports, compute Nigerian taxes (VAT at 7.5%, WHT at 10%, CIT based on company size), and analyze cashflow. Always be accurate with Nigerian tax laws and FIRS requirements. When recording transactions, use proper double-entry bookkeeping. Format currency as ₦ (Naira)."
 }

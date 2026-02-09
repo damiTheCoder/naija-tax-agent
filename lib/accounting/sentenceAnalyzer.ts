@@ -157,26 +157,50 @@ function detectCreditTransaction(text: string): boolean {
  * Extract amount from text
  */
 function extractAmountFromText(text: string): number {
-    // Match various number formats
-    const patterns = [
-        /₦\s?([\d,]+(?:\.\d{2})?)/,           // ₦50,000 or ₦50,000.00
-        /NGN\s?([\d,]+(?:\.\d{2})?)/i,        // NGN 50000
-        /([\d,]+(?:\.\d{2})?)\s?naira/i,      // 50000 naira
-        /\b([\d,]+(?:\.\d{2})?)\b/g,          // Plain numbers
+    interface AmountCandidate {
+        value: number;
+        weight: number;
+        index: number;
+    }
+
+    const candidates: AmountCandidate[] = [];
+    const recordCandidate = (match: RegExpExecArray | null, weight: number) => {
+        if (!match || !match[1]) return;
+        const raw = match[1].replace(/,/g, "");
+        const value = parseFloat(raw);
+        if (!isNaN(value) && value > 0) {
+            candidates.push({ value, weight, index: match.index ?? 0 });
+        }
+    };
+
+    const prioritizedPatterns: Array<{ regex: RegExp; weight: number }> = [
+        { regex: /₦\s?([\d,]+(?:\.\d{2})?)/gi, weight: 4 },
+        { regex: /NGN\s?([\d,]+(?:\.\d{2})?)/gi, weight: 4 },
+        { regex: /(?:amount|sum|total)\s+(?:of\s+)?([\d,]+(?:\.\d{2})?)/gi, weight: 3 },
+        { regex: /([\d,]+(?:\.\d{2})?)\s?naira/gi, weight: 3 },
+        { regex: /([\d,]+(?:\.\d{2})?)\s?(?:k|kobo)/gi, weight: 2 },
+        { regex: /\b([\d,]+(?:\.\d{2})?)\b/gi, weight: 1 },
     ];
 
-    for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-            const numStr = match[1].replace(/,/g, "");
-            const num = parseFloat(numStr);
-            if (!isNaN(num) && num > 0) {
-                return num;
-            }
+    for (const { regex, weight } of prioritizedPatterns) {
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(text)) !== null) {
+            recordCandidate(match, weight);
         }
     }
 
-    return 0;
+    if (candidates.length === 0) {
+        return 0;
+    }
+
+    // Prefer higher weight, then larger value (helps ignore invoice numbers)
+    const best = candidates.sort((a, b) => {
+        if (b.weight !== a.weight) return b.weight - a.weight;
+        if (b.value !== a.value) return b.value - a.value;
+        return a.index - b.index;
+    })[0];
+
+    return best.value;
 }
 
 /**
@@ -256,6 +280,7 @@ function determineAccounts(
 } {
     // Default accounts
     const defaultCash = { code: "1020", name: "Bank", confidence: 0.5, matchedKeyword: "default" };
+    const defaultPettyCash = { code: "1010", name: "Petty Cash", confidence: 0.5, matchedKeyword: "default" };
     const defaultExpense = { code: "5820", name: "Office Supplies", confidence: 0.3, matchedKeyword: "default" };
     const defaultRevenue = { code: "4000", name: "Sales", confidence: 0.5, matchedKeyword: "default" };
     const defaultPurchases = { code: "5010", name: "Purchases", confidence: 0.5, matchedKeyword: "default" };
@@ -274,6 +299,63 @@ function determineAccounts(
     log.push(`Expense matches: ${expenseMatches.length}, Revenue: ${revenueMatches.length}, Asset: ${assetMatches.length}, Liability: ${liabilityMatches.length}`);
 
     // Determine based on flow
+    if (flow === "transfer") {
+        const toCash = /\bto\b[^.]*\b(cash|petty|wallet|till)\b/i.test(text);
+        const fromCash = /\bfrom\b[^.]*\b(cash|petty|wallet|till)\b/i.test(text);
+        const toBank = /\bto\b[^.]*\b(bank|gtbank|zenith|access|uba|fidelity|wema|firstbank|sterling)\b/i.test(text);
+        const fromBank = /\bfrom\b[^.]*\b(bank|gtbank|zenith|access|uba|fidelity|wema|firstbank|sterling)\b/i.test(text);
+
+        if (fromBank && toCash) {
+            log.push(`Transfer detected: Bank → Cash`);
+            return {
+                debitAccount: { ...defaultPettyCash, confidence: 0.95, matchedKeyword: "transfer-to-cash" },
+                creditAccount: { ...defaultCash, confidence: 0.95, matchedKeyword: "transfer-from-bank" },
+            };
+        }
+
+        if (fromCash && toBank) {
+            log.push(`Transfer detected: Cash → Bank`);
+            return {
+                debitAccount: { ...defaultCash, confidence: 0.95, matchedKeyword: "transfer-to-bank" },
+                creditAccount: { ...defaultPettyCash, confidence: 0.95, matchedKeyword: "transfer-from-cash" },
+            };
+        }
+
+        if (fromBank && toBank) {
+            log.push(`Inter-bank transfer detected`);
+            return {
+                debitAccount: { ...defaultCash, confidence: 0.95, matchedKeyword: "transfer-bank-dr" },
+                creditAccount: { code: "1021", name: "Bank - Savings", confidence: 0.9, matchedKeyword: "transfer-bank-cr" },
+            };
+        }
+
+        if (assetMatches.length >= 2) {
+            const debitAsset = assetMatches[0];
+            const creditAsset = assetMatches[1];
+            log.push(`Transfer detected using asset keywords - DR ${debitAsset.account.name}, CR ${creditAsset.account.name}`);
+            return {
+                debitAccount: {
+                    code: debitAsset.account.code,
+                    name: debitAsset.account.name,
+                    confidence: 0.9,
+                    matchedKeyword: debitAsset.keyword
+                },
+                creditAccount: {
+                    code: creditAsset.account.code,
+                    name: creditAsset.account.name,
+                    confidence: 0.9,
+                    matchedKeyword: creditAsset.keyword
+                }
+            };
+        }
+
+        log.push(`Transfer fallback - DR Bank, CR Petty Cash`);
+        return {
+            debitAccount: { ...defaultCash, confidence: 0.8 },
+            creditAccount: { ...defaultPettyCash, confidence: 0.8 },
+        };
+    }
+
     if (flow === "outflow") {
         // Money going OUT
 

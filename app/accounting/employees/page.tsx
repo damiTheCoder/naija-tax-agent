@@ -345,8 +345,8 @@ export default function EmployeesPage() {
 
             {/* Add Employee Modal (Simplified Overlay for Demo) */}
             {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#121212] w-full max-w-xl rounded-3xl p-10 shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#121212] w-full max-w-xl rounded-3xl p-10 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-10">
                             <div>
                                 <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Onboard New Talent</h2>
@@ -482,4 +482,3 @@ export default function EmployeesPage() {
         </div>
     );
 }
-

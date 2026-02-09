@@ -1,6 +1,6 @@
-# Insight Skills for Clawdbot
+# Quantum Ledger Skills for Clawdbot
 
-This directory contains Clawdbot-compatible skill definitions that enable natural language interaction with Insight accounting features.
+This directory contains Clawdbot-compatible skill definitions that enable natural language interaction with Quantum Ledger accounting features.
 
 ## Installation
 
@@ -32,6 +32,6 @@ Set these environment variables in your Clawdbot config:
 # ~/clawd/config.yaml
 tools:
   cashos:
-    base_url: "http://localhost:3000"  # Your Insight instance
+    base_url: "http://localhost:3000"  # Your Quantum Ledger instance
     api_key: ""  # Optional: For authenticated endpoints
 ```

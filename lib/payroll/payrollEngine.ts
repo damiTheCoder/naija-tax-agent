@@ -131,6 +131,9 @@ class PayrollEngine {
     private postPayrollToLedger(run: PayrollRun) {
         const narration = `Payroll Disbursement - ${run.month} ${run.year} (Ref: ${run.paymentReference})`;
         const date = new Date().toISOString().split("T")[0];
+        const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+        const totalEmployeePension = Math.max(0, roundCurrency(run.totalGross - run.totalNet - run.totalNHF - run.totalTax));
+        const employerPension = Math.max(0, roundCurrency(run.totalPension - totalEmployeePension));
 
         // Lines for the journal entry
         const lines = [
@@ -141,6 +144,13 @@ class PayrollEngine {
                 debit: run.totalGross,
                 credit: 0
             },
+            // DR Employer Pension Expense (employer share)
+            ...(employerPension > 0 ? [{
+                accountCode: "5520",
+                accountName: "Pension Expense",
+                debit: employerPension,
+                credit: 0
+            }] : []),
             // CR PAYE Payable
             {
                 accountCode: "2210",

@@ -17,7 +17,7 @@ export default function ProfessionalProfilePage() {
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-white mb-3">Professional Listing</h1>
                     <p className="text-gray-400">
-                        Manage your professional profile and WhatsApp link to connect with businesses on Insight.
+                        Manage your professional profile and WhatsApp link to connect with businesses on Quantum Ledger.
                     </p>
                 </div>
 
@@ -114,7 +114,7 @@ export default function ProfessionalProfilePage() {
                         <div>
                             <h4 className="font-bold text-blue-300 mb-1 text-sm">Visibility Note</h4>
                             <p className="text-blue-400/70 text-xs leading-relaxed">
-                                Once you save your profile, it will be visible to all businesses using Insight. Make sure your WhatsApp link is correct so they can reach you directly.
+                                Once you save your profile, it will be visible to all businesses using Quantum Ledger. Make sure your WhatsApp link is correct so they can reach you directly.
                             </p>
                         </div>
                     </div>

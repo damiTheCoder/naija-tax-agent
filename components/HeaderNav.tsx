@@ -31,10 +31,10 @@ export default function HeaderNav() {
       <div className="max-w-5xl mx-auto px-6 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative w-9 h-9 overflow-hidden rounded-full transition-all">
-            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" priority />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Insight</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Quantum Ledger</h1>
             <p className="hidden text-xs text-[#666666] sm:block">Smart Nigerian Tax Manager</p>
           </div>
         </Link>

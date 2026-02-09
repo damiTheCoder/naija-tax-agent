@@ -16,6 +16,7 @@ import type { TransactionAnalysis } from './sentenceAnalyzer';
 import { AITransactionValidator, getAIValidator, validateWithAI } from './aiTransactionValidator';
 import type { SystemInterpretation, AIValidationResult } from './aiTransactionValidator';
 import { identifyTransactionNature } from './transactionTaxAnalyzer';
+import { getAccount, getAccountByName } from './doubleEntry';
 
 // ============================================================================
 // TYPES
@@ -159,6 +160,60 @@ function calculateTaxImplications(
     }
 }
 
+const ANALYZER_FALLBACKS = {
+    debit: { code: "5010", name: "Purchases", confidence: 0.3, matchedKeyword: "fallback" },
+    credit: { code: "1020", name: "Bank", confidence: 0.3, matchedKeyword: "fallback" }
+} as const;
+
+const SIMPLE_FALLBACKS = {
+    debit: { code: "5010", name: "Purchases" },
+    credit: { code: "1020", name: "Bank" }
+} as const;
+
+function lookupChartAccount(code?: string, name?: string) {
+    if (code) {
+        const match = getAccount(code);
+        if (match) return match;
+    }
+    if (name) {
+        const matchByName = getAccountByName(name);
+        if (matchByName) return matchByName;
+    }
+    return undefined;
+}
+
+function normalizeAnalyzerAccount(
+    account: TransactionAnalysis["debitAccount"] | undefined,
+    type: "debit" | "credit"
+): TransactionAnalysis["debitAccount"] {
+    const fallback = ANALYZER_FALLBACKS[type];
+    const base = { ...fallback, ...(account || {}) };
+    const chartAccount = lookupChartAccount(base.code, base.name);
+    if (chartAccount) {
+        base.code = chartAccount.code;
+        base.name = chartAccount.name;
+    }
+    if (!base.matchedKeyword) {
+        base.matchedKeyword = "fallback";
+    }
+    if (typeof base.confidence !== "number") {
+        base.confidence = 0.4;
+    }
+    return base;
+}
+
+function normalizeSimpleAccount(
+    account: { code?: string; name?: string } | undefined,
+    type: "debit" | "credit"
+): { code: string; name: string } {
+    const fallback = SIMPLE_FALLBACKS[type];
+    const chartAccount = lookupChartAccount(account?.code, account?.name);
+    if (chartAccount) {
+        return { code: chartAccount.code, name: chartAccount.name };
+    }
+    return fallback;
+}
+
 // ============================================================================
 // INTEGRATED PROCESSOR
 // ============================================================================
@@ -181,6 +236,8 @@ export async function processTransaction(
     auditLog.push('[Layer 1] Starting system logic analysis...');
 
     const layer1Result = analyzeTransactionText(transactionText, amount || 0);
+    const debitAccount = normalizeAnalyzerAccount(layer1Result.debitAccount, "debit");
+    const creditAccount = normalizeAnalyzerAccount(layer1Result.creditAccount, "credit");
 
     // Extract amount from text if not provided
     const extractedAmount = amount || layer1Result.amount;
@@ -192,8 +249,8 @@ export async function processTransaction(
         date: new Date().toISOString(),
         narration: transactionText,
         lines: [
-            { accountCode: layer1Result.debitAccount.code, accountName: layer1Result.debitAccount.name, debit: extractedAmount, credit: 0 },
-            { accountCode: layer1Result.creditAccount.code, accountName: layer1Result.creditAccount.name, debit: 0, credit: extractedAmount }
+            { accountCode: debitAccount.code, accountName: debitAccount.name, debit: extractedAmount, credit: 0 },
+            { accountCode: creditAccount.code, accountName: creditAccount.name, debit: 0, credit: extractedAmount }
         ],
         // Required JournalEntry fields
         isBalanced: true,
@@ -207,18 +264,18 @@ export async function processTransaction(
 
     const nature = identifyTransactionNature(mockEntry);
     auditLog.push(`[Layer 1] Nature identified: ${nature}`);
-    auditLog.push(`[Layer 1] Accounts: DR ${layer1Result.debitAccount.code} ${layer1Result.debitAccount.name}, CR ${layer1Result.creditAccount.code} ${layer1Result.creditAccount.name}`);
+    auditLog.push(`[Layer 1] Accounts: DR ${debitAccount.code} ${debitAccount.name}, CR ${creditAccount.code} ${creditAccount.name}`);
 
     // Calculate tax implications based on nature
     const taxImplications = calculateTaxImplications(nature, extractedAmount);
 
     const layer1Final = {
-        debitAccount: layer1Result.debitAccount,
-        creditAccount: layer1Result.creditAccount,
+        debitAccount,
+        creditAccount,
         flow: layer1Result.flow,
         isCredit: layer1Result.isCredit,
         nature,
-        confidence: Math.max(layer1Result.debitAccount.confidence, layer1Result.creditAccount.confidence)
+        confidence: Math.max(debitAccount.confidence, creditAccount.confidence)
     };
 
     auditLog.push(`[Layer 1] Confidence: ${(layer1Final.confidence * 100).toFixed(0)}%`);
@@ -235,8 +292,8 @@ export async function processTransaction(
 
         const systemInterpretation: SystemInterpretation = {
             transactionText,
-            debitAccount: layer1Result.debitAccount,
-            creditAccount: layer1Result.creditAccount,
+            debitAccount: { code: debitAccount.code, name: debitAccount.name },
+            creditAccount: { code: creditAccount.code, name: creditAccount.name },
             amount: extractedAmount,
             nature,
             taxImplications,
@@ -272,12 +329,14 @@ export async function processTransaction(
     // Use Layer 2 result if available, otherwise Layer 1
     const finalInterpretation = layer2Result?.finalInterpretation || {
         transactionText,
-        debitAccount: layer1Result.debitAccount,
-        creditAccount: layer1Result.creditAccount,
+        debitAccount: { code: debitAccount.code, name: debitAccount.name },
+        creditAccount: { code: creditAccount.code, name: creditAccount.name },
         amount: extractedAmount,
         nature,
         taxImplications
     };
+    const normalizedFinalDebit = normalizeSimpleAccount(finalInterpretation.debitAccount, "debit");
+    const normalizedFinalCredit = normalizeSimpleAccount(finalInterpretation.creditAccount, "credit");
 
     return {
         transactionText,
@@ -285,8 +344,8 @@ export async function processTransaction(
         layer1: layer1Final,
         layer2: layer2Result,
         final: {
-            debitAccount: finalInterpretation.debitAccount,
-            creditAccount: finalInterpretation.creditAccount,
+            debitAccount: normalizedFinalDebit,
+            creditAccount: normalizedFinalCredit,
             amount: extractedAmount,
             nature: finalInterpretation.nature || nature,
             taxImplications: {

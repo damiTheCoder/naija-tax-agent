@@ -13,7 +13,7 @@
  * 2. Correct tax treatment (VAT, WHT, PAYE, CGT per FIRS rules)
  */
 
-import { CHART_OF_ACCOUNTS } from './doubleEntry';
+import { CHART_OF_ACCOUNTS, getAccount, getAccountByName } from './doubleEntry';
 
 // ============================================================================
 // CONFIGURATION
@@ -23,6 +23,12 @@ import { CHART_OF_ACCOUNTS } from './doubleEntry';
 const AI_PROVIDER = process.env.AI_VALIDATION_PROVIDER || 'gemini';
 const CLAWDBOT_API_URL = process.env.CLAWDBOT_API_URL || 'http://localhost:8080';
 const CLAWDBOT_API_KEY = process.env.CLAWDBOT_API_KEY || '';
+const VALIDATION_RETRY_LIMIT = 2;
+const VALIDATION_RETRY_DELAY_MS = 300;
+const DEFAULT_DEBIT_ACCOUNT = { code: "5010", name: "Purchases" };
+const DEFAULT_CREDIT_ACCOUNT = { code: "1020", name: "Bank" };
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ============================================================================
 // TYPES
@@ -119,6 +125,21 @@ function getChartOfAccountsSummary(): string {
     return summary;
 }
 
+function ensureChartAccount(
+    account: { code?: string; name?: string } | undefined,
+    fallback: { code: string; name: string }
+): { code: string; name: string } {
+    if (account) {
+        const chartAccount =
+            (account.code && getAccount(account.code)) ||
+            (account.name && getAccountByName(account.name));
+        if (chartAccount) {
+            return { code: chartAccount.code, name: chartAccount.name };
+        }
+    }
+    return fallback;
+}
+
 // ============================================================================
 // CLAWDBOT AI VALIDATOR CLASS
 // ============================================================================
@@ -172,26 +193,33 @@ export class AITransactionValidator {
             };
         }
 
-        try {
-            if (this.provider === 'clawdbot') {
-                return await this.validateWithClawdbot(systemInterpretation, startTime);
-            } else {
-                return await this.validateWithGemini(systemInterpretation, startTime);
+        let lastError: unknown = null;
+        for (let attempt = 1; attempt <= VALIDATION_RETRY_LIMIT; attempt++) {
+            try {
+                if (this.provider === 'clawdbot') {
+                    return await this.validateWithClawdbot(systemInterpretation, startTime);
+                } else {
+                    return await this.validateWithGemini(systemInterpretation, startTime);
+                }
+            } catch (error) {
+                lastError = error;
+                console.error(`[AI Validator] Attempt ${attempt} failed:`, error);
+                if (attempt < VALIDATION_RETRY_LIMIT) {
+                    await sleep(VALIDATION_RETRY_DELAY_MS * attempt);
+                }
             }
-        } catch (error) {
-            console.error('[AI Validator] Error:', error);
-
-            // On error, return system interpretation with warning
-            return {
-                validated: true,
-                corrected: false,
-                corrections: [],
-                finalInterpretation: systemInterpretation,
-                confidence: systemInterpretation.confidence || 0.5,
-                reasoning: `AI validation failed: ${error instanceof Error ? error.message : 'Unknown error'}. Using system logic.`,
-                processingTimeMs: Date.now() - startTime
-            };
         }
+
+        // On repeated failure, return system interpretation with warning
+        return {
+            validated: true,
+            corrected: false,
+            corrections: [],
+            finalInterpretation: systemInterpretation,
+            confidence: systemInterpretation.confidence || 0.5,
+            reasoning: `AI validation failed after retries: ${lastError instanceof Error ? lastError.message : 'Unknown error'}. Using system logic.`,
+            processingTimeMs: Date.now() - startTime
+        };
     }
 
     /**
@@ -369,6 +397,12 @@ Validate this interpretation and correct any errors. Respond with JSON only.`;
                     };
                 }
             }
+
+            finalInterpretation = {
+                ...finalInterpretation,
+                debitAccount: ensureChartAccount(finalInterpretation.debitAccount, DEFAULT_DEBIT_ACCOUNT),
+                creditAccount: ensureChartAccount(finalInterpretation.creditAccount, DEFAULT_CREDIT_ACCOUNT)
+            };
 
             return {
                 validated: parsed.validated ?? true,

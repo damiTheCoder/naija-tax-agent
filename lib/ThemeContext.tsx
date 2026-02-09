@@ -15,15 +15,36 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [theme, setTheme] = useState<Theme>("light");
     const [mounted, setMounted] = useState(false);
+    const [hasUserPreference, setHasUserPreference] = useState(false);
 
-    // Load theme from localStorage on mount
+    // Load theme from localStorage or fall back to system preference
     useEffect(() => {
         const stored = localStorage.getItem("theme") as Theme | null;
         if (stored === "dark" || stored === "light") {
             setTheme(stored);
+            setHasUserPreference(true);
+        } else {
+            const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            setTheme(systemPrefersDark ? "dark" : "light");
         }
         setMounted(true);
     }, []);
+
+    // Watch for OS/browser theme changes when user hasn't picked a preference
+    useEffect(() => {
+        if (!mounted || hasUserPreference) return;
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+            setTheme(event.matches ? "dark" : "light");
+        };
+        if (typeof media.addEventListener === "function") {
+            media.addEventListener("change", handleChange);
+            return () => media.removeEventListener("change", handleChange);
+        } else if (typeof media.addListener === "function") {
+            media.addListener(handleChange);
+            return () => media.removeListener(handleChange);
+        }
+    }, [mounted, hasUserPreference]);
 
     // Apply theme class to document
     useEffect(() => {
@@ -35,10 +56,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         } else {
             root.classList.remove("dark");
         }
-        localStorage.setItem("theme", theme);
     }, [theme, mounted]);
 
+    // Persist only explicit user preferences
+    useEffect(() => {
+        if (!mounted) return;
+        if (hasUserPreference) {
+            localStorage.setItem("theme", theme);
+        } else {
+            localStorage.removeItem("theme");
+        }
+    }, [theme, mounted, hasUserPreference]);
+
     const toggleTheme = () => {
+        setHasUserPreference(true);
         setTheme((prev) => (prev === "light" ? "dark" : "light"));
     };
 

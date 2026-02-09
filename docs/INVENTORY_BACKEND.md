@@ -19,7 +19,7 @@ This document describes the backend architecture for the **Inventory Intelligenc
 
 ## Overview
 
-Inventory Intelligence is a standalone module within the Insight application that provides:
+Inventory Intelligence is a standalone module within the Quantum Ledger application that provides:
 
 - **Multi-location inventory tracking** (warehouse + branches)
 - **Purchase Order management** with receiving workflow

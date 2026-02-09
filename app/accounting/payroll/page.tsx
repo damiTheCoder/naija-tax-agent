@@ -9,13 +9,15 @@ const MONTHS = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
 ];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) => CURRENT_YEAR - 2 + index);
 
 export default function PayrollDashboard() {
     const [runs, setRuns] = useState<PayrollRun[]>([]);
     const [showNewRunModal, setShowNewRunModal] = useState(false);
     const [showAuditModal, setShowAuditModal] = useState<PayrollRun | null>(null);
     const [newRunMonth, setNewRunMonth] = useState(MONTHS[new Date().getMonth()]);
-    const [newRunYear, setNewRunYear] = useState(new Date().getFullYear());
+    const [newRunYear, setNewRunYear] = useState(CURRENT_YEAR);
 
     useEffect(() => {
         setRuns(payrollEngine.getRuns());
@@ -29,13 +31,28 @@ export default function PayrollDashboard() {
             alert("Please add employees in Staff Management first.");
             return;
         }
-        const employees = JSON.parse(savedEmployees);
-        if (employees.length === 0) {
-            alert("No active employees found. Please add employees first.");
+
+        let employees: EmployeeRecord[];
+        try {
+            employees = JSON.parse(savedEmployees);
+        } catch (error) {
+            console.error("Failed to parse employees cache", error);
+            alert("We could not read your saved employees. Please reopen Staff Management and try again.");
             return;
         }
 
-        payrollEngine.createRun(newRunMonth, newRunYear, employees);
+        if (!Array.isArray(employees)) {
+            alert("Saved employees data looks invalid. Please re-save your staff records.");
+            return;
+        }
+
+        const activeEmployees = employees.filter(emp => emp && emp.isActive !== false);
+        if (activeEmployees.length === 0) {
+            alert("No active employees found. Please activate staff in Staff Management first.");
+            return;
+        }
+
+        payrollEngine.createRun(newRunMonth, newRunYear, activeEmployees);
         setShowNewRunModal(false);
     };
 
@@ -227,7 +244,9 @@ export default function PayrollDashboard() {
                                     onChange={e => setNewRunYear(parseInt(e.target.value))}
                                     className="w-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-3.5 text-sm font-bold outline-none"
                                 >
-                                    {[2023, 2024, 2025].map(y => <option key={y} value={y}>{y}</option>)}
+                                    {YEAR_OPTIONS.map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
@@ -287,4 +306,3 @@ export default function PayrollDashboard() {
         </div>
     );
 }
-

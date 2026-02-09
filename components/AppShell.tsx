@@ -221,9 +221,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Logo and Name - Left Side */}
             <Link href="/" className="flex items-center gap-2">
               <div className="relative w-9 h-9 overflow-hidden rounded-full">
-                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" priority />
+                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" priority />
               </div>
-              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Insight</span>
+              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Quantum Ledger</span>
             </Link>
 
             <div className="flex items-center gap-1 flex-shrink-0">
@@ -310,7 +310,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/tax-tools/wht")) return "Withholding Tax";
   if (pathname.includes("/tax-tools/vat")) return "Value Added Tax";
   if (pathname.includes("/tax-tools/cgt")) return "Capital Gains Tax";
-  return "Insight";
+  return "Quantum Ledger";
 }
 
 function getPageDescription(pathname: string): string {

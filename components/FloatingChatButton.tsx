@@ -184,9 +184,9 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     },
     default: {
         id: "general",
-        name: "Insight",
-        title: "Insight Assistant",
-        placeholder: "Ask Insight...",
+        name: "Quantum Ledger",
+        title: "Quantum Ledger Assistant",
+        placeholder: "Ask Quantum Ledger...",
         greeting: "Hi! I'm your AI financial assistant. How can I help you today?",
         examples: [
             '"Record a transaction"',
@@ -642,7 +642,7 @@ _Ask me anything about bank reconciliation!_`;
 
             return `📊 **Business Overview**\n\nRevenue: ₦${revenue.toLocaleString()}\nExpenses: ₦${expenses.toLocaleString()}\nProfit: ${profit >= 0 ? '+' : ''}₦${profit.toLocaleString()}\nProfit Margin: ${profitMargin}%\n\n_Navigate to specific modules for detailed analysis._`;
         } catch {
-            return "Welcome to Insight! Start by recording transactions in the Accounting module.";
+            return "Welcome to Quantum Ledger! Start by recording transactions in the Accounting module.";
         }
     }, []);
 
@@ -796,7 +796,7 @@ _Ask me anything about bank reconciliation!_`;
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
                         <div
-                            className="relative mt-auto mx-2 mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
+                            className="relative mt-auto mx-1.5 sm:mx-2 mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
                             style={{ animation: "slideUp 0.3s ease-out forwards", maxHeight: "85vh" }}
                         >
                             <div
@@ -808,7 +808,7 @@ _Ask me anything about bank reconciliation!_`;
                             />
                             <div className="relative m-[3px] rounded-[25px] bg-gray-100 dark:bg-[#1a1a1a] flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
                                 {/* Header */}
-                                <div className="flex items-center gap-3 px-5 py-4">
+                                <div className="flex items-center gap-3 px-4 sm:px-5 py-4">
                                     <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
                                         {currentModule.title}
                                     </h3>
@@ -826,7 +826,7 @@ _Ask me anything about bank reconciliation!_`;
                                 </div>
 
                                 {/* Messages */}
-                                <div className="flex-1 overflow-y-auto px-5 pb-4">
+                                <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4">
                                     {messages.map((msg) => (
                                         <div
                                             key={msg.id}
@@ -856,7 +856,7 @@ _Ask me anything about bank reconciliation!_`;
                                 </div>
 
                                 {/* Input */}
-                                <div className="px-4 py-4">
+                                <div className="px-3 sm:px-4 py-4">
                                     <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
                                         <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
