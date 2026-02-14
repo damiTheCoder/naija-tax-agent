@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { calculateMonthlyPayroll } from "@/lib/payroll/calculator";
 import { payrollEngine, PayrollRun } from "@/lib/payroll/payrollEngine";
+import type { EmployeeRecord } from "@/lib/payroll/types";
 import Link from "next/link";
 
 const MONTHS = [

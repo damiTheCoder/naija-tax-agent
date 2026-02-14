@@ -3,25 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { calculateMonthlyPayroll, PayrollResult } from "@/lib/payroll/calculator";
-
-interface EmployeeRecord {
-    id: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    email: string;
-    basicSalary: number;
-    housing: number;
-    transport: number;
-    otherAllowances: number;
-    isActive: boolean;
-    taxId?: string;
-    bankName?: string;
-    accountNumber?: string;
-    department?: string;
-    hireDate?: string;
-    employmentType: "FULL_TIME" | "PART_TIME" | "CONTRACTOR";
-}
+import type { EmployeeRecord } from "@/lib/payroll/types";
 
 const MOCK_EMPLOYEES: EmployeeRecord[] = [
     {
@@ -124,6 +106,12 @@ export default function EmployeesPage() {
             housing: 0,
             transport: 0,
             otherAllowances: 0,
+            taxId: "",
+            bankName: "",
+            accountNumber: "",
+            department: "",
+            employmentType: "FULL_TIME",
+            hireDate: new Date().toISOString().split('T')[0],
         });
     };
 

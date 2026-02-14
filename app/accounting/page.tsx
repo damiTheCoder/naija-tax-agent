@@ -462,6 +462,14 @@ export default function AccountingPage() {
           const accountInfo = debitAccount && creditAccount ?
             `\n📘 **DR ${debitAccount.code}** ${debitAccount.name}\n📕 **CR ${creditAccount.code}** ${creditAccount.name}` : '';
 
+          if (!debitAccount || !creditAccount) {
+            appendMessage(
+              "assistant",
+              `I could not safely determine both accounts for this transaction. ${confidenceText}. Please use manual posting for this one.`,
+            );
+            return;
+          }
+
           // Show AI corrections if any
           const correctionInfo = aiResult.aiCorrected ?
             `\n\n🤖 _AI Correction Applied: ${aiResult.aiReasoning}_` : '';
@@ -474,6 +482,18 @@ export default function AccountingPage() {
           if (aiResult.taxImplications?.cgt > 0) taxInfo.push(`CGT: ₦${aiResult.taxImplications.cgt.toLocaleString()}`);
           const taxLine = taxInfo.length > 0 ? `\n💰 Tax: ${taxInfo.join(' | ')}` : '';
 
+          const requiresManualReview =
+            debitAccount.code === creditAccount.code ||
+            ((aiResult.confidence || 0) < 0.7 && aiResult.aiValidated !== true);
+
+          if (requiresManualReview) {
+            appendMessage(
+              "assistant",
+              `⚠️ I parsed this transaction but it needs review before posting.${accountInfo}${taxLine}\n\nReason: low confidence or conflicting accounts.`,
+            );
+            return;
+          }
+
           try {
             // USE AI-VALIDATED ACCOUNTS - not local backtesting
             const result = accountingEngine.processTransactionWithAIAccounts(
@@ -483,7 +503,10 @@ export default function AccountingPage() {
                 debitName: debitAccount.name,
                 creditCode: creditAccount.code,
                 creditName: creditAccount.name,
-                confidence: aiResult.confidence
+                confidence: aiResult.confidence,
+                reasoning: aiResult.aiReasoning,
+                parsedType: aiResult.parsedType,
+                taxImplications: aiResult.taxImplications,
               }
             );
             setTransactions((prev) => [...prev, newTransaction]);
@@ -866,7 +889,7 @@ export default function AccountingPage() {
   const handleDeleteEntry = (entryId: string) => {
     console.log("[Delete] Attempting to delete entry:", entryId);
 
-    if (!confirm("Are you sure you want to delete this journal entry? This will reverse all related ledger entries.")) {
+    if (!confirm("Are you sure you want to void this journal entry? This will reverse all related ledger entries and keep an audit trail.")) {
       console.log("[Delete] User cancelled");
       return;
     }
@@ -881,8 +904,8 @@ export default function AccountingPage() {
       setAccountingState(updatedState);
       setJournalEntries(updatedState.journalEntries);
 
-      appendMessage("assistant", `🗑️ Deleted journal entry ${entryId}`);
-      pushAutomationActivity("Entry deleted", `Deleted: ${entryId}`);
+      appendMessage("assistant", `🧾 Voided journal entry ${entryId}`);
+      pushAutomationActivity("Entry voided", `Voided: ${entryId}`);
       console.log("[Delete] State refreshed, entries count:", updatedState.journalEntries.length);
     } catch (err: unknown) {
       console.error("[Delete] Error:", err);
@@ -1145,7 +1168,7 @@ export default function AccountingPage() {
                     </div>
                     <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[500px] overflow-y-auto">
                       {journalEntries.slice(-10).reverse().map((entry) => (
-                        <div key={entry.id} className="px-2 py-4 hover:bg-gray-50/50 transition-colors group">
+                        <div key={entry.id} className={`px-2 py-4 hover:bg-gray-50/50 transition-colors group ${entry.status === "voided" ? "opacity-70" : ""}`}>
                           <div className="flex items-start justify-between gap-3 mb-3">
                             <div className="min-w-0 flex-1">
                               <span className="text-xs font-mono text-purple-600">{entry.id}</span>
@@ -1153,21 +1176,26 @@ export default function AccountingPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${entry.status === "voided" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                {entry.status === "voided" ? "VOIDED" : "POSTED"}
+                              </span>
                               {/* Edit/Delete buttons - always visible */}
                               <div className="flex gap-1">
                                 <button
-                                  onClick={() => openEditEntry(entry)}
-                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                                  title="Edit entry"
+                                  onClick={() => entry.status !== "voided" && openEditEntry(entry)}
+                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={entry.status === "voided" ? "Voided entries are read-only" : "Edit entry"}
+                                  disabled={entry.status === "voided"}
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteEntry(entry.id)}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete entry"
+                                  onClick={() => entry.status !== "voided" && handleDeleteEntry(entry.id)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                  title={entry.status === "voided" ? "Entry already voided" : "Void entry"}
+                                  disabled={entry.status === "voided"}
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

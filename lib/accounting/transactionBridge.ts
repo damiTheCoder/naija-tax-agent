@@ -164,6 +164,12 @@ class AccountingEngine {
     let skippedCount = 0;
 
     for (const journalEntry of this.state.journalEntries) {
+      // Only posted entries should impact balances.
+      if (journalEntry.status !== "posted") {
+        skippedCount++;
+        continue;
+      }
+
       // Validate the entry first
       const validation = validateJournalEntry(journalEntry.lines);
 
@@ -317,6 +323,9 @@ class AccountingEngine {
     }
 
     const oldEntry = this.state.journalEntries[entryIndex];
+    if (oldEntry.status !== "posted") {
+      throw new Error(`Journal entry ${entryId} is ${oldEntry.status} and cannot be edited`);
+    }
 
     // Validate new lines balance
     const totalDebits = updates.lines.reduce((sum, l) => sum + l.debit, 0);
@@ -366,12 +375,22 @@ class AccountingEngine {
     }
 
     const entry = this.state.journalEntries[entryIndex];
+    if (entry.status === "voided") {
+      return;
+    }
 
     // Reverse the entry from ledger
     this.reverseFromLedger(entry);
 
-    // Remove from state
-    this.state.journalEntries.splice(entryIndex, 1);
+    // Keep immutable history and mark as voided instead of hard delete.
+    this.state.journalEntries[entryIndex] = {
+      ...entry,
+      status: "voided",
+      updatedAt: new Date().toISOString(),
+      reasoning: entry.reasoning
+        ? `${entry.reasoning} | Voided by user action`
+        : "Voided by user action",
+    };
     this.notify();
   }
 
@@ -448,6 +467,12 @@ class AccountingEngine {
       creditCode: string;
       creditName: string;
       confidence: number;
+      reasoning?: string;
+      parsedType?: string;
+      taxImplications?: {
+        outputVAT?: number;
+        inputVAT?: number;
+      };
     }
   ): {
     journalEntry: JournalEntry;
@@ -455,14 +480,28 @@ class AccountingEngine {
   } {
     const journalId = generateJournalId();
     const amount = rawTx.amount;
+    const outputVAT = Math.max(0, aiAccounts.taxImplications?.outputVAT || 0);
+    const inputVAT = Math.max(0, aiAccounts.taxImplications?.inputVAT || 0);
 
-    // Create journal entry with AI-validated accounts
-    const journalEntry: JournalEntry = {
-      id: journalId,
-      date: rawTx.date,
-      reference: rawTx.id,
-      narration: rawTx.description,
-      lines: [
+    let lines: JournalLine[] = [
+      {
+        accountCode: aiAccounts.debitCode,
+        accountName: aiAccounts.debitName,
+        debit: amount,
+        credit: 0,
+      },
+      {
+        accountCode: aiAccounts.creditCode,
+        accountName: aiAccounts.creditName,
+        debit: 0,
+        credit: amount,
+      },
+    ];
+
+    // Split VAT into control accounts for enterprise-grade posting.
+    if (outputVAT > 0 && outputVAT < amount && aiAccounts.creditCode.startsWith("4")) {
+      const netRevenue = Math.max(0, amount - outputVAT);
+      lines = [
         {
           accountCode: aiAccounts.debitCode,
           accountName: aiAccounts.debitName,
@@ -473,14 +512,54 @@ class AccountingEngine {
           accountCode: aiAccounts.creditCode,
           accountName: aiAccounts.creditName,
           debit: 0,
+          credit: netRevenue,
+        },
+        {
+          accountCode: "2200",
+          accountName: "Output VAT Payable",
+          debit: 0,
+          credit: outputVAT,
+        },
+      ];
+    } else if (inputVAT > 0 && inputVAT < amount && (aiAccounts.debitCode.startsWith("5") || aiAccounts.debitCode.startsWith("15"))) {
+      const netExpenseOrAsset = Math.max(0, amount - inputVAT);
+      lines = [
+        {
+          accountCode: aiAccounts.debitCode,
+          accountName: aiAccounts.debitName,
+          debit: netExpenseOrAsset,
+          credit: 0,
+        },
+        {
+          accountCode: "1400",
+          accountName: "Input VAT Receivable",
+          debit: inputVAT,
+          credit: 0,
+        },
+        {
+          accountCode: aiAccounts.creditCode,
+          accountName: aiAccounts.creditName,
+          debit: 0,
           credit: amount,
         },
-      ],
+      ];
+    }
+
+    // Create journal entry with AI-validated accounts
+    const journalEntry: JournalEntry = {
+      id: journalId,
+      date: rawTx.date,
+      reference: rawTx.id,
+      narration: rawTx.description,
+      lines,
       isBalanced: true,
       totalDebits: amount,
       totalCredits: amount,
       transactionType: rawTx.type as TransactionType || 'other',
       status: "posted",
+      source: "ai-validated",
+      confidence: aiAccounts.confidence,
+      reasoning: aiAccounts.reasoning,
       createdAt: new Date().toISOString(),
       postedAt: new Date().toISOString(),
     };

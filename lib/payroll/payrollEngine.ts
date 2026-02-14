@@ -51,7 +51,9 @@ class PayrollEngine {
 
     subscribe(listener: (runs: PayrollRun[]) => void) {
         this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
+        return () => {
+            this.listeners.delete(listener);
+        };
     }
 
     getRuns() {
