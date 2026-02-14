@@ -8,6 +8,7 @@ import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, PERSONAL_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
+import BottomSidebar from "./BottomSidebar";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -176,6 +177,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             ))}
           </div>
         )}
+
+        <div className="px-2 pb-4 pt-3 border-t border-white/10">
+          <BottomSidebar variant="sidebar" />
+        </div>
       </aside>
 
       {/* Mobile Slide Panel - Right side, dark theme */}

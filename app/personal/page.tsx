@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
 import { generatePfmResponse } from "./action";
 import { BarChart2, Wallet, RefreshCw, Layers, Send } from "lucide-react";
+import { playGoogleButtonClickSound } from "@/lib/sounds";
 
 type ChatMessage = {
     id: string;
@@ -58,6 +59,9 @@ export default function PersonalChatPage() {
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const hasMessages = messages.length > 0;
+    const chatAreaBottomPaddingClass = isExpanded
+        ? "pb-[calc(19rem+env(safe-area-inset-bottom))] sm:pb-64 lg:pb-52"
+        : "pb-[calc(9rem+env(safe-area-inset-bottom))] sm:pb-36 lg:pb-28";
 
     // Auto-scroll
     useEffect(() => {
@@ -144,12 +148,12 @@ export default function PersonalChatPage() {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-80px)] -mx-2 -my-4 lg:-mx-8 lg:-my-8 relative">
+        <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-80px)] -mx-2 lg:-mx-8 relative">
             {/* Chat Area */}
-            <div className={`flex-1 overflow-y-auto transition-all duration-300 ${isExpanded ? "pb-24" : "pb-10"}`}>
+            <div className={`flex-1 overflow-y-auto pt-2 sm:pt-3 transition-all duration-300 ${chatAreaBottomPaddingClass}`}>
                 {!hasMessages ? (
                     /* ── Welcome State ── */
-                    <div className="flex flex-col items-center justify-center h-full px-4">
+                    <div className="flex flex-col items-center justify-start lg:justify-center min-h-full px-4 pt-4 lg:pt-0 pb-3">
                         <div className="max-w-2xl w-full text-center space-y-8">
                             {/* Google Logo / AI Branding */}
                             <div className="flex justify-center">
@@ -265,23 +269,23 @@ export default function PersonalChatPage() {
             </div>
 
             {/* ── Expanding Composer / FAB ── */}
-            <div className={`fixed bottom-4 lg:bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-3xl px-4 z-50 transition-all duration-500 ease-in-out`}>
+            <div className={`fixed bottom-6 left-1/2 lg:left-[calc(50%_+_7.5rem)] transform -translate-x-1/2 flex justify-center z-50 transition-all duration-500 ease-in-out w-auto`}>
                 {!isExpanded ? (
-                    // Floating Action Button
+                    // Floating Action Button - same style as accounting button
                     <button
-                        onClick={() => setIsExpanded(true)}
-                        className={`
-                            mx-auto flex items-center justify-center gap-2 px-5 py-3 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95
-                            bg-[#2264ff] text-white hover:bg-[#1b54d9]
-                        `}
+                        onClick={() => {
+                            playGoogleButtonClickSound();
+                            setIsExpanded(true);
+                        }}
+                        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                     >
-                        <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 rounded-full bg-white p-0.5" />
-                        <span className="font-semibold text-sm">Chat</span>
+                        <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 flex-shrink-0 rounded-full" />
+                        <span className="font-semibold text-sm text-white">Chat</span>
                     </button>
                 ) : (
                     // Expanded Composer
                     <div className={`
-                        flex flex-col gap-2 rounded-3xl border px-4 py-3 shadow-2xl animate-in slide-in-from-bottom-5 fade-in duration-300
+                        w-[90vw] max-w-2xl flex flex-col gap-2 rounded-3xl border px-4 py-3 shadow-2xl animate-in slide-in-from-bottom-5 fade-in duration-300
                         ${isDark
                             ? "border-gray-700 bg-gray-900 focus-within:border-gray-500"
                             : "border-gray-200 bg-white focus-within:border-gray-300"
@@ -289,8 +293,8 @@ export default function PersonalChatPage() {
                     `}>
                         {/* Header in Expanded State */}
                         <div className="flex items-center gap-2 mb-1 px-1">
-                            <img src="/google-logo.jpg" alt="Google" className="w-7 h-7 rounded-full" />
-                            <span className={`text-xs font-semibold ${isDark ? "text-gray-300" : "text-gray-500"}`}>
+                            <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 rounded-full" />
+                            <span className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-gray-500"}`}>
                                 Chat with Finance AI
                             </span>
                         </div>

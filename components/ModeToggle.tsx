@@ -2,46 +2,64 @@
 
 import { useMode } from "@/lib/ModeContext";
 
+function EnterpriseIcon({ className }: { className: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 21h16" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21V7.5A1.5 1.5 0 018.5 6h7A1.5 1.5 0 0117 7.5V21" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 10h.01M14 10h.01M10 13h.01M14 13h.01M10 16h.01M14 16h.01" />
+    </svg>
+  );
+}
+
+function PersonalIcon({ className }: { className: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20a7.5 7.5 0 0115 0" />
+    </svg>
+  );
+}
+
 export function DesktopModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
+  const activeModeLabel = isUser ? "Personal" : "Enterprise";
 
   return (
-    <button
-      onClick={toggleMode}
-      className="relative isolate flex items-center gap-2 rounded-full px-2 py-1.5 text-xs font-semibold tracking-wide transition-all"
-      style={{
-        background: isUser ? "linear-gradient(135deg, #1f2937, #0f172a)" : "#ecf2ff",
-        color: isUser ? "#e5e7ff" : "#1d4ed8",
-        boxShadow: isUser ? "0 4px 25px rgba(15,23,42,0.35)" : "0 1px 2px rgba(15,23,42,0.1)",
-      }}
-      aria-label={isUser ? "Switch to enterprise experience" : "Switch to user experience"}
-    >
-      <span className={`relative z-10 flex items-center gap-1 px-3 py-1 rounded-full transition-all ${!isUser ? "bg-white text-[#1d4ed8]" : "text-white/70"}`}>
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 6l9-4 9 4M4 10v11m16-11v11" />
-        </svg>
-        Enterprise
+    <div className="flex items-center gap-2">
+      <span
+        className="text-sm font-semibold tracking-wide"
+        style={{ color: "#1e3a8a" }}
+      >
+        {activeModeLabel}
       </span>
-      <span className={`relative z-10 flex items-center gap-1 px-3 py-1 rounded-full transition-all ${isUser ? "bg-white/10 text-white" : "text-[#64748b]"}`}>
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20a7.5 7.5 0 0115 0" />
-        </svg>
-        Personal
-      </span>
-      <div
-        className="absolute top-1 bottom-1 rounded-full bg-white transition-all duration-300"
+      <button
+        onClick={toggleMode}
+        role="switch"
+        aria-checked={isUser}
+        className="relative inline-flex h-9 w-16 items-center rounded-full transition-colors"
         style={{
-          width: "48%",
-          left: isUser ? "50%" : "2%",
-          boxShadow: "0 8px 15px rgba(0,0,0,0.12)",
-          opacity: isUser ? 0.15 : 1,
-          pointerEvents: "none",
-          zIndex: 0,
+          background: isUser ? "#1e3a8a" : "#dbe2ea",
+          boxShadow: "none",
         }}
-        aria-hidden="true"
-      />
-    </button>
+        aria-label={isUser ? "Switch to enterprise experience" : "Switch to personal experience"}
+      >
+        <span
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-transform duration-300 ${isUser ? "translate-x-8" : "translate-x-1"}`}
+          style={{
+            background: "#ffffff",
+            color: "#1e3a8a",
+            boxShadow: "none",
+          }}
+        >
+          {isUser ? (
+            <PersonalIcon className="w-3.5 h-3.5" />
+          ) : (
+            <EnterpriseIcon className="w-3.5 h-3.5" />
+          )}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -60,13 +78,9 @@ export function MobileModeToggle() {
       aria-label={isUser ? "Switch to enterprise experience" : "Switch to user experience"}
     >
       {isUser ? (
-        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20a7.5 7.5 0 0115 0" />
-        </svg>
+        <PersonalIcon className="w-4 h-4 text-white" />
       ) : (
-        <svg className="w-4 h-4 text-[#2264ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M3 6l9-4 9 4M4 10v11m16-11v11" />
-        </svg>
+        <EnterpriseIcon className="w-4 h-4 text-[#1e3a8a]" />
       )}
     </button>
   );

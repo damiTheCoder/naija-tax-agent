@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
-import { APP_LOGO_SRC, APP_LOGO_ROUNDED_SRC } from "@/lib/constants";
+import { APP_LOGO_ROUNDED_SRC } from "@/lib/constants";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { NavigationProvider } from "@/lib/NavigationContext";
 import { WorkspaceProvider } from "@/lib/WorkspaceContext";
@@ -34,6 +34,14 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,6 +49,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="color-scheme" content="light dark" />
+        <meta name="supported-color-schemes" content="light dark" />
+      </head>
       <body className="font-sans antialiased">
         <ThemeProvider>
           <ModeProvider>

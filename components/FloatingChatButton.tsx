@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
+import { playGoogleButtonClickSound } from "@/lib/sounds";
 
 // ============================================================================
 // CLAWDBOT INTEGRATION
@@ -762,8 +763,11 @@ _Ask me anything about bank reconciliation!_`;
         <>
             {/* Floating Chat Button */}
             <button
-                onClick={() => setIsModalOpen(true)}
-                className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center justify-center bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${isExpanded ? "gap-2" : "gap-0"}`}
+                onClick={() => {
+                    playGoogleButtonClickSound();
+                    setIsModalOpen(true);
+                }}
+                className={`fixed bottom-8 left-1/2 lg:left-[calc(50%_+_7.5rem)] -translate-x-1/2 z-40 flex items-center justify-center bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${isExpanded ? "gap-2" : "gap-0"}`}
                 aria-label="Open chat"
             >
                 {/* Red badge for clarification */}
@@ -788,7 +792,7 @@ _Ask me anything about bank reconciliation!_`;
             {
                 isModalOpen && (
                     <div
-                        className="fixed inset-0 z-[100] flex flex-col"
+                        className="fixed inset-0 z-[100] flex flex-col lg:pl-60"
                         onClick={(e) => {
                             if (e.target === e.currentTarget) setIsModalOpen(false);
                         }}

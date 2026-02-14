@@ -288,7 +288,7 @@ export async function processTransaction(
     let aiCorrectionsMade = false;
 
     if (validator.isAIEnabled()) {
-        auditLog.push('[Layer 2] AI validation enabled, sending to Clawdbot...');
+        auditLog.push(`[Layer 2] AI validation enabled, sending to ${validator.getProvider()}...`);
 
         const systemInterpretation: SystemInterpretation = {
             transactionText,

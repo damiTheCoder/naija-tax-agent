@@ -20,15 +20,46 @@ import { CHART_OF_ACCOUNTS, getAccount, getAccountByName } from './doubleEntry';
 // ============================================================================
 
 // AI Provider: 'clawdbot' or 'gemini' (for backward compatibility)
-const AI_PROVIDER = process.env.AI_VALIDATION_PROVIDER || 'gemini';
+const RAW_AI_PROVIDER = process.env.AI_VALIDATION_PROVIDER || 'gemini';
 const CLAWDBOT_API_URL = process.env.CLAWDBOT_API_URL || 'http://localhost:8080';
 const CLAWDBOT_API_KEY = process.env.CLAWDBOT_API_KEY || '';
 const VALIDATION_RETRY_LIMIT = 2;
 const VALIDATION_RETRY_DELAY_MS = 300;
 const DEFAULT_DEBIT_ACCOUNT = { code: "5010", name: "Purchases" };
 const DEFAULT_CREDIT_ACCOUNT = { code: "1020", name: "Bank" };
+const DEFAULT_GEMINI_MODEL_CANDIDATES = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function normalizeProvider(provider: string | undefined): 'clawdbot' | 'gemini' {
+    const normalized = (provider || '').trim().toLowerCase();
+    if (['clawdbot', 'claw', 'clawdbot-ai'].includes(normalized)) return 'clawdbot';
+    if (['gemini', 'google', 'google-gemini', 'google_gemini'].includes(normalized)) return 'gemini';
+    return 'gemini';
+}
+
+function resolveGeminiApiKey(): string {
+    const keys = [
+        process.env.GOOGLE_GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY,
+        process.env.GOOGLE_API_KEY,
+        process.env.NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY,
+        process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+    ];
+
+    for (const key of keys) {
+        const value = (key || '').trim();
+        if (value && value !== 'your_api_key_here') return value;
+    }
+    return '';
+}
+
+function resolveGeminiModels(): string[] {
+    const configured = (process.env.GOOGLE_GEMINI_MODEL || process.env.GEMINI_MODEL || '')
+        .trim();
+    const models = configured ? [configured, ...DEFAULT_GEMINI_MODEL_CANDIDATES] : DEFAULT_GEMINI_MODEL_CANDIDATES;
+    return Array.from(new Set(models));
+}
 
 // ============================================================================
 // TYPES
@@ -146,19 +177,20 @@ function ensureChartAccount(
 
 export class AITransactionValidator {
     private isEnabled: boolean = true;
-    private provider: string = AI_PROVIDER;
+    private provider: 'clawdbot' | 'gemini' = normalizeProvider(RAW_AI_PROVIDER);
+    private geminiApiKey: string = '';
 
     constructor() {
         const enabled = process.env.ENABLE_AI_VALIDATION !== 'false';
+        this.geminiApiKey = resolveGeminiApiKey();
 
         if (enabled && this.provider === 'clawdbot') {
             this.isEnabled = true;
             console.log('[AI Validator] Initialized with Clawdbot');
         } else if (enabled && this.provider === 'gemini') {
-            // Legacy Gemini support - check for API key
-            const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-            this.isEnabled = !!apiKey && apiKey !== 'your_api_key_here';
-            console.log(`[AI Validator] Gemini mode - ${this.isEnabled ? 'enabled' : 'disabled'}`);
+            // Gemini support - check for API key aliases
+            this.isEnabled = !!this.geminiApiKey;
+            console.log(`[AI Validator] Gemini mode - ${this.isEnabled ? 'enabled' : 'disabled (missing API key)'}`);
         } else {
             this.isEnabled = false;
             console.log('[AI Validator] Disabled by configuration');
@@ -170,6 +202,10 @@ export class AITransactionValidator {
      */
     isAIEnabled(): boolean {
         return this.isEnabled;
+    }
+
+    getProvider(): 'clawdbot' | 'gemini' {
+        return this.provider;
     }
 
     /**
@@ -271,19 +307,42 @@ export class AITransactionValidator {
         interpretation: SystemInterpretation,
         startTime: number
     ): Promise<AIValidationResult> {
+        if (!this.geminiApiKey) {
+            throw new Error('Gemini API key not configured. Set GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY/GOOGLE_API_KEY).');
+        }
+
         // Dynamic import for Gemini (only if needed)
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
-        const apiKey = process.env.GOOGLE_GEMINI_API_KEY!;
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const genAI = new GoogleGenerativeAI(this.geminiApiKey);
+        const modelCandidates = resolveGeminiModels();
 
         const prompt = this.buildPrompt(interpretation);
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response?.text?.() || '';
+        let text = '';
+        let lastGeminiError: unknown = null;
+
+        for (const modelName of modelCandidates) {
+            try {
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent({
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.2,
+                        responseMimeType: 'application/json',
+                    }
+                });
+                const response = await result.response;
+                text = response?.text?.() || '';
+                if (text.trim().length > 0) {
+                    break;
+                }
+            } catch (error) {
+                lastGeminiError = error;
+                console.error(`[AI Validator] Gemini model ${modelName} failed:`, error);
+            }
+        }
 
         if (!text || text.trim().length === 0) {
-            throw new Error('Empty response from Gemini');
+            throw new Error(`Empty response from Gemini. Last error: ${lastGeminiError instanceof Error ? lastGeminiError.message : 'Unknown error'}`);
         }
 
         const aiResult = this.parseAIResponse(text, interpretation);
@@ -340,7 +399,18 @@ Validate this interpretation and correct any errors. Respond with JSON only.`;
                 jsonStr = jsonStr.replace(/^```\n?/, '').replace(/\n?```$/, '');
             }
 
-            const parsed = JSON.parse(jsonStr);
+            let parsed: Record<string, any>;
+            try {
+                parsed = JSON.parse(jsonStr);
+            } catch {
+                const start = jsonStr.indexOf('{');
+                const end = jsonStr.lastIndexOf('}');
+                if (start >= 0 && end > start) {
+                    parsed = JSON.parse(jsonStr.slice(start, end + 1));
+                } else {
+                    throw new Error('No JSON object found in AI response');
+                }
+            }
 
             // Start with fallback interpretation
             let finalInterpretation = { ...fallback };

@@ -3,7 +3,7 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: only light;
   /* Brand Colors - Blue & Black */
   --font-glacial: "Glacial Indifference", sans-serif;
   --background: #ffffff;
@@ -29,7 +29,7 @@
 
 /* Dark Mode */
 .dark {
-  color-scheme: dark;
+  color-scheme: only dark;
   --background: #000000;
   --foreground: #ffffff;
   --card-bg: #1a1a1a;
@@ -42,25 +42,27 @@
   --border-color: #333333;
 }
 
-/* ============================================
-   DARK MODE - COMPREHENSIVE OVERRIDES
-   Main containers: #1a1a1a (darker grey)
-   Sub containers:  #2a2a2a (lighter grey)
-   ============================================ */
-
-/* Force all elements with white-ish backgrounds to dark grey */
-.dark div,
-.dark section,
-.dark article,
-.dark aside,
-.dark main,
-.dark header,
-.dark footer,
-.dark nav {
-  background-color: inherit;
+html {
+  background: var(--background);
+  color: var(--foreground);
 }
 
-/* Primary white backgrounds -> dark grey */
+html.dark {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* ============================================
+   DARK MODE - SAFE GLOBAL NORMALIZATION
+   Keep layout structure intact while remapping light tokens.
+   ============================================ */
+
+.dark body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Light surfaces -> dark surfaces */
 .dark [class*="bg-white"],
 .dark [class*="bg-[#fff"],
 .dark [class*="bg-[#FFFFFF"],
@@ -68,101 +70,19 @@
 .dark [class*="bg-[#f5f5"],
 .dark [class*="bg-gray-50"],
 .dark [class*="bg-gray-100"] {
-  background-color: #1a1a1a !important;
+  background-color: #111111 !important;
 }
 
-/* Nested/sub backgrounds -> lighter grey */
-.dark [class*="bg-white"] [class*="bg-white"],
-.dark [class*="bg-white"] [class*="bg-gray-"],
-.dark [class*="bg-gray-50"] [class*="bg-white"],
-.dark [class*="bg-[#f5f5"] [class*="bg-white"] {
-  background-color: #2a2a2a !important;
-}
-
-/* Light grey backgrounds -> slightly lighter dark */
 .dark [class*="bg-gray-200"],
 .dark [class*="bg-gray-300"],
 .dark [class*="bg-[#e0e0"],
-.dark [class*="bg-[#e8e8"] {
-  background-color: #333333 !important;
+.dark [class*="bg-[#e8e8"],
+.dark [class*="bg-[#e5e5e5]"],
+.dark [class*="bg-[#f5f5f7]"] {
+  background-color: #1f1f1f !important;
 }
 
-/* Preserve semantic icon backgrounds in dark mode */
-.dark [class*="bg-orange-100"] {
-  background-color: rgb(124, 45, 18) !important;
-  /* orange-900 */
-}
-
-.dark [class*="bg-emerald-100"] {
-  background-color: rgb(6, 78, 59) !important;
-  /* emerald-900 */
-}
-
-.dark [class*="bg-rose-100"] {
-  background-color: rgb(136, 19, 55) !important;
-  /* rose-900 */
-}
-
-.dark [class*="bg-blue-100"] {
-  background-color: rgb(30, 58, 138) !important;
-  /* blue-900 */
-}
-
-.dark [class*="bg-purple-100"] {
-  background-color: rgb(88, 28, 135) !important;
-  /* purple-900 */
-}
-
-.dark [class*="bg-amber-100"] {
-  background-color: rgb(120, 53, 15) !important;
-  /* amber-900 */
-}
-
-.dark [class*="bg-gray-200"] {
-  background-color: rgb(55, 65, 81) !important;
-  /* gray-700 */
-}
-
-/* Inputs, selects, textareas */
-.dark input,
-.dark select,
-.dark textarea {
-  background-color: #252525 !important;
-  color: #ffffff !important;
-  border-color: #444444 !important;
-}
-
-/* Exception for transparent textareas (chat inputs) */
-.dark textarea[class*="bg-transparent"] {
-  background-color: transparent !important;
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: #888888 !important;
-}
-
-/* ALL text should be white or light */
-.dark * {
-  color: inherit;
-}
-
-.dark [class*="text-gray-"],
-.dark [class*="text-black"],
-.dark [class*="text-[#0"],
-.dark [class*="text-[#1"],
-.dark [class*="text-[#2"],
-.dark [class*="text-[#3"],
-.dark [class*="text-[#4"],
-.dark [class*="text-[#5"],
-.dark [class*="text-[#6"],
-.dark [class*="text-[#7"],
-.dark [class*="text-[#8"],
-.dark [class*="text-[#9"] {
-  color: #ffffff !important;
-}
-
-/* Remove all grey borders in dark mode */
+/* Borders/dividers should stay visible, not removed */
 .dark [class*="border-gray"],
 .dark [class*="border-[#e"],
 .dark [class*="border-[#d"],
@@ -172,135 +92,115 @@
 .dark [class*="border-[#9"],
 .dark [class*="border-[#8"],
 .dark [class*="divide-gray"] {
-  border-color: transparent !important;
+  border-color: #333333 !important;
 }
 
-/* Also remove borders from common elements */
-.dark div[class*="border"],
-.dark section[class*="border"],
-.dark article[class*="border"] {
-  border-color: transparent !important;
+/* Inputs */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #1a1a1a !important;
+  color: #f3f4f6 !important;
+  border-color: #3a3a3a !important;
 }
 
-/* Muted/secondary text */
-.dark [class*="text-gray-400"],
+.dark textarea[class*="bg-transparent"] {
+  background-color: transparent !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Text normalization without flattening everything */
+.dark [class*="text-black"],
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-800"] {
+  color: #f3f4f6 !important;
+}
+
+.dark [class*="text-gray-700"],
+.dark [class*="text-gray-600"] {
+  color: #d1d5db !important;
+}
+
 .dark [class*="text-gray-500"],
-.dark [class*="text-gray-600"],
+.dark [class*="text-gray-400"],
 .dark [class*="text-muted"],
 .dark [class*="text-[#666"],
 .dark [class*="text-[#999"] {
-  color: #a0a0a0 !important;
+  color: #9ca3af !important;
 }
 
-/* Preserve semantic colors in dark mode with lighter variants */
+/* Preserve semantic accents */
 .dark [class*="text-emerald-600"],
 .dark [class*="text-emerald-700"] {
   color: #34d399 !important;
-  /* emerald-400 */
 }
 
 .dark [class*="text-rose-600"],
 .dark [class*="text-rose-700"] {
   color: #fb7185 !important;
-  /* rose-400 */
 }
 
 .dark [class*="text-blue-600"],
-.dark [class*="text-blue-700"] {
-  color: #2264ff !important;
-  /* lime-400 */
-}
-
+.dark [class*="text-blue-700"],
 .dark [class*="text-purple-600"],
 .dark [class*="text-purple-700"] {
-  color: #2264ff !important;
-  /* purple-400 */
+  color: #60a5fa !important;
 }
 
 .dark [class*="text-amber-600"],
 .dark [class*="text-amber-700"] {
   color: #fbbf24 !important;
-  /* amber-400 */
 }
 
 .dark [class*="text-orange-600"],
 .dark [class*="text-orange-700"] {
   color: #fb923c !important;
-  /* orange-400 */
 }
 
 /* Tables */
 .dark table {
-  background-color: #1a1a1a !important;
+  background-color: #111111 !important;
 }
 
 .dark th {
-  background-color: #252525 !important;
-  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+  color: #f3f4f6 !important;
   border-color: #333333 !important;
 }
 
 .dark td {
-  background-color: #1a1a1a !important;
-  color: #ffffff !important;
+  background-color: #111111 !important;
+  color: #e5e7eb !important;
   border-color: #333333 !important;
 }
 
 .dark tr:hover td {
-  background-color: #252525 !important;
+  background-color: #1f1f1f !important;
 }
 
-/* Borders */
-.dark [class*="border-gray"],
-.dark [class*="border-[#e"],
-.dark [class*="border-[#d"],
-.dark [class*="border-[#c"],
-.dark [class*="border-[#b"] {
-  border-color: #333333 !important;
-}
-
-/* Buttons */
-.dark button {
-  color: inherit;
-}
-
-.dark button[class*="bg-white"],
-.dark button[class*="bg-gray-"] {
-  background-color: #2a2a2a !important;
-  color: #ffffff !important;
-  border-color: #444444 !important;
-}
-
-/* Dropdowns and menus */
+/* Menus/dialogs */
 .dark [class*="dropdown"],
 .dark [role="listbox"],
 .dark [role="menu"],
 .dark [role="dialog"] {
-  background-color: #1a1a1a !important;
+  background-color: #111111 !important;
   border-color: #333333 !important;
 }
 
-/* Cards and panels with shadows */
-.dark [class*="shadow"],
-.dark [class*="rounded"] {
-  /* Let these inherit but ensure no white */
-}
-
-/* Specific overrides for any remaining whites */
+/* Inline light backgrounds fallback */
 .dark [style*="background: white"],
 .dark [style*="background-color: white"],
 .dark [style*="background: #fff"],
 .dark [style*="background-color: #fff"],
 .dark [style*="background: rgb(255"],
 .dark [style*="background-color: rgb(255"] {
-  background-color: #1a1a1a !important;
-}
-
-/* Chat input containers - grey background in dark mode */
-.dark [class*="bg-[#e5e5e5]"],
-.dark [class*="bg-[#e0e0e0]"],
-.dark [class*="bg-[#f5f5f7]"] {
-  background-color: #2a2a2a !important;
+  background-color: #111111 !important;
 }
 
 @theme inline {

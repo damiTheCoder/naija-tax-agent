@@ -306,7 +306,12 @@ class AccountingEngine {
     }
   ): JournalEntry {
     // Find the existing entry
-    const entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    let entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1 && typeof window !== "undefined") {
+      // Recover from stale in-memory state after route transitions/hot reload.
+      this.load();
+      entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    }
     if (entryIndex === -1) {
       throw new Error(`Journal entry ${entryId} not found`);
     }
@@ -350,7 +355,12 @@ class AccountingEngine {
    * Delete a journal entry and reverse its effect from the ledger
    */
   deleteJournalEntry(entryId: string): void {
-    const entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    let entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1 && typeof window !== "undefined") {
+      // Recover from stale in-memory state after route transitions/hot reload.
+      this.load();
+      entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    }
     if (entryIndex === -1) {
       throw new Error(`Journal entry ${entryId} not found`);
     }
@@ -3207,9 +3217,208 @@ export const accountingEngine = new AccountingEngine();
  * 2. Direct entry: "debit bank 50000 credit sales", "dr cash cr capital 100000"
  * 3. Simple amounts with context: "sales 50000", "rent expense 20000"
  */
+type ParsedTransactionType = 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+
+function parseCompactNumber(raw: string): number {
+  const trimmed = raw.trim();
+  const suffix = trimmed.slice(-1).toLowerCase();
+  const multiplier = suffix === "k" ? 1000 : suffix === "m" ? 1000000 : suffix === "b" ? 1000000000 : 1;
+  const numericPart = multiplier === 1 ? trimmed : trimmed.slice(0, -1);
+  const parsed = parseFloat(numericPart.replace(/[^\d.]/g, ""));
+  if (isNaN(parsed) || parsed <= 0) return 0;
+  return parsed * multiplier;
+}
+
+function isLikelyReferenceNumber(raw: string, context: string): boolean {
+  const compact = raw.replace(/[^\d]/g, "");
+  const value = parseInt(compact, 10);
+  if (!compact) return true;
+
+  // Phone/account/reference identifiers should not be treated as transaction amounts.
+  if (compact.length >= 9) return true;
+  if (/\b(invoice|inv|ref|reference|acct|account|order|id|trx|transaction|phone|tel|no\.)\b/i.test(context)) {
+    return true;
+  }
+
+  // Date-like values (years, day/month/year strings) should be ignored.
+  if ((value >= 1900 && value <= 2100) && /\b(date|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\/|-)\b/i.test(context)) {
+    return true;
+  }
+
+  return false;
+}
+
+function extractQuantityAmount(message: string): number {
+  const qtyPatterns = [
+    /(\d+(?:\.\d+)?)\s*[x×]\s*[a-z][\w-]*(?:\s+[a-z][\w-]*){0,4}\s*(?:@|at)\s*([₦]?\s*\d[\d,]*(?:\.\d+)?\s*[kmb]?)/i,
+    /(\d+(?:\.\d+)?)\s*(?:units?|items?|pcs?|pieces?)\s*(?:@|at|for)\s*([₦]?\s*\d[\d,]*(?:\.\d+)?\s*[kmb]?)/i,
+    /(?:sold|bought|purchased|sale)\s+(\d+(?:\.\d+)?)\s+\w+(?:\s+\w+){0,3}\s+(?:@|at|for)\s*([₦]?\s*\d[\d,]*(?:\.\d+)?\s*[kmb]?)\s*(?:each|per|ea)?/i,
+  ];
+
+  for (const pattern of qtyPatterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+    const quantity = parseFloat(match[1]);
+    const unitAmount = parseCompactNumber(match[2]);
+    if (quantity > 1 && unitAmount > 0) {
+      return quantity * unitAmount;
+    }
+  }
+
+  return 0;
+}
+
+function extractAmountFromMessage(message: string): number {
+  const candidates: Array<{ value: number; score: number; index: number }> = [];
+  const msg = message;
+  const lower = msg.toLowerCase();
+
+  const register = (raw: string, index: number, baseScore: number) => {
+    const value = parseCompactNumber(raw);
+    if (value <= 0) return;
+
+    const start = Math.max(0, index - 30);
+    const end = Math.min(lower.length, index + raw.length + 30);
+    const context = lower.slice(start, end);
+
+    let score = baseScore;
+    if (/[₦]/.test(raw) || /\b(ngn|naira)\b/.test(context)) score += 45;
+    if (/\b(amount|total|sum|value|for|paid|received|sold|bought|purchase|payment|invoice|rent|salary|fee)\b/.test(context)) score += 20;
+    if (/\b(each|per|x|×|units?|items?|pcs?)\b/.test(context)) score += 8;
+    if (isLikelyReferenceNumber(raw, context)) score -= 50;
+
+    candidates.push({ value, score, index });
+  };
+
+  const qtyAmount = extractQuantityAmount(msg);
+  if (qtyAmount > 0) {
+    candidates.push({ value: qtyAmount, score: 95, index: 0 });
+  }
+
+  const currencyPatterns = [
+    /₦\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
+    /ngn\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
+    /([\d,]+(?:\.\d+)?\s*[kmb]?)\s*naira\b/gi,
+  ];
+
+  currencyPatterns.forEach((regex) => {
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(msg)) !== null) {
+      register(match[1], match.index ?? 0, 80);
+    }
+  });
+
+  const genericNumberRegex = /\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*[kmb]?\b/gi;
+  let numberMatch: RegExpExecArray | null;
+  while ((numberMatch = genericNumberRegex.exec(msg)) !== null) {
+    register(numberMatch[0], numberMatch.index ?? 0, 30);
+  }
+
+  if (!candidates.length) return 0;
+
+  const winner = candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.value !== a.value) return b.value - a.value;
+    return a.index - b.index;
+  })[0];
+
+  return winner.value;
+}
+
+function inferAccountsFromClassification(
+  parsedType: ParsedTransactionType,
+  category: string,
+  paymentMethod: PaymentMethod,
+  lowerMessage: string
+): { debitAccount?: string; creditAccount?: string } {
+  const useCash = paymentMethod === "cash";
+  const cashOrBank = useCash ? "1000" : "1020";
+  const isCreditTerm = /\b(on\s+credit|on\s+account|credit\s+sale|credit\s+purchase|invoice|receivable|payable|debtor|creditor|outstanding)\b/i.test(lowerMessage);
+
+  const expenseAccountByCategory: Record<string, string> = {
+    rent: "5600",
+    salary: "5500",
+    utilities: "5610",
+    transport: "6070",
+    purchases: "5010",
+    expense: "5820",
+    "loan-repayment": "2500",
+    "supplier-payment": "2000",
+    drawing: "3200",
+    asset: "1540",
+  };
+
+  if (parsedType === "sale" || parsedType === "receipt") {
+    const revenueAccount =
+      category === "service" ? "4010" :
+        category === "income" && /\binterest\b/.test(lowerMessage) ? "4200" :
+          category === "income" && /\brent\b/.test(lowerMessage) ? "4220" :
+            "4000";
+    return {
+      debitAccount: isCreditTerm ? "1100" : cashOrBank,
+      creditAccount: revenueAccount,
+    };
+  }
+
+  if (parsedType === "purchase") {
+    return {
+      debitAccount: "5010",
+      creditAccount: isCreditTerm ? "2000" : cashOrBank,
+    };
+  }
+
+  if (parsedType === "expense") {
+    const debitAccount = expenseAccountByCategory[category] || "5820";
+    return {
+      debitAccount,
+      creditAccount: isCreditTerm ? "2000" : cashOrBank,
+    };
+  }
+
+  if (parsedType === "payment") {
+    const debitAccount = expenseAccountByCategory[category] || "2000";
+    return {
+      debitAccount,
+      creditAccount: cashOrBank,
+    };
+  }
+
+  if (parsedType === "transfer") {
+    if (/\b(withdrew|withdrawal|from\s+bank)\b/i.test(lowerMessage)) {
+      return { debitAccount: "1000", creditAccount: "1020" };
+    }
+    return { debitAccount: "1020", creditAccount: "1000" };
+  }
+
+  if (parsedType === "asset") {
+    const assetAccount =
+      /\b(vehicle|car)\b/i.test(lowerMessage) ? "1530" :
+        /\b(furniture)\b/i.test(lowerMessage) ? "1550" :
+          /\b(computer|laptop|phone)\b/i.test(lowerMessage) ? "1560" :
+            "1540";
+    return {
+      debitAccount: assetAccount,
+      creditAccount: isCreditTerm ? "2000" : cashOrBank,
+    };
+  }
+
+  if (parsedType === "equity") {
+    if (category === "drawing") {
+      return { debitAccount: "3200", creditAccount: cashOrBank };
+    }
+    return { debitAccount: cashOrBank, creditAccount: "3000" };
+  }
+
+  if (parsedType === "loan") {
+    return { debitAccount: cashOrBank, creditAccount: "2500" };
+  }
+
+  return {};
+}
+
 export function parseTransactionFromChat(message: string): Partial<TransactionInput> & {
   confidence: number;
-  parsedType: 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+  parsedType: ParsedTransactionType;
   debitAccount?: string;
   creditAccount?: string;
 } | null {
@@ -3219,82 +3428,9 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   const lowerMsg = msg.toLowerCase();
 
   // ==========================================================================
-  // STEP 1: EXTRACT AMOUNT(S) - Extract the largest number from the message
+  // STEP 1: EXTRACT AMOUNT(S)
   // ==========================================================================
-
-  // First, try to find explicit currency amounts
-  let amount = 0;
-
-  // Pattern 1: ₦ prefix (₦50,000 or ₦50000)
-  const nairaMatch = msg.match(/₦\s*([\d,]+(?:\.\d{1,2})?)/);
-  if (nairaMatch) {
-    amount = parseFloat(nairaMatch[1].replace(/,/g, ''));
-  }
-
-  // Pattern 2: NGN prefix
-  if (amount === 0) {
-    const ngnMatch = msg.match(/ngn\s*([\d,]+(?:\.\d{1,2})?)/i);
-    if (ngnMatch) {
-      amount = parseFloat(ngnMatch[1].replace(/,/g, ''));
-    }
-  }
-
-  // Pattern 2.5: K/M notation (e.g., 50k = 50000, 2m = 2000000, 1.5m = 1500000)
-  if (amount === 0) {
-    const kmMatch = msg.match(/(\d+(?:\.\d+)?)\s*([km])\b/i);
-    if (kmMatch) {
-      const num = parseFloat(kmMatch[1]);
-      const multiplier = kmMatch[2].toLowerCase() === 'k' ? 1000 : 1000000;
-      amount = num * multiplier;
-    }
-  }
-
-  // Pattern 3: Quantity × Unit Price (e.g., "7x braid 5500", "sold 10 units @ 500", "3 items at 1000 each")
-  if (amount === 0) {
-    // Pattern: "Nx item price" or "N x item price" (e.g., "7x braid 5500", "10 x shirts 2000")
-    const qtyTimesPattern = msg.match(/(\d+)\s*[x×]\s*\w+.*?(\d[\d,]*(?:\.\d{1,2})?)/i);
-    if (qtyTimesPattern) {
-      const qty = parseInt(qtyTimesPattern[1], 10);
-      const unitPrice = parseFloat(qtyTimesPattern[2].replace(/,/g, ''));
-      if (qty > 0 && unitPrice > 0) {
-        amount = qty * unitPrice;
-      }
-    }
-
-    // Pattern: "N units/items @ price" or "N units at price each"
-    if (amount === 0) {
-      const unitsAtPattern = msg.match(/(\d+)\s*(?:units?|items?|pcs?|pieces?)\s*[@at]\s*(\d[\d,]*(?:\.\d{1,2})?)/i);
-      if (unitsAtPattern) {
-        const qty = parseInt(unitsAtPattern[1], 10);
-        const unitPrice = parseFloat(unitsAtPattern[2].replace(/,/g, ''));
-        if (qty > 0 && unitPrice > 0) {
-          amount = qty * unitPrice;
-        }
-      }
-    }
-
-    // Pattern: "sold/bought N item(s) for/@ price each" (e.g., "sold 5 shirts for 2000 each")
-    if (amount === 0) {
-      const soldQtyPattern = msg.match(/(?:sold|bought|purchased|sale)\s+(\d+)\s*[x×]?\s*\w+.*?(?:for|@|at)?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(?:each|per|ea)?/i);
-      if (soldQtyPattern) {
-        const qty = parseInt(soldQtyPattern[1], 10);
-        const unitPrice = parseFloat(soldQtyPattern[2].replace(/,/g, ''));
-        // Only apply multiplication if quantity > 1 and both values present
-        if (qty > 1 && unitPrice > 0) {
-          amount = qty * unitPrice;
-        }
-      }
-    }
-  }
-
-  // Pattern 4: Any number (find the largest one, likely the amount)
-  if (amount === 0) {
-    const numberMatches = msg.match(/\d[\d,]*/g);
-    if (numberMatches) {
-      const amounts = numberMatches.map(n => parseFloat(n.replace(/,/g, '')));
-      amount = Math.max(...amounts);
-    }
-  }
+  const amount = extractAmountFromMessage(msg);
 
   if (amount <= 0) return null;
 
@@ -3302,8 +3438,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   // STEP 2: DETECT DIRECT DEBIT/CREDIT ENTRY
   // ==========================================================================
   // Pattern: "debit bank 50000 credit sales" or "dr cash cr revenue 100000"
-  const directEntryPattern = /(?:debit|dr)\s+(\w+(?:\s+\w+)?)\s+(?:credit|cr)\s+(\w+(?:\s+\w+)?)/i;
-  const reverseEntryPattern = /(?:credit|cr)\s+(\w+(?:\s+\w+)?)\s+(?:debit|dr)\s+(\w+(?:\s+\w+)?)/i;
+  const directEntryPattern = /(?:debit|dr)\s+([a-z][a-z0-9/&\-\s]{1,40}?)(?:\s+₦?\s*[\d,]+(?:\.\d{1,2})?)?\s+(?:credit|cr)\s+([a-z][a-z0-9/&\-\s]{1,40}?)(?=$|\s+(?:for|with|being|on)\b|\s+₦|\s+\d)/i;
+  const reverseEntryPattern = /(?:credit|cr)\s+([a-z][a-z0-9/&\-\s]{1,40}?)(?:\s+₦?\s*[\d,]+(?:\.\d{1,2})?)?\s+(?:debit|dr)\s+([a-z][a-z0-9/&\-\s]{1,40}?)(?=$|\s+(?:for|with|being|on)\b|\s+₦|\s+\d)/i;
 
   let directEntry = lowerMsg.match(directEntryPattern);
   if (directEntry) {
@@ -3341,7 +3477,7 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
 
   type TransactionPattern = {
     patterns: RegExp[];
-    parsedType: 'sale' | 'purchase' | 'expense' | 'receipt' | 'payment' | 'transfer' | 'asset' | 'equity' | 'loan' | 'other';
+    parsedType: ParsedTransactionType;
     category: string;
     paymentMethod?: PaymentMethod;
     isIncome: boolean;
@@ -3361,6 +3497,29 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
       isIncome: false,
     },
 
+    // ===== HIGH PRIORITY: SALES RETURNS / REVERSALS =====
+    {
+      patterns: [
+        /(?:customer|client)\s+returned\s+(?:goods|items|products)/i,
+        /received\s+returned\s+(?:goods|items|products)/i,
+        /sales?\s+return/i,
+      ],
+      parsedType: 'other',
+      category: 'other',
+      isIncome: false,
+    },
+
+    // ===== HIGH PRIORITY: REFUNDS =====
+    {
+      patterns: [
+        /refund\s+from\s+(?:supplier|vendor|creditor)/i,
+        /(?:supplier|vendor)\s+refund/i,
+        /reimbursement\s+from/i,
+      ],
+      parsedType: 'receipt',
+      category: 'receipt',
+      isIncome: true,
+    },
     // ===== HIGH PRIORITY: FUEL (expense, not purchase) =====
     {
       patterns: [
@@ -3392,12 +3551,24 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
       patterns: [
         /deposit\s+from\s+(?:client|customer)/i,
         /(?:client|customer)\s+deposit/i,
-        /advance\s+(?:from|payment)/i,
+        /advance\s+from\s+(?:client|customer)/i,
+        /advance\s+payment\s+from\s+(?:client|customer)/i,
         /received\s+advance/i,
       ],
       parsedType: 'receipt',
       category: 'income',
       isIncome: true,
+    },
+
+    // ===== HIGH PRIORITY: PREPAYMENTS =====
+    {
+      patterns: [
+        /advance\s+payment\s+for\s+(?:supplies|materials|rent|services?)/i,
+        /prepaid\s+(?:supplies|materials|rent|services?|insurance)/i,
+      ],
+      parsedType: 'expense',
+      category: 'expense',
+      isIncome: false,
     },
 
     // ===== HIGH PRIORITY: CONTRACT PAYMENTS =====
@@ -3428,6 +3599,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     {
       patterns: [
         /remitted?\s+(?:vat|wht|paye|tax)/i,
+        /remitted?\s+withholding\s+tax/i,
+        /withholding\s+tax\s+(?:remittance|payment|remitted)/i,
         /(?:vat|wht|paye)\s+(?:remittance|payment|remitted)/i,
         /paid\s+(?:vat|wht|paye)\s+(?:to|firs)/i,
       ],
@@ -3487,9 +3660,10 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== SALES / REVENUE =====
     {
       patterns: [
+        /^(?:sold|sale|sales)\b/i,
         /(?:sold|sale|sales)\s+(?:of\s+)?(?:goods|products|items|merchandise)/i,
-        /(?:sold|sale)\s+.*(?:for|@|at)/i,
-        /(?:cash\s+)?sale/i,
+        /\b(?:sold|sale)\b\s+.*(?:for|@|at)/i,
+        /\b(?:cash\s+)?sale\b/i,
         /(?:received|got)\s+(?:from\s+)?customer/i,
         /revenue\s+(?:from|of|received)/i,
         /(?:invoice|invoiced)\s+(?:customer|client)/i,
@@ -3501,8 +3675,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     {
       patterns: [
         /service\s+(?:fee|revenue|income|rendered)/i,
-        /(?:consultancy|consulting)\s+(?:fee|income|service)/i,
-        /professional\s+(?:fee|service)/i,
+        /(?:consultancy|consulting)\s+(?:fee\b|income|service)/i,
+        /professional\s+(?:fee\b|service)/i,
       ],
       parsedType: 'sale',
       category: 'service',
@@ -3512,8 +3686,10 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== PURCHASES =====
     {
       patterns: [
+        /(?:bought|purchased|purchase)\s+.*\bfor\s+resale\b/i,
+        /paid\s+(?:cash\s+)?\d[\d,]*(?:\.\d{1,2})?\s+(?:for\s+)?(?:stock|inventory|goods|materials)/i,
         /(?:bought|purchased|purchase)\s+(?:goods|inventory|stock|products|materials)/i,
-        /(?:bought|purchased)\s+.*(?:from\s+)?(?:supplier|vendor)/i,
+        /(?:bought|purchased)\s+.*\b(?:from\s+)?(?:supplier|vendor)\b/i,
         /purchase\s+(?:of|from)/i,
       ],
       parsedType: 'purchase',
@@ -3524,6 +3700,7 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== RENT =====
     {
       patterns: [
+        /^rent\s+\d/i,
         /(?:paid|pay)\s+(?:for\s+)?rent/i,
         /rent\s+(?:payment|expense|paid)/i,
         /office\s+rent/i,
@@ -3537,6 +3714,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== SALARIES / PAYROLL =====
     {
       patterns: [
+        /^salary\s+\d/i,
+        /^salaries\s+\d/i,
         /(?:paid|pay)\s+(?:staff\s+)?(?:salary|salaries|wages)/i,
         /salary\s+(?:payment|expense|paid)/i,
         /payroll/i,
@@ -3550,6 +3729,7 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== UTILITIES =====
     {
       patterns: [
+        /^(?:electricity|nepa|phcn|water|internet|airtime|data)\s+\d/i,
         /(?:paid|pay)\s+(?:for\s+)?(?:electricity|power|nepa|phcn)/i,
         /(?:paid|pay)\s+(?:for\s+)?(?:water|water\s+bill)/i,
         /(?:paid|pay)\s+(?:for\s+)?(?:internet|airtime|data|phone)/i,
@@ -3597,6 +3777,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     {
       patterns: [
         /(?:paid|pay)\s+(?:for\s+)?(?:legal|audit|accounting|consultancy|professional)\s+fee/i,
+        /\bconsultancy\s+fees\b/i,
+        /\bprofessional\s+fees\b/i,
         /(?:legal|audit|accounting)\s+fee/i,
         /consultancy\s+fee/i,
         /professional\s+fee/i,
@@ -3661,11 +3843,11 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== ASSETS =====
     {
       patterns: [
-        /(?:bought|purchased|acquired)\s+(?:a\s+)?(?:computer|laptop|phone|equipment|machinery|vehicle|car|furniture|generator|air\s*conditioner)/i,
+        /(?:bought|purchased|acquired)\s+(?:(?:a|an|new|office|company)\s+){0,2}(?:computer|laptop|phone|equipment|machinery|vehicle|car|furniture|generator|air\s*conditioner)\b/i,
         /(?:computer|laptop|equipment|machinery|vehicle|furniture)\s+(?:purchase|bought)/i,
-        /(?:new|bought)\s+(?:office\s+)?equipment/i,
+        /(?:new|bought|purchased)\s+(?:office\s+)?equipment/i,
         /bought\s+generator/i,
-        /purchased\s+(?:generator|ac|air\s*conditioner)/i,
+        /purchased\s+\b(?:generator|ac|air\s*conditioner)\b/i,
         /bought\s+(?:\d+\s+)?laptops?/i,
         /purchased\s+building/i,
         /(?:paid|pay)\s+\d+\s+for\s+(?:generator|equipment|vehicle|computer)/i,
@@ -3722,9 +3904,11 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== TRANSFERS =====
     {
       patterns: [
+        /(?:withdrew|withdraw)\s+.*\sfrom\s+bank/i,
+        /petty\s+cash\s+replenishment/i,
         /(?:transfer(?:red)?|moved)\s+(?:money|funds|cash)\s+(?:from|to)/i,
         /(?:deposited|deposit)\s+(?:cash|money)\s+(?:to|into)\s+bank/i,
-        /bank\s+(?:deposit|transfer)/i,
+        /bank\s+(?:deposit|transfer)(?!\s+received)/i,
         /(?:withdrew|withdraw)\s+(?:from\s+)?bank/i,
         /cash\s+(?:deposit|withdrawal)/i,
       ],
@@ -3751,6 +3935,9 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== RECEIPTS FROM DEBTORS =====
     {
       patterns: [
+        /bank\s+transfer\s+received/i,
+        /received\s+bank\s+transfer/i,
+        /^(?:received|got|collected)\s+(?:payment|money|cash|transfer)\s+from/i,
         /(?:received|collected)\s+(?:payment\s+)?(?:from\s+)?(?:debtor|customer)/i,
         /customer\s+(?:paid|payment)/i,
         /(?:debtor|receivable)\s+(?:paid|collected)/i,
@@ -3763,6 +3950,7 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     // ===== PAYMENTS TO CREDITORS =====
     {
       patterns: [
+        /\bgave\s+(?:supplier|vendor|creditor)\b/i,
         /paid\s+supplier/i,                                    // "paid supplier 3000000"
         /paid\s+(?:to\s+)?(?:creditor|supplier|vendor)/i,      // "paid to supplier"
         /(?:creditor|payable)\s+(?:paid|payment)/i,
@@ -3781,6 +3969,12 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     for (const regex of txPattern.patterns) {
       if (regex.test(lowerMsg)) {
         const paymentMethod = detectPaymentMethod(lowerMsg);
+        const inferredAccounts = inferAccountsFromClassification(
+          txPattern.parsedType,
+          txPattern.category,
+          paymentMethod,
+          lowerMsg
+        );
         return {
           description: msg.substring(0, 150),
           amount,
@@ -3788,6 +3982,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
           paymentMethod,
           confidence: 0.90,
           parsedType: txPattern.parsedType,
+          debitAccount: inferredAccounts.debitAccount,
+          creditAccount: inferredAccounts.creditAccount,
         };
       }
     }
@@ -3847,6 +4043,12 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   for (const kc of keywordCategories) {
     if (kc.keywords.some(kw => lowerMsg.includes(kw))) {
       const paymentMethod = detectPaymentMethod(lowerMsg);
+      const inferredAccounts = inferAccountsFromClassification(
+        kc.parsedType,
+        kc.category,
+        paymentMethod,
+        lowerMsg
+      );
       return {
         description: msg.substring(0, 150),
         amount,
@@ -3854,6 +4056,8 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
         paymentMethod,
         confidence: 0.70,
         parsedType: kc.parsedType,
+        debitAccount: inferredAccounts.debitAccount,
+        creditAccount: inferredAccounts.creditAccount,
       };
     }
   }
@@ -3861,13 +4065,22 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   // ==========================================================================
   // STEP 5: AMOUNT-ONLY FALLBACK (Low confidence)
   // ==========================================================================
+  const fallbackPaymentMethod = detectPaymentMethod(lowerMsg);
+  const fallbackAccounts = inferAccountsFromClassification(
+    'other',
+    'other',
+    fallbackPaymentMethod,
+    lowerMsg
+  );
   return {
     description: msg.substring(0, 150),
     amount,
     category: 'other',
-    paymentMethod: detectPaymentMethod(lowerMsg),
+    paymentMethod: fallbackPaymentMethod,
     confidence: 0.40,
     parsedType: 'other',
+    debitAccount: fallbackAccounts.debitAccount,
+    creditAccount: fallbackAccounts.creditAccount,
   };
 }
 
@@ -3877,9 +4090,9 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
 function detectPaymentMethod(msg: string): PaymentMethod {
   if (msg.includes('cash')) return 'cash';
   if (msg.includes('pos') || msg.includes('card') || msg.includes('atm')) return 'pos';
-  if (msg.includes('transfer') || msg.includes('bank transfer')) return 'transfer';
+  if (msg.includes('transfer') || msg.includes('bank transfer') || msg.includes('wire')) return 'transfer';
   if (msg.includes('cheque') || msg.includes('check')) return 'cheque';
-  if (msg.includes('mobile') || msg.includes('ussd')) return 'mobile';
+  if (msg.includes('mobile') || msg.includes('ussd') || msg.includes('opay') || msg.includes('palmpay') || msg.includes('kuda')) return 'mobile';
   if (msg.includes('credit') || msg.includes('on account') || msg.includes('invoice')) return 'credit';
   return 'bank'; // Default
 }

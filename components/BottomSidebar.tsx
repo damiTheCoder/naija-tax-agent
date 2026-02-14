@@ -4,7 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 
-export default function BottomSidebar() {
+interface BottomSidebarProps {
+    variant?: "floating" | "sidebar";
+}
+
+export default function BottomSidebar({ variant = "floating" }: BottomSidebarProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -13,6 +17,7 @@ export default function BottomSidebar() {
     const router = useRouter();
 
     const { currentWorkspace, workspaces, switchWorkspace, isLoaded } = useWorkspace();
+    const isSidebarVariant = variant === "sidebar";
 
     // Close panel when clicking outside (but not on the button)
     useEffect(() => {
@@ -69,32 +74,32 @@ export default function BottomSidebar() {
     const currentGradient = currentWorkspace ? getWorkspaceGradient(currentWorkspace.id) : "from-blue-400 to-blue-600";
 
     return (
-        <>
-            {/* Trigger Button - Desktop only, shows active workspace with arrow */}
+        <div className={isSidebarVariant ? "relative" : ""}>
+            {/* Trigger Button */}
             <button
                 ref={buttonRef}
                 onClick={() => setIsOpen(!isOpen)}
                 className={`
-          fixed bottom-6 right-6 z-[60] hidden lg:flex
-          gap-2 px-3 py-2 rounded-full
-          bg-[#0a0a0a] hover:bg-[#1a1a1a]
-          text-white shadow-lg
-          items-center justify-center
+          ${isSidebarVariant
+                        ? "relative w-full flex items-center justify-between rounded-xl border border-white/10 bg-[#05070b] hover:bg-[#0d121b] px-3 py-2.5 text-white"
+                        : "fixed bottom-6 right-6 z-[60] hidden lg:flex gap-2 px-3 py-2 rounded-full bg-[#0a0a0a] hover:bg-[#1a1a1a] text-white shadow-lg items-center justify-center"
+                    }
           transition-all duration-300 ease-out cursor-pointer
         `}
                 aria-label={isOpen ? "Close workspace menu" : "Open workspace menu"}
             >
-                {/* Workspace Avatar */}
-                <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${currentGradient} flex items-center justify-center text-[10px] font-medium text-white shadow-sm`}>
-                    {currentWorkspace?.name.charAt(0).toUpperCase() || "W"}
+                <div className="flex items-center gap-2 min-w-0">
+                    {/* Workspace Avatar */}
+                    <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${currentGradient} flex items-center justify-center text-[11px] font-medium text-white shadow-sm`}>
+                        {currentWorkspace?.name.charAt(0).toUpperCase() || "W"}
+                    </div>
+                    {/* Workspace Name */}
+                    <span className={`font-medium truncate ${isSidebarVariant ? "text-sm" : "text-xs max-w-[100px]"}`}>
+                        {currentWorkspace?.name || "Workspace"}
+                    </span>
                 </div>
-                {/* Workspace Name */}
-                <span className="text-xs font-medium max-w-[100px] truncate">
-                    {currentWorkspace?.name || "Workspace"}
-                </span>
-                {/* Arrow Icon */}
                 <svg
-                    className={`w-3 h-3 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+                    className={`w-3.5 h-3.5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${isSidebarVariant ? "text-white/60" : ""}`}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -109,7 +114,7 @@ export default function BottomSidebar() {
             </button>
 
             {/* Overlay */}
-            {isOpen && (
+            {isOpen && !isSidebarVariant && (
                 <div
                     className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[55] hidden lg:block"
                     onClick={() => {
@@ -119,15 +124,21 @@ export default function BottomSidebar() {
                 />
             )}
 
-            {/* Slide-up Panel - Desktop only, at absolute bottom-right of viewport */}
+            {/* Slide-up Panel */}
             <div
                 ref={panelRef}
                 className={`
-          fixed right-6 z-[59] hidden lg:block
-          w-52 bg-[#0a0a0a] rounded-xl
+          ${isSidebarVariant
+                        ? "absolute left-0 right-0 bottom-[calc(100%+0.5rem)] z-30"
+                        : "fixed right-6 z-[59] hidden lg:block"
+                    }
+          w-52 ${isSidebarVariant ? "w-full" : ""} bg-[#0a0a0a] rounded-xl
           shadow-2xl border border-white/10
           transition-all duration-300 ease-out
-          ${isOpen ? "opacity-100 bottom-20" : "opacity-0 bottom-6 pointer-events-none"}
+          ${isOpen
+                        ? isSidebarVariant ? "opacity-100 translate-y-0" : "opacity-100 bottom-20"
+                        : isSidebarVariant ? "opacity-0 translate-y-2 pointer-events-none" : "opacity-0 bottom-6 pointer-events-none"
+                    }
         `}
             >
                 {/* Panel Header */}
@@ -253,7 +264,6 @@ export default function BottomSidebar() {
                     )}
                 </nav>
             </div>
-        </>
+        </div>
     );
 }
-

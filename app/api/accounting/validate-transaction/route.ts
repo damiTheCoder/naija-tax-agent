@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processTransaction } from '@/lib/accounting/integratedTransactionProcessor';
+import { parseTransactionFromChat } from '@/lib/accounting/transactionBridge';
 
 export async function POST(request: NextRequest) {
     try {
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
 
         // Run the 2-layer integrated processor
         const result = await processTransaction(transactionText, amount);
+        const ruleParsed = parseTransactionFromChat(transactionText);
 
         if (!result || result.amount <= 0) {
             return NextResponse.json(
@@ -72,8 +74,9 @@ export async function POST(request: NextRequest) {
                 // Core transaction data
                 amount: result.amount,
                 description: result.transactionText,
-                category: natureToCategoryMap[result.final.nature] || 'other',
-                parsedType: natureToTypeMap[result.final.nature] || 'other',
+                // Prefer the dedicated transaction parser for user-facing type/category labels.
+                category: ruleParsed?.category || natureToCategoryMap[result.final.nature] || 'other',
+                parsedType: ruleParsed?.parsedType || natureToTypeMap[result.final.nature] || 'other',
 
                 // Account information
                 debitAccount: result.final.debitAccount,
@@ -81,10 +84,11 @@ export async function POST(request: NextRequest) {
 
                 // AI validation info
                 aiEnabled: result.aiEnabled,
+                aiProvider: process.env.AI_VALIDATION_PROVIDER || 'gemini',
                 aiValidated: result.layer2?.validated ?? false,
                 aiCorrected: result.aiCorrectionsMade,
                 confidence: result.final.confidence,
-                aiReasoning: result.layer2?.reasoning ?? 'AI validation not performed',
+                aiReasoning: result.layer2?.reasoning ?? (result.aiEnabled ? 'AI validation attempted without explicit reasoning' : 'AI validation not performed'),
 
                 // Tax implications
                 taxImplications: result.final.taxImplications,

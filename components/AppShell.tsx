@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-import BottomSidebar from "@/components/BottomSidebar";
 import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
@@ -70,9 +69,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLanding = pathname === "/";
+  const isPersonalRoute = pathname.startsWith("/personal");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
   const { mode, mounted } = useMode();
+  const previousModeRef = useRef(mode);
 
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {
@@ -90,13 +91,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Navigate when mode changes
+  // Navigate only when mode changes (do not override manual page navigation)
   useEffect(() => {
     if (!mounted) return;
-    if (mode === "user" && !pathname.startsWith("/personal")) {
-      router.push("/personal");
-    } else if (mode === "enterprise" && pathname.startsWith("/personal")) {
-      router.push("/accounting");
+
+    // Initialize previous mode after hydration without forcing a redirect.
+    if (previousModeRef.current === mode) {
+      return;
+    }
+
+    previousModeRef.current = mode;
+
+    if (mode === "user") {
+      router.replace("/personal");
+    } else if (pathname.startsWith("/personal")) {
+      router.replace("/accounting");
     }
   }, [mode, mounted, pathname, router]);
 
@@ -212,10 +221,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 
       {/* Floating Chat Button for transaction input */}
-      <FloatingChatButton />
+      {!isPersonalRoute && <FloatingChatButton />}
 
-      {/* Bottom-right sidebar with Profile and Workspace links */}
-      <BottomSidebar />
     </div>
   );
 }

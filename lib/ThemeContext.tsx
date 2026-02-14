@@ -52,11 +52,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
 
         const root = document.documentElement;
+        const body = document.body;
         if (theme === "dark") {
             root.classList.add("dark");
         } else {
             root.classList.remove("dark");
         }
+
+        // Keep browser UI/theme controls in sync and prevent Chrome auto-adjust drift.
+        root.style.colorScheme = theme;
+        body.style.backgroundColor = theme === "dark" ? "#000000" : "#ffffff";
+        body.style.color = theme === "dark" ? "#ffffff" : "#0a0a0a";
+
+        document
+            .querySelectorAll('meta[name="theme-color"]')
+            .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff"));
     }, [theme, mounted]);
 
     // Persist only explicit user preferences
