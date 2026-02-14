@@ -1,6 +1,6 @@
 export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop";
 
-export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll";
+export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
 
 export interface TaxNavItem {
   label: string;
@@ -204,5 +204,23 @@ export const MARKETPLACE_NAV_ITEMS: TaxNavItem[] = [
     icon: "shop",
     description: "Manage your professional listing",
     mode: "marketplace",
+  },
+];
+
+// Personal OS navigation
+export const PERSONAL_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Chat",
+    href: "/personal",
+    icon: "chat",
+    description: "Talk to your finances",
+    mode: "personal",
+  },
+  {
+    label: "Connected Apps",
+    href: "/personal/apps",
+    icon: "bank",
+    description: "Manage linked financial services",
+    mode: "personal",
   },
 ];

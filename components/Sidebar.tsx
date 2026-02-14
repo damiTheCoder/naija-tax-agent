@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, AppMode } from "@/lib/navigation";
+import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, PERSONAL_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 
@@ -28,6 +28,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
+    if (pathname.startsWith("/personal")) return "personal";
     if (pathname.startsWith("/marketplace")) return "marketplace";
     if (pathname.startsWith("/supersheet")) return "supersheet";
     if (pathname.startsWith("/wallet")) return "wallet";
@@ -41,7 +42,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   // Update mode when pathname changes
   useEffect(() => {
-    if (pathname.startsWith("/marketplace")) {
+    if (pathname.startsWith("/personal")) {
+      setMode("personal");
+    } else if (pathname.startsWith("/marketplace")) {
       setMode("marketplace");
     } else if (pathname.startsWith("/supersheet")) {
       setMode("supersheet");
@@ -58,21 +61,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     }
   }, [pathname]);
 
-  const navItems = mode === "tax"
-    ? TAX_NAV_ITEMS
-    : mode === "intelligence"
-      ? INTELLIGENCE_NAV_ITEMS
-      : mode === "wallet"
-        ? WALLET_NAV_ITEMS
-        : mode === "supersheet"
-          ? SUPERSHEET_NAV_ITEMS
-          : mode === "marketplace"
-            ? MARKETPLACE_NAV_ITEMS
-            : mode === "payroll"
-              ? PAYROLL_NAV_ITEMS
-              : ACCOUNTING_NAV_ITEMS;
-
-
+  const navItems = mode === "personal"
+    ? PERSONAL_NAV_ITEMS
+    : mode === "tax"
+      ? TAX_NAV_ITEMS
+      : mode === "intelligence"
+        ? INTELLIGENCE_NAV_ITEMS
+        : mode === "wallet"
+          ? WALLET_NAV_ITEMS
+          : mode === "supersheet"
+            ? SUPERSHEET_NAV_ITEMS
+            : mode === "marketplace"
+              ? MARKETPLACE_NAV_ITEMS
+              : mode === "payroll"
+                ? PAYROLL_NAV_ITEMS
+                : ACCOUNTING_NAV_ITEMS;
 
   return (
     <>
@@ -107,7 +110,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto mt-2">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
+            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           {navItems.map((item) => {
             // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
@@ -146,6 +149,33 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             );
           })}
         </nav>
+
+        {/* Chat History Section (Only for Personal Mode) */}
+        {mode === "personal" && (
+          <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-40 border-t border-white/10 pt-4 pb-4">
+            <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
+              Chat History
+            </p>
+            {[
+              { label: "Salary Analysis", href: "#" },
+              { label: "Investment Plan", href: "#" },
+              { label: "Tax Query", href: "#" },
+            ].map((item, idx) => (
+              <button
+                key={idx}
+                className={`
+                  relative flex items-center gap-3 px-2 py-1.5 rounded-md text-[13px] transition-all duration-200 w-full text-left group my-0.5
+                  text-white/60 hover:text-white hover:bg-white/5
+                `}
+              >
+                <span className="w-5 h-5 flex items-center justify-center opacity-70 group-hover:opacity-100">
+                  <NavIconBadge icon="message-square" className="w-4 h-4" />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </aside>
 
       {/* Mobile Slide Panel - Right side, dark theme */}
@@ -171,12 +201,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-
-
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-hidden">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
+            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           <button
             onClick={() => {
@@ -189,8 +217,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             className={`
               relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
               ${pathname.startsWith("/marketplace")
-              ? "bg-[#2264ff] text-[#0a0a0a]"
-              : "text-white/70 hover:bg-white/10 hover:text-white"}
+                ? "bg-[#2264ff] text-[#0a0a0a]"
+                : "text-white/70 hover:bg-white/10 hover:text-white"}
             `}
           >
             <span className="w-5 h-5 flex items-center justify-center">

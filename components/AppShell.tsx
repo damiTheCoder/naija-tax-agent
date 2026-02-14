@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
@@ -14,6 +14,9 @@ import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
 import { NavIconBadge } from "@/components/NavIconBadge";
+import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
+import { useMode } from "@/lib/ModeContext";
+import UserModeExperience from "@/components/UserModeExperience";
 
 // Skeleton loading component - shows placeholder shapes instead of spinner
 function PageLoadingSpinner() {
@@ -63,108 +66,13 @@ function PageLoadingSpinner() {
 }
 
 
-// Theme toggle switch component (Desktop)
-function ThemeToggle() {
-  const { theme, toggleTheme } = useTheme();
-  const isDark = theme === "dark";
-
-  return (
-    <button
-      onClick={toggleTheme}
-      className="relative w-14 h-7 rounded-full transition-colors duration-300 flex items-center px-1"
-      style={{ background: isDark ? '#333333' : '#e0e0e0' }}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      {/* Sun icon (left) */}
-      <svg
-        className={`w-4 h-4 absolute left-1.5 transition-opacity ${isDark ? 'opacity-30' : 'opacity-100 text-amber-500'}`}
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-      </svg>
-
-      {/* Moon icon (right) */}
-      <svg
-        className={`w-4 h-4 absolute right-1.5 transition-opacity ${isDark ? 'opacity-100 text-[#2264ff]' : 'opacity-30'}`}
-        fill="currentColor"
-        viewBox="0 0 20 20"
-      >
-        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-      </svg>
-
-      {/* Toggle thumb */}
-      <div
-        className="w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300"
-        style={{ transform: isDark ? 'translateX(28px)' : 'translateX(0)' }}
-      />
-    </button>
-  );
-}
-
-// Mobile theme toggle - WhatsApp status style ring
-function MobileThemeToggle() {
-  const { theme, toggleTheme } = useTheme();
-  const isDark = theme === "dark";
-
-  return (
-    <button
-      onClick={toggleTheme}
-      className="relative w-7 h-7 flex items-center justify-center transition-all"
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      {/* Segmented status ring using SVG */}
-      <svg
-        className="absolute inset-0 w-full h-full"
-        viewBox="0 0 36 36"
-        style={{ transform: 'rotate(-90deg)' }}
-      >
-        {/* First segment */}
-        <circle
-          cx="18"
-          cy="18"
-          r="16"
-          fill="none"
-          stroke={isDark ? "#fbbf24" : "#64748b"}
-          strokeWidth="2"
-          strokeDasharray="25 5"
-          strokeLinecap="round"
-        />
-      </svg>
-      {isDark ? (
-        // Sun icon when in dark mode (click to go light)
-        <svg
-          className="w-4 h-4 text-amber-400 relative z-10"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
-        </svg>
-      ) : (
-        // Moon icon when in light mode (click to go dark)
-        <svg
-          className="w-4 h-4 text-gray-600 relative z-10"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isLanding = pathname === "/";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
-
-  // Determine if current page is a chat page (has chat input)
-  const isChatPage = pathname.startsWith('/accounting') ||
-    pathname.startsWith('/tax/chat') ||
-    pathname.startsWith('/cashflow-intelligence/chat') ||
-    pathname.startsWith('/wallet');
+  const { mode, mounted } = useMode();
 
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {
@@ -181,6 +89,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Navigate when mode changes
+  useEffect(() => {
+    if (!mounted) return;
+    if (mode === "user" && !pathname.startsWith("/personal")) {
+      router.push("/personal");
+    } else if (mode === "enterprise" && pathname.startsWith("/personal")) {
+      router.push("/accounting");
+    }
+  }, [mode, mounted, pathname, router]);
 
   if (isLanding) {
     return (
@@ -206,9 +124,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="pointer-events-auto">
             <ModuleButtonBar />
           </div>
-          {/* Theme Toggle - Right Side */}
+          {/* Mode Toggle - Right Side */}
           <div className="pointer-events-auto">
-            <ThemeToggle />
+            <DesktopModeToggle />
           </div>
         </header>
 
@@ -238,7 +156,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <NavIconBadge icon="shop" className="w-4 h-4 text-[#2264ff]" />
               </Link>
-              <ThemeToggle />
+              <MobileModeToggle />
               {/* Profile Icon - Mobile */}
               <Link
                 href="/profile"

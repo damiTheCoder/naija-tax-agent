@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { useTheme } from "@/lib/ThemeContext";
+import { useMode } from "@/lib/ModeContext";
 
 // Module configurations with icons
 const MODULES: {
@@ -75,7 +76,11 @@ export default function ModuleButtonBar() {
     const pathname = usePathname();
     const { navigateTo, isNavigating } = useNavigation();
     const { theme } = useTheme();
+    const { mode: experienceMode } = useMode();
     const isDark = theme === 'dark';
+
+    // Hide enterprise module buttons in personal mode
+    if (experienceMode === "user") return null;
 
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {

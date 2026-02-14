@@ -9,9 +9,11 @@ import {
     INTELLIGENCE_NAV_ITEMS,
     WALLET_NAV_ITEMS,
     MARKETPLACE_NAV_ITEMS,
+    PERSONAL_NAV_ITEMS,
     AppMode
 } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
+import { useMode } from "@/lib/ModeContext";
 import { NavIconBadge } from "./NavIconBadge";
 import { SIDEBAR_LOGO_SRC, APP_LOGO_ALT } from "@/lib/constants";
 import Image from "next/image";
@@ -27,6 +29,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const pathname = usePathname();
     const { navigateTo } = useNavigation();
     const { theme } = useTheme();
+    const { mode } = useMode();
     const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
     const [expandedModule, setExpandedModule] = useState<AppMode | null>(null);
 
@@ -49,13 +52,17 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         setExpandedModule(expandedModule === mode ? null : mode);
     };
 
-    const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = [
-        { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
-        { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
-        { id: "intelligence", label: "Treasury Management", items: INTELLIGENCE_NAV_ITEMS },
-        { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
-        { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
-    ];
+    const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
+        ? [
+            { id: "personal", label: "Personal OS", items: PERSONAL_NAV_ITEMS }
+        ]
+        : [
+            { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
+            { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
+            { id: "intelligence", label: "Treasury Management", items: INTELLIGENCE_NAV_ITEMS },
+            { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
+            { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
+        ];
 
     return (
         <>

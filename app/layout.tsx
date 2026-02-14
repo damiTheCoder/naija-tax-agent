@@ -5,7 +5,9 @@ import { APP_LOGO_SRC, APP_LOGO_ROUNDED_SRC } from "@/lib/constants";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { NavigationProvider } from "@/lib/NavigationContext";
 import { WorkspaceProvider } from "@/lib/WorkspaceContext";
+import { ConnectedAppsProvider } from "@/lib/ConnectedAppsContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
+import { ModeProvider } from "@/lib/ModeContext";
 
 const siteTitle = "Quantum Ledger - Smart Nigerian Tax Manager";
 const siteDescription =
@@ -41,12 +43,16 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <WorkspaceProvider>
-            <NavigationProvider>
-              <GlobalSpinner />
-              <AppShell>{children}</AppShell>
-            </NavigationProvider>
-          </WorkspaceProvider>
+          <ModeProvider>
+            <WorkspaceProvider>
+              <NavigationProvider>
+                <ConnectedAppsProvider>
+                  <GlobalSpinner />
+                  <AppShell>{children}</AppShell>
+                </ConnectedAppsProvider>
+              </NavigationProvider>
+            </WorkspaceProvider>
+          </ModeProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -6,7 +6,7 @@ import { useTheme } from "@/lib/ThemeContext";
 
 export default function ProfilePage() {
     const { profile, updateProfile, workspaces, currentWorkspace, createWorkspace, deleteWorkspace, renameWorkspace, switchWorkspace } = useWorkspace();
-    const { theme } = useTheme();
+    const { theme, setTheme } = useTheme();
 
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState(profile.name);
@@ -202,6 +202,61 @@ export default function ProfilePage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                     </svg>
                                     New
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Appearance Controls */}
+                        <div className={`rounded-2xl border p-5 space-y-4 ${isDark ? "border-gray-600 bg-[#050505]" : "border-gray-200 bg-white"}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+                                        Appearance
+                                    </p>
+                                    <p className={`text-xs mt-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                                        Choose how Quantum Ledger should look on this device.
+                                    </p>
+                                </div>
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-3 py-1 rounded-full ${isDark ? "bg-white/10 text-gray-200" : "bg-blue-50 text-blue-600"}`}>
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Saves per profile
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => setTheme("light")}
+                                    className={`rounded-2xl border p-4 text-left transition-all ${theme === "light" ? "ring-2 ring-offset-2 ring-blue-500" : ""} ${isDark ? "bg-[#0d0d0d] border-gray-700 hover:border-gray-500" : "bg-gray-50 border-gray-200 hover:border-gray-400"}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-200 to-amber-400 flex items-center justify-center">
+                                            <svg className="w-5 h-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m0-11.314L7.05 7.05m10.607 10.607l1.414 1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Daylight</p>
+                                            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Bright UI for offices</p>
+                                        </div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setTheme("dark")}
+                                    className={`rounded-2xl border p-4 text-left transition-all ${theme === "dark" ? "ring-2 ring-offset-2 ring-blue-500" : ""} ${isDark ? "bg-[#090909] border-gray-600 hover:border-gray-400" : "bg-gray-50 border-gray-200 hover:border-gray-400"}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-gray-900 flex items-center justify-center">
+                                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Night shift</p>
+                                            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Low-light trading floors</p>
+                                        </div>
+                                    </div>
                                 </button>
                             </div>
                         </div>

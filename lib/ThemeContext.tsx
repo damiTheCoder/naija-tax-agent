@@ -7,13 +7,14 @@ type Theme = "light" | "dark";
 interface ThemeContextValue {
     theme: Theme;
     toggleTheme: () => void;
+    setTheme: (nextTheme: Theme) => void;
     mounted: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState<Theme>("light");
+    const [theme, setThemeState] = useState<Theme>("light");
     const [mounted, setMounted] = useState(false);
     const [hasUserPreference, setHasUserPreference] = useState(false);
 
@@ -21,11 +22,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const stored = localStorage.getItem("theme") as Theme | null;
         if (stored === "dark" || stored === "light") {
-            setTheme(stored);
+            setThemeState(stored);
             setHasUserPreference(true);
         } else {
             const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-            setTheme(systemPrefersDark ? "dark" : "light");
+            setThemeState(systemPrefersDark ? "dark" : "light");
         }
         setMounted(true);
     }, []);
@@ -35,7 +36,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (!mounted || hasUserPreference) return;
         const media = window.matchMedia("(prefers-color-scheme: dark)");
         const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
-            setTheme(event.matches ? "dark" : "light");
+            setThemeState(event.matches ? "dark" : "light");
         };
         if (typeof media.addEventListener === "function") {
             media.addEventListener("change", handleChange);
@@ -70,12 +71,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const toggleTheme = () => {
         setHasUserPreference(true);
-        setTheme((prev) => (prev === "light" ? "dark" : "light"));
+        setThemeState((prev) => (prev === "light" ? "dark" : "light"));
+    };
+
+    const setTheme = (nextTheme: Theme) => {
+        setHasUserPreference(true);
+        setThemeState(nextTheme);
     };
 
     // Render children always, but with suppressed hydration warning div wrapper
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, mounted }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, mounted }}>
             <div suppressHydrationWarning>
                 {children}
             </div>
