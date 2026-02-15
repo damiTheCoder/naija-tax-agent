@@ -3,9 +3,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ConnectedApp } from "@/lib/ConnectedAppsContext";
 
-// Initialize Gemini
-const apiKey = process.env.GOOGLE_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(apiKey);
+
 
 const SYSTEM_PROMPT = `
 You are the "Quantum Ledger Personal Finance Assistant", a helpful, secure, and intelligent AI for Nigerian users.
@@ -30,13 +28,29 @@ AVAILABLE DATA (Simulated for this context):
 When you receive the list of connected apps, strictly adhere to what is available.
 `;
 
+// Simple session-based cache for PFM responses
+const queryCache = new Map<string, { response: string, timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
 export async function generatePfmResponse(message: string, connectedApps: ConnectedApp[]): Promise<string> {
+  const apiKey = process.env.GOOGLE_GEMINI_API_KEY || "";
+
+  // 1. Check Cache
+  const cacheKey = message.trim().toLowerCase();
+  const cached = queryCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log("[Gemini PFM] Using cached response for query");
+    return cached.response;
+  }
+
   if (!apiKey) {
+    console.warn("[Gemini PFM] API Key is missing");
     return "⚠️ Google Gemini API Key is missing. Please configure it in your environment variables.";
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
     // Filter for connected apps to build context
     const activeConnections = connectedApps.filter(app => app.status === "connected").map(app => app.name).join(", ");
@@ -54,9 +68,28 @@ Based on the connected apps, provide a helpful response. If they ask for data fr
     const result = await model.generateContent(`${SYSTEM_PROMPT}\n\n${userPrompt}`);
 
     const response = await result.response;
-    return response.text();
+    const text = response.text();
+
+    if (!text) {
+      throw new Error("Empty response from Gemini");
+    }
+
+    // 2. Update Cache
+    queryCache.set(cacheKey, { response: text, timestamp: Date.now() });
+
+    return text;
   } catch (error) {
-    console.error("Gemini PFM Error:", error);
+    console.error("[Gemini PFM Error]:", error);
+
+    // Check for specific error types if possible
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("API_KEY_INVALID")) {
+      return "❌ The Gemini API key provided is invalid. Please check your .env.local file.";
+    }
+    if (errorMessage.includes("quota")) {
+      return "⏳ Gemini free tier quota exceeded. Please try again in a few minutes.";
+    }
+
     return "I'm having trouble connecting to Google AI right now. Please try again later.";
   }
 }

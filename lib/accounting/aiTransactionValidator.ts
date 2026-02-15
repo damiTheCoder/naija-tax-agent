@@ -27,7 +27,13 @@ const VALIDATION_RETRY_LIMIT = 2;
 const VALIDATION_RETRY_DELAY_MS = 300;
 const DEFAULT_DEBIT_ACCOUNT = { code: "5010", name: "Purchases" };
 const DEFAULT_CREDIT_ACCOUNT = { code: "1020", name: "Bank" };
-const DEFAULT_GEMINI_MODEL_CANDIDATES = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+const DEFAULT_GEMINI_MODEL_CANDIDATES = [
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -141,7 +147,7 @@ Review the transaction interpretation and validate BOTH:
   "corrections": [{ "field": "...", "was": ..., "correctedTo": ..., "reason": "..." }],
   "finalInterpretation": { ... full interpretation object ... },
   "confidence": 0.0-1.0,
-  "reasoning": "brief explanation"
+  "reasoning": "A professional and conversational explanation of why the transaction was validated or corrected. Explain the tax logic to the user as a helpful accountant."
 }
 `;
 
@@ -174,6 +180,10 @@ function ensureChartAccount(
 // ============================================================================
 // CLAWDBOT AI VALIDATOR CLASS
 // ============================================================================
+
+// In-memory cache for AI validation results to save quota
+const validationCache = new Map<string, AIValidationResult>();
+const CONFIDENCE_THRESHOLD = 0.85;
 
 export class AITransactionValidator {
     private isEnabled: boolean = true;
@@ -209,14 +219,41 @@ export class AITransactionValidator {
     }
 
     /**
-     * Validate a transaction interpretation using Clawdbot AI
+     * Validate a transaction interpretation using AI (Clawdbot or Gemini)
+     * Includes caching and confidence thresholding to optimize quota usage.
      */
     async validateTransaction(
         systemInterpretation: SystemInterpretation
     ): Promise<AIValidationResult> {
         const startTime = Date.now();
+        const textKey = `${systemInterpretation.transactionText}_${systemInterpretation.amount}`;
 
-        // If AI is disabled, return the system interpretation as-is
+        // 1. Check Caching
+        const cached = validationCache.get(textKey);
+        if (cached) {
+            console.log('[AI Validator] Using cached result for:', systemInterpretation.transactionText);
+            return {
+                ...cached,
+                processingTimeMs: Date.now() - startTime
+            };
+        }
+
+        // 2. Check Confidence Threshold
+        // If Layer 1 is highly confident, skip Layer 2 AI to save quota
+        if (systemInterpretation.confidence && systemInterpretation.confidence >= CONFIDENCE_THRESHOLD) {
+            console.log(`[AI Validator] Skipping Layer 2 - Layer 1 confidence (${(systemInterpretation.confidence * 100).toFixed(0)}%) meets threshold (${CONFIDENCE_THRESHOLD * 100}%)`);
+            return {
+                validated: true,
+                corrected: false,
+                corrections: [],
+                finalInterpretation: systemInterpretation,
+                confidence: systemInterpretation.confidence,
+                reasoning: `Layer 1 confidence (${(systemInterpretation.confidence * 100).toFixed(0)}%) sufficient. AI skipped to optimize quota.`,
+                processingTimeMs: Date.now() - startTime
+            };
+        }
+
+        // 3. AI is disabled check
         if (!this.isAIEnabled()) {
             return {
                 validated: true,
@@ -232,11 +269,16 @@ export class AITransactionValidator {
         let lastError: unknown = null;
         for (let attempt = 1; attempt <= VALIDATION_RETRY_LIMIT; attempt++) {
             try {
+                let result: AIValidationResult;
                 if (this.provider === 'clawdbot') {
-                    return await this.validateWithClawdbot(systemInterpretation, startTime);
+                    result = await this.validateWithClawdbot(systemInterpretation, startTime);
                 } else {
-                    return await this.validateWithGemini(systemInterpretation, startTime);
+                    result = await this.validateWithGemini(systemInterpretation, startTime);
                 }
+
+                // Store successful result in cache
+                validationCache.set(textKey, result);
+                return result;
             } catch (error) {
                 lastError = error;
                 console.error(`[AI Validator] Attempt ${attempt} failed:`, error);

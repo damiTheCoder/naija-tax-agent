@@ -7,8 +7,7 @@ interface ChatMessage {
   content: string;
 }
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const OPENAI_BASE_URL = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
+
 
 function formatResponse(text: string, entries: KnowledgeEntry[]): string {
   const sourceList = entries.map((entry) => `${entry.topic} → ${entry.sources.join(", ")}`).join("; ");
@@ -37,38 +36,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const context = buildContextSnippet(entries);
     const userQuestion = messages[messages.length - 1]?.content || "";
 
-    const systemPrompt = `You are NaijaTaxAgent AI, a subject-matter guide for the Nigerian tax calculator.\n` +
-      `Explain calculations using the provided context, reference relevant modules, and keep answers concise.\n` +
-      `Context: \n${context}`;
+    const systemPrompt = `You are NaijaTaxAgent AI, a subject-matter guide for the Nigerian tax calculator.
+Help users understand Nigerian tax rules (VAT, WHT, CIT, Personal Income Tax) with expertise and clarity.
+Be professional yet friendly and conversational in your approach.
+Use the provided context to explain calculations, reference relevant modules, and provide actionable advice.
+Maintain a helpful, advisory tone—as if you are a personal tax consultant.
 
-    const apiKey = process.env.OPENAI_API_KEY;
+Context: 
+${context}`;
+
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ answer: fallbackAnswer(userQuestion, entries) });
     }
 
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.map((msg) => ({ role: msg.role, content: msg.content })),
-        ],
+    // Initialize Gemini
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+    // Call Gemini
+    const result = await model.generateContent({
+      contents: [
+        { role: 'user', parts: [{ text: systemPrompt + "\n\n" + messages.map(m => `${m.role}: ${m.content}`).join("\n") }] }
+      ],
+      generationConfig: {
         temperature: 0.2,
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const fallbackText = fallbackAnswer(userQuestion, entries);
-      return NextResponse.json({ answer: fallbackText });
-    }
-
-    const completion = await response.json();
-    const answer = completion?.choices?.[0]?.message?.content || "No response";
+    const answer = result.response.text() || "No response";
     return NextResponse.json({ answer: formatResponse(answer, entries) });
   } catch (error) {
     console.error("Tax assistant error", error);

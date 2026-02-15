@@ -607,6 +607,11 @@ _Ready to begin? Upload your files above!_`;
 
                 if (response.ok) {
                     const result = await response.json();
+
+                    if (result.conversationalResponse) {
+                        return result.conversationalResponse;
+                    }
+
                     return `🤖 **AI Insights**\n\n${result.summary || 'Upload your files and run reconciliation first for detailed insights.'}\n\n${result.recommendations?.slice(0, 3).map((r: string, i: number) => `${i + 1}. ${r}`).join('\n') || ''}`;
                 }
             } catch {

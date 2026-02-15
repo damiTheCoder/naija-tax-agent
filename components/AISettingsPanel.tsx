@@ -6,12 +6,12 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { 
-  Settings, 
-  Brain, 
-  Shield, 
-  Zap, 
-  CheckCircle2, 
+import {
+  Settings,
+  Brain,
+  Shield,
+  Zap,
+  CheckCircle2,
   AlertCircle,
   Info,
   ChevronDown,
@@ -83,11 +83,10 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            config.aiSettings.enabled 
-              ? "bg-green-100 text-green-700" 
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.aiSettings.enabled
+              ? "bg-green-100 text-green-700"
               : "bg-gray-100 text-gray-600"
-          }`}>
+            }`}>
             {config.aiSettings.enabled ? "AI Enabled" : "Rule-based Only"}
           </span>
           {isExpanded ? (
@@ -111,14 +110,12 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
             </div>
             <button
               onClick={() => updateAISettings("enabled", !config.aiSettings.enabled)}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                config.aiSettings.enabled ? "bg-[#2264ff]" : "bg-gray-300"
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-colors ${config.aiSettings.enabled ? "bg-[#2264ff]" : "bg-gray-300"
+                }`}
             >
               <span
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  config.aiSettings.enabled ? "translate-x-6" : ""
-                }`}
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${config.aiSettings.enabled ? "translate-x-6" : ""
+                  }`}
               />
             </button>
           </div>
@@ -167,6 +164,8 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               <option value="gpt-4">GPT-4</option>
               <option value="gpt-4-turbo">GPT-4 Turbo</option>
               <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
               <option value="claude-3-opus">Claude 3 Opus</option>
               <option value="claude-3-sonnet">Claude 3 Sonnet</option>
             </select>
@@ -200,14 +199,12 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               </div>
               <button
                 onClick={() => updateAISettings("autoClassify", !config.aiSettings.autoClassify)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  config.aiSettings.autoClassify ? "bg-[#2264ff]" : "bg-gray-300"
-                }`}
+                className={`relative w-10 h-5 rounded-full transition-colors ${config.aiSettings.autoClassify ? "bg-[#2264ff]" : "bg-gray-300"
+                  }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                    config.aiSettings.autoClassify ? "translate-x-5" : ""
-                  }`}
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${config.aiSettings.autoClassify ? "translate-x-5" : ""
+                    }`}
                 />
               </button>
             </div>
@@ -219,14 +216,12 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
               </div>
               <button
                 onClick={() => updateAISettings("autoGenerateJournals", !config.aiSettings.autoGenerateJournals)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  config.aiSettings.autoGenerateJournals ? "bg-[#2264ff]" : "bg-gray-300"
-                }`}
+                className={`relative w-10 h-5 rounded-full transition-colors ${config.aiSettings.autoGenerateJournals ? "bg-[#2264ff]" : "bg-gray-300"
+                  }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                    config.aiSettings.autoGenerateJournals ? "translate-x-5" : ""
-                  }`}
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${config.aiSettings.autoGenerateJournals ? "translate-x-5" : ""
+                    }`}
                 />
               </button>
             </div>
@@ -242,11 +237,10 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
                 <button
                   key={mode}
                   onClick={() => updateAISettings("complianceMode", mode)}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    config.aiSettings.complianceMode === mode
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${config.aiSettings.complianceMode === mode
                       ? "border-[#2264ff] bg-blue-50 text-[#2264ff]"
                       : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
                 </button>
@@ -263,7 +257,7 @@ export default function AISettingsPanel({ onSave, className = "" }: AISettingsPa
             <div className="text-sm text-gray-700">
               <p className="font-medium text-gray-900 mb-1">Dual Classification System</p>
               <p>
-                The system uses rule-based classification first. When confidence is below the threshold, 
+                The system uses rule-based classification first. When confidence is below the threshold,
                 AI is used for intelligent classification following Nigerian accounting standards (FIRS, CAMA, IFRS for SMEs).
               </p>
             </div>

@@ -504,10 +504,12 @@ Review the tax computation and transaction schedule provided and **identify all 
 * Ensuring all totals reconcile with the underlying figures
 
 Assume the entity is **VAT-registered** and qualifies as a **small company exempt from Company Income Tax**.
+Maintain a professional, helpful, and advisory tone in your `auditorCommentary`.
 
 **Response Format:**
 Return a JSON object with the following structure:
 {
+  "auditorCommentary": "A helpful, professional summary of the audit findings in natural language. Talk to the user as a friendly tax advisor.",
   "errors": [
     { "type": "WHT" | "VAT" | "CIT" | "CALCULATION", "description": string, "original": any, "corrected": any }
   ],
@@ -564,6 +566,7 @@ export interface TaxAuditError {
 }
 
 export interface TaxAuditResponse {
+    auditorCommentary: string;
     errors: TaxAuditError[];
     correctedSummary: {
         directTaxes: {

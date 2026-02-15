@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import {
     ReconciliationResult,
     DiscrepancyItem,
@@ -25,7 +24,7 @@ YOUR RESPONSIBILITIES:
 6. Provide an overall assessment of the reconciliation status
 
 OUTPUT FORMAT (JSON):
-{
+  "conversationalResponse": "A professional and friendly preamble explaining the findings in natural language before the structured data. Talk to the user as a helpful auditor.",
   "overallAssessment": "balanced|needs_attention|critical_issues",
   "confidence": 0.0-1.0,
   "summary": "Brief overall summary of findings",
@@ -56,6 +55,7 @@ OUTPUT FORMAT (JSON):
 
 IMPORTANT GUIDELINES:
 - Be specific and actionable in your recommendations
+- **TONE**: Maintain a professional yet friendly and helpful tone in your `conversationalResponse`. Imagine you are presenting this to a business owner who values both accuracy and clear communication.
 - Consider Nigerian banking practices and common issues
 - Account for bank processing delays (typically 1-3 business days)
 - Flag round-number transactions over ₦500,000 for extra scrutiny
@@ -79,6 +79,7 @@ interface AIInsight {
 }
 
 interface AIReconciliationResponse {
+    conversationalResponse: string;
     overallAssessment: 'balanced' | 'needs_attention' | 'critical_issues';
     confidence: number;
     summary: string;
@@ -165,29 +166,24 @@ ${body.additionalContext ? `ADDITIONAL CONTEXT:\n${body.additionalContext}` : ''
 Please analyze this bank reconciliation and provide detailed insights and recommendations.
 `;
 
-        // Initialize OpenAI
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
+        // Initialize Gemini
+        const apiKey = process.env.GOOGLE_GEMINI_API_KEY || "";
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-        // Call OpenAI
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-                {
-                    role: 'system',
-                    content: BANK_RECONCILIATION_SYSTEM_PROMPT,
-                },
-                {
-                    role: 'user',
-                    content: userMessage,
-                },
+        // Call Gemini
+        const result = await model.generateContent({
+            contents: [
+                { role: 'user', parts: [{ text: BANK_RECONCILIATION_SYSTEM_PROMPT + "\n\n" + userMessage }] }
             ],
-            temperature: 0.3,
-            response_format: { type: 'json_object' },
+            generationConfig: {
+                temperature: 0.3,
+                responseMimeType: 'application/json',
+            }
         });
 
-        const responseContent = completion.choices[0]?.message?.content;
+        const responseContent = result.response.text();
 
         if (!responseContent) {
             return NextResponse.json(
@@ -215,7 +211,7 @@ Please analyze this bank reconciliation and provide detailed insights and recomm
             ...aiResult,
             metadata: {
                 analyzedAt: new Date().toISOString(),
-                model: 'gpt-4o',
+                model: 'gemini-1.5-flash',
             },
         };
 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import {
     AI_TAX_AUDIT_SYSTEM_PROMPT,
     TaxAuditRequest,
@@ -75,29 +74,24 @@ ${referenceRates}
 Please audit this tax computation and provide corrections.
 `;
 
-        // Initialize OpenAI
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
+        // Initialize Gemini
+        const apiKey = process.env.GOOGLE_GEMINI_API_KEY || "";
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-        // Call OpenAI
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-                {
-                    role: 'system',
-                    content: AI_TAX_AUDIT_SYSTEM_PROMPT,
-                },
-                {
-                    role: 'user',
-                    content: userMessage,
-                },
+        // Call Gemini
+        const result = await model.generateContent({
+            contents: [
+                { role: 'user', parts: [{ text: AI_TAX_AUDIT_SYSTEM_PROMPT + "\n\n" + userMessage }] }
             ],
-            temperature: 0.3, // Lower temperature for more consistent tax calculations
-            response_format: { type: 'json_object' },
+            generationConfig: {
+                temperature: 0.3,
+                responseMimeType: 'application/json',
+            }
         });
 
-        const responseContent = completion.choices[0]?.message?.content;
+        const responseContent = result.response.text();
 
         if (!responseContent) {
             return NextResponse.json(
@@ -126,7 +120,7 @@ Please audit this tax computation and provide corrections.
             metadata: {
                 auditedAt: new Date().toISOString(),
                 transactionCount: body.transactions.length,
-                model: 'gpt-4o',
+                model: 'gemini-1.5-flash',
             },
         };
 
