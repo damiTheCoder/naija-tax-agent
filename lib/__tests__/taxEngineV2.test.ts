@@ -70,6 +70,7 @@ describe("Tax Engine V2 - Rulebook Driven", () => {
         const vatProfile: UserProfile = { ...profile, isVATRegistered: true };
         const inputs: TaxInputs = {
             grossRevenue: 10000000,
+            allowableExpenses: 0,
             inputVATPaid: 200000
         };
         const result = calculateTaxForNigeria(vatProfile, inputs);

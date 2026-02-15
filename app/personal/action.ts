@@ -51,10 +51,7 @@ User's Disconnected Apps: ${disconnected || "None"}
 Based on the connected apps, provide a helpful response. If they ask for data from a disconnected app, guide them to connect it.
 `;
 
-    const result = await model.generateContent([
-      { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
-      { role: "user", parts: [{ text: userPrompt }] }
-    ]);
+    const result = await model.generateContent(`${SYSTEM_PROMPT}\n\n${userPrompt}`);
 
     const response = await result.response;
     return response.text();

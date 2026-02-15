@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
 import { generatePfmResponse } from "./action";
-import { BarChart2, Wallet, RefreshCw, Layers, Send } from "lucide-react";
+import { BarChart2, Wallet, RefreshCw, Layers, Send, TrendingUp } from "lucide-react";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
+import Link from "next/link";
 
 type ChatMessage = {
     id: string;
@@ -148,16 +149,16 @@ export default function PersonalChatPage() {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-80px)] -mx-2 lg:-mx-8 relative">
+        <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-80px)] relative">
             {/* Chat Area */}
-            <div className={`flex-1 overflow-y-auto pt-2 sm:pt-3 transition-all duration-300 ${chatAreaBottomPaddingClass}`}>
+            <div className={`flex-1 overflow-y-auto hide-scrollbar pt-2 sm:pt-3 transition-all duration-300 ${chatAreaBottomPaddingClass}`}>
                 {!hasMessages ? (
                     /* ── Welcome State ── */
                     <div className="flex flex-col items-center justify-start lg:justify-center min-h-full px-4 pt-4 lg:pt-0 pb-3">
                         <div className="max-w-2xl w-full text-center space-y-8">
                             {/* Google Logo / AI Branding */}
                             <div className="flex justify-center">
-                                <div className="p-4 bg-white rounded-full shadow-md">
+                                <div className="p-4 bg-white rounded-full">
                                     <img
                                         src="/google-logo.jpg"
                                         alt="Google AI"
@@ -169,7 +170,7 @@ export default function PersonalChatPage() {
                             {/* Greeting */}
                             <div>
                                 <h1 className={`text-2xl md:text-3xl font-semibold mb-2 ${isDark ? "text-white" : "text-gray-900"}`}>
-                                    Hi there, I'm your Personal Finance AI
+                                    Hi there, I&apos;m your Personal Finance AI
                                 </h1>
                                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
                                     Powered by Google Gemini. Connect your apps and ask me anything about your money.
@@ -183,12 +184,12 @@ export default function PersonalChatPage() {
                                         key={card.title}
                                         onClick={() => handleSuggestionClick(card.prompt)}
                                         className={`
-                      group rounded-2xl border p-4 transition-all text-left flex flex-col gap-3
-                      ${isDark
+                                            group rounded-2xl border p-4 transition-all text-left flex flex-col gap-3
+                                            ${isDark
                                                 ? "border-gray-700 bg-gray-900/50 hover:bg-gray-800/80 hover:border-gray-600"
                                                 : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300"
                                             }
-                    `}
+                                        `}
                                     >
                                         <div className={`p-2 rounded-lg w-fit ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
                                             <card.icon className={`w-5 h-5 ${card.color}`} />
@@ -214,7 +215,7 @@ export default function PersonalChatPage() {
                                 <div className={`flex gap-3 max-w-[85%] md:max-w-[75%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                                     {/* Avatar */}
                                     {msg.role === "assistant" ? (
-                                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm overflow-hidden flex-shrink-0">
+                                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden flex-shrink-0 border">
                                             <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain" />
                                         </div>
                                     ) : (
@@ -229,12 +230,12 @@ export default function PersonalChatPage() {
                                     {/* Bubble */}
                                     <div>
                                         <div className={`
-                      rounded-2xl px-4 py-3 text-sm leading-relaxed
-                      ${msg.role === "assistant"
-                                                ? isDark ? "bg-gray-800 text-gray-200" : "bg-white border border-gray-100 text-gray-800 shadow-sm"
+                                            rounded-2xl px-4 py-3 text-sm leading-relaxed
+                                            ${msg.role === "assistant"
+                                                ? isDark ? "bg-gray-800 text-gray-200" : "bg-white border border-gray-100 text-gray-800"
                                                 : "bg-[#2264ff] text-white"
                                             }
-                    `}>
+                                        `}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                         </div>
                                         <p className={`text-[10px] mt-1.5 px-1 ${isDark ? "text-gray-600" : "text-gray-400"}`}>
@@ -249,10 +250,10 @@ export default function PersonalChatPage() {
                         {isTyping && (
                             <div className="flex justify-start">
                                 <div className="flex gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm overflow-hidden flex-shrink-0">
+                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden flex-shrink-0 border">
                                         <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain" />
                                     </div>
-                                    <div className={`rounded-2xl px-4 py-3 ${isDark ? "bg-gray-800" : "bg-white border border-gray-100 shadow-sm"}`}>
+                                    <div className={`rounded-2xl px-4 py-3 ${isDark ? "bg-gray-800" : "bg-white border border-gray-100"}`}>
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full animate-bounce bg-blue-500" style={{ animationDelay: "0ms" }} />
                                             <div className="w-2 h-2 rounded-full animate-bounce bg-red-500" style={{ animationDelay: "150ms" }} />
@@ -271,13 +272,13 @@ export default function PersonalChatPage() {
             {/* ── Expanding Composer / FAB ── */}
             <div className={`fixed bottom-6 left-1/2 lg:left-[calc(50%_+_7.5rem)] transform -translate-x-1/2 flex justify-center z-50 transition-all duration-500 ease-in-out w-auto`}>
                 {!isExpanded ? (
-                    // Floating Action Button - same style as accounting button
+                    // Floating Action Button
                     <button
                         onClick={() => {
                             playGoogleButtonClickSound();
                             setIsExpanded(true);
                         }}
-                        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 transition-all duration-300 hover:scale-105"
                     >
                         <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 flex-shrink-0 rounded-full" />
                         <span className="font-semibold text-sm text-white">Chat</span>
@@ -285,18 +286,23 @@ export default function PersonalChatPage() {
                 ) : (
                     // Expanded Composer
                     <div className={`
-                        w-[90vw] max-w-2xl flex flex-col gap-2 rounded-3xl border px-4 py-3 shadow-2xl animate-in slide-in-from-bottom-5 fade-in duration-300
+                        w-[90vw] max-w-2xl flex flex-col gap-2 rounded-3xl border px-4 py-3 animate-in slide-in-from-bottom-5 fade-in duration-300
                         ${isDark
                             ? "border-gray-700 bg-gray-900 focus-within:border-gray-500"
-                            : "border-gray-200 bg-white focus-within:border-gray-300"
+                            : "border-gray-200 bg-white focus-within:border-gray-300 shadow-sm"
                         }
                     `}>
                         {/* Header in Expanded State */}
-                        <div className="flex items-center gap-2 mb-1 px-1">
-                            <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 rounded-full" />
-                            <span className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-gray-500"}`}>
-                                Chat with Finance AI
-                            </span>
+                        <div className="flex items-center justify-between mb-1 px-1">
+                            <div className="flex items-center gap-2">
+                                <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 rounded-full" />
+                                <span className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-gray-500"}`}>
+                                    Chat with Finance AI
+                                </span>
+                            </div>
+                            <button onClick={() => setIsExpanded(false)} className={`p-1.5 rounded-full hover:bg-gray-100 ${isDark ? "hover:bg-gray-800 text-gray-500" : "text-gray-400"}`}>
+                                <TrendingUp className="w-4 h-4 rotate-180" />
+                            </button>
                         </div>
 
                         <div className="flex items-end gap-2">

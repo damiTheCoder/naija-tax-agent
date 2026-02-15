@@ -1,0 +1,1 @@
+lib/__tests__/taxEngineV2.test.ts(71,15): error TS2741: Property 'allowableExpenses' is missing in type '{ grossRevenue: number; inputVATPaid: number; }' but required in type 'TaxInputs'.

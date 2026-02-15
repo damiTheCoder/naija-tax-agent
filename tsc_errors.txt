@@ -1,0 +1,34 @@
+app/personal/action.ts(55,9): error TS2353: Object literal may only specify known properties, and 'role' does not exist in type 'Part'.
+app/personal/action.ts(56,9): error TS2353: Object literal may only specify known properties, and 'role' does not exist in type 'Part'.
+app/personal/dashboard/page.tsx(105,49): error TS2322: Type '(value: number) => string' is not assignable to type 'Formatter<number, NameType>'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+app/personal/dashboard/page.tsx(139,49): error TS2322: Type '(value: number) => string' is not assignable to type 'Formatter<number, NameType>'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+components/Sidebar.tsx(173,33): error TS2322: Type '"message-square"' is not assignable to type 'NavIcon'.
+lib/__tests__/taxEngineV2.test.ts(5,1): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(15,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(31,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(32,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(33,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(36,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(39,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(46,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(47,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(50,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(54,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(57,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(66,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(69,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(71,15): error TS2741: Property 'allowableExpenses' is missing in type '{ grossRevenue: number; inputVATPaid: number; }' but required in type 'TaxInputs'.
+lib/__tests__/taxEngineV2.test.ts(77,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(81,1): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(82,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(87,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(90,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(95,9): error TS2304: Cannot find name 'expect'.
+lib/__tests__/taxEngineV2.test.ts(98,5): error TS2582: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+lib/__tests__/taxEngineV2.test.ts(103,9): error TS2304: Cannot find name 'expect'.
