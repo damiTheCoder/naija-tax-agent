@@ -51,7 +51,7 @@ export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
     let label = "";
     let rateDescription = "";
     let formula = "";
-    let citation = "SDA Schedule";
+    const citation = "SDA Schedule";
 
     switch (input.documentType) {
         case 'agreement':

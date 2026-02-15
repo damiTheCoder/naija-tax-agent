@@ -104,7 +104,7 @@ export function evaluateFormula(formula: string, context: Record<string, number>
         if (/[^0-9+\-*/().\s]/.test(processed)) {
             throw new Error(`Unsafe characters in evaluated formula: ${processed}`);
         }
-        // eslint-disable-next-line no-new-func
+         
         return new Function(`return ${processed}`)();
     } catch (error) {
         console.error(`Failed to evaluate formula: ${formula} (processed: ${processed})`, error);

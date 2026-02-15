@@ -99,7 +99,7 @@ export default function CashIntelligencePage() {
 
         // 2. Calculate OHLC
         const candles: typeof candleData = [];
-        let currentBalance = 0; // Should ideally start from opening balance of 30 days ago
+        const currentBalance = 0; // Should ideally start from opening balance of 30 days ago
 
         // Calculate initial balance (pro-rated for demo, or sum all prior)
         // For simplicity in this view, we'll start with the analytics.cashBalance and work backwards? 
