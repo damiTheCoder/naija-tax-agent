@@ -24,12 +24,13 @@ export function DesktopModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
   const activeModeLabel = isUser ? "Personal" : "Enterprise";
+  const logoBlue = "#2264ff";
 
   return (
     <div className="flex items-center gap-2">
       <span
         className="text-sm font-semibold tracking-wide"
-        style={{ color: "#1e3a8a" }}
+        style={{ color: logoBlue }}
       >
         {activeModeLabel}
       </span>
@@ -39,7 +40,7 @@ export function DesktopModeToggle() {
         aria-checked={isUser}
         className="relative inline-flex h-9 w-16 items-center rounded-full transition-colors"
         style={{
-          background: isUser ? "#1e3a8a" : "#dbe2ea",
+          background: logoBlue,
           boxShadow: "none",
         }}
         aria-label={isUser ? "Switch to enterprise experience" : "Switch to personal experience"}
@@ -48,7 +49,7 @@ export function DesktopModeToggle() {
           className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-transform duration-300 ${isUser ? "translate-x-8" : "translate-x-1"}`}
           style={{
             background: "#ffffff",
-            color: "#1e3a8a",
+            color: logoBlue,
             boxShadow: "none",
           }}
         >
@@ -66,21 +67,22 @@ export function DesktopModeToggle() {
 export function MobileModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
+  const logoBlue = "#2264ff";
 
   return (
     <button
       onClick={toggleMode}
       className="flex items-center justify-center w-8 h-8 rounded-full border transition-all"
       style={{
-        borderColor: isUser ? "rgba(255,255,255,0.4)" : "rgba(34,100,255,0.15)",
-        background: isUser ? "rgba(15,23,42,0.5)" : "#f1f5f9",
+        borderColor: logoBlue,
+        background: logoBlue,
       }}
       aria-label={isUser ? "Switch to enterprise experience" : "Switch to user experience"}
     >
       {isUser ? (
         <PersonalIcon className="w-4 h-4 text-white" />
       ) : (
-        <EnterpriseIcon className="w-4 h-4 text-[#1e3a8a]" />
+        <EnterpriseIcon className="w-4 h-4 text-white" />
       )}
     </button>
   );

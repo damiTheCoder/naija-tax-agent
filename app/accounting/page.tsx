@@ -952,11 +952,11 @@ export default function AccountingPage() {
   return (
     <>
 
-      <div className="space-y-6 pb-32">
+      <div className="space-y-6 pb-20 md:pb-32">
         <section className="relative min-h-[75vh]">
 
           <div className="chat-feed flex flex-col min-h-[60vh]">
-            <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
+            <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-24 md:pb-36 space-y-3 md:space-y-5">
               <div className="space-y-4">
                 {/* Inflow Section */}
                 <div>

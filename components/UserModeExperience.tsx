@@ -148,12 +148,14 @@ const FLOW_TIMELINE = [
   { title: "USD hedge window", detail: "GTB Treasury", eta: "Open", value: "Flag FX" },
 ];
 
+const INITIAL_MESSAGE_BASE_TS = Date.parse("2025-01-01T09:00:00+01:00");
+
 const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: "msg-1",
     role: "assistant",
     content: "Welcome back 👋🏾 I pulled fresh statements from Zenith and reconciled payroll accruals. What should we focus on?",
-    timestamp: Date.now() - 1000 * 60 * 3,
+    timestamp: INITIAL_MESSAGE_BASE_TS,
     summary: "Bank + payroll refresh complete",
     sources: ["Zenith Business", "Wave Payroll"],
   },
@@ -161,13 +163,13 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     id: "msg-2",
     role: "user",
     content: "Is there enough cash to ladder ₦5M into 30 day paper?",
-    timestamp: Date.now() - 1000 * 60 * 2,
+    timestamp: INITIAL_MESSAGE_BASE_TS + 1000 * 60,
   },
   {
     id: "msg-3",
     role: "assistant",
     content: "Yes. Idle cash after buffers is ₦6.1M. I can sweep ₦5M into the 30d bucket and leave ₦1.1M for tax reserve.",
-    timestamp: Date.now() - 1000 * 60,
+    timestamp: INITIAL_MESSAGE_BASE_TS + 1000 * 60 * 2,
     summary: "Idle cash validated across Zenith + GTB",
     sources: ["Zenith Business", "GTB Treasury", "Unified Ledger.qldb"],
   },
@@ -177,7 +179,12 @@ function formatTimestamp(timestamp: number) {
   return new Intl.DateTimeFormat("en-NG", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Africa/Lagos",
   }).format(timestamp);
+}
+
+function getNowTimestamp(): number {
+  return Date.now();
 }
 
 export default function UserModeExperience() {
@@ -221,22 +228,23 @@ export default function UserModeExperience() {
   const sendMessage = (prompt?: string) => {
     const text = (prompt ?? composer).trim();
     if (!text) return;
+    const now = getNowTimestamp();
 
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${now}`,
       role: "user",
       content: text,
-      timestamp: Date.now(),
+      timestamp: now,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     if (!prompt) setComposer("");
 
     const followUp: ChatMessage = {
-      id: `assistant-${Date.now() + 1}`,
+      id: `assistant-${now + 1}`,
       role: "assistant",
       content: `Working on "${text}". Pulling context from ${selectedNode.name} and connected apps.`,
-      timestamp: Date.now() + 500,
+      timestamp: now + 500,
       summary: `${selectedNode.badge} coverage with ${selectedNode.metrics}`,
       sources: selectedNode.sources.slice(0, 3),
     };
@@ -247,10 +255,10 @@ export default function UserModeExperience() {
   };
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-20 md:pb-32">
       <section className="relative min-h-[75vh]">
         <div className="chat-feed flex flex-col min-h-[60vh]">
-          <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
+          <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-24 md:pb-36 space-y-3 md:space-y-5">
             <div className="space-y-4">
 
               {/* Net Worth Summary */}

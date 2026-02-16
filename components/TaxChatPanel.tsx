@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { addChatHistoryEntry } from "@/lib/personalChatHistory";
 
 type ChatRole = "user" | "assistant";
 
@@ -60,10 +61,18 @@ export default function TaxChatPanel() {
     setError(null);
 
     try {
+      addChatHistoryEntry({
+        module: "tax",
+        route: "/tax-tools",
+        prompt: trimmed,
+      });
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: outgoing.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({
+          module: "tax",
+          messages: outgoing.map(({ role, content }) => ({ role, content })),
+        }),
       });
 
       if (!response.ok) {
@@ -76,6 +85,12 @@ export default function TaxChatPanel() {
           ? data.answer
           : "I could not generate a useful response. Please try again.";
       appendMessage("assistant", answer);
+      addChatHistoryEntry({
+        module: "tax",
+        route: "/tax-tools",
+        prompt: trimmed,
+        response: answer,
+      });
     } catch (err) {
       const fallback = err instanceof Error ? err.message : "Unable to reach the tax assistant.";
       setError(fallback);

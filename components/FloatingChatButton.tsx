@@ -6,6 +6,11 @@ import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/tra
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
+import {
+    addChatHistoryEntry,
+    CHAT_HISTORY_SELECTED_EVENT,
+    consumeSelectedChatHistory,
+} from "@/lib/personalChatHistory";
 
 // ============================================================================
 // CLAWDBOT INTEGRATION
@@ -22,6 +27,21 @@ interface ClawdbotResponse {
     }>;
     fallback?: boolean;
     error?: string;
+}
+
+interface AgentResponse {
+    answer?: string;
+    finalAnswer?: string;
+    error?: string;
+}
+
+interface ClarificationData {
+    transaction: {
+        amount: number;
+        date: string;
+        description: string;
+        bankName: string;
+    };
 }
 
 /**
@@ -57,6 +77,42 @@ async function sendToClawdbot(
             fallback: true,
             error: error instanceof Error ? error.message : "Unknown error",
         };
+    }
+}
+
+async function humanizeDraftReply(
+    message: string,
+    moduleId: string,
+    draftReply: string
+): Promise<string> {
+    if (!draftReply.trim()) return draftReply;
+
+    try {
+        const response = await fetch("/api/agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                module: moduleId,
+                draftReply,
+                includeSources: false,
+                messages: [{ role: "user", content: message }],
+            }),
+        });
+
+        if (!response.ok) return draftReply;
+        const data: AgentResponse = await response.json();
+
+        if (typeof data.answer === "string" && data.answer.trim()) {
+            return data.answer;
+        }
+
+        if (typeof data.finalAnswer === "string" && data.finalAnswer.trim()) {
+            return data.finalAnswer;
+        }
+
+        return draftReply;
+    } catch {
+        return draftReply;
     }
 }
 
@@ -225,6 +281,15 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     return moduleConfigs.default;
 }
 
+function createIntroMessage(module: ModuleConfig): ChatMessage {
+    return {
+        id: "intro",
+        role: "assistant",
+        content: `${module.greeting}\n\nExamples:\n• ${module.examples.join('\n• ')}`,
+        timestamp: Date.now(),
+    };
+}
+
 export default function FloatingChatButton() {
     const pathname = usePathname();
     const [currentModule, setCurrentModule] = useState<ModuleConfig>(moduleConfigs.default);
@@ -233,29 +298,89 @@ export default function FloatingChatButton() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [clarificationData, setClarificationData] = useState<any | null>(null);
+    const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     // Detect module from pathname
     useEffect(() => {
-        const module = getModuleFromPath(pathname);
-        setCurrentModule(module);
+        const activeModule = getModuleFromPath(pathname);
+        setCurrentModule(activeModule);
+        const introMessage = createIntroMessage(activeModule);
+        const selected = consumeSelectedChatHistory({ pathname });
+
+        if (selected && selected.module !== "personal") {
+            const restoredMessages: ChatMessage[] = [introMessage];
+            const baseTs = selected.timestamp || Date.now();
+            restoredMessages.push({
+                id: `hist-u-${selected.id}`,
+                role: "user",
+                content: selected.prompt,
+                timestamp: baseTs,
+            });
+            if (selected.response) {
+                restoredMessages.push({
+                    id: `hist-a-${selected.id}`,
+                    role: "assistant",
+                    content: selected.response,
+                    timestamp: baseTs + 1,
+                });
+            }
+
+            setMessages(restoredMessages);
+            setInputValue(selected.response ? "" : selected.prompt);
+            setIsModalOpen(true);
+            return;
+        }
 
         // Reset messages with module-specific greeting when module changes
-        setMessages([{
-            id: "intro",
-            role: "assistant",
-            content: `${module.greeting}\n\nExamples:\n• ${module.examples.join('\n• ')}`,
-            timestamp: Date.now(),
-        }]);
+        setMessages([introMessage]);
+    }, [pathname]);
+
+    useEffect(() => {
+        const handleHistorySelection = () => {
+            const selected = consumeSelectedChatHistory({ pathname });
+            if (!selected || selected.module === "personal") return;
+
+            const activeModule = getModuleFromPath(pathname);
+            setCurrentModule(activeModule);
+            const introMessage = createIntroMessage(activeModule);
+            const baseTs = selected.timestamp || Date.now();
+            const restoredMessages: ChatMessage[] = [
+                introMessage,
+                {
+                    id: `hist-u-${selected.id}`,
+                    role: "user",
+                    content: selected.prompt,
+                    timestamp: baseTs,
+                },
+            ];
+
+            if (selected.response) {
+                restoredMessages.push({
+                    id: `hist-a-${selected.id}`,
+                    role: "assistant",
+                    content: selected.response,
+                    timestamp: baseTs + 1,
+                });
+            }
+
+            setMessages(restoredMessages);
+            setInputValue(selected.response ? "" : selected.prompt);
+            setIsModalOpen(true);
+        };
+
+        window.addEventListener(CHAT_HISTORY_SELECTED_EVENT, handleHistorySelection as EventListener);
+        return () => {
+            window.removeEventListener(CHAT_HISTORY_SELECTED_EVENT, handleHistorySelection as EventListener);
+        };
     }, [pathname]);
 
     // Listen for clarification requests
     useEffect(() => {
         const handleClarification = (e: CustomEvent) => {
             console.log("Clarification request received", e.detail);
-            setClarificationData(e.detail);
+            setClarificationData(e.detail as ClarificationData);
         };
 
         if (typeof window !== "undefined") {
@@ -639,6 +764,7 @@ _Ask me anything about bank reconciliation!_`;
 
     // Handle dashboard/general queries
     const handleDashboardMessage = useCallback((message: string) => {
+        void message;
         try {
             const statements = accountingEngine.generateStatements();
             const revenue = statements.revenue || 0;
@@ -702,6 +828,7 @@ _Ask me anything about bank reconciliation!_`;
 
         try {
             let response: string;
+            let shouldHumanize = false;
 
             // Use Clawdbot AI if enabled
             if (USE_CLAWDBOT) {
@@ -711,6 +838,7 @@ _Ask me anything about bank reconciliation!_`;
                 if (clawdbotResult.fallback || clawdbotResult.error) {
                     console.log("[Clawdbot] Falling back to local handlers");
                     response = await getLocalResponse(trimmed);
+                    shouldHumanize = true;
                 } else {
                     response = clawdbotResult.reply;
 
@@ -726,8 +854,19 @@ _Ask me anything about bank reconciliation!_`;
             } else {
                 // Use local handlers
                 response = await getLocalResponse(trimmed);
+                shouldHumanize = true;
             }
 
+            if (shouldHumanize) {
+                response = await humanizeDraftReply(trimmed, currentModule.id, response);
+            }
+
+            addChatHistoryEntry({
+                module: currentModule.id,
+                route: pathname,
+                prompt: trimmed,
+                response,
+            });
             appendMessage("assistant", response);
         } catch {
             appendMessage("assistant", "Sorry, I couldn't process that. Please try again.");
@@ -754,7 +893,7 @@ _Ask me anything about bank reconciliation!_`;
                     return handleDashboardMessage(message);
             }
         }
-    }, [inputValue, isLoading, currentModule.id, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage]);
+    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -126,7 +126,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="lg:ml-60 min-h-screen flex flex-col pb-20 lg:pb-0"> {/* pb-20 for mobile BottomNav, lg:pb-0 for desktop */}
+      <div className="lg:ml-60 min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
         {/* Desktop Header */}
         <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-between items-center pointer-events-none">
           {/* Module Buttons - Left Side */}

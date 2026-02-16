@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { addChatHistoryEntry } from "@/lib/personalChatHistory";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -42,10 +43,18 @@ export default function TaxAgentChat() {
     setIsLoading(true);
 
     try {
+      addChatHistoryEntry({
+        module: "tax",
+        route: "/tax-tools",
+        prompt: question,
+      });
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({
+          module: "tax",
+          messages: newMessages.map(({ role, content }) => ({ role, content })),
+        }),
       });
 
       if (!response.ok) {
@@ -56,6 +65,12 @@ export default function TaxAgentChat() {
       const answer = data.answer || "I could not generate a useful response. Please try again.";
 
       setMessages((prev) => [...prev, { role: "assistant", content: answer, timestamp: Date.now() }]);
+      addChatHistoryEntry({
+        module: "tax",
+        route: "/tax-tools",
+        prompt: question,
+        response: answer,
+      });
     } catch (err) {
       const fallback = err instanceof Error ? err.message : "Tax assistant unavailable.";
       setError(fallback);

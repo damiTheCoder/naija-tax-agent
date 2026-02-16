@@ -15,6 +15,7 @@ export interface PlatformInvestment {
     roi: number;
     color: string;
     icon: string;
+    logo?: string;
 }
 
 // Simulated data based on SYSTEM_PROMPT in action.ts
@@ -65,6 +66,7 @@ export function getPlatformInvestments(connectedApps: ConnectedApp[]): PlatformI
                 roi: data.roi,
                 color: app.accent,
                 icon: app.initial,
+                logo: app.logo,
             };
         });
 }

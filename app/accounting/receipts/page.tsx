@@ -355,7 +355,7 @@ export default function ReceiptsManagementPage() {
     }
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6 pb-10 sm:pb-14">
             {/* Header */}
             <div
                 className="rounded-2xl border px-6 py-6"

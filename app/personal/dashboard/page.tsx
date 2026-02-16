@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
-import { BarChart2, Wallet, RefreshCw, Layers, TrendingUp, ArrowUpRight, ArrowLeft, PieChart as PieIcon } from "lucide-react";
+import { BarChart2, TrendingUp, ArrowUpRight, PieChart as PieIcon } from "lucide-react";
 import { getPortfolioMetrics, getPlatformInvestments, formatNaira, getAssetAllocation, getMonthlyPerformance } from "@/lib/personal/investmentData";
-import Link from "next/link";
+import Image from "next/image";
 import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, Tooltip, Legend
@@ -17,27 +17,31 @@ export default function InvestmentDashboardPage() {
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const { apps } = useConnectedApps();
+    const returnsTextClass = isDark ? "text-emerald-300" : "text-emerald-500";
+    const cardSurfaceClass = isDark ? "bg-gray-800/70" : "bg-gray-100";
 
     // Data derived from connected apps
     const metrics = useMemo(() => getPortfolioMetrics(apps), [apps]);
     const platformInvestments = useMemo(() => getPlatformInvestments(apps), [apps]);
     const assetData = useMemo(() => getAssetAllocation(apps), [apps]);
+    const assetChartData = useMemo(
+        () =>
+            assetData.map((entry, index) => {
+                const palette = ["#3b82f6", "#86efac"];
+                return { ...entry, color: palette[index % palette.length] };
+            }),
+        [assetData]
+    );
     const performanceData = useMemo(() => getMonthlyPerformance(), []);
 
     return (
         <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-80px)] relative">
-            <div className="flex-1 overflow-y-auto hide-scrollbar pt-2 sm:pt-4 transition-all duration-300 pb-8">
+            <div className="flex-1 overflow-y-auto hide-scrollbar pt-2 sm:pt-4 transition-all duration-300 pb-4 sm:pb-6">
                 <div className="max-w-5xl mx-auto px-4 w-full">
                     <div className="space-y-8 mb-8 animate-in fade-in duration-500">
                         {/* Portfolio Header */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
-                                <Link
-                                    href="/personal"
-                                    className={`p-2 rounded-full border transition-colors ${isDark ? "border-gray-800 hover:bg-gray-800 text-gray-400" : "border-gray-100 hover:bg-gray-50 text-gray-500"}`}
-                                >
-                                    <ArrowLeft className="w-5 h-5" />
-                                </Link>
                                 <div>
                                     <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
                                         Investment Portfolio
@@ -55,7 +59,7 @@ export default function InvestmentDashboardPage() {
 
                         {/* Metrics Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className={`p-5 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-5 rounded-2xl ${cardSurfaceClass}`}>
                                 <p className={`text-xs font-medium mb-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>Total Portfolio Value</p>
                                 <p className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{formatNaira(metrics.totalValue)}</p>
                                 <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-500 font-medium">
@@ -63,15 +67,15 @@ export default function InvestmentDashboardPage() {
                                     <span>+₦124,500</span>
                                 </div>
                             </div>
-                            <div className={`p-5 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-5 rounded-2xl ${cardSurfaceClass}`}>
                                 <p className={`text-xs font-medium mb-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>Cumulative Returns</p>
-                                <p className="text-xl font-bold text-emerald-500">{formatNaira(metrics.cumulativeReturn)}</p>
+                                <p className={`text-xl font-bold ${returnsTextClass}`}>{formatNaira(metrics.cumulativeReturn)}</p>
                             </div>
-                            <div className={`p-5 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-5 rounded-2xl ${cardSurfaceClass}`}>
                                 <p className={`text-xs font-medium mb-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>Average ROI</p>
                                 <p className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{metrics.averageRoi.toFixed(1)}%</p>
                             </div>
-                            <div className={`p-5 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-5 rounded-2xl ${cardSurfaceClass}`}>
                                 <p className={`text-xs font-medium mb-1 ${isDark ? "text-gray-500" : "text-gray-500"}`}>Monthly Inflow</p>
                                 <p className={`text-xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{formatNaira(metrics.monthlyInflow)}</p>
                             </div>
@@ -80,16 +84,16 @@ export default function InvestmentDashboardPage() {
                         {/* Charts Section */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Asset Allocation Pie Chart */}
-                            <div className={`p-6 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-6 rounded-2xl ${cardSurfaceClass}`}>
                                 <div className="flex items-center gap-2 mb-6">
-                                    <PieIcon className="w-4 h-4 text-indigo-500" />
+                                    <PieIcon className="w-4 h-4 text-emerald-400" />
                                     <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Asset Allocation</h3>
                                 </div>
                                 <div className="h-[240px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={assetData}
+                                                data={assetChartData}
                                                 cx="50%"
                                                 cy="50%"
                                                 innerRadius={60}
@@ -97,12 +101,12 @@ export default function InvestmentDashboardPage() {
                                                 paddingAngle={5}
                                                 dataKey="value"
                                             >
-                                                {assetData.map((entry, index) => (
+                                                {assetChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>
                                             <Tooltip
-                                                formatter={(value: any) => formatNaira(Number(value))}
+                                                formatter={(value: number) => formatNaira(value)}
                                                 contentStyle={{
                                                     backgroundColor: isDark ? "#111827" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
@@ -117,7 +121,7 @@ export default function InvestmentDashboardPage() {
                             </div>
 
                             {/* Monthly Performance Bar Chart */}
-                            <div className={`p-6 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                            <div className={`p-6 rounded-2xl ${cardSurfaceClass}`}>
                                 <div className="flex items-center gap-2 mb-6">
                                     <BarChart2 className="w-4 h-4 text-emerald-500" />
                                     <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Monthly Performance</h3>
@@ -136,7 +140,7 @@ export default function InvestmentDashboardPage() {
                                                 hide
                                             />
                                             <Tooltip
-                                                formatter={(value: any) => formatNaira(Number(value))}
+                                                formatter={(value: number) => formatNaira(value)}
                                                 contentStyle={{
                                                     backgroundColor: isDark ? "#111827" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
@@ -146,7 +150,7 @@ export default function InvestmentDashboardPage() {
                                             />
                                             <Bar
                                                 dataKey="returns"
-                                                fill="#10b981"
+                                                fill="#86efac"
                                                 radius={[4, 4, 0, 0]}
                                                 name="Returns"
                                             />
@@ -169,9 +173,24 @@ export default function InvestmentDashboardPage() {
                             <div className="overflow-x-auto hide-scrollbar -mx-4 px-4">
                                 <div className="flex gap-4 min-w-max pb-4">
                                     {platformInvestments.map((inv) => (
-                                        <div key={inv.id} className={`w-48 p-4 rounded-2xl border ${isDark ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-100"}`}>
+                                        <div key={inv.id} className={`w-48 p-4 rounded-2xl ${cardSurfaceClass}`}>
                                             <div className="flex items-center gap-3 mb-3">
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold" style={{ backgroundColor: inv.color }}>{inv.icon}</div>
+                                                <div
+                                                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold overflow-hidden"
+                                                    style={inv.logo ? undefined : { backgroundColor: inv.color }}
+                                                >
+                                                    {inv.logo ? (
+                                                        <Image
+                                                            src={inv.logo}
+                                                            alt={`${inv.name} logo`}
+                                                            width={36}
+                                                            height={36}
+                                                            className="w-9 h-9 object-contain rounded-2xl"
+                                                        />
+                                                    ) : (
+                                                        inv.icon
+                                                    )}
+                                                </div>
                                                 <div>
                                                     <p className="text-xs font-bold">{inv.name}</p>
                                                     <p className="text-[10px] text-emerald-500">+{inv.roi}%</p>

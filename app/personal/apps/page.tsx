@@ -1,18 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
+import Image from "next/image";
+import { Search } from "lucide-react";
 
 export default function ConnectedAppsPage() {
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const { apps, toggleApp: toggleConnection } = useConnectedApps();
+    const [searchQuery, setSearchQuery] = useState("");
 
-    const connectedApps = apps.filter((a) => a.status === "connected");
-    const availableApps = apps.filter((a) => a.status === "disconnected");
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesSearch = (value: string) => value.toLowerCase().includes(normalizedQuery);
+
+    const connectedApps = apps.filter(
+        (a) =>
+            a.status === "connected" &&
+            (!normalizedQuery ||
+                matchesSearch(a.name) ||
+                matchesSearch(a.type) ||
+                matchesSearch(a.description))
+    );
+
+    const availableApps = apps.filter(
+        (a) =>
+            a.status === "disconnected" &&
+            (!normalizedQuery ||
+                matchesSearch(a.name) ||
+                matchesSearch(a.type) ||
+                matchesSearch(a.description))
+    );
 
     return (
-        <div className="space-y-8 pb-16">
+        <div className="space-y-8 pb-8 sm:pb-10 px-1 sm:px-0">
             {/* Page Header */}
             <div>
                 <h1 className={`text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -21,6 +43,24 @@ export default function ConnectedAppsPage() {
                 <p className={`text-sm mt-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
                     Manage your linked banks, investment platforms, and financial services
                 </p>
+            </div>
+
+            {/* Search */}
+            <div
+                className={`h-9 rounded-full px-3 flex items-center gap-2 overflow-hidden transition-colors ${isDark
+                        ? "bg-gray-800/90"
+                        : "bg-gray-100 shadow-[0_1px_6px_rgba(15,23,42,0.06)]"
+                    }`}
+            >
+                <Search className={`w-4 h-4 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search apps by name, type, or description"
+                    className={`flex-1 h-full bg-transparent !border-0 !rounded-none !shadow-none !ring-0 !outline-none !p-0 !m-0 text-sm ${isDark ? "text-gray-200 placeholder:text-gray-500" : "text-gray-700 placeholder:text-gray-400"}`}
+                    style={{ border: "none", boxShadow: "none" }}
+                />
             </div>
 
             {/* Connected Apps Section */}
@@ -39,20 +79,30 @@ export default function ConnectedAppsPage() {
                             <div
                                 key={app.id}
                                 className={`
-                  rounded-2xl border p-5 transition-all
+                  rounded-2xl p-5 transition-all
                   ${isDark
-                                        ? "border-gray-700 bg-gray-900/50 hover:border-gray-600"
-                                        : "border-gray-200 bg-white hover:border-gray-300"
+                                        ? "bg-gray-800/70 hover:bg-gray-800/90"
+                                        : "bg-gray-100 hover:bg-gray-200/70"
                                     }
                 `}
                             >
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold"
-                                            style={{ background: app.accent }}
+                                            className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-sm font-bold overflow-hidden"
+                                            style={{ background: app.logo ? "transparent" : app.accent }}
                                         >
-                                            {app.initial}
+                                            {app.logo ? (
+                                                <Image
+                                                    src={app.logo}
+                                                    alt={`${app.name} logo`}
+                                                    width={32}
+                                                    height={32}
+                                                    className="w-8 h-8 object-contain rounded-full"
+                                                />
+                                            ) : (
+                                                app.initial
+                                            )}
                                         </div>
                                         <div>
                                             <h3 className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
@@ -109,20 +159,30 @@ export default function ConnectedAppsPage() {
                             <div
                                 key={app.id}
                                 className={`
-                  rounded-2xl border p-5 transition-all
+                  rounded-2xl p-5 transition-all
                   ${isDark
-                                        ? "border-gray-800 bg-gray-900/30 hover:border-gray-700"
-                                        : "border-gray-200 bg-gray-50/50 hover:border-gray-300"
+                                        ? "bg-gray-800/50 hover:bg-gray-800/70"
+                                        : "bg-gray-100/80 hover:bg-gray-200/60"
                                     }
                 `}
                             >
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold opacity-60"
-                                            style={{ background: app.accent }}
+                                            className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-sm font-bold opacity-70 overflow-hidden"
+                                            style={{ background: app.logo ? "transparent" : app.accent }}
                                         >
-                                            {app.initial}
+                                            {app.logo ? (
+                                                <Image
+                                                    src={app.logo}
+                                                    alt={`${app.name} logo`}
+                                                    width={32}
+                                                    height={32}
+                                                    className="w-8 h-8 object-contain rounded-full"
+                                                />
+                                            ) : (
+                                                app.initial
+                                            )}
                                         </div>
                                         <div>
                                             <h3 className={`text-sm font-semibold ${isDark ? "text-gray-400" : "text-gray-600"}`}>
@@ -148,6 +208,12 @@ export default function ConnectedAppsPage() {
                         ))}
                     </div>
                 </section>
+            )}
+
+            {connectedApps.length === 0 && availableApps.length === 0 && (
+                <div className={`rounded-2xl p-5 text-sm ${isDark ? "bg-gray-800/60 text-gray-400" : "bg-gray-100 text-gray-500"}`}>
+                    No apps matched your search.
+                </div>
             )}
         </div>
     );

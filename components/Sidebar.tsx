@@ -3,12 +3,19 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, PERSONAL_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 import BottomSidebar from "./BottomSidebar";
+import {
+  PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
+  ChatHistoryEntry,
+  formatHistoryTime,
+  loadChatHistory,
+  selectChatHistoryEntry,
+} from "@/lib/personalChatHistory";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,15 +24,10 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { navigateTo } = useNavigation();
 
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
-
-  // Clear navigating state when pathname changes (navigation complete)
-  useEffect(() => {
-    setNavigatingTo(null);
-  }, [pathname]);
+  const [chatHistory, setChatHistory] = useState<ChatHistoryEntry[]>([]);
 
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
@@ -39,28 +41,20 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     return "tax";
   };
 
-  const [mode, setMode] = useState<AppMode>(getInitialMode);
+  const mode = getInitialMode();
 
-  // Update mode when pathname changes
   useEffect(() => {
-    if (pathname.startsWith("/personal")) {
-      setMode("personal");
-    } else if (pathname.startsWith("/marketplace")) {
-      setMode("marketplace");
-    } else if (pathname.startsWith("/supersheet")) {
-      setMode("supersheet");
-    } else if (pathname.startsWith("/wallet")) {
-      setMode("wallet");
-    } else if (pathname.startsWith("/cashflow-intelligence")) {
-      setMode("intelligence");
-    } else if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) {
-      setMode("payroll");
-    } else if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) {
-      setMode("accounting");
-    } else if (pathname.startsWith("/main") || pathname.startsWith("/tax-tools") || pathname.startsWith("/tax")) {
-      setMode("tax");
-    }
-  }, [pathname]);
+    const refreshHistory = () => {
+      setChatHistory(loadChatHistory());
+    };
+    refreshHistory();
+    window.addEventListener("storage", refreshHistory);
+    window.addEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
+    return () => {
+      window.removeEventListener("storage", refreshHistory);
+      window.removeEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
+    };
+  }, []);
 
   const navItems = mode === "personal"
     ? PERSONAL_NAV_ITEMS
@@ -93,7 +87,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className="hidden lg:flex fixed left-3 top-3 bottom-0 w-60 flex-col z-50 overflow-hidden rounded-t-2xl"
         style={{
           background: '#000000',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
+          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
         {/* Decorative gradient blurs - removed for cleaner look */}
@@ -116,7 +112,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {navItems.map((item) => {
             // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
             const isActive = pathname === item.href;
-            const isNavigating = navigatingTo === item.href;
+            const isNavigating = navigatingTo === item.href && pathname !== item.href;
 
             // Clean, no-background style as requested
             return (
@@ -151,34 +147,44 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           })}
         </nav>
 
-        {/* Chat History Section (Only for Personal Mode) */}
-        {mode === "personal" && (
-          <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-40 border-t border-white/10 pt-4 pb-4">
-            <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-              Chat History
-            </p>
-            {[
-              { label: "Salary Analysis", href: "#" },
-              { label: "Investment Plan", href: "#" },
-              { label: "Tax Query", href: "#" },
-            ].map((item, idx) => (
+        {/* Chat History Section */}
+        <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-44 pt-4 pb-4">
+          <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
+            Chat History
+          </p>
+          {chatHistory.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-white/45">No chats yet</p>
+          ) : (
+            chatHistory.map((item) => (
               <button
-                key={idx}
+                key={item.id}
+                onClick={() => {
+                  selectChatHistoryEntry(item);
+                  const sameRoute = pathname === item.route;
+                  if (!sameRoute) {
+                    navigateTo(item.route);
+                  }
+                }}
                 className={`
-                  relative flex items-center gap-3 px-2 py-1.5 rounded-md text-[13px] transition-all duration-200 w-full text-left group my-0.5
-                  text-white/60 hover:text-white hover:bg-white/5
+                  relative flex items-start gap-3 px-2 py-1.5 rounded-md text-[13px] transition-all duration-200 w-full text-left group my-0.5
+                  text-white/70 hover:text-white hover:bg-white/5
                 `}
               >
-                <span className="w-5 h-5 flex items-center justify-center opacity-70 group-hover:opacity-100">
+                <span className="w-5 h-5 flex items-center justify-center opacity-70 group-hover:opacity-100 mt-0.5">
                   <NavIconBadge icon="message-square" className="w-4 h-4" />
                 </span>
-                <span className="truncate">{item.label}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="truncate block">{item.title}</span>
+                  <span className="truncate block text-[11px] text-white/45">
+                    {item.module} · {formatHistoryTime(item.timestamp)}
+                  </span>
+                </span>
               </button>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
 
-        <div className="px-2 pb-4 pt-3 border-t border-white/10">
+        <div className="px-2 pb-4 pt-3">
           <BottomSidebar variant="sidebar" />
         </div>
       </aside>
@@ -233,7 +239,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
           {navItems.map((item) => {
             const isActive = pathname === item.href;
-            const isNavigating = navigatingTo === item.href;
+            const isNavigating = navigatingTo === item.href && pathname !== item.href;
 
             return (
               <button

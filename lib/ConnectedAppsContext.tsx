@@ -10,8 +10,34 @@ export interface ConnectedApp {
     status: "connected" | "disconnected";
     accent: string;
     initial: string;
+    logo?: string;
     lastSync?: string;
     impact?: string;
+}
+
+function isConnectedApp(value: unknown): value is ConnectedApp {
+    if (!value || typeof value !== "object") return false;
+    const app = value as Partial<ConnectedApp>;
+    return (
+        typeof app.id === "string" &&
+        typeof app.name === "string" &&
+        typeof app.type === "string" &&
+        typeof app.description === "string" &&
+        (app.status === "connected" || app.status === "disconnected") &&
+        typeof app.accent === "string" &&
+        typeof app.initial === "string"
+    );
+}
+
+function mergeWithDefaults(storedApps: ConnectedApp[]): ConnectedApp[] {
+    const defaultById = new Map(DEFAULT_APPS.map((app) => [app.id, app]));
+    const merged = storedApps.map((storedApp) => {
+        const defaultApp = defaultById.get(storedApp.id);
+        return defaultApp ? { ...defaultApp, ...storedApp, logo: storedApp.logo || defaultApp.logo } : storedApp;
+    });
+    const existingIds = new Set(merged.map((app) => app.id));
+    const missingDefaults = DEFAULT_APPS.filter((app) => !existingIds.has(app.id));
+    return [...merged, ...missingDefaults];
 }
 
 const DEFAULT_APPS: ConnectedApp[] = [
@@ -23,6 +49,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#2264ff",
         initial: "Z",
+        logo: "/connected-apps/zenith.svg",
         lastSync: "2 minutes ago",
         impact: "+₦4.8M inflow",
     },
@@ -34,6 +61,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#e63946",
         initial: "G",
+        logo: "/connected-apps/gtb.svg",
         lastSync: "18 minutes ago",
         impact: "+₦2.3M FX",
     },
@@ -45,6 +73,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#0ead69",
         initial: "R",
+        logo: "/connected-apps/risevest-alt.png",
         lastSync: "1 hour ago",
         impact: "₦9.4M deployed",
     },
@@ -56,6 +85,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#a162f7",
         initial: "W",
+        logo: "/connected-apps/wave.png",
         lastSync: "3 hours ago",
         impact: "-₦3.4M forecast",
     },
@@ -67,6 +97,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#f97316",
         initial: "Q",
+        logo: "/connected-apps/quickinvoice.svg",
         lastSync: "9 minutes ago",
         impact: "₦2.1M collectible",
     },
@@ -78,6 +109,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "connected",
         accent: "#1d4ed8",
         initial: "C",
+        logo: "/connected-apps/carbon.png",
         lastSync: "30 minutes ago",
         impact: "₦1.8M staked",
     },
@@ -89,6 +121,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#2563eb",
         initial: "P",
+        logo: "/connected-apps/piggyvest.png",
     },
     {
         id: "cowrywise",
@@ -98,6 +131,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#0ea5e9",
         initial: "C",
+        logo: "/connected-apps/cowrywise.png",
     },
     {
         id: "kuda",
@@ -107,6 +141,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#7c3aed",
         initial: "K",
+        logo: "/connected-apps/kuda.png",
     },
     {
         id: "bamboo",
@@ -116,6 +151,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#059669",
         initial: "B",
+        logo: "/connected-apps/bamboo.png",
     },
     {
         id: "fairmoney",
@@ -125,6 +161,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#10b981",
         initial: "F",
+        logo: "/connected-apps/fairmoney.png",
     },
     {
         id: "ikeja-electric",
@@ -134,6 +171,7 @@ const DEFAULT_APPS: ConnectedApp[] = [
         status: "disconnected",
         accent: "#eab308",
         initial: "IE",
+        logo: "/connected-apps/ikeja-electric.png",
     },
 ];
 
@@ -146,29 +184,26 @@ interface ConnectedAppsContextType {
 const ConnectedAppsContext = createContext<ConnectedAppsContextType | undefined>(undefined);
 
 export function ConnectedAppsProvider({ children }: { children: React.ReactNode }) {
-    const [apps, setApps] = useState<ConnectedApp[]>(DEFAULT_APPS);
-    const [mounted, setMounted] = useState(false);
-
-    // Load from localStorage on mount
-    useEffect(() => {
-        const stored = localStorage.getItem("quantum-connected-apps");
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                setApps(parsed);
-            } catch (e) {
-                console.error("Failed to parse connected apps", e);
-            }
+    const [apps, setApps] = useState<ConnectedApp[]>(() => {
+        if (typeof window === "undefined") {
+            return DEFAULT_APPS;
         }
-        setMounted(true);
-    }, []);
+        try {
+            const stored = localStorage.getItem("quantum-connected-apps");
+            if (!stored) return DEFAULT_APPS;
+            const parsed = JSON.parse(stored) as unknown;
+            if (!Array.isArray(parsed)) return DEFAULT_APPS;
+            return mergeWithDefaults(parsed.filter(isConnectedApp));
+        } catch (e) {
+            console.error("Failed to parse connected apps", e);
+            return DEFAULT_APPS;
+        }
+    });
 
     // Save to localStorage on change
     useEffect(() => {
-        if (mounted) {
-            localStorage.setItem("quantum-connected-apps", JSON.stringify(apps));
-        }
-    }, [apps, mounted]);
+        localStorage.setItem("quantum-connected-apps", JSON.stringify(apps));
+    }, [apps]);
 
     const toggleApp = (id: string) => {
         setApps((prev) =>

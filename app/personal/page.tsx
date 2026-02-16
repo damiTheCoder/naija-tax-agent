@@ -4,9 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
 import { generatePfmResponse } from "./action";
-import { BarChart2, Wallet, RefreshCw, Layers, Send, TrendingUp } from "lucide-react";
+import { BarChart2, Wallet, RefreshCw, Layers, Send, TrendingUp, MessageSquarePlus, Square } from "lucide-react";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
-import Link from "next/link";
+import {
+    addChatHistoryEntry,
+    CHAT_HISTORY_SELECTED_EVENT,
+    consumeSelectedChatHistory,
+} from "@/lib/personalChatHistory";
 
 type ChatMessage = {
     id: string;
@@ -58,6 +62,8 @@ export default function PersonalChatPage() {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const activeRequestIdRef = useRef<number | null>(null);
+    const cancelledRequestIdsRef = useRef<Set<number>>(new Set());
 
     const hasMessages = messages.length > 0;
     const chatAreaBottomPaddingClass = isExpanded
@@ -103,15 +109,78 @@ export default function PersonalChatPage() {
         };
     }, [isExpanded, input]);
 
+    useEffect(() => {
+        const applySelectedHistory = () => {
+            const selected = consumeSelectedChatHistory({ module: "personal", pathname: "/personal" });
+            if (!selected) return;
+
+            setIsExpanded(true);
+
+            if (selected.response) {
+                const baseTs = selected.timestamp || Date.now();
+                setMessages([
+                    {
+                        id: `hist-u-${selected.id}`,
+                        role: "user",
+                        content: selected.prompt,
+                        timestamp: baseTs,
+                    },
+                    {
+                        id: `hist-a-${selected.id}`,
+                        role: "assistant",
+                        content: selected.response,
+                        timestamp: baseTs + 1,
+                    },
+                ]);
+                setInput("");
+            } else {
+                setInput(selected.prompt);
+            }
+
+            setTimeout(() => textareaRef.current?.focus(), 50);
+        };
+
+        applySelectedHistory();
+        window.addEventListener(CHAT_HISTORY_SELECTED_EVENT, applySelectedHistory as EventListener);
+        return () => {
+            window.removeEventListener(CHAT_HISTORY_SELECTED_EVENT, applySelectedHistory as EventListener);
+        };
+    }, []);
+
+    const stopAiResponse = () => {
+        const activeRequestId = activeRequestIdRef.current;
+        if (activeRequestId !== null) {
+            cancelledRequestIdsRef.current.add(activeRequestId);
+            activeRequestIdRef.current = null;
+        }
+        setIsTyping(false);
+    };
+
+    const startNewChat = () => {
+        stopAiResponse();
+        setMessages([]);
+        setInput("");
+        setIsExpanded(true);
+    };
+
     const sendMessage = async (text?: string) => {
+        if (isTyping) return;
         const msg = (text ?? input).trim();
         if (!msg) return;
 
+        addChatHistoryEntry({
+            module: "personal",
+            route: "/personal",
+            prompt: msg,
+        });
+        const requestId = Date.now();
+        activeRequestIdRef.current = requestId;
+
         const userMsg: ChatMessage = {
-            id: `u-${Date.now()}`,
+            id: `u-${requestId}`,
             role: "user",
             content: msg,
-            timestamp: Date.now(),
+            timestamp: requestId,
         };
         setMessages((prev) => [...prev, userMsg]);
         if (!text) setInput("");
@@ -121,6 +190,9 @@ export default function PersonalChatPage() {
         try {
             // Call Server Action with user message and connected apps context
             const responseText = await generatePfmResponse(msg, apps);
+            if (cancelledRequestIdsRef.current.has(requestId) || activeRequestIdRef.current !== requestId) {
+                return;
+            }
 
             const assistantMsg: ChatMessage = {
                 id: `a-${Date.now()}`,
@@ -129,7 +201,16 @@ export default function PersonalChatPage() {
                 timestamp: Date.now(),
             };
             setMessages((prev) => [...prev, assistantMsg]);
+            addChatHistoryEntry({
+                module: "personal",
+                route: "/personal",
+                prompt: msg,
+                response: responseText,
+            });
         } catch (error) {
+            if (cancelledRequestIdsRef.current.has(requestId) || activeRequestIdRef.current !== requestId) {
+                return;
+            }
             console.error("Chat Error:", error);
             const errorMsg: ChatMessage = {
                 id: `e-${Date.now()}`,
@@ -139,7 +220,11 @@ export default function PersonalChatPage() {
             };
             setMessages((prev) => [...prev, errorMsg]);
         } finally {
-            setIsTyping(false);
+            cancelledRequestIdsRef.current.delete(requestId);
+            if (activeRequestIdRef.current === requestId) {
+                activeRequestIdRef.current = null;
+                setIsTyping(false);
+            }
         }
     };
 
@@ -158,11 +243,11 @@ export default function PersonalChatPage() {
                         <div className="max-w-2xl w-full text-center space-y-8">
                             {/* Google Logo / AI Branding */}
                             <div className="flex justify-center">
-                                <div className="p-4 bg-white rounded-full">
+                                <div className="p-4 rounded-full bg-transparent">
                                     <img
                                         src="/google-logo.jpg"
                                         alt="Google AI"
-                                        className="w-12 h-12 object-contain"
+                                        className="w-12 h-12 object-contain rounded-full"
                                     />
                                 </div>
                             </div>
@@ -184,10 +269,10 @@ export default function PersonalChatPage() {
                                         key={card.title}
                                         onClick={() => handleSuggestionClick(card.prompt)}
                                         className={`
-                                            group rounded-2xl border p-4 transition-all text-left flex flex-col gap-3
+                                            group rounded-2xl p-4 transition-all text-left flex flex-col gap-3
                                             ${isDark
-                                                ? "border-gray-700 bg-gray-900/50 hover:bg-gray-800/80 hover:border-gray-600"
-                                                : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300"
+                                                ? "bg-gray-800/70 hover:bg-gray-800/90"
+                                                : "bg-gray-100 hover:bg-gray-200/70"
                                             }
                                         `}
                                     >
@@ -209,30 +294,23 @@ export default function PersonalChatPage() {
                     </div>
                 ) : (
                     /* ── Message Feed ── */
-                    <div className="max-w-3xl mx-auto w-full px-4 py-6 space-y-6">
+                    <div className="max-w-3xl mx-auto w-full px-3 py-3 space-y-4">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                                <div className={`flex gap-3 max-w-[85%] md:max-w-[75%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                                <div className={`flex max-w-[85%] md:max-w-[75%] ${msg.role === "user" ? "flex-row-reverse" : "gap-3"}`}>
                                     {/* Avatar */}
                                     {msg.role === "assistant" ? (
-                                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden flex-shrink-0 border">
-                                            <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain" />
+                                        <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-transparent">
+                                            <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain rounded-full" />
                                         </div>
-                                    ) : (
-                                        <div className={`
-                                            w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold
-                                            ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"}
-                                        `}>
-                                            U
-                                        </div>
-                                    )}
+                                    ) : null}
 
                                     {/* Bubble */}
                                     <div>
                                         <div className={`
-                                            rounded-2xl px-4 py-3 text-sm leading-relaxed
+                                            rounded-2xl px-3 py-2.5 text-sm leading-relaxed
                                             ${msg.role === "assistant"
-                                                ? isDark ? "bg-gray-800 text-gray-200" : "bg-white border border-gray-100 text-gray-800"
+                                                ? isDark ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
                                                 : "bg-[#2264ff] text-white"
                                             }
                                         `}>
@@ -250,10 +328,10 @@ export default function PersonalChatPage() {
                         {isTyping && (
                             <div className="flex justify-start">
                                 <div className="flex gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden flex-shrink-0 border">
-                                        <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain" />
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-transparent">
+                                        <img src="/google-logo.jpg" alt="AI" className="w-6 h-6 object-contain rounded-full" />
                                     </div>
-                                    <div className={`rounded-2xl px-4 py-3 ${isDark ? "bg-gray-800" : "bg-white border border-gray-100"}`}>
+                                    <div className={`rounded-2xl px-4 py-3 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full animate-bounce bg-blue-500" style={{ animationDelay: "0ms" }} />
                                             <div className="w-2 h-2 rounded-full animate-bounce bg-red-500" style={{ animationDelay: "150ms" }} />
@@ -286,26 +364,14 @@ export default function PersonalChatPage() {
                 ) : (
                     // Expanded Composer
                     <div className={`
-                        w-[90vw] max-w-2xl flex flex-col gap-2 rounded-3xl border px-4 py-3 animate-in slide-in-from-bottom-5 fade-in duration-300
+                        w-[90vw] max-w-2xl flex flex-col gap-2 rounded-3xl px-3 py-2 animate-in slide-in-from-bottom-5 fade-in duration-300
                         ${isDark
-                            ? "border-gray-700 bg-gray-900 focus-within:border-gray-500"
-                            : "border-gray-200 bg-white focus-within:border-gray-300 shadow-sm"
+                            ? "bg-gray-800/90"
+                            : "bg-gray-100"
                         }
                     `}>
-                        {/* Header in Expanded State */}
-                        <div className="flex items-center justify-between mb-1 px-1">
-                            <div className="flex items-center gap-2">
-                                <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 rounded-full" />
-                                <span className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-gray-500"}`}>
-                                    Chat with Finance AI
-                                </span>
-                            </div>
-                            <button onClick={() => setIsExpanded(false)} className={`p-1.5 rounded-full hover:bg-gray-100 ${isDark ? "hover:bg-gray-800 text-gray-500" : "text-gray-400"}`}>
-                                <TrendingUp className="w-4 h-4 rotate-180" />
-                            </button>
-                        </div>
-
                         <div className="flex items-end gap-2">
+                            <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 flex-shrink-0 rounded-full mb-0.5" />
                             <textarea
                                 ref={textareaRef}
                                 value={input}
@@ -320,22 +386,48 @@ export default function PersonalChatPage() {
                                 rows={1}
                                 autoFocus
                                 className={`
-                                    flex-1 resize-none py-2 text-sm bg-transparent border-none outline-none
+                                    flex-1 resize-none py-1.5 text-sm bg-transparent border-none outline-none
                                     ${isDark ? "text-gray-200 placeholder-gray-500" : "text-gray-900 placeholder-gray-400"}
                                 `}
                             />
                             <button
-                                onClick={() => sendMessage()}
-                                disabled={!input.trim()}
+                                onClick={startNewChat}
+                                className={`flex-shrink-0 p-1.5 rounded-full hover:bg-gray-100 ${isDark ? "hover:bg-gray-800 text-gray-500" : "text-gray-400"}`}
+                                aria-label="Start new chat"
+                                title="Start new chat"
+                            >
+                                <MessageSquarePlus className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setIsExpanded(false)}
+                                className={`flex-shrink-0 p-1.5 rounded-full hover:bg-gray-100 ${isDark ? "hover:bg-gray-800 text-gray-500" : "text-gray-400"}`}
+                                aria-label="Collapse composer"
+                                title="Collapse composer"
+                            >
+                                <TrendingUp className="w-4 h-4 rotate-180" />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (isTyping) {
+                                        stopAiResponse();
+                                        return;
+                                    }
+                                    sendMessage();
+                                }}
+                                disabled={!isTyping && !input.trim()}
                                 className={`
                                     flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all
-                                    ${input.trim()
-                                        ? "bg-[#2264ff] hover:bg-[#1b54d9] text-white"
+                                    ${isTyping
+                                        ? "bg-red-500 hover:bg-red-600 text-white"
+                                        : input.trim()
+                                            ? "bg-[#2264ff] hover:bg-[#1b54d9] text-white"
                                         : isDark ? "bg-gray-800 text-gray-600" : "bg-gray-100 text-gray-400"
                                     }
                                 `}
+                                aria-label={isTyping ? "Stop AI response" : "Send message"}
+                                title={isTyping ? "Stop AI response" : "Send message"}
                             >
-                                <Send className="w-4 h-4" />
+                                {isTyping ? <Square className="w-3.5 h-3.5 fill-current" /> : <Send className="w-4 h-4" />}
                             </button>
                         </div>
                     </div>
