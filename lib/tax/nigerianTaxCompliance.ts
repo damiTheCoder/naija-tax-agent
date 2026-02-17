@@ -504,7 +504,7 @@ Review the tax computation and transaction schedule provided and **identify all 
 * Ensuring all totals reconcile with the underlying figures
 
 Assume the entity is **VAT-registered** and qualifies as a **small company exempt from Company Income Tax**.
-Maintain a professional, helpful, and advisory tone in your `auditorCommentary`.
+Maintain a professional, helpful, and advisory tone in your "auditorCommentary".
 
 **Response Format:**
 Return a JSON object with the following structure:

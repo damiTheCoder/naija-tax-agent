@@ -55,7 +55,7 @@ OUTPUT FORMAT (JSON):
 
 IMPORTANT GUIDELINES:
 - Be specific and actionable in your recommendations
-- **TONE**: Maintain a professional yet friendly and helpful tone in your `conversationalResponse`. Imagine you are presenting this to a business owner who values both accuracy and clear communication.
+- **TONE**: Maintain a professional yet friendly and helpful tone in your "conversationalResponse". Imagine you are presenting this to a business owner who values both accuracy and clear communication.
 - Consider Nigerian banking practices and common issues
 - Account for bank processing delays (typically 1-3 business days)
 - Flag round-number transactions over ₦500,000 for extra scrutiny

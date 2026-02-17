@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
     calculateCashflowAnalytics,
     formatNaira,
@@ -13,17 +13,8 @@ import { accountingEngine } from "@/lib/accounting/transactionBridge";
 // =============================================================================
 
 export default function CashIntelligencePage() {
-    // State
-    const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    // Daily flow chart data - last 7 days
-    const [dailyFlows, setDailyFlows] = useState<Array<{ day: string; inflow: number; outflow: number }>>([]);
-
-    // Load analytics from accounting data
-    const loadAnalytics = useCallback(() => {
-        setLoading(true);
-
+    // Build analytics snapshot from accounting data
+    const calculateAnalyticsSnapshot = useCallback((): CashflowAnalytics => {
         try {
             const statements = accountingEngine.generateStatements();
 
@@ -42,143 +33,66 @@ export default function CashIntelligencePage() {
                 monthAgo.toISOString().split("T")[0],
                 today.toISOString().split("T")[0]
             );
-
-            setAnalytics(result);
+            return result;
         } catch {
             // If no data, set defaults
-            setAnalytics(calculateCashflowAnalytics(0, 0, 0, "", ""));
+            return calculateCashflowAnalytics(0, 0, 0, "", "");
         }
-
-        setLoading(false);
     }, []);
 
-    // Candlestick chart data - last 30 days
-    const [candleData, setCandleData] = useState<Array<{
-        date: string;
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        isGreen: boolean;
-    } & { txCount?: number }>>([]);
+    // State
+    const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(() => calculateAnalyticsSnapshot());
 
-    // Generate REAL candlestick data from accounting engine
-    useEffect(() => {
+    const loadAnalytics = useCallback(() => {
+        setAnalytics(calculateAnalyticsSnapshot());
+    }, [calculateAnalyticsSnapshot]);
+
+    // Build 30-day receipt vs payment bars from accounting engine
+    const cashBarData = useMemo(() => {
         const entries = accountingEngine.getState().journalEntries;
-        const cashAccountCodes = ['1000', '1010', '1020', '1021']; // Cash & Bank codes
-
-        // 1. Group transactions by date
-        const dailyTransactions = new Map<string, Array<{ amount: number, type: 'debit' | 'credit', narration: string }>>();
+        const cashAccountCodes = new Set(['1000', '1010', '1020', '1021']); // Cash & Bank codes
+        const dailyFlows = new Map<string, { receipts: number; payments: number; txCount: number }>();
 
         // Initialize last 30 days
-        const today = new Date();
+        const today = analytics?.periodEnd ? new Date(analytics.periodEnd) : new Date();
         for (let i = 29; i >= 0; i--) {
             const d = new Date(today);
+            d.setHours(0, 0, 0, 0);
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
-            dailyTransactions.set(dateStr, []);
+            dailyFlows.set(dateStr, { receipts: 0, payments: 0, txCount: 0 });
         }
 
-        // Process all entries to find cash impact
+        // Process entries: debit cash = receipt (inflow), credit cash = payment (outflow)
         entries.forEach(entry => {
             const dateStr = entry.date;
+            const bucket = dailyFlows.get(dateStr);
+            if (!bucket) return;
 
             entry.lines.forEach(line => {
-                if (cashAccountCodes.includes(line.accountCode)) {
-                    if (!dailyTransactions.has(dateStr)) {
-                        dailyTransactions.set(dateStr, []);
-                    }
-                    dailyTransactions.get(dateStr)?.push({
-                        amount: line.debit > 0 ? line.debit : line.credit,
-                        type: line.debit > 0 ? 'debit' : 'credit', // Debit increases asset (cash), Credit decreases
-                        narration: entry.narration
-                    });
-                }
+                if (!cashAccountCodes.has(line.accountCode)) return;
+                if (line.debit > 0) bucket.receipts += line.debit;
+                if (line.credit > 0) bucket.payments += line.credit;
+                if (line.debit > 0 || line.credit > 0) bucket.txCount += 1;
             });
         });
 
-        // 2. Calculate OHLC
-        const candles: typeof candleData = [];
-        const currentBalance = 0; // Should ideally start from opening balance of 30 days ago
-
-        // Calculate initial balance (pro-rated for demo, or sum all prior)
-        // For simplicity in this view, we'll start with the analytics.cashBalance and work backwards? 
-        // Or cleaner: calculate accumulated balance from day 0 of system if possible.
-        // Let's rely on analytics.cashBalance as the "Current" and work backwards if needed.
-        // Actually, let's just run forward from the first day of the 30-day window.
-        // We need the opening balance 30 days ago. 
-        // Let's approximate starting balance = Current Cash - Net Flow of last 30 days.
-
-        const sortedDates = Array.from(dailyTransactions.keys()).sort();
-        const last30Days = sortedDates.filter(d => {
-            const date = new Date(d);
-            const diffTime = Math.abs(today.getTime() - date.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays <= 30;
-        });
-
-        // Calculate opening balance for the period
-        // For now, we'll assume a base if no history, or trace back.
-        // Let's use analytics.cashBalance as the anchor at the END.
-        // But doing forward pass is easier for candlesticks.
-        // Let's assume start = current - sum(flows).
-
-        let totalFlow = 0;
-        last30Days.forEach(date => {
-            const txs = dailyTransactions.get(date) || [];
-            txs.forEach(tx => {
-                if (tx.type === 'debit') totalFlow += tx.amount;
-                else totalFlow -= tx.amount;
-            });
-        });
-
-        let runningBalance = (analytics?.cashBalance || 250000) - totalFlow;
-        if (runningBalance < 0 && (analytics?.cashBalance || 0) > 0) runningBalance = 100000; // Fallback if calc is weird
-
-        sortedDates.forEach(date => {
-            const dateObj = new Date(date);
-            // data only for last 30 days
-            if ((today.getTime() - dateObj.getTime()) / (1000 * 3600 * 24) > 30) return;
-
-            const txs = dailyTransactions.get(date) || [];
-            const open = runningBalance;
-            let high = open;
-            let low = open;
-
-            txs.forEach(tx => {
-                if (tx.type === 'debit') runningBalance += tx.amount;
-                else runningBalance -= tx.amount;
-
-                if (runningBalance > high) high = runningBalance;
-                if (runningBalance < low) low = runningBalance;
-            });
-
-            const close = runningBalance;
-
-            candles.push({
+        const bars = Array.from(dailyFlows.entries()).map(([dateStr, flow]) => {
+            const dateObj = new Date(`${dateStr}T00:00:00`);
+            return {
                 date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                open,
-                high,
-                low,
-                close,
-                isGreen: close >= open,
-                // Add extra data for tooltip if needed
-                txCount: txs.length
-            });
+                receipts: flow.receipts,
+                payments: flow.payments,
+                net: flow.receipts - flow.payments,
+                txCount: flow.txCount,
+            };
         });
+        return bars;
+    }, [analytics]);
 
-        // If no data, show empty state or single candle? 
-        // If empty, we keep the array empty or minimal.
-        // Fill gaps?
-        // Better to show gaps as gaps.
-
-        setCandleData(candles);
-
-    }, [analytics, loading]);
-
-    useEffect(() => {
-        loadAnalytics();
-    }, [loadAnalytics]);
+    if (!analytics) {
+        return null;
+    }
 
     // Health status colors
     const getHealthColor = (status: CashflowAnalytics["healthStatus"]) => {
@@ -203,13 +117,12 @@ export default function CashIntelligencePage() {
         return badges[status] || badges.moderate;
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-pulse text-gray-500">Loading Cash Intelligence...</div>
-            </div>
-        );
-    }
+    const cashBarScale = Math.max(
+        ...cashBarData.map((point) => Math.max(point.receipts, point.payments)),
+        1
+    );
+    const trailingNetFlow = cashBarData.reduce((sum, point) => sum + point.net, 0);
+    const hasCashMovement = cashBarData.some((point) => point.receipts > 0 || point.payments > 0);
 
     return (
         <div className="min-h-screen">
@@ -355,7 +268,7 @@ export default function CashIntelligencePage() {
                     </div>
                 </div>
 
-                {/* Cash Position Chart - Matching Accounting Dashboard Style */}
+                {/* Treasury Movement Chart */}
                 <div className="rounded-2xl bg-transparent overflow-hidden">
                     {/* Header */}
                     <div className="py-3 md:py-4">
@@ -367,8 +280,8 @@ export default function CashIntelligencePage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-semibold !text-black dark:!text-white">Cash Position</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">30-day candlestick chart</p>
+                                    <h3 className="text-sm font-semibold !text-black dark:!text-white">Receipts vs Payments</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">30-day treasury movement (green up, red down)</p>
                                 </div>
                             </div>
 
@@ -377,24 +290,21 @@ export default function CashIntelligencePage() {
 
                     {/* Chart Body */}
                     <div className="relative pt-4 pb-0 md:pt-6">
-                        {/* Price axis on right */}
+                        {/* Value axis on right */}
                         <div className="absolute right-4 md:right-6 top-4 md:top-6 bottom-14 w-16 flex flex-col justify-between text-right z-10">
-                            {candleData.length > 0 && (() => {
-                                const prices = candleData.flatMap(c => [c.high, c.low]);
-                                const maxPrice = Math.max(...prices);
-                                const minPrice = Math.min(...prices);
-                                const range = maxPrice - minPrice;
-                                return [0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
+                            {cashBarData.length > 0 && [1, 0.5, 0, -0.5, -1].map((multiplier, i) => {
+                                const value = cashBarScale * multiplier;
+                                return (
                                     <span key={i} className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-                                        {formatNaira(maxPrice - range * pct)}
+                                        {multiplier > 0 ? "+" : ""}{formatNaira(value)}
                                     </span>
-                                ));
-                            })()}
+                                );
+                            })}
                         </div>
 
                         {/* Chart area */}
                         <div className="h-64 pr-20">
-                            {candleData.length > 0 ? (
+                            {hasCashMovement ? (
                                 <div className="relative h-full">
                                     {/* Horizontal grid lines */}
                                     <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
@@ -403,70 +313,61 @@ export default function CashIntelligencePage() {
                                         ))}
                                     </div>
 
-                                    {/* Candlesticks */}
+                                    {/* Zero baseline */}
+                                    <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-emerald-500/80 pointer-events-none" />
+
+                                    {/* Diverging bars */}
                                     <div className="flex items-stretch h-full gap-[2px]">
-                                        {candleData.map((candle, idx) => {
-                                            const prices = candleData.flatMap(c => [c.high, c.low]);
-                                            const maxPrice = Math.max(...prices);
-                                            const minPrice = Math.min(...prices);
-                                            const range = maxPrice - minPrice || 1;
-
-                                            // Calculate positions as percentages from top
-                                            const highPct = ((maxPrice - candle.high) / range) * 100;
-                                            const lowPct = ((maxPrice - candle.low) / range) * 100;
-                                            const openPct = ((maxPrice - candle.open) / range) * 100;
-                                            const closePct = ((maxPrice - candle.close) / range) * 100;
-
-                                            const bodyTop = Math.min(openPct, closePct);
-                                            const bodyHeight = Math.abs(closePct - openPct);
-                                            const wickTop = highPct;
-                                            const wickHeight = lowPct - highPct;
-
-                                            const color = candle.isGreen ? '#10b981' : '#f43f5e';
+                                        {cashBarData.map((point, idx) => {
+                                            const receiptHeight = (point.receipts / cashBarScale) * 50;
+                                            const paymentHeight = (point.payments / cashBarScale) * 50;
+                                            const netPositive = point.net >= 0;
 
                                             return (
                                                 <div key={idx} className="flex-1 relative group">
-                                                    {/* Wick (thin line) */}
-                                                    <div
-                                                        className="absolute left-1/2 -translate-x-1/2"
-                                                        style={{
-                                                            top: `${wickTop}%`,
-                                                            height: `${Math.max(wickHeight, 0.5)}%`,
-                                                            width: '1px',
-                                                            background: color
-                                                        }}
-                                                    />
+                                                    {/* Receipt bar (up, green) */}
+                                                    {point.receipts > 0 && (
+                                                        <div
+                                                            className="absolute left-1/2 -translate-x-1/2 rounded-[2px] bg-emerald-500"
+                                                            style={{
+                                                                bottom: "50%",
+                                                                height: `${Math.max(receiptHeight, 1)}%`,
+                                                                width: "62%",
+                                                                minWidth: "4px",
+                                                                maxWidth: "10px",
+                                                            }}
+                                                        />
+                                                    )}
 
-                                                    {/* Body (thick rectangle) */}
-                                                    <div
-                                                        className="absolute left-1/2 -translate-x-1/2 rounded-[1px]"
-                                                        style={{
-                                                            top: `${bodyTop}%`,
-                                                            height: `${Math.max(bodyHeight, 0.5)}%`,
-                                                            width: '60%',
-                                                            minWidth: '3px',
-                                                            maxWidth: '8px',
-                                                            background: color
-                                                        }}
-                                                    />
+                                                    {/* Payment bar (down, red) */}
+                                                    {point.payments > 0 && (
+                                                        <div
+                                                            className="absolute left-1/2 -translate-x-1/2 rounded-[2px] bg-rose-500"
+                                                            style={{
+                                                                top: "50%",
+                                                                height: `${Math.max(paymentHeight, 1)}%`,
+                                                                width: "62%",
+                                                                minWidth: "4px",
+                                                                maxWidth: "10px",
+                                                            }}
+                                                        />
+                                                    )}
 
                                                     {/* Hover tooltip */}
                                                     <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
                                                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg px-3 py-2 text-[11px] whitespace-nowrap">
-                                                            <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">{candle.date}</div>
+                                                            <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">{point.date}</div>
                                                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
-                                                                <span className="text-gray-400">Open:</span>
-                                                                <span className="text-right font-mono">{formatNaira(candle.open)}</span>
-                                                                <span className="text-gray-400">High:</span>
-                                                                <span className="text-right font-mono">{formatNaira(candle.high)}</span>
-                                                                <span className="text-gray-400">Low:</span>
-                                                                <span className="text-right font-mono">{formatNaira(candle.low)}</span>
-                                                                <span className="text-gray-400">Close:</span>
-                                                                <span className={`text-right font-mono font-medium ${candle.isGreen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                                                    {formatNaira(candle.close)}
+                                                                <span className="text-gray-400">Receipts:</span>
+                                                                <span className="text-right font-mono text-emerald-600 dark:text-emerald-400">+{formatNaira(point.receipts)}</span>
+                                                                <span className="text-gray-400">Payments:</span>
+                                                                <span className="text-right font-mono text-rose-600 dark:text-rose-400">-{formatNaira(point.payments)}</span>
+                                                                <span className="text-gray-400">Net:</span>
+                                                                <span className={`text-right font-mono font-medium ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                                                    {point.net >= 0 ? "+" : "-"}{formatNaira(Math.abs(point.net))}
                                                                 </span>
                                                                 <span className="col-span-2 text-xs text-gray-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-1">
-                                                                    {candle.txCount || 0} transactions
+                                                                    {point.txCount} cash transactions
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -485,21 +386,21 @@ export default function CashIntelligencePage() {
 
                         {/* Time axis */}
                         <div className="h-8 pr-20 flex justify-between items-center mt-2 border-t border-gray-100 dark:border-gray-800 pt-2">
-                            {candleData.filter((_, i) => i % 5 === 0).map((candle, idx) => (
-                                <span key={idx} className="text-[10px] text-gray-400 dark:text-gray-500">{candle.date}</span>
+                            {cashBarData.filter((_, i) => i % 5 === 0).map((point, idx) => (
+                                <span key={idx} className="text-[10px] text-gray-400 dark:text-gray-500">{point.date}</span>
                             ))}
                         </div>
                     </div>
 
-                    {/* Footer with current value */}
-                    {candleData.length > 0 && (
+                    {/* Footer with net movement */}
+                    {cashBarData.length > 0 && (
                         <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">Current Position</span>
-                            <span className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${candleData[candleData.length - 1].isGreen
+                            <span className="text-xs text-gray-500 dark:text-gray-400">30-day Net Movement</span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${trailingNetFlow >= 0
                                 ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'
                                 : 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400'
                                 }`}>
-                                {formatNaira(candleData[candleData.length - 1].close)}
+                                {trailingNetFlow >= 0 ? "+" : "-"}{formatNaira(Math.abs(trailingNetFlow))}
                             </span>
                         </div>
                     )}

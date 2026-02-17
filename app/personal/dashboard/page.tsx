@@ -106,7 +106,7 @@ export default function InvestmentDashboardPage() {
                                                 ))}
                                             </Pie>
                                             <Tooltip
-                                                formatter={(value: number) => formatNaira(value)}
+                                                formatter={(value) => formatNaira(Number(value ?? 0))}
                                                 contentStyle={{
                                                     backgroundColor: isDark ? "#111827" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
@@ -140,7 +140,7 @@ export default function InvestmentDashboardPage() {
                                                 hide
                                             />
                                             <Tooltip
-                                                formatter={(value: number) => formatNaira(value)}
+                                                formatter={(value) => formatNaira(Number(value ?? 0))}
                                                 contentStyle={{
                                                     backgroundColor: isDark ? "#111827" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
