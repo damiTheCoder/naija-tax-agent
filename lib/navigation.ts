@@ -80,6 +80,13 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
+    label: "Financial Projections",
+    href: "/accounting/projections",
+    icon: "trend",
+    description: "Forecast revenue, expenses, and cash position",
+    mode: "accounting",
+  },
+  {
     label: "Bank Connections",
     href: "/accounting/banks",
     icon: "bank",

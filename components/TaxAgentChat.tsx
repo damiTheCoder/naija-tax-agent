@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { addChatHistoryEntry } from "@/lib/personalChatHistory";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } from "@/lib/agent/unifiedClient";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -21,6 +22,7 @@ export default function TaxAgentChat() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,21 +50,14 @@ export default function TaxAgentChat() {
         route: "/tax-tools",
         prompt: question,
       });
-      const response = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          module: "tax",
-          messages: newMessages.map(({ role, content }) => ({ role, content })),
-        }),
+      const result = await runUnifiedAgentMessage({
+        message: question,
+        module: "tax",
+        route: "/tax-tools",
+        conversation: newMessages.map(({ role, content }) => ({ role, content })),
       });
-
-      if (!response.ok) {
-        throw new Error("Unable to reach the tax assistant right now.");
-      }
-
-      const data = await response.json();
-      const answer = data.answer || "I could not generate a useful response. Please try again.";
+      setPlanSource(result.planSource);
+      const answer = result.finalReply || "I could not generate a useful response. Please try again.";
 
       setMessages((prev) => [...prev, { role: "assistant", content: answer, timestamp: Date.now() }]);
       addChatHistoryEntry({
@@ -72,6 +67,7 @@ export default function TaxAgentChat() {
         response: answer,
       });
     } catch (err) {
+      setPlanSource("fallback");
       const fallback = err instanceof Error ? err.message : "Tax assistant unavailable.";
       setError(fallback);
       setMessages((prev) => [...prev, { role: "assistant", content: fallback, timestamp: Date.now() }]);
@@ -128,6 +124,7 @@ export default function TaxAgentChat() {
             <span className="status-pill">Docs {docsCount}</span>
             <span className="status-pill warning">Draft {draftsPending}</span>
             <span className="status-pill danger">Audit {auditStatus}</span>
+            <span className="status-pill">{formatPlanSourceLabel(planSource)}</span>
           </div>
 
           <div className="info-card">

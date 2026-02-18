@@ -32,6 +32,8 @@ import {
     ChevronDown,
 } from "lucide-react";
 import ModeSelector from "@/components/ModeSelector";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } from "@/lib/agent/unifiedClient";
+import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 
 // =============================================================================
 // TYPES
@@ -45,6 +47,13 @@ type ChatMessage = {
 };
 
 type ModalType = "link-card" | "send" | "fund" | "receive" | "withdraw" | null;
+
+const WALLET_CHAT_INTRO: ChatMessage = {
+    id: "intro",
+    role: "assistant",
+    content: "Welcome to your Wallet! 💳\n\nSend money instantly using natural language:\n\n• \"Send ₦500 to 9168961220 Opay\"\n• \"Pay ₦1,000 to john@email.com\"\n• \"Transfer ₦2,500 to 0123456789 GTB\"\n\nYou can also use the quick action buttons above.",
+    timestamp: Date.parse("2025-01-01T09:00:00+01:00"),
+};
 
 // =============================================================================
 // CARD NETWORK BADGE
@@ -791,8 +800,9 @@ function FundWalletModal({
 export default function WalletPage() {
     const [walletState, setWalletState] = useState<WalletState | null>(null);
     const [loading, setLoading] = useState(true);
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([WALLET_CHAT_INTRO]);
     const [composerInput, setComposerInput] = useState("");
+    const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
     const [activeModal, setActiveModal] = useState<ModalType>(null);
     const [sendPrefill, setSendPrefill] = useState<{ amount: number; recipient: string; provider?: string } | undefined>();
 
@@ -820,20 +830,6 @@ export default function WalletPage() {
         });
         return () => unsubscribe();
     }, []);
-
-    // Initial chat message
-    useEffect(() => {
-        if (messages.length === 0) {
-            setMessages([
-                {
-                    id: "intro",
-                    role: "assistant",
-                    content: "Welcome to your Wallet! 💳\n\nSend money instantly using natural language:\n\n• \"Send ₦500 to 9168961220 Opay\"\n• \"Pay ₦1,000 to john@email.com\"\n• \"Transfer ₦2,500 to 0123456789 GTB\"\n\nYou can also use the quick action buttons above.",
-                    timestamp: Date.now(),
-                },
-            ]);
-        }
-    }, [messages.length]);
 
     // Auto-expand textarea
     useEffect(() => {
@@ -863,12 +859,32 @@ export default function WalletPage() {
     }, []);
 
     // Handle send message (chat-to-pay)
-    const handleSendMessage = useCallback(() => {
+    const handleSendMessage = useCallback(async () => {
         const trimmed = composerInput.trim();
         if (!trimmed) return;
 
         appendMessage("user", trimmed);
         setComposerInput("");
+        try {
+            const conversation: AgentConversationMessage[] = [...messages, { role: "user" as const, content: trimmed }]
+                .slice(-12)
+                .map((item) => ({
+                    role: item.role === "assistant" ? "assistant" : "user",
+                    content: item.content,
+                }));
+            const result = await runUnifiedAgentMessage({
+                message: trimmed,
+                module: "wallet",
+                route: "/wallet",
+                conversation,
+            });
+            appendMessage("assistant", result.finalReply);
+            setPlanSource(result.planSource);
+            return;
+        } catch {
+            setPlanSource("fallback");
+            // Fallback to local wallet assistant logic.
+        }
 
         const msg = trimmed.toLowerCase();
 
@@ -921,7 +937,7 @@ export default function WalletPage() {
             "assistant",
             "I didn't understand that. Try saying something like:\n\n• \"Send 500 naira to 09168961220 Opay\"\n• \"What's my balance?\"\n• \"Show recent transactions\""
         );
-    }, [appendMessage, composerInput, walletState]);
+    }, [appendMessage, composerInput, walletState, messages]);
 
     const canSend = composerInput.trim().length > 0;
 
@@ -969,6 +985,7 @@ export default function WalletPage() {
                     <div className="rounded-2xl overflow-hidden">
                         <div className="py-2">
                             <h3 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Quick Actions</h3>
+                            <p className="text-[11px] text-gray-500">{formatPlanSourceLabel(planSource)}</p>
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                             <QuickActionButton

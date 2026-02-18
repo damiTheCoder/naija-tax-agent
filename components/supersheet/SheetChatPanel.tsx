@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Sheet, parseCellRange, getCellValue, createCellRef } from '@/lib/supersheet/spreadsheet';
+import { runUnifiedAgentMessage } from '@/lib/agent/unifiedClient';
 
 interface SheetChatPanelProps {
     sheet: Sheet;
@@ -280,9 +281,29 @@ What would you like me to help with?`,
         setIsLoading(true);
 
         try {
-            // Process locally (can be extended to use AI API)
-            const response = await processMessage(userMessage.content);
+            try {
+                const conversation = [...messages, userMessage]
+                    .slice(-12)
+                    .map((msg) => ({ role: msg.role, content: msg.content }));
+                const result = await runUnifiedAgentMessage({
+                    message: userMessage.content,
+                    module: "supersheet",
+                    route: "/supersheet",
+                    conversation,
+                });
+                const assistantMessage: ChatMessage = {
+                    id: `msg_${Date.now() + 1}`,
+                    role: 'assistant',
+                    content: result.finalReply,
+                    timestamp: Date.now(),
+                };
+                setMessages(prev => [...prev, assistantMessage]);
+                return;
+            } catch {
+                // Fallback to local supersheet helper logic.
+            }
 
+            const response = await processMessage(userMessage.content);
             const assistantMessage: ChatMessage = {
                 id: `msg_${Date.now() + 1}`,
                 role: 'assistant',
@@ -290,7 +311,6 @@ What would you like me to help with?`,
                 timestamp: Date.now(),
                 action: response.action,
             };
-
             setMessages(prev => [...prev, assistantMessage]);
         } catch (error) {
             const errorMessage: ChatMessage = {

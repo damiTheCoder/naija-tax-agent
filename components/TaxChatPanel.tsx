@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { addChatHistoryEntry } from "@/lib/personalChatHistory";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } from "@/lib/agent/unifiedClient";
 
 type ChatRole = "user" | "assistant";
 
@@ -24,6 +25,7 @@ export default function TaxChatPanel() {
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -66,24 +68,14 @@ export default function TaxChatPanel() {
         route: "/tax-tools",
         prompt: trimmed,
       });
-      const response = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          module: "tax",
-          messages: outgoing.map(({ role, content }) => ({ role, content })),
-        }),
+      const result = await runUnifiedAgentMessage({
+        message: trimmed,
+        module: "tax",
+        route: "/tax-tools",
+        conversation: outgoing.map(({ role, content }) => ({ role, content })),
       });
-
-      if (!response.ok) {
-        throw new Error("Assistant is offline. Please try again.");
-      }
-
-      const data = await response.json();
-      const answer =
-        typeof data?.answer === "string"
-          ? data.answer
-          : "I could not generate a useful response. Please try again.";
+      setPlanSource(result.planSource);
+      const answer = result.finalReply || "I could not generate a useful response. Please try again.";
       appendMessage("assistant", answer);
       addChatHistoryEntry({
         module: "tax",
@@ -92,6 +84,7 @@ export default function TaxChatPanel() {
         response: answer,
       });
     } catch (err) {
+      setPlanSource("fallback");
       const fallback = err instanceof Error ? err.message : "Unable to reach the tax assistant.";
       setError(fallback);
       appendMessage("assistant", fallback);
@@ -116,6 +109,7 @@ export default function TaxChatPanel() {
           <p className="text-sm text-gray-500">
             Journals go straight into the VAT, WHT, CGT, and stamp-duty schedules.
           </p>
+          <p className="mt-1 text-[11px] text-gray-500">{formatPlanSourceLabel(planSource)}</p>
         </div>
         <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
           Live

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TaxRuleMetadata, UserProfile } from "@/lib/types";
-import { DEFAULT_TAX_YEAR, CIT_CONFIG } from "@/lib/taxRules/config";
+import { CIT_CONFIG } from "@/lib/taxRules/config";
 import { clearAllData } from "@/lib/utils/system";
 import { buildTransactionsFromFiles } from "@/lib/accounting/statementEngine";
 import {
@@ -13,6 +13,7 @@ import {
   type TaxTransaction,
 } from "@/lib/tax/taxEngine";
 import { getClientTaxRuleMetadata, refreshClientTaxRules } from "@/lib/taxRules/liveRatesClient";
+import { generateTaxRemittancePdf } from "@/lib/taxRemittancePdf";
 
 type WorkspaceDocument = {
   id: string;
@@ -30,6 +31,20 @@ type WorkspaceSnapshot = {
   lastUpdated: string;
 };
 
+type RemittanceAuditRecord = {
+  id: string;
+  paymentReference: string;
+  taxpayerName: string;
+  businessName?: string;
+  taxType: string;
+  period: string;
+  dueDate: string;
+  taxAmount: number;
+  scheduleId: string;
+  source: string;
+  createdAt: string;
+};
+
 type ActiveTab = "timeline" | "schedules" | "flows" | "documents";
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -39,13 +54,7 @@ const currencyFormatter = new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 0,
 });
 
-const numberFormatter = new Intl.NumberFormat("en-NG", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
 const formatCurrency = (amount: number) => currencyFormatter.format(Math.round(amount || 0));
-const formatNumber = (value: number) => numberFormatter.format(Math.round(value || 0));
 const formatFileSize = (size: number) => {
   if (size >= 1024 * 1024) {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
@@ -80,6 +89,8 @@ export default function TaxWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [remittanceHistory, setRemittanceHistory] = useState<RemittanceAuditRecord[]>([]);
+  const [isLoadingRemittanceHistory, setIsLoadingRemittanceHistory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hydratedRef = useRef(false);
 
@@ -132,6 +143,26 @@ export default function TaxWorkspacePage() {
     };
     hydrateRules();
   }, []);
+
+  const loadRemittanceHistory = useCallback(async () => {
+    setIsLoadingRemittanceHistory(true);
+    try {
+      const response = await fetch("/api/tax/remittance?limit=30", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data?.success || !Array.isArray(data.records)) {
+        throw new Error(data?.error || "Could not load remittance history");
+      }
+      setRemittanceHistory(data.records as RemittanceAuditRecord[]);
+    } catch (fetchError) {
+      console.error("Unable to load remittance history", fetchError);
+    } finally {
+      setIsLoadingRemittanceHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRemittanceHistory();
+  }, [loadRemittanceHistory]);
 
   const ingestFiles = useCallback(
     async (fileList: FileList | File[]) => {
@@ -196,6 +227,53 @@ export default function TaxWorkspacePage() {
       event.dataTransfer.clearData();
     }
   };
+
+  const handleGenerateRemittance = useCallback(async (schedule: TaxScheduleEntry) => {
+    const paymentReference = generateTaxRemittancePdf({
+      taxpayerName: snapshot.profile.fullName || "Authorized Taxpayer",
+      businessName: snapshot.profile.businessName,
+      taxType: schedule.taxType,
+      period: schedule.period,
+      dueDate: schedule.dueDate,
+      taxAmount: schedule.taxAmount,
+      scheduleId: schedule.id,
+    });
+
+    try {
+      const response = await fetch("/api/tax/remittance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paymentReference,
+          taxpayerName: snapshot.profile.fullName || "Authorized Taxpayer",
+          businessName: snapshot.profile.businessName,
+          taxType: schedule.taxType,
+          period: schedule.period,
+          dueDate: schedule.dueDate,
+          taxAmount: schedule.taxAmount,
+          scheduleId: schedule.id,
+          source: "tax-workspace",
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.success || !data.record) {
+        throw new Error(data?.error || "Failed to save remittance audit record");
+      }
+
+      setRemittanceHistory((prev) => [data.record as RemittanceAuditRecord, ...prev].slice(0, 30));
+      setStatusMessage(
+        `${schedule.taxType} remittance generated and logged. FIRS reference: ${paymentReference}`
+      );
+    } catch (persistError) {
+      console.error("Failed to persist remittance record", persistError);
+      setStatusMessage(
+        `${schedule.taxType} remittance generated (PDF downloaded), but audit log save failed. Reference: ${paymentReference}`
+      );
+    }
+  }, [snapshot.profile.businessName, snapshot.profile.fullName]);
 
 
   const derivedStats = useMemo(() => {
@@ -495,22 +573,68 @@ export default function TaxWorkspacePage() {
                 <p>No active schedules generated</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {snapshot.schedules.slice().reverse().map((schedule) => (
-                  <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
-                        <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">{schedule.status}</span>
+              <div>
+                <div className="divide-y divide-gray-100">
+                  {snapshot.schedules.slice().reverse().map((schedule) => (
+                    <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
+                          <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">{schedule.status}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.taxAmount)}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateRemittance(schedule)}
+                          className="text-xs text-[#2264ff] hover:underline font-medium mt-1"
+                        >
+                          Generate Remittance
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.taxAmount)}</p>
-                      <button className="text-xs text-[#2264ff] hover:underline font-medium mt-1">Generate Remittance</button>
-                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-gray-100 px-4 py-4 bg-gray-50/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Remittance Audit History</h3>
+                    <button
+                      type="button"
+                      onClick={loadRemittanceHistory}
+                      className="text-xs text-[#2264ff] hover:underline font-medium"
+                    >
+                      Refresh
+                    </button>
                   </div>
-                ))}
+
+                  {isLoadingRemittanceHistory ? (
+                    <p className="text-xs text-gray-500 mt-3">Loading remittance history...</p>
+                  ) : remittanceHistory.length === 0 ? (
+                    <p className="text-xs text-gray-500 mt-3">No remittance records yet.</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {remittanceHistory.slice(0, 8).map((record) => (
+                        <div key={record.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] sm:text-xs font-mono text-gray-700">{record.paymentReference}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {record.taxType} • {record.period} • Due {record.dueDate}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-semibold text-gray-900">{formatCurrency(record.taxAmount)}</p>
+                              <p className="text-[11px] text-gray-400">{record.createdAt.slice(0, 16).replace("T", " ")}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -6,6 +6,8 @@ import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/tra
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource, type UnifiedCustomActionExecutor } from "@/lib/agent/unifiedClient";
+import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import {
     addChatHistoryEntry,
     CHAT_HISTORY_SELECTED_EVENT,
@@ -42,6 +44,26 @@ interface ClarificationData {
         description: string;
         bankName: string;
     };
+}
+
+type ProjectionActionUpdate = {
+    key: string;
+    value: number;
+    unit?: string;
+};
+
+const PROJECTIONS_CONTEXT_STORAGE_KEY = "ql::projections-context";
+const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
+const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
+
+function readProjectionsContextSnapshot(): string {
+    if (typeof window === "undefined") return "";
+    try {
+        const raw = window.localStorage.getItem(PROJECTIONS_CONTEXT_STORAGE_KEY);
+        return typeof raw === "string" ? raw : "";
+    } catch {
+        return "";
+    }
 }
 
 /**
@@ -147,6 +169,19 @@ const moduleConfigs: Record<string, ModuleConfig> = {
             '"Bought office supplies ₦5,000"'
         ],
         color: "purple"
+    },
+    projections: {
+        id: "projections",
+        name: "Projections",
+        title: "Projections Assistant",
+        placeholder: "Ask about projections or update assumptions...",
+        greeting: "Hi! I can analyze your projection charts and update assumptions directly from this chat.",
+        examples: [
+            '"How do I calculate revenue growth rate?"',
+            '"Set revenue growth assumption to 12%"',
+            '"Reset assumptions to auto"'
+        ],
+        color: "blue"
     },
     reconciliation: {
         id: "reconciliation",
@@ -264,6 +299,9 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     if (firstSegment === 'accounting' && secondSegment === 'reconciliation') {
         return moduleConfigs.reconciliation;
     }
+    if (firstSegment === 'accounting' && secondSegment === 'projections') {
+        return moduleConfigs.projections;
+    }
 
     // Check for exact match first
     if (moduleConfigs[firstSegment]) {
@@ -298,6 +336,7 @@ export default function FloatingChatButton() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -817,6 +856,59 @@ _Ask me anything about bank reconciliation!_`;
         return `📊 **SuperSheet Help**\n\nI can help you with:\n• "How do I sum a column?"\n• "Create an IF formula"\n• "What formulas are available?"\n• "Analyze my data"\n\n_Use the chat button in SuperSheet for contextual AI assistance!_`;
     }, []);
 
+    const handleProjectionsMessage = useCallback((message: string) => {
+        const lower = message.toLowerCase();
+        const context = readProjectionsContextSnapshot();
+        if (!context) {
+            return "Open the projections dashboard first so I can read live metrics and assumptions.";
+        }
+
+        if (lower.includes("assumption") || lower.includes("growth") || lower.includes("cogs") || lower.includes("baseline")) {
+            return "I can update assumptions directly here. Try: set revenue growth assumption to 12%, or reset assumptions to auto.";
+        }
+
+        const topLines = context.split("\n").slice(0, 5).join("\n");
+        return `Here is a quick projection snapshot from your live dashboard:\n\n${topLines}`;
+    }, []);
+
+    const executeProjectionAction = useCallback<UnifiedCustomActionExecutor>(async (action: UnifiedAgentAction) => {
+        if (typeof window === "undefined") return null;
+
+        if (action.type === "projections.resetAssumptions") {
+            window.dispatchEvent(new CustomEvent(PROJECTIONS_RESET_EVENT));
+            return {
+                type: "projections.resetAssumptions",
+                success: true,
+                message: "Projection assumptions reset to auto-derived values.",
+            };
+        }
+
+        if (action.type !== "projections.updateAssumption") {
+            return null;
+        }
+
+        const payload = action.payload && typeof action.payload === "object" ? action.payload : {};
+        const updates = Array.isArray((payload as Record<string, unknown>).updates)
+            ? ((payload as Record<string, unknown>).updates as ProjectionActionUpdate[])
+            : [payload as ProjectionActionUpdate];
+
+        if (!updates.length) {
+            return {
+                type: "projections.updateAssumption",
+                success: false,
+                message: "No assumption update was provided.",
+            };
+        }
+
+        window.dispatchEvent(new CustomEvent(PROJECTIONS_UPDATE_EVENT, { detail: { updates } }));
+        return {
+            type: "projections.updateAssumption",
+            success: true,
+            message: "Projection assumptions updated.",
+            data: { updates },
+        };
+    }, []);
+
 
     const handleSend = useCallback(async () => {
         const trimmed = inputValue.trim();
@@ -828,37 +920,39 @@ _Ask me anything about bank reconciliation!_`;
 
         try {
             let response: string;
-            let shouldHumanize = false;
+            try {
+                const conversation = [...messages, { role: "user" as const, content: trimmed }]
+                    .slice(-12)
+                    .map((msg) => ({ role: msg.role, content: msg.content }));
+                const result = await runUnifiedAgentMessage({
+                    message: trimmed,
+                    module: currentModule.id,
+                    route: pathname,
+                    conversation,
+                    contextSnapshot: currentModule.id === "projections" ? readProjectionsContextSnapshot() : undefined,
+                    customActionExecutor: currentModule.id === "projections" ? executeProjectionAction : undefined,
+                });
 
-            // Use Clawdbot AI if enabled
-            if (USE_CLAWDBOT) {
-                const clawdbotResult = await sendToClawdbot(trimmed, currentModule.id);
-
-                // If Clawdbot failed or returned fallback, use local handlers
-                if (clawdbotResult.fallback || clawdbotResult.error) {
-                    console.log("[Clawdbot] Falling back to local handlers");
-                    response = await getLocalResponse(trimmed);
-                    shouldHumanize = true;
-                } else {
-                    response = clawdbotResult.reply;
-
-                    // Handle any actions returned by Clawdbot
-                    if (clawdbotResult.actions && clawdbotResult.actions.length > 0) {
-                        console.log("[Clawdbot] Actions executed:", clawdbotResult.actions);
-                        // Trigger UI updates if transactions were recorded
-                        if (typeof window !== "undefined") {
-                            window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "clawdbot" } }));
-                        }
-                    }
+                response = result.finalReply;
+                setPlanSource(result.planSource);
+                if (result.navigateTo && result.navigateTo !== pathname && typeof window !== "undefined") {
+                    window.location.href = result.navigateTo;
                 }
-            } else {
-                // Use local handlers
-                response = await getLocalResponse(trimmed);
-                shouldHumanize = true;
-            }
-
-            if (shouldHumanize) {
-                response = await humanizeDraftReply(trimmed, currentModule.id, response);
+            } catch {
+                setPlanSource("fallback");
+                // Fallback for resilience if unified agent planner is unavailable.
+                if (USE_CLAWDBOT) {
+                    const clawdbotResult = await sendToClawdbot(trimmed, currentModule.id);
+                    if (clawdbotResult.fallback || clawdbotResult.error) {
+                        response = await getLocalResponse(trimmed);
+                        response = await humanizeDraftReply(trimmed, currentModule.id, response);
+                    } else {
+                        response = clawdbotResult.reply;
+                    }
+                } else {
+                    response = await getLocalResponse(trimmed);
+                    response = await humanizeDraftReply(trimmed, currentModule.id, response);
+                }
             }
 
             addChatHistoryEntry({
@@ -869,6 +963,7 @@ _Ask me anything about bank reconciliation!_`;
             });
             appendMessage("assistant", response);
         } catch {
+            setPlanSource("fallback");
             appendMessage("assistant", "Sorry, I couldn't process that. Please try again.");
         } finally {
             setIsLoading(false);
@@ -889,11 +984,13 @@ _Ask me anything about bank reconciliation!_`;
                     return await handleReconciliationMessage(message);
                 case "supersheet":
                     return handleSupersheetMessage(message);
+                case "projections":
+                    return handleProjectionsMessage(message);
                 default:
                     return handleDashboardMessage(message);
             }
         }
-    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage]);
+    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage, handleProjectionsMessage, executeProjectionAction]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -971,6 +1068,9 @@ _Ask me anything about bank reconciliation!_`;
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     </button>
+                                </div>
+                                <div className="px-4 sm:px-5 pb-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                    {formatPlanSourceLabel(planSource)}
                                 </div>
 
                                 {/* Messages */}

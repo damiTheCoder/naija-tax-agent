@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
 import { getClientTaxRuleMetadata, refreshClientTaxRules } from "@/lib/taxRules/liveRatesClient";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } from "@/lib/agent/unifiedClient";
+import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 import type { TaxRuleMetadata } from "@/lib/types";
 import type { TaxDraftPayload } from "@/lib/accounting/types";
 import { Plus, RefreshCw, ShieldCheck, CalendarDays, FileDown, Trash2, SendHorizontal } from "lucide-react";
@@ -40,6 +42,7 @@ export default function TaxChatPage() {
   const [draftPayload, setDraftPayload] = useState<TaxDraftPayload | null>(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [status, setStatus] = useState("Workspace ready for entries.");
+  const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const hydratedRef = useRef(false);
@@ -133,12 +136,35 @@ export default function TaxChatPage() {
     ]);
   }, []);
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback(async () => {
     const trimmed = composerInput.trim();
     if (!trimmed) return;
     appendMessage("user", trimmed);
     setComposerInput("");
     setIsActionMenuOpen(false);
+
+    try {
+      const conversation: AgentConversationMessage[] = [...messages, { role: "user" as const, content: trimmed }]
+        .slice(-12)
+        .map((item) => ({
+          role: item.role === "assistant" ? "assistant" : "user",
+          content: item.content,
+        }));
+      const result = await runUnifiedAgentMessage({
+        message: trimmed,
+        module: "tax",
+        route: "/tax/chat",
+        conversation,
+      });
+      appendMessage("assistant", result.finalReply);
+      setPlanSource(result.planSource);
+      setStatus(`Agent executed your request. ${formatPlanSourceLabel(result.planSource)}.`);
+      syncState();
+      return;
+    } catch {
+      setPlanSource("fallback");
+      // Fallback to direct tax-engine parser below.
+    }
 
     const parsed = taxEngine.parseTransactionFromChat(trimmed);
     if (parsed && parsed.amount && parsed.amount !== 0) {
@@ -167,7 +193,7 @@ export default function TaxChatPage() {
       appendMessage("assistant", "No taxable transaction detected.");
       setStatus("Need an amount and taxable context to act.");
     }
-  }, [appendMessage, composerInput, syncState]);
+  }, [appendMessage, composerInput, syncState, messages]);
 
   const handleRefreshRules = useCallback(async () => {
     try {
@@ -230,6 +256,7 @@ export default function TaxChatPage() {
                 <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-600">Rules {ruleMetadata.version || "base"}</span>
                 <span className="px-3 py-1 rounded-md bg-emerald-50 text-emerald-600">{engineState.transactions.length} txns</span>
                 <span className="px-3 py-1 rounded-md bg-amber-50 text-amber-600">{openSchedules.length} filings open</span>
+                <span className="px-3 py-1 rounded-md bg-slate-50 text-slate-600">{formatPlanSourceLabel(planSource)}</span>
               </div>
             </div>
           </div>

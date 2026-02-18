@@ -228,6 +228,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function getPageTitle(pathname: string): string {
+  if (pathname.includes("/accounting/projections")) return "Financial Projections";
   if (pathname.includes("/accounting/workspace")) return "Accounting Records";
   if (pathname.includes("/accounting")) return "Accounting Studio";
   if (pathname.includes("/dashboard")) return "Dashboard";
@@ -239,6 +240,7 @@ function getPageTitle(pathname: string): string {
 }
 
 function getPageDescription(pathname: string): string {
+  if (pathname.includes("/accounting/projections")) return "Forward-looking forecasts from your accounting records";
   if (pathname.includes("/accounting/workspace")) return "Real-time journals, ledgers, and statements";
   if (pathname.includes("/accounting")) return "Generate financial statements before tax";
   if (pathname.includes("/dashboard")) return "Business metrics and analytics overview";

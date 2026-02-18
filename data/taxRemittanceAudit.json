@@ -1,0 +1,14 @@
+[
+  {
+    "id": "REM-1771410258513-z8c03f",
+    "paymentReference": "FIRS-VAT-2026Q1-20260218-6344",
+    "taxpayerName": "Authorized Taxpayer",
+    "taxType": "VAT",
+    "period": "2026-Q1",
+    "dueDate": "2026-04-21",
+    "taxAmount": 6344.25,
+    "scheduleId": "SCH-VAT-2026-Q1",
+    "source": "tax-workspace",
+    "createdAt": "2026-02-18T10:24:18.513Z"
+  }
+]

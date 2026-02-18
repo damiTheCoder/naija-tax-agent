@@ -18,6 +18,8 @@ import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
 import { clearAllData } from "@/lib/utils/system";
 import { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { useTheme } from "@/lib/ThemeContext";
+import { runUnifiedAgentMessage } from "@/lib/agent/unifiedClient";
+import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 import { EmptyChat, SkeletonList, EmptyTransactions } from "@/components/ui";
 
 type ManualTransactionDraft = {
@@ -393,6 +395,31 @@ export default function AccountingPage() {
     appendMessage("user", trimmed);
     setComposerInput("");
     setIsWorkspaceCollapsed(true);
+
+    try {
+      const conversation: AgentConversationMessage[] = [...messages, { role: "user" as const, content: trimmed }]
+        .slice(-12)
+        .map((item) => ({
+          role: item.role === "assistant" ? "assistant" : "user",
+          content: item.content,
+        }));
+      const result = await runUnifiedAgentMessage({
+        message: trimmed,
+        module: "accounting",
+        route: "/accounting",
+        conversation,
+      });
+      appendMessage("assistant", result.finalReply);
+      pushAutomationActivity("Agent execution", `Handled request in accounting module.`);
+      const engineStatements = accountingEngine.generateStatements();
+      setGeneratedStatements(engineStatements);
+      if (result.navigateTo && result.navigateTo !== "/accounting" && typeof window !== "undefined") {
+        window.location.href = result.navigateTo;
+      }
+      return;
+    } catch {
+      // Fallback to the existing local + AI validation flow below.
+    }
 
     // First, try local parsing for immediate feedback
     const localParsed = parseTransactionFromChat(trimmed);

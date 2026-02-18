@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
 import { generatePfmResponse } from "./action";
+import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } from "@/lib/agent/unifiedClient";
 import { BarChart2, Wallet, RefreshCw, Layers, Send, TrendingUp, MessageSquarePlus, Square } from "lucide-react";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
 import {
@@ -59,6 +60,7 @@ export default function PersonalChatPage() {
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [agentPlanSource, setAgentPlanSource] = useState<AgentPlanSource>("fallback");
     const chatEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -188,8 +190,28 @@ export default function PersonalChatPage() {
         setIsExpanded(true);
 
         try {
-            // Call Server Action with user message and connected apps context
-            const responseText = await generatePfmResponse(msg, apps);
+            let responseText: string;
+            try {
+                const conversation = [...messages, { role: "user" as const, content: msg }]
+                    .slice(-12)
+                    .map((item) => ({ role: item.role, content: item.content }));
+                const result = await runUnifiedAgentMessage({
+                    message: msg,
+                    module: "personal",
+                    route: "/personal",
+                    conversation,
+                });
+                responseText = result.finalReply;
+                setAgentPlanSource(result.planSource);
+                if (result.navigateTo && result.navigateTo !== "/personal" && typeof window !== "undefined") {
+                    window.location.href = result.navigateTo;
+                }
+            } catch {
+                // Preserve existing personal assistant fallback.
+                responseText = await generatePfmResponse(msg, apps);
+                setAgentPlanSource("fallback");
+            }
+
             if (cancelledRequestIdsRef.current.has(requestId) || activeRequestIdRef.current !== requestId) {
                 return;
             }
@@ -219,6 +241,7 @@ export default function PersonalChatPage() {
                 timestamp: Date.now(),
             };
             setMessages((prev) => [...prev, errorMsg]);
+            setAgentPlanSource("fallback");
         } finally {
             cancelledRequestIdsRef.current.delete(requestId);
             if (activeRequestIdRef.current === requestId) {
@@ -370,6 +393,9 @@ export default function PersonalChatPage() {
                             : "bg-gray-100"
                         }
                     `}>
+                        <div className={`px-2 text-[11px] ${isDark ? "text-gray-500" : "text-gray-500"}`}>
+                            {formatPlanSourceLabel(agentPlanSource)}
+                        </div>
                         <div className="flex items-end gap-2">
                             <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 flex-shrink-0 rounded-full mb-0.5" />
                             <textarea

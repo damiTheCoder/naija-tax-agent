@@ -20,6 +20,8 @@ import {
 } from "@/lib/cashflow/investmentCalculator";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import { SendHorizontal, Plus, Trash2, Power, TrendingUp } from "lucide-react";
+import { runUnifiedAgentMessage } from "@/lib/agent/unifiedClient";
+import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 
 // =============================================================================
 // TYPES
@@ -309,12 +311,31 @@ export default function CashflowChatPage() {
     }, []);
 
     // Handle send message
-    const handleSendMessage = useCallback(() => {
+    const handleSendMessage = useCallback(async () => {
         const trimmed = composerInput.trim();
         if (!trimmed) return;
 
         appendMessage("user", trimmed);
         setComposerInput("");
+
+        try {
+            const conversation: AgentConversationMessage[] = [...messages, { role: "user" as const, content: trimmed }]
+                .slice(-12)
+                .map((item) => ({
+                    role: item.role === "assistant" ? "assistant" : "user",
+                    content: item.content,
+                }));
+            const result = await runUnifiedAgentMessage({
+                message: trimmed,
+                module: "cashflow",
+                route: "/cashflow-intelligence/chat",
+                conversation,
+            });
+            appendMessage("assistant", result.finalReply);
+            return;
+        } catch {
+            // Fallback to existing local cashflow chat logic.
+        }
 
         const monthlyInflow = analytics?.monthlyInflow || 0;
         const msg = trimmed.toLowerCase();
@@ -362,7 +383,7 @@ export default function CashflowChatPage() {
 
         // Default response
         appendMessage("assistant", "I can help you with:\n\n• **Set up automations**: \"Invest 5% in T-Bills\", \"Save 10% automatically\"\n• **Check returns**: \"What's my projected return?\"\n• **View automations**: \"Show my automations\"\n• **Cashflow summary**: \"Show my cashflow\"\n\nTry one of these commands!");
-    }, [appendMessage, composerInput, analytics, automationState]);
+    }, [appendMessage, composerInput, analytics, automationState, messages]);
 
     // Add quick automation
     const handleQuickAutomation = (type: "tbills" | "savings", percent: number) => {
