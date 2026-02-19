@@ -118,17 +118,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
+    <div className="app-shell-root min-h-screen transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
       {/* Sidebar - Desktop Only (always visible on desktop, mobile overlay disabled) */}
-      <Sidebar isOpen={false} onClose={() => { }} />
+      <div className="app-shell-sidebar">
+        <Sidebar isOpen={false} onClose={() => { }} />
+      </div>
 
       {/* Mobile Menu Dropdown */}
-      <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+      <div className="app-shell-mobile-menu">
+        <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+      </div>
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="lg:ml-60 min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
+      <div className="app-shell-content-wrapper lg:ml-[15.75rem] min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
         {/* Desktop Header */}
-        <header className="hidden lg:flex sticky top-0 z-30 bg-transparent px-8 py-4 justify-between items-center pointer-events-none">
+        <header
+          className="app-shell-topbar hidden lg:flex sticky top-0 z-50 px-8 py-3 justify-between items-center pointer-events-none backdrop-blur-xl"
+          style={{
+            background: theme === "dark" ? "rgba(0,0,0,0.82)" : "rgba(255,255,255,0.92)",
+          }}
+        >
           {/* Module Buttons - Left Side */}
           <div className="pointer-events-auto">
             <ModuleButtonBar />
@@ -141,7 +150,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Header Only */}
         <header
-          className="sticky top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
+          className="app-shell-topbar sticky top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
           style={{ background: theme === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' }}
         >
           <div className="px-4 py-3 flex items-center justify-between">
@@ -207,8 +216,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 px-2 py-4 lg:p-8">
-          <div className="max-w-6xl mx-auto w-full">
+        <main className="app-shell-content-main flex-1 px-2 py-4 lg:p-8">
+          <div className="app-shell-content-container max-w-6xl mx-auto w-full">
             <Suspense fallback={<PageLoadingSpinner />}>
               {children}
             </Suspense>
@@ -221,7 +230,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 
       {/* Floating Chat Button for transaction input */}
-      {!isPersonalRoute && <FloatingChatButton />}
+      {!isPersonalRoute && (
+        <div className="app-shell-floating-chat">
+          <FloatingChatButton />
+        </div>
+      )}
 
     </div>
   );

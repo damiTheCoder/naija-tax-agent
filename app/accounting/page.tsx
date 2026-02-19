@@ -3,6 +3,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   RawTransaction,
   StatementDraft,
@@ -57,8 +58,44 @@ const initialTransaction: ManualTransactionDraft = {
   type: "income" as const,
 };
 
+function getContextJournalLabel(entry: JournalEntry): string {
+  const txType = entry.transactionType;
+  const narration = entry.narration.toLowerCase();
+  const hasCashLine = entry.lines.some(
+    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
+  );
+  const hasSalesLine = entry.lines.some((line) => line.accountCode.startsWith("4") && line.credit > 0);
+  const hasPurchaseLine = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("50") || /purchase|inventory|stock|materials/i.test(line.accountName)) &&
+      line.debit > 0
+  );
+  const hasExpenseLine = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("5") || line.accountCode.startsWith("6") || line.accountCode.startsWith("7")) &&
+      line.debit > 0
+  );
+
+  if (txType === "sale" || txType === "sale-return" || hasSalesLine) return "Sales Journal";
+  if (txType === "purchase" || txType === "purchase-return" || hasPurchaseLine) return "Purchase Journal";
+  if (txType === "expense" || hasExpenseLine) return "Expense Journal";
+
+  if (txType === "receipt" || txType === "payment" || txType === "transfer" || hasCashLine) {
+    if (hasSalesLine || /received|receipt|cash sale/.test(narration)) return "Cash Receipt Journal";
+    if (hasExpenseLine || /paid|payment|disburse|withdraw/.test(narration)) return "Cash Payment Journal";
+    return "Cash Journal";
+  }
+
+  if (txType === "adjustment") return "Adjustment Journal";
+  if (txType === "opening-balance") return "Opening Journal";
+  if (txType === "closing") return "Closing Journal";
+  return "General Journal";
+}
+
 export default function AccountingPage() {
   const { theme } = useTheme();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   // -- State for Documents & Automation --
   const [documents, setDocuments] = useState<DraftDocumentMeta[]>([]);
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
@@ -95,6 +132,8 @@ export default function AccountingPage() {
   const auditUploadRef = useRef<HTMLInputElement | null>(null);
   const manualFormRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const autoEditHandledRef = useRef<string | null>(null);
+  const autoNewEntryHandledRef = useRef(false);
 
   // Post Entry Section State
   type PostEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
@@ -843,7 +882,7 @@ export default function AccountingPage() {
   };
 
   // Edit Entry handlers
-  const openEditEntry = (entry: JournalEntry) => {
+  const openEditEntry = useCallback((entry: JournalEntry) => {
     setEditingEntryId(entry.id);
     setEditEntryNarration(entry.narration);
     setEditEntryDate(entry.date);
@@ -858,7 +897,72 @@ export default function AccountingPage() {
     );
     setEditEntryError("");
     setShowEditEntry(true);
-  };
+  }, []);
+
+  const beginEntryEdit = useCallback((entry: JournalEntry, resetToDraft = true) => {
+    if (entry.status === "voided") {
+      appendMessage("assistant", `⚠️ Entry ${entry.id} is voided and cannot be edited.`);
+      return;
+    }
+
+    let targetEntry = entry;
+    if (resetToDraft && entry.status === "posted") {
+      try {
+        const draftEntry = accountingEngine.resetJournalEntryToDraft(entry.id);
+        const updatedState = accountingEngine.getState();
+        setAccountingState(updatedState);
+        setJournalEntries(updatedState.journalEntries);
+        targetEntry = updatedState.journalEntries.find((j) => j.id === entry.id) || draftEntry;
+        appendMessage("assistant", `📝 Entry ${entry.id} reset to draft. Update and save to repost.`);
+        pushAutomationActivity("Entry reset to draft", `Draft: ${entry.id}`);
+      } catch (err) {
+        appendMessage("assistant", `❌ Failed to open ${entry.id} for edit: ${err instanceof Error ? err.message : "Unknown error"}`);
+        return;
+      }
+    }
+
+    openEditEntry(targetEntry);
+  }, [appendMessage, openEditEntry, pushAutomationActivity]);
+
+  const editEntryIdParam = searchParams.get("editEntry");
+  const shouldResetDraftParam = searchParams.get("resetDraft") === "1";
+  const shouldOpenNewEntryParam = searchParams.get("newEntry") === "1";
+
+  useEffect(() => {
+    if (!editEntryIdParam) {
+      autoEditHandledRef.current = null;
+      return;
+    }
+
+    const dedupeKey = `${editEntryIdParam}:${shouldResetDraftParam ? "1" : "0"}`;
+    if (autoEditHandledRef.current === dedupeKey) {
+      return;
+    }
+
+    const entry = journalEntries.find((j) => j.id === editEntryIdParam);
+    if (!entry) {
+      return;
+    }
+
+    autoEditHandledRef.current = dedupeKey;
+    beginEntryEdit(entry, shouldResetDraftParam);
+    router.replace("/accounting");
+  }, [beginEntryEdit, editEntryIdParam, journalEntries, router, shouldResetDraftParam]);
+
+  useEffect(() => {
+    if (!shouldOpenNewEntryParam) {
+      autoNewEntryHandledRef.current = false;
+      return;
+    }
+
+    if (autoNewEntryHandledRef.current) {
+      return;
+    }
+
+    autoNewEntryHandledRef.current = true;
+    setShowPostEntry(true);
+    router.replace("/accounting");
+  }, [router, shouldOpenNewEntryParam]);
 
   const handleSaveEditEntry = () => {
     setEditEntryError("");
@@ -1193,71 +1297,93 @@ export default function AccountingPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="divide-y-[0.5px] divide-gray-100 dark:!divide-gray-800/50 max-h-[500px] overflow-y-auto">
-                      {journalEntries.slice(-10).reverse().map((entry) => (
-                        <div key={entry.id} className={`px-2 py-4 hover:bg-gray-50/50 transition-colors group ${entry.status === "voided" ? "opacity-70" : ""}`}>
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-xs font-mono text-purple-600">{entry.id}</span>
-                              <p className="text-sm font-medium text-gray-900 mt-1 whitespace-nowrap overflow-x-auto hide-scrollbar cursor-grab active:cursor-grabbing">{entry.narration}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 font-mono">{entry.date}</span>
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${entry.status === "voided" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                {entry.status === "voided" ? "VOIDED" : "POSTED"}
-                              </span>
-                              {/* Edit/Delete buttons - always visible */}
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() => entry.status !== "voided" && openEditEntry(entry)}
-                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={entry.status === "voided" ? "Voided entries are read-only" : "Edit entry"}
-                                  disabled={entry.status === "voided"}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => entry.status !== "voided" && handleDeleteEntry(entry.id)}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title={entry.status === "voided" ? "Entry already voided" : "Void entry"}
-                                  disabled={entry.status === "voided"}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <table className="w-full text-xs mt-2">
-                            <thead>
-                              <tr className="border-b border-gray-100">
-                                <th className="py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                                <th className="py-1.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Debit</th>
-                                <th className="py-1.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Credit</th>
+                    <div className="max-h-[560px] overflow-auto">
+                      <table className="w-full min-w-[1080px]">
+                        <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+                          <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                            <th className="px-2 py-3 font-semibold">Date</th>
+                            <th className="px-2 py-3 font-semibold">Number</th>
+                            <th className="px-2 py-3 font-semibold">Partner</th>
+                            <th className="px-2 py-3 font-semibold">Reference</th>
+                            <th className="px-2 py-3 font-semibold">Journal</th>
+                            <th className="px-2 py-3 text-right font-semibold">Total</th>
+                            <th className="px-2 py-3 font-semibold">Status</th>
+                            <th className="px-2 py-3 font-semibold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {journalEntries.slice(-200).reverse().map((entry) => {
+                            const total = entry.totalDebits || entry.lines.reduce((sum, line) => sum + (line.debit || 0), 0);
+                            const partner = entry.reference || "—";
+                            const journalLabel = getContextJournalLabel(entry);
+                            return (
+                              <tr
+                                key={entry.id}
+                                onClick={() => beginEntryEdit(entry, true)}
+                                className={`hover:bg-gray-50/70 transition-colors ${entry.status === "voided" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                              >
+                                <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{entry.date}</td>
+                                <td className="px-2 py-3 text-sm font-mono text-purple-700 whitespace-nowrap">{entry.id}</td>
+                                <td className="px-2 py-3 text-sm text-gray-600 whitespace-nowrap">{partner}</td>
+                                <td className="px-2 py-3 text-sm text-gray-700 max-w-[340px]">
+                                  <p className="truncate" title={entry.narration}>{entry.narration}</p>
+                                </td>
+                                <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{journalLabel}</td>
+                                <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">₦{total.toLocaleString()}</td>
+                                <td className="px-2 py-3">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                    entry.status === "voided"
+                                      ? "bg-rose-100 text-rose-700"
+                                      : entry.status === "draft"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-emerald-100 text-emerald-700"
+                                  }`}>
+                                    {entry.status === "voided" ? "Voided" : entry.status === "draft" ? "Draft" : "Posted"}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-3">
+                                  <div className="flex justify-end gap-1">
+                                    <button
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        beginEntryEdit(entry, true);
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title={entry.status === "voided" ? "Voided entries are read-only" : "Edit entry"}
+                                      disabled={entry.status === "voided"}
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (entry.status !== "voided") {
+                                          handleDeleteEntry(entry.id);
+                                        }
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title={entry.status === "voided" ? "Entry already voided" : "Void entry"}
+                                      disabled={entry.status === "voided"}
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                              {entry.lines.map((line, idx) => (
-                                <tr key={idx}>
-                                  <td className={`py-1.5 text-gray-700 ${line.credit > 0 ? "pl-4" : ""}`}>
-                                    {line.accountName}
-                                  </td>
-                                  <td className="py-1.5 text-right font-mono text-gray-600 w-24">
-                                    {line.debit > 0 ? `₦${line.debit.toLocaleString()}` : "-"}
-                                  </td>
-                                  <td className="py-1.5 text-right font-mono text-gray-600 w-24">
-                                    {line.credit > 0 ? `₦${line.credit.toLocaleString()}` : "-"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+                    {journalEntries.length > 200 && (
+                      <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100 bg-gray-50/70">
+                        Showing latest 200 entries. Open workspace for full historical view.
+                      </div>
+                    )}
                   </div>
                 )}
 

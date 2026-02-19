@@ -6161,3 +6161,28 @@ tr:hover td {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+/* Print layout: hide app shell chrome so exported PDFs contain only page content */
+@media print {
+  .app-shell-topbar,
+  .app-shell-sidebar,
+  .app-shell-mobile-menu,
+  .app-shell-floating-chat {
+    display: none !important;
+  }
+
+  .app-shell-content-wrapper {
+    margin-left: 0 !important;
+    min-height: auto !important;
+    padding-bottom: 0 !important;
+  }
+
+  .app-shell-content-main {
+    padding: 0 !important;
+  }
+
+  .app-shell-content-container {
+    max-width: none !important;
+    width: 100% !important;
+  }
+}

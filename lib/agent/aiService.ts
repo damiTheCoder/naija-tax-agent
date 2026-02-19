@@ -1,0 +1,211 @@
+import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
+import type { BuiltModuleContext } from "@/lib/agent/contextBuilder";
+import { getToolsForDomain, type ToolRequest, toUnifiedAction } from "@/lib/agent/toolRegistry";
+import { GeminiClient } from "@/lib/agent/geminiClient";
+
+export interface GeminiPlannerResponse {
+  reply: string;
+  confidence: number;
+  reasoning: string;
+  toolRequests: ToolRequest[];
+}
+
+function stripMarkdownFences(text: string): string {
+  return text.replace(/```json/gi, "```").replace(/```/g, "").trim();
+}
+
+function safeJsonParse(raw: string): unknown {
+  const cleaned = stripMarkdownFences(raw);
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("No JSON object found in Gemini response.");
+  }
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+function normalizeToolRequest(input: unknown): ToolRequest | null {
+  if (!input || typeof input !== "object") return null;
+  const candidate = input as Partial<ToolRequest>;
+  if (typeof candidate.name !== "string" || !candidate.name.trim()) return null;
+
+  return {
+    name: candidate.name.trim(),
+    arguments: candidate.arguments && typeof candidate.arguments === "object" ? candidate.arguments : {},
+    reason: typeof candidate.reason === "string" ? candidate.reason.trim() : undefined,
+    confidence:
+      typeof candidate.confidence === "number" && Number.isFinite(candidate.confidence)
+        ? Math.max(0, Math.min(1, candidate.confidence))
+        : undefined,
+  };
+}
+
+function normalizePlannerResponse(raw: unknown): GeminiPlannerResponse {
+  const fallback: GeminiPlannerResponse = {
+    reply: "",
+    confidence: 0.4,
+    reasoning: "Gemini response normalized with defaults.",
+    toolRequests: [],
+  };
+
+  if (!raw || typeof raw !== "object") return fallback;
+  const obj = raw as Partial<GeminiPlannerResponse> & { toolRequests?: unknown[] };
+
+  return {
+    reply: typeof obj.reply === "string" ? obj.reply.trim() : fallback.reply,
+    confidence:
+      typeof obj.confidence === "number" && Number.isFinite(obj.confidence)
+        ? Math.max(0, Math.min(1, obj.confidence))
+        : fallback.confidence,
+    reasoning: typeof obj.reasoning === "string" ? obj.reasoning.trim() : fallback.reasoning,
+    toolRequests: Array.isArray(obj.toolRequests)
+      ? obj.toolRequests.map(normalizeToolRequest).filter((item): item is ToolRequest => Boolean(item)).slice(0, 6)
+      : fallback.toolRequests,
+  };
+}
+
+function normalizeFromRawText(raw: string): GeminiPlannerResponse {
+  const cleaned = stripMarkdownFences(raw);
+  return {
+    reply: cleaned || "I reviewed your request but I need a bit more detail to proceed.",
+    confidence: 0.45,
+    reasoning: "Gemini returned non-JSON text; using it as conversational reply with no tool requests.",
+    toolRequests: [],
+  };
+}
+
+function buildToolSpecText(context: BuiltModuleContext): string {
+  return getToolsForDomain(context.module)
+    .map((tool) => {
+      const payload = Object.keys(tool.payloadSchema).length
+        ? Object.entries(tool.payloadSchema)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(", ")
+        : "no arguments";
+      const mode = tool.kind === "action" ? "action" : "internal";
+      return `- ${tool.name} [${mode}] -> ${tool.description}. args: { ${payload} }`;
+    })
+    .join("\n");
+}
+
+function buildSystemInstruction(context: BuiltModuleContext): string {
+  return [
+    "You are the AI assistant embedded inside a financial operating system.",
+    "You have access to financial records, reporting systems, customer/payment modules, and operational workflows.",
+    `Active module: ${context.moduleLabel} (${context.module}).`,
+    `Module capabilities: ${context.moduleDescription}`,
+    "You must ground your response in provided context, available functions, and entities.",
+    "Avoid generic or stateless chatbot responses.",
+    "When an operation is required, choose the best tool request.",
+  ].join(" ");
+}
+
+function buildPlannerPrompt(params: {
+  userMessage: string;
+  context: BuiltModuleContext;
+  forceNoTools?: boolean;
+  toolObservations?: Array<{ tool: string; result: string }>;
+}): string {
+  const { userMessage, context, forceNoTools, toolObservations } = params;
+
+  const toolInstruction = forceNoTools
+    ? "You already have tool observations. Do not request additional tools. Return toolRequests as []."
+    : "If needed, request tools from the available list. Only request tools relevant to the module and user objective.";
+
+  const observationsBlock =
+    Array.isArray(toolObservations) && toolObservations.length > 0
+      ? toolObservations.map((item) => `- ${item.tool}: ${item.result}`).join("\n")
+      : "No tool observations yet.";
+
+  return `SYSTEM:
+${buildSystemInstruction(context)}
+
+CONTEXT (JSON):
+${JSON.stringify(
+    {
+      module: context.module,
+      moduleLabel: context.moduleLabel,
+      route: context.route,
+      availableFunctions: context.availableFunctions,
+      relevantEntities: context.relevantEntities,
+      databaseEntities: context.databaseEntities,
+      userState: context.userState,
+      relevantRecords: context.relevantRecords,
+      snapshotMetrics: context.snapshotMetrics,
+      uiSnapshot: context.uiSnapshot,
+      contextSnapshot: context.contextSnapshot,
+      knowledgeContext: context.knowledgeContext,
+    },
+    null,
+    2
+  )}
+
+AVAILABLE TOOLS:
+${buildToolSpecText(context)}
+
+TOOL GUIDANCE:
+${toolInstruction}
+
+TOOL OBSERVATIONS:
+${observationsBlock}
+
+USER:
+${userMessage}
+
+Return strict JSON only with this schema:
+{
+  "reply": "string",
+  "confidence": 0.0,
+  "reasoning": "string",
+  "toolRequests": [
+    {
+      "name": "toolName",
+      "arguments": {},
+      "reason": "why this tool",
+      "confidence": 0.0
+    }
+  ]
+}
+
+Rules:
+- Always respond as a deeply embedded system agent with contextual awareness.
+- Ground every response in module context and system capabilities.
+- If this is normal conversation, return toolRequests: [] and provide a natural, human response.
+- If toolRequests include action tools, include only what is necessary and safe.
+- Never output markdown fences or extra prose outside the JSON.`;
+}
+
+export class AIService {
+  constructor(private readonly geminiClient: GeminiClient) {}
+
+  isConfigured(): boolean {
+    return this.geminiClient.isConfigured();
+  }
+
+  async generatePlan(params: {
+    userMessage: string;
+    context: BuiltModuleContext;
+    forceNoTools?: boolean;
+    toolObservations?: Array<{ tool: string; result: string }>;
+  }): Promise<GeminiPlannerResponse> {
+    const prompt = buildPlannerPrompt(params);
+    const raw = await this.geminiClient.generateText(prompt, 0.2);
+    let normalized: GeminiPlannerResponse;
+    try {
+      const parsed = safeJsonParse(raw);
+      normalized = normalizePlannerResponse(parsed);
+    } catch {
+      normalized = normalizeFromRawText(raw);
+    }
+
+    if (!normalized.reply) {
+      normalized = normalizeFromRawText(raw);
+    }
+
+    return normalized;
+  }
+
+  toActions(toolRequests: ToolRequest[]): UnifiedAgentAction[] {
+    return toolRequests.map(toUnifiedAction).filter((item): item is UnifiedAgentAction => Boolean(item)).slice(0, 4);
+  }
+}

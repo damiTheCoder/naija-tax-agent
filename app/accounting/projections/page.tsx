@@ -729,7 +729,7 @@ function KpiCard({ label, value, hint, accent }: { label: string; value: string;
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
       <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
-      <p className="text-2xl font-bold text-gray-900 mt-3">{value}</p>
+      <p className="text-2xl font-semibold text-gray-900 mt-3">{value}</p>
       <p className="text-xs text-gray-500 mt-2">{hint}</p>
     </div>
   );
@@ -1439,6 +1439,13 @@ export default function AccountingProjectionsPage() {
     }
   }, [projectionContextSnapshot]);
 
+  const handlePrintDashboard = () => {
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      window.print();
+    });
+  };
+
   if (!state) {
     return <div className="p-6 text-sm text-gray-500">Loading financial projection dashboard...</div>;
   }
@@ -1450,6 +1457,9 @@ export default function AccountingProjectionsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Financial Projections Dashboard</h1>
           <p className="text-gray-500 mt-2">Record transactions in Accounting first. Projection charts will auto-populate from your ledgers.</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/accounting/projections/modelling" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              Open Financial Modelling
+            </Link>
             <Link href="/accounting" className="px-4 py-2 rounded-lg bg-[#2264ff] text-white text-sm font-semibold hover:bg-[#1a50cc]">
               Go to Accounting Chat
             </Link>
@@ -1463,19 +1473,27 @@ export default function AccountingProjectionsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="projection-print-root space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Projections Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">Decision-focused projection view from real accounting records, tuned for management and investors.</p>
+          <Link href="/accounting/projections/modelling" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+            Open Financial Modelling
+          </Link>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
-            Dashboard
-          </Link>
-          <Link href="/accounting/workspace" className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
-            Accounting Workspace
-          </Link>
+        <div className="print-hidden flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handlePrintDashboard}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+            title="Print projections dashboard"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V4h12v5M6 14H4a2 2 0 01-2-2v-1a3 3 0 013-3h14a3 3 0 013 3v1a2 2 0 01-2 2h-2M6 14v6h12v-6M9 18h6" />
+            </svg>
+            Print PDF
+          </button>
         </div>
       </div>
 
@@ -1684,7 +1702,7 @@ export default function AccountingProjectionsPage() {
           <button
             type="button"
             onClick={() => setAssumptionOverrides({})}
-            className="text-xs font-medium text-[#2264ff] hover:underline"
+            className="print-hidden text-xs font-medium text-[#2264ff] hover:underline"
           >
             Reset to Auto
           </button>
@@ -1787,6 +1805,55 @@ export default function AccountingProjectionsPage() {
         </div>
       </div>
 
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+
+          html,
+          body {
+            background: #ffffff !important;
+          }
+
+          .projection-print-root {
+            color: #111827 !important;
+          }
+
+          .projection-print-root .print-hidden {
+            display: none !important;
+          }
+
+          .projection-print-root .rounded-2xl {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            border-color: #d1d5db !important;
+            box-shadow: none !important;
+          }
+
+          .projection-print-root .overflow-x-auto {
+            overflow: visible !important;
+          }
+
+          .projection-print-root svg {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: auto !important;
+          }
+
+          .projection-print-root .pointer-events-none {
+            display: none !important;
+          }
+
+          .projection-print-root input {
+            border: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -18,11 +18,20 @@ import type {
 } from "@/lib/agent/unifiedTypes";
 
 let enginesLoaded = false;
-const PLAN_TIMEOUT_MS = 9000;
+const PLAN_TIMEOUT_MS = 30000;
 const ACCOUNTING_PARSE_TIMEOUT_MS = 7000;
 const UI_SNAPSHOT_MAX_ITEMS = 14;
 const AGENT_LOOP_MAX_CYCLES = 3;
 const AGENT_MEMORY_MAX_ITEMS = 40;
+const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
+  "accounting.postTransaction",
+  "tax.recordTransaction",
+  "wallet.sendMoney",
+  "wallet.fund",
+  "projections.updateAssumption",
+  "projections.resetAssumptions",
+  "ui.operate",
+]);
 
 export type AgentPlanSource = "fast-path" | "gemini" | "fallback";
 export type UnifiedCustomActionExecutor = (
@@ -421,8 +430,19 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   const lower = message.toLowerCase();
   const moduleId = (request.module || "general").toLowerCase();
   const contextSnapshot = typeof request.contextSnapshot === "string" ? request.contextSnapshot : "";
+  const isLoopMetaMessage = /^goal\s*:/i.test(message) && /latest observation\s*:/i.test(lower);
   const amount = extractAmount(message);
   const actions: UnifiedAgentAction[] = [];
+
+  if (isLoopMetaMessage) {
+    return {
+      reply: "Noted. I will wait for your next direct instruction.",
+      actions: [],
+      confidence: 0.72,
+      reasoning: "Ignored loop meta prompt to avoid duplicated side effects.",
+      planSource: "fallback",
+    };
+  }
 
   const greetingIntent = /\b(hi|hello|hey|yo|good morning|good afternoon|good evening)\b/.test(lower);
   const thanksIntent = /\b(thanks|thank you|appreciate)\b/.test(lower);
@@ -937,12 +957,21 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
   const payload = action.payload || {};
   const description = toText(payload.description);
   const amount = Math.abs(toNumber(payload.amount));
+  const looksLikeLoopMetaDescription = /^goal\s*:/i.test(description) && /latest observation\s*:/i.test(description.toLowerCase());
 
   if (!description || amount <= 0) {
     return {
       type: "accounting.postTransaction",
       success: false,
       message: "Skipped accounting post because amount or description was missing.",
+    };
+  }
+
+  if (looksLikeLoopMetaDescription) {
+    return {
+      type: "accounting.postTransaction",
+      success: false,
+      message: "Skipped accounting post because the payload looked like agent loop metadata, not a real transaction description.",
     };
   }
 
@@ -1277,9 +1306,64 @@ export async function executeUnifiedAgentActions(
 export async function requestUnifiedAgentPlan(
   request: UnifiedAgentRequest
 ): Promise<UnifiedAgentResponse> {
-  const fallback = buildLocalFallbackPlan(request);
+  const serviceErrorPlan: UnifiedAgentResponse = {
+    reply: "AI service is temporarily unavailable for this request. Please retry.",
+    actions: [],
+    confidence: 0,
+    reasoning: "No planner response available",
+    planSource: "fallback",
+  };
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), PLAN_TIMEOUT_MS);
+  const buildChatApiFallback = async (reason: string): Promise<UnifiedAgentResponse> => {
+    try {
+      const transcript = Array.isArray(request.conversation)
+        ? request.conversation.slice(-10)
+        : [];
+      const messages = [
+        ...transcript.map((item) => ({
+          role: item.role,
+          content: item.content,
+        })),
+      ];
+
+      if (!messages.length || messages[messages.length - 1]?.content !== request.message) {
+        messages.push({ role: "user", content: request.message });
+      }
+
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          module: request.module,
+          messages,
+        }),
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as { answer?: string; finalAnswer?: string };
+        const reply =
+          (typeof data.finalAnswer === "string" && data.finalAnswer.trim()) ||
+          (typeof data.answer === "string" && data.answer.trim());
+        if (reply) {
+          return {
+            reply,
+            actions: [],
+            confidence: 0.42,
+            reasoning: `Fallback via /api/agent. ${reason}`,
+            planSource: "fallback",
+          };
+        }
+      }
+    } catch {
+      // Ignore and return serviceErrorPlan below.
+    }
+
+    return {
+      ...serviceErrorPlan,
+      reasoning: reason,
+    };
+  };
 
   try {
     const response = await fetch("/api/agent/execute", {
@@ -1290,34 +1374,26 @@ export async function requestUnifiedAgentPlan(
     });
 
     if (!response.ok) {
-      return {
-        ...fallback,
-        reasoning: `Endpoint status ${response.status}. ${fallback.reasoning || ""}`.trim(),
-      };
+      return buildChatApiFallback(`Endpoint status ${response.status}`);
     }
 
     const data = (await response.json()) as UnifiedAgentResponse;
     return {
-      reply: typeof data.reply === "string" && data.reply.trim() ? data.reply.trim() : fallback.reply,
-      actions: Array.isArray(data.actions) ? data.actions : fallback.actions,
+      reply: typeof data.reply === "string" && data.reply.trim() ? data.reply.trim() : serviceErrorPlan.reply,
+      actions: Array.isArray(data.actions) ? data.actions : [],
       confidence:
         typeof data.confidence === "number" && Number.isFinite(data.confidence)
           ? Math.max(0, Math.min(1, data.confidence))
-          : fallback.confidence,
-      reasoning: typeof data.reasoning === "string" ? data.reasoning : fallback.reasoning,
+          : serviceErrorPlan.confidence,
+      reasoning: typeof data.reasoning === "string" ? data.reasoning : serviceErrorPlan.reasoning,
       planSource:
-        data.planSource === "fast-path" || data.planSource === "gemini" || data.planSource === "fallback"
+        data.planSource === "gemini" || data.planSource === "fallback"
           ? data.planSource
-          : fallback.planSource || "fallback",
+          : "fallback",
     };
   } catch (error) {
-    console.warn("[Unified Agent] Planner fallback:", error);
-    return {
-      ...fallback,
-      reasoning: `${
-        error instanceof Error ? error.message : "Planner unavailable"
-      }. ${fallback.reasoning || "Client fallback"}`.trim(),
-    };
+    console.warn("[Unified Agent] Planner request failed:", error);
+    return buildChatApiFallback(error instanceof Error ? error.message : "Planner unavailable");
   } finally {
     clearTimeout(timeoutHandle);
   }
@@ -1480,13 +1556,9 @@ export async function runUnifiedAgentMessage(params: {
   const aggregateActions: UnifiedAgentAction[] = [];
   const aggregateExecution: UnifiedActionExecutionResult[] = [];
   const seenSignatures = new Set<string>();
-  let observationForNextStep = "";
 
   for (let cycle = 0; cycle < AGENT_LOOP_MAX_CYCLES; cycle += 1) {
-    const loopPrompt =
-      cycle === 0
-        ? trimmedMessage
-        : `Goal: ${objective}\nLatest observation: ${observationForNextStep}\nDecide the next best step. If goal is complete, return actions: [] with a completion reply.`;
+    const loopPrompt = trimmedMessage;
 
     const plan = await requestUnifiedAgentPlan({
       message: loopPrompt,
@@ -1529,7 +1601,6 @@ export async function runUnifiedAgentMessage(params: {
     latestNavigateTo = execution.find((result) => result.navigateTo)?.navigateTo || latestNavigateTo;
 
     const observation = buildObservation(execution, latestNavigateTo);
-    observationForNextStep = observation;
     appendAgentMemory(moduleId, {
       timestamp: Date.now(),
       module: moduleId,
@@ -1552,6 +1623,11 @@ export async function runUnifiedAgentMessage(params: {
     const hasFailure = execution.some((result) => !result.success);
     if (hasFailure) {
       latestReply = `${latestReply}\n\nI stopped after a failed step. You can adjust the instruction and I’ll continue.`;
+      break;
+    }
+
+    const hasEffectfulSuccess = execution.some((result) => result.success && EFFECTFUL_ACTION_TYPES.has(result.type));
+    if (hasEffectfulSuccess) {
       break;
     }
   }

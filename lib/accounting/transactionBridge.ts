@@ -81,6 +81,32 @@ class AccountingEngine {
     });
   }
 
+  /**
+   * Detect corrupted narrations produced by older agent loop prompts.
+   * These are not real user transaction narrations and should not stay in books.
+   */
+  private isCorruptedAgentLoopNarration(narration: unknown): boolean {
+    if (typeof narration !== "string") return false;
+    const normalized = narration.toLowerCase().replace(/\s+/g, " ").trim();
+    return (
+      normalized.startsWith("goal:") &&
+      normalized.includes("latest observation:") &&
+      normalized.includes("accounting.posttransaction")
+    );
+  }
+
+  /**
+   * Remove only known-corrupted loop-generated entries.
+   * Returns number of purged entries.
+   */
+  private purgeCorruptedJournalEntries(): number {
+    const before = this.state.journalEntries.length;
+    this.state.journalEntries = this.state.journalEntries.filter(
+      (entry) => !this.isCorruptedAgentLoopNarration(entry?.narration)
+    );
+    return before - this.state.journalEntries.length;
+  }
+
   // Subscribe to state changes
   subscribe(listener: (state: AccountingState) => void): () => void {
     this.listeners.add(listener);
@@ -132,6 +158,11 @@ class AccountingEngine {
           }
         });
         this.state.lastUpdated = parsed.lastUpdated || new Date().toISOString();
+
+        const purgedEntries = this.purgeCorruptedJournalEntries();
+        if (purgedEntries > 0) {
+          console.warn(`[Load] Purged ${purgedEntries} corrupted loop-generated journal entr${purgedEntries === 1 ? "y" : "ies"}.`);
+        }
 
         // Auto-rebuild ledger to fix any discrepancies
         console.log("[Load] Auto-rebuilding ledger to ensure trial balance is correct...");
@@ -323,7 +354,7 @@ class AccountingEngine {
     }
 
     const oldEntry = this.state.journalEntries[entryIndex];
-    if (oldEntry.status !== "posted") {
+    if (oldEntry.status === "voided") {
       throw new Error(`Journal entry ${entryId} is ${oldEntry.status} and cannot be edited`);
     }
 
@@ -347,6 +378,8 @@ class AccountingEngine {
       isBalanced: true,
       totalDebits,
       totalCredits,
+      status: "posted",
+      postedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
@@ -358,6 +391,43 @@ class AccountingEngine {
     this.notify();
 
     return updatedEntry;
+  }
+
+  /**
+   * Reset a posted journal entry to draft so it can be edited.
+   * Keeps ledger values intact until the edited version is saved.
+   */
+  resetJournalEntryToDraft(entryId: string): JournalEntry {
+    let entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1 && typeof window !== "undefined") {
+      this.load();
+      entryIndex = this.state.journalEntries.findIndex(e => e.id === entryId);
+    }
+    if (entryIndex === -1) {
+      throw new Error(`Journal entry ${entryId} not found`);
+    }
+
+    const existingEntry = this.state.journalEntries[entryIndex];
+    if (existingEntry.status === "voided") {
+      throw new Error(`Journal entry ${entryId} is voided and cannot be edited`);
+    }
+    if (existingEntry.status === "draft") {
+      return existingEntry;
+    }
+
+    const draftEntry: JournalEntry = {
+      ...existingEntry,
+      status: "draft",
+      updatedAt: new Date().toISOString(),
+      reasoning: existingEntry.reasoning
+        ? `${existingEntry.reasoning} | Reset to draft for edit`
+        : "Reset to draft for edit",
+    };
+
+    this.state.journalEntries[entryIndex] = draftEntry;
+    this.notify();
+
+    return draftEntry;
   }
 
   /**

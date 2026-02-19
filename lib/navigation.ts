@@ -87,6 +87,13 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     mode: "accounting",
   },
   {
+    label: "Financial Modelling",
+    href: "/accounting/projections/modelling",
+    icon: "spreadsheet",
+    description: "Build assumptions, scenarios, and AI-native forecast models",
+    mode: "accounting",
+  },
+  {
     label: "Bank Connections",
     href: "/accounting/banks",
     icon: "bank",

@@ -919,40 +919,22 @@ _Ask me anything about bank reconciliation!_`;
         setIsLoading(true);
 
         try {
-            let response: string;
-            try {
-                const conversation = [...messages, { role: "user" as const, content: trimmed }]
-                    .slice(-12)
-                    .map((msg) => ({ role: msg.role, content: msg.content }));
-                const result = await runUnifiedAgentMessage({
-                    message: trimmed,
-                    module: currentModule.id,
-                    route: pathname,
-                    conversation,
-                    contextSnapshot: currentModule.id === "projections" ? readProjectionsContextSnapshot() : undefined,
-                    customActionExecutor: currentModule.id === "projections" ? executeProjectionAction : undefined,
-                });
+            const conversation = [...messages, { role: "user" as const, content: trimmed }]
+                .slice(-12)
+                .map((msg) => ({ role: msg.role, content: msg.content }));
+            const result = await runUnifiedAgentMessage({
+                message: trimmed,
+                module: currentModule.id,
+                route: pathname,
+                conversation,
+                contextSnapshot: currentModule.id === "projections" ? readProjectionsContextSnapshot() : undefined,
+                customActionExecutor: currentModule.id === "projections" ? executeProjectionAction : undefined,
+            });
 
-                response = result.finalReply;
-                setPlanSource(result.planSource);
-                if (result.navigateTo && result.navigateTo !== pathname && typeof window !== "undefined") {
-                    window.location.href = result.navigateTo;
-                }
-            } catch {
-                setPlanSource("fallback");
-                // Fallback for resilience if unified agent planner is unavailable.
-                if (USE_CLAWDBOT) {
-                    const clawdbotResult = await sendToClawdbot(trimmed, currentModule.id);
-                    if (clawdbotResult.fallback || clawdbotResult.error) {
-                        response = await getLocalResponse(trimmed);
-                        response = await humanizeDraftReply(trimmed, currentModule.id, response);
-                    } else {
-                        response = clawdbotResult.reply;
-                    }
-                } else {
-                    response = await getLocalResponse(trimmed);
-                    response = await humanizeDraftReply(trimmed, currentModule.id, response);
-                }
+            const response = result.finalReply;
+            setPlanSource(result.planSource);
+            if (result.navigateTo && result.navigateTo !== pathname && typeof window !== "undefined") {
+                window.location.href = result.navigateTo;
             }
 
             addChatHistoryEntry({
@@ -968,29 +950,7 @@ _Ask me anything about bank reconciliation!_`;
         } finally {
             setIsLoading(false);
         }
-
-        // Local handler router
-        async function getLocalResponse(message: string): Promise<string> {
-            switch (currentModule.id) {
-                case "accounting":
-                    return await handleAccountingMessage(message);
-                case "cashflow":
-                    return handleCashflowMessage(message);
-                case "tax":
-                    return handleTaxMessage(message);
-                case "wallet":
-                    return handleWalletMessage(message);
-                case "reconciliation":
-                    return await handleReconciliationMessage(message);
-                case "supersheet":
-                    return handleSupersheetMessage(message);
-                case "projections":
-                    return handleProjectionsMessage(message);
-                default:
-                    return handleDashboardMessage(message);
-            }
-        }
-    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, handleAccountingMessage, handleCashflowMessage, handleTaxMessage, handleWalletMessage, handleReconciliationMessage, handleSupersheetMessage, handleDashboardMessage, handleProjectionsMessage, executeProjectionAction]);
+    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, executeProjectionAction]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {

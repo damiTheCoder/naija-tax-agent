@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 // Removed automation imports
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
@@ -10,8 +11,83 @@ import { generateFinancialStatementsPDF, generateJournalsPDF, generateTrialBalan
 import { generateTaxSchedule, TransactionTaxAnalysis, TaxPayablesSchedule } from "@/lib/accounting/transactionTaxAnalyzer";
 
 type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements" | "tax-payables" | "cashbook";
+type JournalClass = "all" | "cash" | "purchase" | "sales" | "expense" | "other";
+
+function classifyJournalEntry(entry: JournalEntry): Exclude<JournalClass, "all"> {
+  const txType = entry.transactionType;
+  if (txType === "sale" || txType === "sale-return") return "sales";
+  if (txType === "purchase" || txType === "purchase-return") return "purchase";
+  if (txType === "expense") return "expense";
+  if (txType === "receipt" || txType === "payment" || txType === "transfer") return "cash";
+
+  const hasCashLine = entry.lines.some(
+    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
+  );
+  if (hasCashLine) return "cash";
+
+  const hasSalesLine = entry.lines.some((line) => line.accountCode.startsWith("4"));
+  if (hasSalesLine) return "sales";
+
+  const hasPurchaseLine = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("50") || /purchase|inventory|stock|materials/i.test(line.accountName)) &&
+      line.debit > 0
+  );
+  if (hasPurchaseLine) return "purchase";
+
+  const hasExpenseLine = entry.lines.some(
+    (line) =>
+      line.accountCode.startsWith("5") ||
+      line.accountCode.startsWith("6") ||
+      line.accountCode.startsWith("7")
+  );
+  if (hasExpenseLine) return "expense";
+
+  return "other";
+}
+
+function formatJournalClassLabel(journalClass: Exclude<JournalClass, "all">): string {
+  if (journalClass === "sales") return "Sales";
+  if (journalClass === "purchase") return "Purchase";
+  if (journalClass === "expense") return "Expense";
+  if (journalClass === "cash") return "Cash";
+  return "Other";
+}
+
+function getJournalBookLabel(entry: JournalEntry): string {
+  const classified = classifyJournalEntry(entry);
+  const narration = entry.narration.toLowerCase();
+  const hasCashLine = entry.lines.some(
+    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
+  );
+  const hasRevenueCredit = entry.lines.some((line) => line.accountCode.startsWith("4") && line.credit > 0);
+  const hasExpenseDebit = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("5") || line.accountCode.startsWith("6") || line.accountCode.startsWith("7")) &&
+      line.debit > 0
+  );
+
+  if (classified === "sales") return "Sales Journal";
+  if (classified === "purchase") return "Purchase Journal";
+  if (classified === "expense") return "Expense Journal";
+  if (classified === "cash") {
+    if (hasCashLine && (hasRevenueCredit || /received|receipt|cash sale/.test(narration))) {
+      return "Cash Receipt Journal";
+    }
+    if (hasCashLine && (hasExpenseDebit || /paid|payment|disburse|withdraw/.test(narration))) {
+      return "Cash Payment Journal";
+    }
+    return "Cash Journal";
+  }
+
+  if (entry.transactionType === "adjustment") return "Adjustment Journal";
+  if (entry.transactionType === "opening-balance") return "Opening Journal";
+  if (entry.transactionType === "closing") return "Closing Journal";
+  return "General Journal";
+}
 
 export default function WorkspacePage() {
+  const router = useRouter();
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [ledgerAccounts, setLedgerAccounts] = useState<Map<string, LedgerAccount>>(new Map());
@@ -23,6 +99,7 @@ export default function WorkspacePage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
+  const [journalClass, setJournalClass] = useState<JournalClass>("all");
 
   // Get available years from journal entries
   const availableYears = useMemo(() => {
@@ -113,6 +190,56 @@ export default function WorkspacePage() {
       .filter(([_, account]) => account.entries.length > 0 || account.closingBalance !== 0)
       .sort((a, b) => a[0].localeCompare(b[0]));
   }, [ledgerAccounts]);
+
+  const journalClassCounts = useMemo(() => {
+    const counts: Record<JournalClass, number> = {
+      all: filteredJournalEntries.length,
+      cash: 0,
+      purchase: 0,
+      sales: 0,
+      expense: 0,
+      other: 0,
+    };
+
+    filteredJournalEntries.forEach((entry) => {
+      const classified = classifyJournalEntry(entry);
+      counts[classified] += 1;
+    });
+
+    return counts;
+  }, [filteredJournalEntries]);
+
+  const classifiedJournalEntries = useMemo(() => {
+    if (journalClass === "all") {
+      return filteredJournalEntries;
+    }
+    return filteredJournalEntries.filter((entry) => classifyJournalEntry(entry) === journalClass);
+  }, [filteredJournalEntries, journalClass]);
+
+  const ledgerEntryRows = useMemo(() => {
+    return filteredJournalEntries
+      .slice()
+      .reverse()
+      .map((entry) => {
+        const debitLines = entry.lines.filter((line) => line.debit > 0);
+        const creditLines = entry.lines.filter((line) => line.credit > 0);
+        return {
+          id: entry.id,
+          date: entry.date,
+          journalId: entry.id,
+          narration: entry.narration,
+          reference: entry.reference || "—",
+          debitLines,
+          creditLines,
+          total: entry.totalDebits || entry.lines.reduce((sum, line) => sum + (line.debit || 0), 0),
+          status: entry.status,
+        };
+      });
+  }, [filteredJournalEntries]);
+
+  const openEntryInEditor = (entryId: string) => {
+    router.push(`/accounting?editEntry=${encodeURIComponent(entryId)}&resetDraft=1`);
+  };
 
 
 
@@ -419,7 +546,7 @@ export default function WorkspacePage() {
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-900">General Journal - {selectedYear}</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{filteredJournalEntries.length} entries {dateFrom || dateTo ? '(filtered)' : ''} • Double-entry format</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{classifiedJournalEntries.length} entries {dateFrom || dateTo ? '(filtered)' : ''} • Classified journal view</p>
                 </div>
                 {filteredJournalEntries.length > 0 && (
                   <button
@@ -433,68 +560,106 @@ export default function WorkspacePage() {
                   </button>
                 )}
               </div>
-              <div className="overflow-x-auto">
-                {filteredJournalEntries.length === 0 ? (
-                  <div className="px-6 py-12 text-center text-gray-400">
-                    <div className="flex flex-col items-center gap-2">
-                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <p>No journal entries for {selectedYear}</p>
-                      <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
-                      <Link href="/accounting" className="mt-2 text-[#2264ff] text-sm font-medium hover:underline">
-                        Go to Accounting Studio →
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {filteredJournalEntries.map((entry) => (
-                      <div key={entry.id} className="p-4 hover:bg-gray-50/50">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{entry.id}</span>
-                            </div>
-                            <p className="text-sm font-medium text-gray-900 mt-1">{entry.narration}</p>
-                          </div>
-                          <span className="text-xs text-gray-400">{formatDate(entry.date)}</span>
-                        </div>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-xs text-gray-400 uppercase">
-                              <th className="text-left py-1 font-medium">Account</th>
-                              <th className="text-right py-1 font-medium w-28">Debit</th>
-                              <th className="text-right py-1 font-medium w-28">Credit</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {entry.lines.map((line, idx) => (
-                              <tr key={idx} className="border-t border-gray-50">
-                                <td className={`py-2 text-gray-700 ${line.credit > 0 ? 'pl-6' : ''}`}>
-                                  <span className="text-xs text-gray-400 mr-2">{line.accountCode}</span>
-                                  {line.accountName}
-                                </td>
-                                <td className="py-2 text-right font-mono text-gray-900">
-                                  {line.debit > 0 ? formatCurrency(line.debit) : '—'}
-                                </td>
-                                <td className="py-2 text-right font-mono text-gray-900">
-                                  {line.credit > 0 ? formatCurrency(line.credit) : '—'}
-                                </td>
-                              </tr>
-                            ))}
-                            <tr className="border-t border-gray-200 border-b-4 border-[#bfdbfe] font-semibold">
-                              <td className="py-2 text-gray-600">Total</td>
-                              <td className="py-2 text-right font-mono">{formatCurrency(entry.lines.reduce((sum, l) => sum + (l.debit || 0), 0))}</td>
-                              <td className="py-2 text-right font-mono">{formatCurrency(entry.lines.reduce((sum, l) => sum + (l.credit || 0), 0))}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="px-6 py-3 border-b border-gray-100 bg-white">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["all", "All"],
+                    ["cash", "Cash"],
+                    ["purchase", "Purchase"],
+                    ["sales", "Sales"],
+                    ["expense", "Expense"],
+                    ["other", "Other"],
+                  ] as const).map(([key, label]) => {
+                    const itemKey = key as JournalClass;
+                    const active = journalClass === itemKey;
+                    return (
+                      <button
+                        key={itemKey}
+                        onClick={() => setJournalClass(itemKey)}
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                          active ? "bg-[#2264ff] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        <span>{label}</span>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20" : "bg-white"}`}>
+                          {journalClassCounts[itemKey]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+              {classifiedJournalEntries.length === 0 ? (
+                <div className="px-6 py-12 text-center text-gray-400">
+                  <div className="flex flex-col items-center gap-2">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>No journal entries for {selectedYear}</p>
+                    <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
+                    <Link href="/accounting" className="mt-2 text-[#2264ff] text-sm font-medium hover:underline">
+                      Go to Accounting Studio →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full min-w-[1040px]">
+                    <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+                      <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                        <th className="px-2 py-3 font-semibold">Date</th>
+                        <th className="px-2 py-3 font-semibold">Number</th>
+                        <th className="px-2 py-3 font-semibold">Class</th>
+                        <th className="px-2 py-3 font-semibold">Reference</th>
+                        <th className="px-2 py-3 font-semibold">Journal</th>
+                        <th className="px-2 py-3 text-right font-semibold">Total</th>
+                        <th className="px-2 py-3 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {classifiedJournalEntries
+                        .slice()
+                        .reverse()
+                        .map((entry) => {
+                          const journalLabel = getJournalBookLabel(entry);
+                          const total = entry.totalDebits || entry.lines.reduce((sum, line) => sum + (line.debit || 0), 0);
+                          const className = formatJournalClassLabel(classifyJournalEntry(entry));
+                          return (
+                            <tr
+                              key={entry.id}
+                              onClick={() => entry.status !== "voided" && openEntryInEditor(entry.id)}
+                              className={`hover:bg-gray-50/70 transition-colors ${entry.status === "voided" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                            >
+                              <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(entry.date)}</td>
+                              <td className="px-2 py-3 text-sm font-mono text-purple-700 whitespace-nowrap">{entry.id}</td>
+                              <td className="px-2 py-3">
+                                <span className="inline-flex rounded-full bg-blue-50 text-blue-700 px-2.5 py-1 text-xs font-medium">
+                                  {className}
+                                </span>
+                              </td>
+                              <td className="px-2 py-3 text-sm text-gray-700 max-w-[340px]">
+                                <p className="truncate" title={entry.narration}>{entry.narration}</p>
+                              </td>
+                              <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{journalLabel}</td>
+                              <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">{formatCurrency(total)}</td>
+                              <td className="px-2 py-3">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  entry.status === "voided"
+                                    ? "bg-red-100 text-red-700"
+                                    : entry.status === "draft"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                }`}>
+                                  {entry.status === "voided" ? "Voided" : entry.status === "draft" ? "Draft" : "Posted"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )
         }
@@ -503,77 +668,95 @@ export default function WorkspacePage() {
         {
           activeTab === "ledger" && (
             <div>
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <h2 className="font-semibold text-gray-900">General Ledger</h2>
-                <p className="text-xs text-gray-500 mt-0.5">{activeLedgerAccounts.length} accounts with activity</p>
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-gray-900">General Ledger</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">{activeLedgerAccounts.length} accounts • {ledgerEntryRows.length} entries with debit/credit sides</p>
+                </div>
+                <button
+                  onClick={() => router.push("/accounting?newEntry=1")}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                  title="Post a new journal entry"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  New Entry
+                </button>
               </div>
-              {activeLedgerAccounts.length === 0 ? (
+              {ledgerEntryRows.length === 0 ? (
                 <div className="px-6 py-12 text-center text-gray-400">
                   <p>No ledger accounts with activity</p>
                   <p className="text-xs mt-1">Post journal entries to see ledger activity</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
-                  {activeLedgerAccounts.map(([code, account]) => (
-                    <div key={code} className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-gray-400">{account.accountCode}</span>
-                            <h3 className="font-semibold text-gray-900">{account.accountName}</h3>
-                            <span className={`text-xs px-2 py-0.5 rounded capitalize ${account.accountType === 'asset' ? 'bg-blue-50 text-blue-600' :
-                              account.accountType === 'liability' ? 'bg-orange-50 text-orange-600' :
-                                account.accountType === 'equity' ? 'bg-purple-50 text-purple-600' :
-                                  account.accountType === 'income' ? 'bg-blue-50 text-blue-600' :
-                                    'bg-red-50 text-red-600'
-                              }`}>{account.accountType}</span>
-                          </div>
-                          <p className="text-xs text-gray-500">{account.entries.length} entries</p>
-                        </div>
-                        <div className={`text-lg font-semibold ${account.accountType === 'asset' || account.accountType === 'expense'
-                          ? (account.closingBalance >= 0 ? 'text-gray-900' : 'text-red-600')
-                          : (account.closingBalance >= 0 ? 'text-blue-600' : 'text-red-600')
-                          }`}>
-                          {formatCurrency(account.closingBalance)}
-                        </div>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm">
-                          <thead>
-                            <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                              <th className="text-left py-2 font-medium">Date</th>
-                              <th className="text-left py-2 font-medium">Description</th>
-                              <th className="text-right py-2 font-medium">Debit</th>
-                              <th className="text-right py-2 font-medium">Credit</th>
-                              <th className="text-right py-2 font-medium">Balance</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50">
-                            {account.entries.slice(-5).map((entry, idx) => (
-                              <tr key={idx} className="hover:bg-gray-50">
-                                <td className="py-2 text-gray-600 whitespace-nowrap">{formatDate(entry.date)}</td>
-                                <td className="py-2 text-gray-900 max-w-[240px] truncate">{entry.narration}</td>
-                                <td className="py-2 text-right font-mono text-gray-700 whitespace-nowrap">
-                                  {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
-                                </td>
-                                <td className="py-2 text-right font-mono text-gray-700 whitespace-nowrap">
-                                  {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
-                                </td>
-                                <td className="py-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
-                                  {formatCurrency(entry.balance)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {account.entries.length > 5 && (
-                        <p className="text-xs text-gray-400 mt-2 text-center">
-                          Showing last 5 of {account.entries.length} entries
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                <div className="max-h-[560px] overflow-auto">
+                  <table className="w-full min-w-[1220px]">
+                    <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+                      <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                        <th className="px-2 py-3 font-semibold">Date</th>
+                        <th className="px-2 py-3 font-semibold">Number</th>
+                        <th className="px-2 py-3 font-semibold">Reference</th>
+                        <th className="px-2 py-3 font-semibold">Debit Account(s)</th>
+                        <th className="px-2 py-3 font-semibold">Credit Account(s)</th>
+                        <th className="px-2 py-3 text-right font-semibold">Total</th>
+                        <th className="px-2 py-3 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {ledgerEntryRows.map((row) => (
+                        <tr
+                          key={row.id}
+                          onClick={() => row.status !== "voided" && openEntryInEditor(row.journalId)}
+                          className={`hover:bg-gray-50/70 transition-colors ${row.status === "voided" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(row.date)}</td>
+                          <td className="px-2 py-3 text-sm font-mono text-purple-700 whitespace-nowrap">{row.journalId}</td>
+                          <td className="px-2 py-3 text-sm text-gray-700 max-w-[280px]">
+                            <p className="truncate" title={row.narration}>{row.narration}</p>
+                          </td>
+                          <td className="px-2 py-3 text-sm text-gray-700 max-w-[320px]">
+                            <div className="space-y-1">
+                              {row.debitLines.length === 0 ? (
+                                <p className="text-gray-400">—</p>
+                              ) : row.debitLines.map((line, idx) => (
+                                <p key={`${row.id}-dr-${line.accountCode}-${idx}`} className="truncate text-gray-700">
+                                  <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
+                                  {line.accountName}
+                                  <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.debit)}</span>
+                                </p>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-2 py-3 text-sm text-gray-700 max-w-[320px]">
+                            <div className="space-y-1">
+                              {row.creditLines.length === 0 ? (
+                                <p className="text-gray-400">—</p>
+                              ) : row.creditLines.map((line, idx) => (
+                                <p key={`${row.id}-cr-${line.accountCode}-${idx}`} className="truncate text-gray-700">
+                                  <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
+                                  {line.accountName}
+                                  <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.credit)}</span>
+                                </p>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">{formatCurrency(row.total)}</td>
+                          <td className="px-2 py-3">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              row.status === "voided"
+                                ? "bg-red-100 text-red-700"
+                                : row.status === "draft"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-emerald-100 text-emerald-700"
+                            }`}>
+                              {row.status === "voided" ? "Voided" : row.status === "draft" ? "Draft" : "Posted"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
