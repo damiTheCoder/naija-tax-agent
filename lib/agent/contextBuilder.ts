@@ -23,7 +23,7 @@ const MODULE_PROFILES: ModuleProfile[] = [
     description: "Core accounting, ledger, transaction posting, and balance operations.",
     relevantEntities: ["Transaction", "JournalEntry", "Ledger", "Account", "Balance"],
     databaseEntities: ["transactions", "journal_entries", "ledger_accounts", "chart_of_accounts"],
-    routes: ["/accounting", "/accounting/workspace", "/accounting/reconciliation", "/dashboard"],
+    routes: ["/accounting", "/accounting/workspace", "/accounting/reconciliation", "/dashboard", "/personal", "/personal/dashboard"],
   },
   {
     domain: "reporting",
@@ -84,7 +84,7 @@ function findProfileByModule(module?: string): ModuleProfile | null {
   const normalized = (module || "").toLowerCase().trim();
   if (!normalized) return null;
 
-  if (["accounting", "reconciliation", "financial"].includes(normalized)) {
+  if (["accounting", "reconciliation", "financial", "personal", "general"].includes(normalized)) {
     return MODULE_PROFILES.find((profile) => profile.domain === "financial") || null;
   }
   if (["reports", "reporting", "projections", "dashboard", "cashflow"].includes(normalized)) {

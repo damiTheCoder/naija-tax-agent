@@ -1306,16 +1306,23 @@ export async function executeUnifiedAgentActions(
 export async function requestUnifiedAgentPlan(
   request: UnifiedAgentRequest
 ): Promise<UnifiedAgentResponse> {
+  const localFallbackPlan = buildLocalFallbackPlan(request);
   const serviceErrorPlan: UnifiedAgentResponse = {
-    reply: "AI service is temporarily unavailable for this request. Please retry.",
-    actions: [],
-    confidence: 0,
-    reasoning: "No planner response available",
+    ...localFallbackPlan,
+    reasoning: localFallbackPlan.reasoning || "No planner response available",
     planSource: "fallback",
   };
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), PLAN_TIMEOUT_MS);
   const buildChatApiFallback = async (reason: string): Promise<UnifiedAgentResponse> => {
+    if (Array.isArray(localFallbackPlan.actions) && localFallbackPlan.actions.length > 0) {
+      return {
+        ...localFallbackPlan,
+        reasoning: `${localFallbackPlan.reasoning} | Local deterministic fallback used (${reason}).`,
+        planSource: "fallback",
+      };
+    }
+
     try {
       const transcript = Array.isArray(request.conversation)
         ? request.conversation.slice(-10)
@@ -1348,9 +1355,12 @@ export async function requestUnifiedAgentPlan(
         if (reply) {
           return {
             reply,
-            actions: [],
-            confidence: 0.42,
-            reasoning: `Fallback via /api/agent. ${reason}`,
+            actions: localFallbackPlan.actions || [],
+            confidence:
+              typeof localFallbackPlan.confidence === "number" && Number.isFinite(localFallbackPlan.confidence)
+                ? localFallbackPlan.confidence
+                : 0.42,
+            reasoning: `${localFallbackPlan.reasoning} | Fallback via /api/agent. ${reason}`,
             planSource: "fallback",
           };
         }
@@ -1360,8 +1370,9 @@ export async function requestUnifiedAgentPlan(
     }
 
     return {
-      ...serviceErrorPlan,
-      reasoning: reason,
+      ...localFallbackPlan,
+      reasoning: `${localFallbackPlan.reasoning} | ${reason}`,
+      planSource: "fallback",
     };
   };
 

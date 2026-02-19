@@ -229,7 +229,7 @@ export default function TaxWorkspacePage() {
   };
 
   const handleGenerateRemittance = useCallback(async (schedule: TaxScheduleEntry) => {
-    const paymentReference = generateTaxRemittancePdf({
+    const paymentReference = await generateTaxRemittancePdf({
       taxpayerName: snapshot.profile.fullName || "Authorized Taxpayer",
       businessName: snapshot.profile.businessName,
       taxType: schedule.taxType,

@@ -8,6 +8,7 @@
 import { jsPDF } from "jspdf";
 import { TaxScheduleEntry, TaxComputationResult } from "./tax/taxEngine";
 import { CONFIDENCE_INDICATORS, TaxConfidenceLevel } from "./ai/nigerianTaxAgentPrompt";
+import { configureJsPdfTypography } from "@/lib/pdf/jspdfTypography";
 
 /**
  * Format number as Nigerian Naira currency
@@ -48,12 +49,13 @@ export interface TaxPayableScheduleData {
 /**
  * Generate Tax Payable Schedule PDF
  */
-export function generateTaxPayableSchedulePDF(data: TaxPayableScheduleData): void {
+export async function generateTaxPayableSchedulePDF(data: TaxPayableScheduleData): Promise<void> {
     const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
     });
+    await configureJsPdfTypography(doc, "times");
 
     // Page dimensions
     const pageWidth = doc.internal.pageSize.getWidth();

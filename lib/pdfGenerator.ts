@@ -6,6 +6,7 @@
  */
 
 import { jsPDF } from "jspdf";
+import { configureJsPdfTypography } from "@/lib/pdf/jspdfTypography";
 import {
     UserProfile,
     TaxInputs,
@@ -54,7 +55,7 @@ function levyAmountPayable(data: LevyEntry): number {
 /**
  * Generate PDF tax computation sheet
  */
-export function generatePDF(
+export async function generatePDF(
     profile: UserProfile,
     inputs: TaxInputs,
     result: TaxResult,
@@ -65,12 +66,13 @@ export function generatePDF(
     stampDutyResult?: { documents: StampDutyResult[]; totalDuty: number },
     leviesResult?: CompanyLeviesResult,
     withholdingCertificates?: WithholdingCertificate[]
-): void {
+): Promise<void> {
     const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
     });
+    await configureJsPdfTypography(doc, "times");
 
     // Page dimensions
     const pageWidth = doc.internal.pageSize.getWidth();

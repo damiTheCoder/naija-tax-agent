@@ -6,6 +6,10 @@ const projectRoot = process.cwd();
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   devIndicators: false,
+  serverExternalPackages: ["pdfkit"],
+  experimental: {
+    optimizePackageImports: ["lucide-react", "recharts"],
+  },
 
   images: {
     remotePatterns: [

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
 import { generatePfmResponse } from "./action";
@@ -52,6 +53,7 @@ function formatTime(ts: number) {
 }
 
 export default function PersonalChatPage() {
+    const router = useRouter();
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const { apps } = useConnectedApps();
@@ -203,8 +205,8 @@ export default function PersonalChatPage() {
                 });
                 responseText = result.finalReply;
                 setAgentPlanSource(result.planSource);
-                if (result.navigateTo && result.navigateTo !== "/personal" && typeof window !== "undefined") {
-                    window.location.href = result.navigateTo;
+                if (result.navigateTo && result.navigateTo !== "/personal") {
+                    router.push(result.navigateTo);
                 }
             } catch {
                 // Preserve existing personal assistant fallback.

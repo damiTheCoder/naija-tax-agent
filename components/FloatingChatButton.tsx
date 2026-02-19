@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
@@ -248,6 +248,19 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "indigo"
     },
+    personal: {
+        id: "personal",
+        name: "Personal",
+        title: "Personal AI Assistant",
+        placeholder: "Ask about your personal finances...",
+        greeting: "Hi! I can chat naturally and also execute actions across your personal finance workflows.",
+        examples: [
+            '"Post salary income of ₦350,000"',
+            '"Send ₦25,000 to John"',
+            '"Analyze my cashflow and runway"'
+        ],
+        color: "blue"
+    },
     dashboard: {
         id: "dashboard",
         name: "Dashboard",
@@ -330,6 +343,7 @@ function createIntroMessage(module: ModuleConfig): ChatMessage {
 
 export default function FloatingChatButton() {
     const pathname = usePathname();
+    const router = useRouter();
     const [currentModule, setCurrentModule] = useState<ModuleConfig>(moduleConfigs.default);
     const [isExpanded, setIsExpanded] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -933,8 +947,8 @@ _Ask me anything about bank reconciliation!_`;
 
             const response = result.finalReply;
             setPlanSource(result.planSource);
-            if (result.navigateTo && result.navigateTo !== pathname && typeof window !== "undefined") {
-                window.location.href = result.navigateTo;
+            if (result.navigateTo && result.navigateTo !== pathname) {
+                router.push(result.navigateTo);
             }
 
             addChatHistoryEntry({
@@ -950,7 +964,7 @@ _Ask me anything about bank reconciliation!_`;
         } finally {
             setIsLoading(false);
         }
-    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, executeProjectionAction]);
+    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, executeProjectionAction, router]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {

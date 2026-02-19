@@ -617,14 +617,14 @@ export default function HomePage() {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!result) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      generatePDF(
+      await generatePDF(
         profile,
         inputs,
         result,

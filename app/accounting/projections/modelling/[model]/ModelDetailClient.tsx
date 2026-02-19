@@ -147,6 +147,20 @@ function formatMetric(metric: ModelMetric): string {
   }
 }
 
+function formatInputValue(definition: ModelInputDefinition, value: number): string {
+  switch (definition.kind) {
+    case "currency":
+      return formatCurrency(value);
+    case "percent":
+      return `${numberFormatter.format(value)}%`;
+    case "integer":
+      return Math.round(value).toLocaleString("en-US");
+    case "number":
+    default:
+      return numberFormatter.format(value);
+  }
+}
+
 function createInitialInputs(definitions: ModelInputDefinition[]): Record<string, number> {
   return definitions.reduce<Record<string, number>>((acc, item) => {
     acc[item.key] = item.defaultValue;
@@ -1021,6 +1035,7 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
   const template = MODEL_TEMPLATES[typedModelId];
 
   const [inputs, setInputs] = useState<Record<string, number>>(() => createInitialInputs(template.inputs));
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   useEffect(() => {
     setInputs(createInitialInputs(template.inputs));
@@ -1049,6 +1064,63 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
     }
   }, [computation, modelMeta.name, modelMeta.purpose]);
 
+  const handleDownloadPdf = async () => {
+    if (isDownloadingPdf) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      const assumptions = template.inputs.map((definition) => ({
+        key: definition.key,
+        label: definition.label,
+        helper: definition.helper,
+        kind: definition.kind,
+        value: inputs[definition.key] ?? 0,
+        formattedValue: formatInputValue(definition, inputs[definition.key] ?? 0),
+      }));
+
+      const response = await fetch("/api/projections/model-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelId: typedModelId,
+          modelName: modelMeta.name,
+          purpose: modelMeta.purpose,
+          description: modelMeta.description,
+          summary: computation.summary,
+          assumptions,
+          metrics: computation.metrics.map((metric) => ({
+            label: metric.label,
+            value: formatMetric(metric),
+            hint: metric.hint || "",
+          })),
+          tables: computation.tables,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`PDF export failed (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const filename = `${typedModelId}-model-report.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Model PDF export failed:", error);
+      if (typeof window !== "undefined") {
+        window.alert("Could not generate PDF right now. Please try again.");
+      }
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
@@ -1063,6 +1135,18 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
           <Link href="/accounting/projections" className="inline-flex text-sm font-medium text-gray-600 hover:text-gray-800">
             Back to Financial Projections
           </Link>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Download this model as PDF"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" />
+            </svg>
+            {isDownloadingPdf ? "Generating PDF..." : "Download PDF"}
+          </button>
         </div>
         <ModelSwitcher activeId={typedModelId} />
       </div>

@@ -4,9 +4,9 @@ import { useState, Suspense, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-import FloatingChatButton from "@/components/FloatingChatButton";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
@@ -16,6 +16,11 @@ import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import UserModeExperience from "@/components/UserModeExperience";
+
+const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
+  ssr: false,
+  loading: () => null,
+});
 
 // Skeleton loading component - shows placeholder shapes instead of spinner
 function PageLoadingSpinner() {
@@ -74,6 +79,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
   const { mode, mounted } = useMode();
   const previousModeRef = useRef(mode);
+
+  useEffect(() => {
+    const routesToPrefetch = [
+      "/accounting",
+      "/dashboard",
+      "/accounting/workspace",
+      "/accounting/projections",
+      "/accounting/projections/modelling",
+      "/tax-tools",
+      "/wallet",
+      "/marketplace",
+      "/personal",
+      "/personal/dashboard",
+    ];
+
+    routesToPrefetch.forEach((route) => {
+      router.prefetch(route);
+    });
+  }, [router]);
 
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {

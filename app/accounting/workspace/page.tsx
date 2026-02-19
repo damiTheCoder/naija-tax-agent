@@ -244,7 +244,7 @@ export default function WorkspacePage() {
 
 
   // Download yearly statement as PDF (includes all 4 statements)
-  const handleDownloadYearlyStatement = (year: number) => {
+  const handleDownloadYearlyStatement = async (year: number) => {
     const statement = yearlyStatements[year];
     if (!statement) return;
 
@@ -267,7 +267,7 @@ export default function WorkspacePage() {
       closingBalance: statementsData.equityStatement?.closingBalance || 0,
     };
 
-    generateFinancialStatementsPDF(
+    await generateFinancialStatementsPDF(
       {
         year,
         revenue: statement.revenue,
@@ -286,11 +286,11 @@ export default function WorkspacePage() {
   };
 
   // Download journal entries for a year as PDF
-  const handleDownloadJournals = (year: number) => {
+  const handleDownloadJournals = async (year: number) => {
     const entries = entriesByYear[year];
     if (!entries || entries.length === 0) return;
 
-    generateJournalsPDF(entries, year, "CashOS Business");
+    await generateJournalsPDF(entries, year, "CashOS Business");
   };
 
   // Load data from accounting engine
@@ -550,7 +550,9 @@ export default function WorkspacePage() {
                 </div>
                 {filteredJournalEntries.length > 0 && (
                   <button
-                    onClick={() => handleDownloadJournals(selectedYear)}
+                    onClick={() => {
+                      void handleDownloadJournals(selectedYear);
+                    }}
                     className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -775,11 +777,13 @@ export default function WorkspacePage() {
                 <div className="flex items-center gap-3">
                   {trialBalance.accounts.length > 0 && (
                     <button
-                      onClick={() => generateTrialBalancePDF(
-                        trialBalance,
-                        new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }),
-                        "CashOS Business"
-                      )}
+                      onClick={() => {
+                        void generateTrialBalancePDF(
+                          trialBalance,
+                          new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }),
+                          "CashOS Business"
+                        );
+                      }}
                       className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -851,7 +855,9 @@ export default function WorkspacePage() {
                 </div>
                 {yearlyStatements[selectedYear] && (
                   <button
-                    onClick={() => handleDownloadYearlyStatement(selectedYear)}
+                    onClick={() => {
+                      void handleDownloadYearlyStatement(selectedYear);
+                    }}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -872,17 +878,19 @@ export default function WorkspacePage() {
                         <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
                       </div>
                       <button
-                        onClick={() => generateIncomeStatementPDF({
-                          year: selectedYear,
-                          revenue: yearlyStatements[selectedYear].revenue,
-                          costOfSales: yearlyStatements[selectedYear].costOfSales,
-                          grossProfit: yearlyStatements[selectedYear].grossProfit,
-                          operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
-                          netIncome: yearlyStatements[selectedYear].netIncome,
-                          assets: yearlyStatements[selectedYear].assets,
-                          liabilities: yearlyStatements[selectedYear].liabilities,
-                          equity: yearlyStatements[selectedYear].equity,
-                        }, "CashOS Business")}
+                        onClick={() => {
+                          void generateIncomeStatementPDF({
+                            year: selectedYear,
+                            revenue: yearlyStatements[selectedYear].revenue,
+                            costOfSales: yearlyStatements[selectedYear].costOfSales,
+                            grossProfit: yearlyStatements[selectedYear].grossProfit,
+                            operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
+                            netIncome: yearlyStatements[selectedYear].netIncome,
+                            assets: yearlyStatements[selectedYear].assets,
+                            liabilities: yearlyStatements[selectedYear].liabilities,
+                            equity: yearlyStatements[selectedYear].equity,
+                          }, "CashOS Business");
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -925,17 +933,19 @@ export default function WorkspacePage() {
                         <p className="text-xs text-gray-500">As at 31 December {selectedYear}</p>
                       </div>
                       <button
-                        onClick={() => generateBalanceSheetPDF({
-                          year: selectedYear,
-                          revenue: yearlyStatements[selectedYear].revenue,
-                          costOfSales: yearlyStatements[selectedYear].costOfSales,
-                          grossProfit: yearlyStatements[selectedYear].grossProfit,
-                          operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
-                          netIncome: yearlyStatements[selectedYear].netIncome,
-                          assets: yearlyStatements[selectedYear].assets,
-                          liabilities: yearlyStatements[selectedYear].liabilities,
-                          equity: yearlyStatements[selectedYear].equity,
-                        }, "CashOS Business")}
+                        onClick={() => {
+                          void generateBalanceSheetPDF({
+                            year: selectedYear,
+                            revenue: yearlyStatements[selectedYear].revenue,
+                            costOfSales: yearlyStatements[selectedYear].costOfSales,
+                            grossProfit: yearlyStatements[selectedYear].grossProfit,
+                            operatingExpenses: yearlyStatements[selectedYear].operatingExpenses,
+                            netIncome: yearlyStatements[selectedYear].netIncome,
+                            assets: yearlyStatements[selectedYear].assets,
+                            liabilities: yearlyStatements[selectedYear].liabilities,
+                            equity: yearlyStatements[selectedYear].equity,
+                          }, "CashOS Business");
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -983,12 +993,14 @@ export default function WorkspacePage() {
                         <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
                       </div>
                       <button
-                        onClick={() => generateCashFlowStatementPDF({
-                          year: selectedYear,
-                          cashFromOperations: accountingEngine.generateStatements().cashFromOperations,
-                          cashFromInvesting: accountingEngine.generateStatements().cashFromInvesting,
-                          cashFromFinancing: accountingEngine.generateStatements().cashFromFinancing,
-                        }, "CashOS Business")}
+                        onClick={() => {
+                          void generateCashFlowStatementPDF({
+                            year: selectedYear,
+                            cashFromOperations: accountingEngine.generateStatements().cashFromOperations,
+                            cashFromInvesting: accountingEngine.generateStatements().cashFromInvesting,
+                            cashFromFinancing: accountingEngine.generateStatements().cashFromFinancing,
+                          }, "CashOS Business");
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1046,14 +1058,16 @@ export default function WorkspacePage() {
                         <p className="text-xs text-gray-500">For the year ended 31 December {selectedYear}</p>
                       </div>
                       <button
-                        onClick={() => generateEquityStatementPDF({
-                          year: selectedYear,
-                          openingBalance: accountingEngine.generateStatements().equityStatement?.openingBalance || 0,
-                          additions: accountingEngine.generateStatements().equityStatement?.additions || 0,
-                          netIncome: accountingEngine.generateStatements().equityStatement?.netIncome || 0,
-                          drawings: accountingEngine.generateStatements().equityStatement?.drawings || 0,
-                          closingBalance: accountingEngine.generateStatements().equityStatement?.closingBalance || 0,
-                        }, "CashOS Business")}
+                        onClick={() => {
+                          void generateEquityStatementPDF({
+                            year: selectedYear,
+                            openingBalance: accountingEngine.generateStatements().equityStatement?.openingBalance || 0,
+                            additions: accountingEngine.generateStatements().equityStatement?.additions || 0,
+                            netIncome: accountingEngine.generateStatements().equityStatement?.netIncome || 0,
+                            drawings: accountingEngine.generateStatements().equityStatement?.drawings || 0,
+                            closingBalance: accountingEngine.generateStatements().equityStatement?.closingBalance || 0,
+                          }, "CashOS Business");
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1103,7 +1117,9 @@ export default function WorkspacePage() {
                       {availableYears.map((year) => (
                         <button
                           key={year}
-                          onClick={() => handleDownloadYearlyStatement(year)}
+                          onClick={() => {
+                            void handleDownloadYearlyStatement(year);
+                          }}
                           disabled={!yearlyStatements[year]}
                           className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#2264ff] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -1155,10 +1171,10 @@ export default function WorkspacePage() {
                       </div>
                       {/* Main Download Button - Consistent with Financial Statements */}
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           try {
                             console.log("Generating Tax Payables PDF...", taxSchedule);
-                            generateTaxPayablesPDF(taxSchedule, "CashOS Business");
+                            await generateTaxPayablesPDF(taxSchedule, "CashOS Business");
                           } catch (error) {
                             console.error("Failed to generate PDF:", error);
                             alert("Failed to generate PDF. Please try again or check console for details.");
@@ -1553,7 +1569,9 @@ export default function WorkspacePage() {
         </Link>
         <button
           type="button"
-          onClick={() => handleDownloadYearlyStatement(selectedYear)}
+          onClick={() => {
+            void handleDownloadYearlyStatement(selectedYear);
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1563,7 +1581,9 @@ export default function WorkspacePage() {
         </button>
         <button
           type="button"
-          onClick={() => handleDownloadJournals(selectedYear)}
+          onClick={() => {
+            void handleDownloadJournals(selectedYear);
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

@@ -7,6 +7,8 @@
 
 import { jsPDF } from "jspdf";
 import { JournalEntry } from "./accounting/doubleEntry";
+import { configureJsPdfTypography } from "@/lib/pdf/jspdfTypography";
+import { TaxPayablesSchedule } from "./accounting/transactionTaxAnalyzer";
 
 // ============= DESIGN CONSTANTS =============
 
@@ -17,6 +19,16 @@ const BLACK: [number, number, number] = [0, 0, 0];
 const BODY_TEXT: [number, number, number] = [40, 40, 40];       // Body text
 const LIGHT_GREY: [number, number, number] = [130, 130, 130];   // Secondary text
 const TABLE_BORDER: [number, number, number] = [180, 180, 180]; // Light border
+
+async function createStyledPdfDoc(options?: { orientation?: "portrait" | "landscape" }): Promise<jsPDF> {
+    const doc = new jsPDF({
+        orientation: options?.orientation ?? "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+    await configureJsPdfTypography(doc, "helvetica");
+    return doc;
+}
 
 /**
  * Format number as Nigerian Naira currency
@@ -147,15 +159,32 @@ function drawTableRow(
     contentWidth: number,
     showBorder: boolean = true
 ): number {
-    const rowHeight = 7;
+    const horizontalPadding = 2;
+    const topPadding = 4.3;
+    const lineHeight = 4.3;
+
+    const cellLines = cells.map((cell) => {
+        if (cell.width <= horizontalPadding * 2) {
+            return [cell.text || ""];
+        }
+        const wrapped = doc.splitTextToSize(cell.text || "", Math.max(8, cell.width - horizontalPadding * 2));
+        if (Array.isArray(wrapped) && wrapped.length > 0) {
+            return wrapped.slice(0, 3);
+        }
+        return [cell.text || ""];
+    });
+
+    const rowHeight = Math.max(7, topPadding + Math.max(...cellLines.map((lines) => lines.length), 1) * lineHeight);
 
     // Row text - all left aligned
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...BODY_TEXT);
 
-    for (const cell of cells) {
-        doc.text(cell.text, cell.x + 2, y + 5);
+    for (let index = 0; index < cells.length; index += 1) {
+        const cell = cells[index];
+        const lines = cellLines[index];
+        doc.text(lines, cell.x + horizontalPadding, y + topPadding);
     }
 
     // Bottom border
@@ -262,15 +291,11 @@ interface TrialBalanceData {
 /**
  * Generate PDF for Income Statement only
  */
-export function generateIncomeStatementPDF(
+export async function generateIncomeStatementPDF(
     data: FinancialStatementData,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -328,15 +353,11 @@ export function generateIncomeStatementPDF(
 /**
  * Generate PDF for Balance Sheet only
  */
-export function generateBalanceSheetPDF(
+export async function generateBalanceSheetPDF(
     data: FinancialStatementData,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -391,15 +412,11 @@ export function generateBalanceSheetPDF(
 /**
  * Generate PDF for Financial Statements (Income Statement + Balance Sheet)
  */
-export function generateFinancialStatementsPDF(
+export async function generateFinancialStatementsPDF(
     data: FinancialStatementData,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -580,16 +597,12 @@ export function generateFinancialStatementsPDF(
 /**
  * Generate PDF for Journal Entries
  */
-export function generateJournalsPDF(
+export async function generateJournalsPDF(
     entries: JournalEntry[],
     year: number,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc({ orientation: "landscape" });
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -693,16 +706,12 @@ export function generateJournalsPDF(
 /**
  * Generate PDF for Trial Balance
  */
-export function generateTrialBalancePDF(
+export async function generateTrialBalancePDF(
     data: TrialBalanceData,
     asAtDate: string,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -783,15 +792,11 @@ export function generateTrialBalancePDF(
 /**
  * Generate PDF for Cash Flow Statement only
  */
-export function generateCashFlowStatementPDF(
+export async function generateCashFlowStatementPDF(
     data: CashFlowData,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -846,15 +851,11 @@ export function generateCashFlowStatementPDF(
 /**
  * Generate PDF for Statement of Changes in Equity only
  */
-export function generateEquityStatementPDF(
+export async function generateEquityStatementPDF(
     data: EquityStatementData,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -903,15 +904,17 @@ export function generateEquityStatementPDF(
     doc.save(`equity-statement-${data.year}.pdf`);
 }
 
-export function generateAccountingPackagePDF(
+export async function generateAccountingPackagePDF(
     statements: FinancialStatementData,
     journals: JournalEntry[],
     trialBalance: TrialBalanceData,
     businessName: string = "Quantum Ledger Business"
-): void {
+): Promise<void> {
+    void journals;
+    void trialBalance;
     // For now, generate individual PDFs
     // In the future, could combine into single PDF with multiple sections
-    generateFinancialStatementsPDF(statements, businessName);
+    await generateFinancialStatementsPDF(statements, businessName);
 }
 
 /**
@@ -939,8 +942,6 @@ export interface TaxPayablesData {
  * - CIT: 30% on profits (small companies exempt)
  * - Development Levy: 4% on assessable profits
  */
-import { TaxPayablesSchedule } from "./accounting/transactionTaxAnalyzer";
-
 /**
  * Generate PDF for Tax Payables Report
  * Based on 2026 Nigerian Tax Laws with Traceable Schedule
@@ -949,15 +950,11 @@ import { TaxPayablesSchedule } from "./accounting/transactionTaxAnalyzer";
  * Generate PDF for Tax Payables Report
  * Based on 2026 Nigerian Tax Laws with Traceable Schedule
  */
-export function generateTaxPayablesPDF(
+export async function generateTaxPayablesPDF(
     schedule: TaxPayablesSchedule,
     businessName: string = "Quantum Ledger Business"
-): void {
-    const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
+): Promise<void> {
+    const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -968,11 +965,12 @@ export function generateTaxPayablesPDF(
     y = drawPeriodField(doc, "As At", schedule.asAtDate, margin, y);
 
     // Add legal reference
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...LIGHT_GREY);
-    doc.text("Based on 2026 Nigerian Tax Laws (Nigeria Tax Reform Acts)", margin, y);
-    y += 8;
+    const legalReference = doc.splitTextToSize("Based on 2026 Nigerian Tax Laws (Nigeria Tax Reform Acts)", contentWidth);
+    doc.text(legalReference, margin, y);
+    y += legalReference.length * 4 + 4;
 
     // Table columns for summaries
     const col1 = margin;
@@ -1063,13 +1061,21 @@ export function generateTaxPayablesPDF(
     y += 10;
 
     // === SECTION 4: ASSUMPTIONS ===
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...LIGHT_GREY);
 
     for (const assumption of schedule.assumptions) {
-        doc.text(`• ${assumption}`, margin + 2, y);
-        y += 4;
+        const lines = doc.splitTextToSize(`• ${assumption}`, contentWidth - 4);
+        doc.text(lines, margin + 2, y);
+        y += lines.length * 3.8;
+        if (y + 24 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(...LIGHT_GREY);
+        }
     }
     y += 8;
 

@@ -452,8 +452,8 @@ export default function AccountingPage() {
       pushAutomationActivity("Agent execution", `Handled request in accounting module.`);
       const engineStatements = accountingEngine.generateStatements();
       setGeneratedStatements(engineStatements);
-      if (result.navigateTo && result.navigateTo !== "/accounting" && typeof window !== "undefined") {
-        window.location.href = result.navigateTo;
+      if (result.navigateTo && result.navigateTo !== "/accounting") {
+        router.push(result.navigateTo);
       }
       return;
     } catch {

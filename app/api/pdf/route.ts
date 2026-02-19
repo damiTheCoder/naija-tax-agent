@@ -1,345 +1,335 @@
 /**
  * API Route: /api/pdf
- * POST endpoint for generating PDF tax computation sheets
+ * POST endpoint for generating tax computation PDF sheets.
  */
 
+import fs from "fs";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import { GeneratePdfRequest } from "@/lib/types";
 
-/**
- * Format number as Nigerian Naira currency
- */
+type PdfDoc = InstanceType<typeof PDFDocument>;
+
+type PdfFonts = {
+  regular: string;
+  bold: string;
+};
+
 function formatCurrency(amount: number): string {
-    return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `NGN ${amount.toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
-/**
- * Format percentage for display
- */
 function formatPercent(rate: number): string {
-    return `${(rate * 100).toFixed(1)}%`;
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
+function resolveFontPath(fileName: string): string | null {
+  const candidates = [
+    path.join(process.cwd(), "app", "fonts", fileName),
+    path.join(process.cwd(), "public", "fonts", fileName),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function configureTypography(doc: PdfDoc): PdfFonts {
+  const regularPath = resolveFontPath("GlacialIndifference-Regular.ttf");
+  const boldPath = resolveFontPath("GlacialIndifference-Bold.ttf");
+
+  if (regularPath && boldPath) {
+    doc.registerFont("GlacialRegular", regularPath);
+    doc.registerFont("GlacialBold", boldPath);
+    doc.font("GlacialRegular");
+    return { regular: "GlacialRegular", bold: "GlacialBold" };
+  }
+
+  doc.font("Helvetica");
+  return { regular: "Helvetica", bold: "Helvetica-Bold" };
+}
+
+function ensureSpace(doc: PdfDoc, requiredHeight = 72): void {
+  if (doc.y + requiredHeight > doc.page.height - 50) {
+    doc.addPage();
+  }
+}
+
+function drawSectionHeader(doc: PdfDoc, title: string, fonts: PdfFonts): void {
+  ensureSpace(doc, 48);
+  doc
+    .moveDown(0.4)
+    .font(fonts.bold)
+    .fontSize(13)
+    .fillColor("#1f2937")
+    .text(title, { width: 495 });
+
+  doc.moveDown(0.2);
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).lineWidth(1).stroke("#dbe3ee");
+  doc.moveDown(0.45);
+}
+
+function drawKeyValue(doc: PdfDoc, label: string, value: string, fonts: PdfFonts): void {
+  ensureSpace(doc, 30);
+  const top = doc.y;
+  doc
+    .font(fonts.bold)
+    .fontSize(10.3)
+    .fillColor("#334155")
+    .text(label, 50, top, { width: 175, lineGap: 1.8 });
+
+  doc
+    .font(fonts.regular)
+    .fontSize(10.3)
+    .fillColor("#111827")
+    .text(value || "N/A", 225, top, { width: 320, lineGap: 2 });
+
+  const consumedHeight = Math.max(
+    doc.heightOfString(label, { width: 175, lineGap: 1.8 }),
+    doc.heightOfString(value || "N/A", { width: 320, lineGap: 2 })
+  );
+  doc.y = top + consumedHeight + 4;
+}
+
+function drawParagraph(doc: PdfDoc, text: string, fonts: PdfFonts, color = "#334155"): void {
+  ensureSpace(doc, 40);
+  doc
+    .font(fonts.regular)
+    .fontSize(10.1)
+    .fillColor(color)
+    .text(text, { width: 495, lineGap: 2.5, align: "left" });
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-    try {
-        const body = await request.json() as GeneratePdfRequest;
+  try {
+    const body = (await request.json()) as GeneratePdfRequest;
+    const { profile, inputs, result } = body;
 
-        const { profile, inputs, result } = body;
-
-        // Validate required data
-        if (!profile || !inputs || !result) {
-            return NextResponse.json(
-                { error: "Profile, inputs, and result are required" },
-                { status: 400 }
-            );
-        }
-
-        // Create PDF document
-        const doc = new PDFDocument({
-            size: "A4",
-            margin: 50,
-            info: {
-                Title: `Tax Computation - ${result.taxYear}`,
-                Author: "NaijaTaxAgent",
-                Subject: "Estimated Tax Computation",
-                Creator: "NaijaTaxAgent",
-            },
-        });
-
-        // Collect PDF chunks
-        const chunks: Uint8Array[] = [];
-        doc.on("data", (chunk: Uint8Array) => chunks.push(chunk));
-
-        // Colors
-        const primaryColor = "#1a365d";
-        const accentColor = "#2c5282";
-        const grayColor = "#4a5568";
-
-        // Header
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(24)
-            .fillColor(primaryColor)
-            .text("NaijaTaxAgent", { align: "center" });
-
-        doc
-            .fontSize(16)
-            .fillColor(accentColor)
-            .text(`Estimated Tax Computation – ${result.taxYear}`, { align: "center" });
-
-        doc.moveDown(0.5);
-
-        doc
-            .fontSize(10)
-            .fillColor(grayColor)
-            .text(`Generated: ${new Date().toLocaleDateString("en-NG", { dateStyle: "long" })}`, { align: "center" });
-
-        doc.moveDown(1.5);
-
-        // Section: Taxpayer Details
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(14)
-            .fillColor(primaryColor)
-            .text("TAXPAYER DETAILS");
-
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(accentColor);
-        doc.moveDown(0.5);
-
-        doc.font("Helvetica").fontSize(11).fillColor("#000000");
-
-        const details = [
-            ["Full Name", profile.fullName],
-            ["Business Name", profile.businessName || "N/A"],
-            ["Taxpayer Type", profile.taxpayerType === "freelancer" ? "Individual/Freelancer" : "Company/SME"],
-            ["Tax Year", result.taxYear.toString()],
-            ["State of Residence", profile.stateOfResidence],
-            ["VAT Registered", profile.isVATRegistered ? "Yes" : "No"],
-        ];
-
-        for (const [label, value] of details) {
-            doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
-            doc.font("Helvetica").text(value);
-        }
-
-        doc.moveDown(1);
-
-        // Section: Financial Inputs
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(14)
-            .fillColor(primaryColor)
-            .text("FINANCIAL INPUTS");
-
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(accentColor);
-        doc.moveDown(0.5);
-
-        doc.font("Helvetica").fontSize(11).fillColor("#000000");
-
-        const inputDetails = [
-            ["Gross Revenue", formatCurrency(inputs.grossRevenue)],
-            ["Allowable Expenses", formatCurrency(inputs.allowableExpenses)],
-        ];
-
-        if (inputs.pensionContributions) {
-            inputDetails.push(["Pension Contributions", formatCurrency(inputs.pensionContributions)]);
-        }
-        if (inputs.nhfContributions) {
-            inputDetails.push(["NHF Contributions", formatCurrency(inputs.nhfContributions)]);
-        }
-        if (inputs.lifeInsurancePremiums) {
-            inputDetails.push(["Life Insurance Premiums", formatCurrency(inputs.lifeInsurancePremiums)]);
-        }
-        if (inputs.otherReliefs) {
-            inputDetails.push(["Other Reliefs", formatCurrency(inputs.otherReliefs)]);
-        }
-
-        if (profile.taxpayerType === "company") {
-            if (inputs.turnover) inputDetails.push(["Turnover", formatCurrency(inputs.turnover)]);
-            if (inputs.costOfSales) inputDetails.push(["Cost of Sales", formatCurrency(inputs.costOfSales)]);
-            if (inputs.operatingExpenses) inputDetails.push(["Operating Expenses", formatCurrency(inputs.operatingExpenses)]);
-            if (inputs.capitalAllowance) inputDetails.push(["Capital Allowance", formatCurrency(inputs.capitalAllowance)]);
-        }
-
-        for (const [label, value] of inputDetails) {
-            doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
-            doc.font("Helvetica").text(value);
-        }
-
-        doc.moveDown(1);
-
-        // Section: Tax Breakdown
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(14)
-            .fillColor(primaryColor)
-            .text("TAX BREAKDOWN");
-
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(accentColor);
-        doc.moveDown(0.5);
-
-        // Table header
-        const tableTop = doc.y;
-        const col1 = 50;
-        const col2 = 200;
-        const col3 = 320;
-        const col4 = 440;
-
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(grayColor);
-        doc.text("Band", col1, tableTop);
-        doc.text("Rate", col2, tableTop);
-        doc.text("Base Amount", col3, tableTop);
-        doc.text("Tax Amount", col4, tableTop);
-
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke("#e2e8f0");
-        doc.moveDown(0.3);
-
-        doc.font("Helvetica").fontSize(10).fillColor("#000000");
-
-        let yPos = doc.y;
-        for (const band of result.bands) {
-            doc.text(band.bandLabel, col1, yPos, { width: 140 });
-            doc.text(formatPercent(band.rate), col2, yPos);
-            doc.text(formatCurrency(band.baseAmount), col3, yPos);
-            doc.text(formatCurrency(band.taxAmount), col4, yPos);
-            yPos += 18;
-        }
-
-        doc.y = yPos;
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke("#e2e8f0");
-        doc.moveDown(0.5);
-
-        // Total row
-        doc.font("Helvetica-Bold").fontSize(11);
-        doc.text("TOTAL TAX DUE:", col1, doc.y, { continued: true });
-        doc.text("", col3);
-        doc.text(formatCurrency(result.totalTaxDue), col4, doc.y - 11);
-
-        doc.moveDown(1);
-
-        // Section: VAT Summary (if applicable)
-        if (result.vat) {
-            doc
-                .font("Helvetica-Bold")
-                .fontSize(14)
-                .fillColor(primaryColor)
-                .text("VAT SUMMARY");
-
-            doc.moveDown(0.3);
-            doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(accentColor);
-            doc.moveDown(0.5);
-
-            doc.font("Helvetica").fontSize(11).fillColor("#000000");
-
-            const vatDetails = [
-                ["VAT Rate", formatPercent(result.vat.vatRate)],
-                ["Output VAT (on sales)", formatCurrency(result.vat.outputVAT)],
-            ];
-
-            if (result.vat.inputVAT !== undefined) {
-                vatDetails.push(["Input VAT (on purchases)", formatCurrency(result.vat.inputVAT)]);
-            }
-
-            vatDetails.push(["Net VAT Payable", formatCurrency(result.vat.netVATPayable)]);
-
-            for (const [label, value] of vatDetails) {
-                doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
-                doc.font("Helvetica").text(value);
-            }
-
-            doc.moveDown(1);
-        }
-
-        // Section: Summary
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(14)
-            .fillColor(primaryColor)
-            .text("SUMMARY");
-
-        doc.moveDown(0.3);
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke(accentColor);
-        doc.moveDown(0.5);
-
-        doc.font("Helvetica").fontSize(12).fillColor("#000000");
-
-        doc.font("Helvetica-Bold").text("Taxable Income: ", { continued: true });
-        doc.font("Helvetica").text(formatCurrency(result.taxableIncome));
-
-        doc.font("Helvetica-Bold").text("Total Tax Due: ", { continued: true });
-        doc.font("Helvetica").text(formatCurrency(result.totalTaxDue));
-
-        doc.font("Helvetica-Bold").text("Effective Tax Rate: ", { continued: true });
-        doc.font("Helvetica").text(formatPercent(result.effectiveRate));
-
-        if (result.vat) {
-            doc.font("Helvetica-Bold").text("VAT Payable: ", { continued: true });
-            doc.font("Helvetica").text(formatCurrency(result.vat.netVATPayable));
-        }
-
-        doc.moveDown(1);
-
-        // Section: Notes
-        if (result.notes.length > 0) {
-            doc
-                .font("Helvetica-Bold")
-                .fontSize(12)
-                .fillColor(primaryColor)
-                .text("NOTES");
-
-            doc.moveDown(0.3);
-
-            doc.font("Helvetica").fontSize(10).fillColor(grayColor);
-
-            for (const note of result.notes) {
-                doc.text(`• ${note}`);
-            }
-
-            doc.moveDown(1);
-        }
-
-        // Section: Disclaimer
-        doc
-            .font("Helvetica-Bold")
-            .fontSize(12)
-            .fillColor("#c53030")
-            .text("DISCLAIMER");
-
-        doc.moveDown(0.3);
-
-        doc.font("Helvetica").fontSize(9).fillColor(grayColor);
-        doc.text(
-            "This computation is an ESTIMATE generated by software based on simplified rules and does not constitute tax, legal, or financial advice. The figures presented are for informational purposes only and may not reflect your actual tax liability.",
-            { align: "justify" }
-        );
-        doc.moveDown(0.5);
-        doc.text(
-            "Please confirm all calculations with the Federal Inland Revenue Service (FIRS), your State Board of Internal Revenue (SBIRS), or a qualified tax professional before making any tax-related decisions or filings.",
-            { align: "justify" }
-        );
-        doc.moveDown(0.5);
-        doc.text(
-            "Tax laws and rates are subject to change. This estimate is based on information available as of the document generation date.",
-            { align: "justify" }
-        );
-
-        // Footer
-        doc.moveDown(2);
-        doc.font("Helvetica").fontSize(8).fillColor(grayColor);
-        doc.text("Generated by NaijaTaxAgent | https://naijatagent.com", { align: "center" });
-
-        // Finalize PDF
-        doc.end();
-
-        // Wait for PDF to be fully generated
-        const pdfBuffer = await new Promise<Buffer>((resolve) => {
-            doc.on("end", () => {
-                resolve(Buffer.concat(chunks));
-            });
-        });
-
-        // Return PDF response
-        const filename = `naijatagent-tax-computation-${result.taxYear}.pdf`;
-
-        return new NextResponse(new Uint8Array(pdfBuffer), {
-            status: 200,
-            headers: {
-                "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="${filename}"`,
-                "Content-Length": pdfBuffer.length.toString(),
-            },
-        });
-    } catch (error) {
-        console.error("Error generating PDF:", error);
-        return NextResponse.json(
-            { error: "Unable to generate PDF. Please try again." },
-            { status: 500 }
-        );
+    if (!profile || !inputs || !result) {
+      return NextResponse.json(
+        { error: "Profile, inputs, and result are required" },
+        { status: 400 }
+      );
     }
+
+    const generatedAt = new Date().toLocaleDateString("en-NG", { dateStyle: "long" });
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 50,
+      info: {
+        Title: `Tax Computation - ${result.taxYear}`,
+        Author: "Quantum Ledger",
+        Subject: "Estimated Tax Computation",
+        Creator: "Quantum Ledger",
+      },
+    });
+
+    const chunks: Uint8Array[] = [];
+    doc.on("data", (chunk: Uint8Array) => chunks.push(chunk));
+    const fonts = configureTypography(doc);
+
+    // Header
+    doc
+      .font(fonts.bold)
+      .fontSize(23)
+      .fillColor("#0f172a")
+      .text("Quantum Ledger", { width: 495, align: "left" });
+
+    doc
+      .moveDown(0.22)
+      .font(fonts.bold)
+      .fontSize(16)
+      .fillColor("#1e40af")
+      .text(`Estimated Tax Computation - ${result.taxYear}`, { width: 495, align: "left" });
+
+    doc
+      .moveDown(0.2)
+      .font(fonts.regular)
+      .fontSize(10)
+      .fillColor("#64748b")
+      .text(`Generated: ${generatedAt}`, { width: 495, align: "left" });
+
+    drawSectionHeader(doc, "Taxpayer Details", fonts);
+    drawKeyValue(doc, "Full Name", profile.fullName || "N/A", fonts);
+    drawKeyValue(doc, "Business Name", profile.businessName || "N/A", fonts);
+    drawKeyValue(
+      doc,
+      "Taxpayer Type",
+      profile.taxpayerType === "freelancer" ? "Individual / Freelancer" : "Company / SME",
+      fonts
+    );
+    drawKeyValue(doc, "Tax Year", String(result.taxYear), fonts);
+    drawKeyValue(doc, "State of Residence", profile.stateOfResidence || "N/A", fonts);
+    drawKeyValue(doc, "VAT Registered", profile.isVATRegistered ? "Yes" : "No", fonts);
+
+    drawSectionHeader(doc, "Financial Inputs", fonts);
+    const inputRows: Array<[string, string]> = [
+      ["Gross Revenue", formatCurrency(inputs.grossRevenue || 0)],
+      ["Allowable Expenses", formatCurrency(inputs.allowableExpenses || 0)],
+    ];
+
+    if (inputs.pensionContributions) inputRows.push(["Pension Contributions", formatCurrency(inputs.pensionContributions)]);
+    if (inputs.nhfContributions) inputRows.push(["NHF Contributions", formatCurrency(inputs.nhfContributions)]);
+    if (inputs.lifeInsurancePremiums) inputRows.push(["Life Insurance Premiums", formatCurrency(inputs.lifeInsurancePremiums)]);
+    if (inputs.otherReliefs) inputRows.push(["Other Reliefs", formatCurrency(inputs.otherReliefs)]);
+    if (profile.taxpayerType === "company") {
+      if (inputs.turnover) inputRows.push(["Turnover", formatCurrency(inputs.turnover)]);
+      if (inputs.costOfSales) inputRows.push(["Cost of Sales", formatCurrency(inputs.costOfSales)]);
+      if (inputs.operatingExpenses) inputRows.push(["Operating Expenses", formatCurrency(inputs.operatingExpenses)]);
+      if (inputs.capitalAllowance) inputRows.push(["Capital Allowance", formatCurrency(inputs.capitalAllowance)]);
+    }
+    inputRows.forEach(([label, value]) => drawKeyValue(doc, label, value, fonts));
+
+    drawSectionHeader(doc, "Tax Rule Data Source", fonts);
+    drawKeyValue(doc, "Version", result.taxRuleMetadata.version || "N/A", fonts);
+    drawKeyValue(doc, "Source", result.taxRuleMetadata.source || "N/A", fonts);
+    if (result.taxRuleMetadata.lastUpdated) {
+      drawKeyValue(
+        doc,
+        "Last Updated",
+        new Date(result.taxRuleMetadata.lastUpdated).toLocaleString("en-NG"),
+        fonts
+      );
+    }
+    if (result.taxRuleMetadata.remoteUrl) {
+      drawKeyValue(doc, "Remote URL", result.taxRuleMetadata.remoteUrl, fonts);
+    }
+
+    drawSectionHeader(doc, "Tax Breakdown", fonts);
+    ensureSpace(doc, 84);
+
+    const headerTop = doc.y;
+    const colBand = 50;
+    const colRate = 255;
+    const colBase = 340;
+    const colTax = 445;
+
+    doc
+      .font(fonts.bold)
+      .fontSize(9.8)
+      .fillColor("#475569")
+      .text("Band", colBand, headerTop)
+      .text("Rate", colRate, headerTop)
+      .text("Base Amount", colBase, headerTop)
+      .text("Tax Amount", colTax, headerTop);
+
+    doc.moveTo(50, headerTop + 16).lineTo(545, headerTop + 16).lineWidth(0.9).stroke("#dbe3ee");
+    doc.y = headerTop + 22;
+
+    for (const band of result.bands) {
+      ensureSpace(doc, 30);
+      const rowTop = doc.y;
+
+      const bandHeight = doc.heightOfString(band.bandLabel, {
+        width: colRate - colBand - 14,
+        lineGap: 1.8,
+      });
+      const rowHeight = Math.max(20, bandHeight + 8);
+
+      doc
+        .font(fonts.regular)
+        .fontSize(10)
+        .fillColor("#111827")
+        .text(band.bandLabel, colBand, rowTop, { width: colRate - colBand - 14, lineGap: 1.8 })
+        .text(formatPercent(band.rate), colRate, rowTop, { width: colBase - colRate - 10, align: "left" })
+        .text(formatCurrency(band.baseAmount), colBase, rowTop, { width: colTax - colBase - 10, align: "left" })
+        .text(formatCurrency(band.taxAmount), colTax, rowTop, { width: 100, align: "left" });
+
+      doc.moveTo(50, rowTop + rowHeight).lineTo(545, rowTop + rowHeight).lineWidth(0.5).stroke("#e5e7eb");
+      doc.y = rowTop + rowHeight + 3;
+    }
+
+    ensureSpace(doc, 36);
+    doc
+      .font(fonts.bold)
+      .fontSize(11.2)
+      .fillColor("#0f172a")
+      .text("Total Tax Due", 50, doc.y)
+      .text(formatCurrency(result.totalTaxDue), 445, doc.y, { width: 100, align: "left" });
+
+    if (result.vat) {
+      drawSectionHeader(doc, "VAT Summary", fonts);
+      drawKeyValue(doc, "VAT Rate", formatPercent(result.vat.vatRate), fonts);
+      drawKeyValue(doc, "Output VAT (Sales)", formatCurrency(result.vat.outputVAT), fonts);
+      if (typeof result.vat.inputVAT === "number") {
+        drawKeyValue(doc, "Input VAT (Purchases)", formatCurrency(result.vat.inputVAT), fonts);
+      }
+      drawKeyValue(doc, "Net VAT Payable", formatCurrency(result.vat.netVATPayable), fonts);
+    }
+
+    drawSectionHeader(doc, "Computation Summary", fonts);
+    drawKeyValue(doc, "Taxable Income", formatCurrency(result.taxableIncome), fonts);
+    drawKeyValue(doc, "Total Tax Due", formatCurrency(result.totalTaxDue), fonts);
+    drawKeyValue(doc, "Effective Tax Rate", formatPercent(result.effectiveRate), fonts);
+    if (result.vat) {
+      drawKeyValue(doc, "VAT Payable", formatCurrency(result.vat.netVATPayable), fonts);
+    }
+
+    if (result.notes.length > 0) {
+      drawSectionHeader(doc, "Notes", fonts);
+      result.notes.forEach((note) => {
+        drawParagraph(doc, `- ${note}`, fonts, "#475569");
+        doc.moveDown(0.1);
+      });
+    }
+
+    drawSectionHeader(doc, "Disclaimer", fonts);
+    drawParagraph(
+      doc,
+      "This computation is an estimate generated by software using available tax rules and supplied inputs. It is for information purposes only and does not constitute tax, legal, or financial advice.",
+      fonts,
+      "#7f1d1d"
+    );
+    doc.moveDown(0.2);
+    drawParagraph(
+      doc,
+      "Confirm all figures with FIRS, your State Board of Internal Revenue, or a qualified tax professional before filing or payment.",
+      fonts,
+      "#7f1d1d"
+    );
+
+    ensureSpace(doc, 28);
+    doc
+      .moveDown(0.5)
+      .moveTo(50, doc.y)
+      .lineTo(545, doc.y)
+      .lineWidth(0.8)
+      .stroke("#dbe3ee");
+    doc
+      .moveDown(0.25)
+      .font(fonts.regular)
+      .fontSize(8.8)
+      .fillColor("#64748b")
+      .text("Generated by Quantum Ledger", { width: 495, align: "center" });
+
+    doc.end();
+
+    const pdfBuffer = await new Promise<Buffer>((resolve) => {
+      doc.on("end", () => {
+        resolve(Buffer.concat(chunks));
+      });
+    });
+
+    const filename = `quantum-ledger-tax-computation-${result.taxYear}.pdf`;
+    return new NextResponse(new Uint8Array(pdfBuffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": pdfBuffer.length.toString(),
+      },
+    });
+  } catch (error) {
+    console.error("[PDF Route] Error generating PDF:", error);
+    return NextResponse.json(
+      { error: "Unable to generate PDF. Please try again." },
+      { status: 500 }
+    );
+  }
 }
+
