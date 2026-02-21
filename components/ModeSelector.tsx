@@ -54,7 +54,7 @@ export default function ModeSelector() {
     const getModeLabel = (m: AppMode) => {
         switch (m) {
             case "tax": return "Tax Manager";
-            case "intelligence": return "Cash Intelligence";
+            case "intelligence": return "Financial Management";
             case "accounting": return "Accounting";
             case "wallet": return "Wallet";
             case "marketplace": return "Marketplace";
@@ -70,7 +70,7 @@ export default function ModeSelector() {
             >
                 <div className="flex items-center gap-2">
                     {isNavigating && (
-                        <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        <div className="w-3 h-3 rounded-full bg-white/30 animate-pulse" />
                     )}
                     <span className="text-xs">{getModeLabel(mode)}</span>
                 </div>
@@ -102,7 +102,7 @@ export default function ModeSelector() {
                         />
                         <ModeOption
                             mode="intelligence"
-                            label="Cash Intelligence"
+                            label="Financial Management"
                             currentMode={mode}
                             onClick={() => handleModeSwitch("intelligence")}
                         />

@@ -1,5 +1,6 @@
 import { taxEngine } from "../tax/taxEngine";
 import { accountingEngine } from "../accounting/transactionBridge";
+import { resetComplianceStore } from "../tax/compliance/store";
 
 /**
  * Clears all application data from local storage and resets engines.
@@ -10,6 +11,7 @@ export const clearAllData = () => {
     // 1. Reset Singleton Engines (clears internal state and their specific localStorage keys)
     taxEngine.reset();
     accountingEngine.reset();
+    resetComplianceStore();
 
     // 2. Clear known standalone localStorage keys
     const keysToClear = [

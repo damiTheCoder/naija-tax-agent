@@ -145,10 +145,17 @@ export const PAYROLL_NAV_ITEMS: TaxNavItem[] = [
 // Intelligence/Cash Management navigation (standalone)
 export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
   {
-    label: "Treasury Management",
+    label: "Financial Management",
     href: "/cashflow-intelligence",
     icon: "intelligence",
-    description: "Cashflow analytics, modelling & investment tools",
+    description: "Cashflow analytics, treasury movement, and investment tools",
+    mode: "intelligence",
+  },
+  {
+    label: "Financial Ratios",
+    href: "/cashflow-intelligence/ratios",
+    icon: "report",
+    description: "Profitability, liquidity, and solvency ratios",
     mode: "intelligence",
   },
   {

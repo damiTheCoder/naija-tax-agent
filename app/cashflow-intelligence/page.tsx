@@ -1,56 +1,123 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import {
     calculateCashflowAnalytics,
     formatNaira,
     type CashflowAnalytics,
 } from "@/lib/cashflow/investmentCalculator";
-import { accountingEngine } from "@/lib/accounting/transactionBridge";
+import { accountingEngine, type AccountingState } from "@/lib/accounting/transactionBridge";
 
 // =============================================================================
 // CASH INTELLIGENCE PAGE - Standalone Analytics & Investment Modelling
 // =============================================================================
 
+const CASH_ACCOUNT_CODES = new Set(["1000", "1010", "1020", "1021"]);
+
+function KpiCard({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+            <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
+            <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{value}</p>
+            <p className="text-xs text-gray-500 mt-2">{hint}</p>
+        </div>
+    );
+}
+
 export default function CashIntelligencePage() {
-    // Build analytics snapshot from accounting data
-    const calculateAnalyticsSnapshot = useCallback((): CashflowAnalytics => {
-        try {
-            const statements = accountingEngine.generateStatements();
+    const [accountingState, setAccountingState] = useState<AccountingState | null>(null);
+    const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(null);
 
-            // Get cashflow data from statements
-            const cashBalance = statements.assets || 0;
-            const monthlyInflow = statements.revenue || 0;
-            const monthlyOutflow = (statements.costOfSales || 0) + (statements.operatingExpenses || 0);
+    const buildAnalyticsFromState = useCallback((state: AccountingState): CashflowAnalytics => {
+        let cashBalance = 0;
+        CASH_ACCOUNT_CODES.forEach((code) => {
+            const account = state.ledgerAccounts.get(code);
+            cashBalance += account?.closingBalance || 0;
+        });
 
-            const today = new Date();
-            const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+        const today = new Date();
+        const start = new Date(today);
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - 29);
 
-            const result = calculateCashflowAnalytics(
-                cashBalance,
-                monthlyInflow,
-                monthlyOutflow,
-                monthAgo.toISOString().split("T")[0],
-                today.toISOString().split("T")[0]
-            );
-            return result;
-        } catch {
-            // If no data, set defaults
-            return calculateCashflowAnalytics(0, 0, 0, "", "");
-        }
+        let monthlyInflow = 0;
+        let monthlyOutflow = 0;
+        state.journalEntries.forEach((entry) => {
+            const entryDate = new Date(`${entry.date}T00:00:00`);
+            if (entryDate < start || entryDate > today) return;
+            entry.lines.forEach((line) => {
+                if (!CASH_ACCOUNT_CODES.has(line.accountCode)) return;
+                if (line.debit > 0) monthlyInflow += line.debit;
+                if (line.credit > 0) monthlyOutflow += line.credit;
+            });
+        });
+
+        return calculateCashflowAnalytics(
+            cashBalance,
+            monthlyInflow,
+            monthlyOutflow,
+            start.toISOString().split("T")[0],
+            today.toISOString().split("T")[0]
+        );
     }, []);
 
-    // State
-    const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(() => calculateAnalyticsSnapshot());
+    const syncFromEngine = useCallback((reload = false) => {
+        if (reload) {
+            accountingEngine.load();
+        }
+        const state = accountingEngine.getState();
+        const snapshot: AccountingState = {
+            ...state,
+            journalEntries: [...state.journalEntries],
+            ledgerAccounts: new Map(state.ledgerAccounts),
+        };
+        setAccountingState(snapshot);
+        setAnalytics(buildAnalyticsFromState(snapshot));
+    }, [buildAnalyticsFromState]);
+
+    useEffect(() => {
+        syncFromEngine(true);
+        const unsubscribe = accountingEngine.subscribe(() => syncFromEngine());
+
+        const onAccountingUpdate = () => {
+            syncFromEngine(true);
+        };
+
+        if (typeof window !== "undefined") {
+            window.addEventListener("accounting-update", onAccountingUpdate);
+        }
+
+        return () => {
+            unsubscribe();
+            if (typeof window !== "undefined") {
+                window.removeEventListener("accounting-update", onAccountingUpdate);
+            }
+        };
+    }, [syncFromEngine]);
 
     const loadAnalytics = useCallback(() => {
-        setAnalytics(calculateAnalyticsSnapshot());
-    }, [calculateAnalyticsSnapshot]);
+        syncFromEngine(true);
+    }, [syncFromEngine]);
+
+    const formatNairaCompact = useCallback((amount: number): string => {
+        const safe = Number.isFinite(amount) ? amount : 0;
+        const abs = Math.abs(safe);
+        const sign = safe < 0 ? "-" : "";
+        if (abs >= 1_000_000_000_000) {
+            return `${sign}₦${(abs / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "")}T`;
+        }
+        if (abs >= 1_000_000_000) {
+            return `${sign}₦${(abs / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+        }
+        if (abs >= 1_000_000) {
+            return `${sign}₦${(abs / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+        }
+        return `${sign}${formatNaira(abs)}`;
+    }, []);
 
     // Build 30-day receipt vs payment bars from accounting engine
     const cashBarData = useMemo(() => {
-        const entries = accountingEngine.getState().journalEntries;
-        const cashAccountCodes = new Set(['1000', '1010', '1020', '1021']); // Cash & Bank codes
+        const entries = accountingState?.journalEntries ?? [];
         const dailyFlows = new Map<string, { receipts: number; payments: number; txCount: number }>();
 
         // Initialize last 30 days
@@ -70,7 +137,7 @@ export default function CashIntelligencePage() {
             if (!bucket) return;
 
             entry.lines.forEach(line => {
-                if (!cashAccountCodes.has(line.accountCode)) return;
+                if (!CASH_ACCOUNT_CODES.has(line.accountCode)) return;
                 if (line.debit > 0) bucket.receipts += line.debit;
                 if (line.credit > 0) bucket.payments += line.credit;
                 if (line.debit > 0 || line.credit > 0) bucket.txCount += 1;
@@ -88,7 +155,7 @@ export default function CashIntelligencePage() {
             };
         });
         return bars;
-    }, [analytics]);
+    }, [accountingState, analytics]);
 
     if (!analytics) {
         return null;
@@ -123,180 +190,106 @@ export default function CashIntelligencePage() {
     );
     const trailingNetFlow = cashBarData.reduce((sum, point) => sum + point.net, 0);
     const hasCashMovement = cashBarData.some((point) => point.receipts > 0 || point.payments > 0);
+    const netCashflow = analytics?.netCashflow || 0;
+    const netCashflowLabel = `${netCashflow >= 0 ? "+" : "-"}${formatNairaCompact(Math.abs(netCashflow))}`;
+    const runwayMonthsLabel = analytics?.runwayMonths === 999 ? "∞" : `${analytics?.runwayMonths || 0} months`;
+    const runwayDaysLabel = analytics?.runwayDays === 999 ? "Sustainable" : `${analytics?.runwayDays || 0} days`;
+    const healthBadge = getHealthBadge(analytics?.healthStatus || "moderate");
 
     return (
-        <div className="min-h-screen">
-            {/* Header */}
-            <header className="px-3 md:px-4 py-3">
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Cash Intelligence</p>
-                        <p className="text-sm text-gray-500">Cashflow analytics, runway modelling & investment tools</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                        {analytics && (
-                            <span className={`px-3 py-1 rounded-md font-medium ${getHealthBadge(analytics.healthStatus).bg} ${getHealthBadge(analytics.healthStatus).text}`}>
-                                {getHealthBadge(analytics.healthStatus).label}
-                            </span>
-                        )}
-                        <button
-                            onClick={loadAnalytics}
-                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-md text-slate-600 font-medium transition-colors flex items-center gap-1.5"
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Refresh
-                        </button>
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Financial Management Dashboard</h1>
+                    <p className="text-sm text-gray-500 mt-1">Cashflow intelligence, runway monitoring, and treasury movement analytics.</p>
+                    <div className="mt-2 inline-flex items-center gap-2 text-xs">
+                        <span className={`px-3 py-1 rounded-md font-medium ${healthBadge.bg} ${healthBadge.text}`}>
+                            {healthBadge.label} Health
+                        </span>
+                        <span className="text-gray-400">Updated from live accounting records</span>
                     </div>
                 </div>
-            </header>
-
-            <main className="max-w-7xl mx-auto px-1 md:px-2 py-3 md:py-4 space-y-3">
-                {/* Metrics Dashboard */}
-                <div className="">
-                    <div className="py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-semibold !text-black dark:!text-white">Cashflow Metrics</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Real-time financial health indicators</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                            {/* Cash Balance */}
-                            <div className="rounded-xl pt-2 pb-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Balance</p>
-                                <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold mt-1">
-                                    {formatNaira(analytics?.cashBalance || 0)}
-                                </p>
-                            </div>
-
-                            {/* Monthly Inflow */}
-                            <div className="rounded-xl pt-2 pb-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Inflow</p>
-                                <p className="text-xl md:text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                                    +{formatNaira(analytics?.monthlyInflow || 0)}
-                                </p>
-                            </div>
-
-                            {/* Monthly Outflow */}
-                            <div className="rounded-xl pt-2 pb-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monthly Outflow</p>
-                                <p className="text-xl md:text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
-                                    -{formatNaira(analytics?.monthlyOutflow || 0)}
-                                </p>
-                            </div>
-
-                            {/* Runway */}
-                            <div className="rounded-xl pt-2 pb-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cash Runway</p>
-                                <div className="flex items-end gap-2 mt-1">
-                                    <p style={{ color: 'var(--foreground)' }} className="text-xl md:text-2xl font-bold">
-                                        {analytics?.runwayMonths === 999 ? "∞" : analytics?.runwayMonths || 0}
-                                    </p>
-                                    <span className="text-sm text-gray-500 dark:text-gray-400 mb-0.5">months</span>
-                                </div>
-                                <div className={`w-full h-1.5 rounded-full mt-2 ${getHealthColor(analytics?.healthStatus || "moderate")}`} />
-                            </div>
-                        </div>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={loadAnalytics}
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh
+                    </button>
                 </div>
+            </div>
 
-                {/* Burn Rate Analysis */}
-                <div className="">
-                    <div className="py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-semibold !text-black dark:!text-white">Burn Rate Analysis</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Cash consumption & sustainability metrics</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
-                                <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Daily Burn Rate</p>
-                                    <p style={{ color: 'var(--foreground)' }} className="text-lg font-semibold">{formatNaira(analytics?.burnRate || 0)}<span className="text-sm font-normal text-gray-500 dark:text-gray-400">/day</span></p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${(analytics?.netCashflow || 0) >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-                                    <svg className={`w-5 h-5 ${(analytics?.netCashflow || 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Net Cashflow</p>
-                                    <p className={`text-lg font-semibold ${(analytics?.netCashflow || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                                        {(analytics?.netCashflow || 0) >= 0 ? "+" : ""}{formatNaira(analytics?.netCashflow || 0)}<span className="text-sm font-normal opacity-70">/mo</span>
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 pt-2 pb-3 rounded-xl">
-                                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Runway Remaining</p>
-                                    <p style={{ color: 'var(--foreground)' }} className="text-lg font-semibold">
-                                        {analytics?.runwayDays === 999 ? "Sustainable" : `${analytics?.runwayDays || 0} days`}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <KpiCard
+                    label="Cash Balance"
+                    value={formatNairaCompact(analytics?.cashBalance || 0)}
+                    hint="Current cash on hand"
+                    accent="text-blue-600"
+                />
+                <KpiCard
+                    label="Monthly Inflow"
+                    value={`+${formatNairaCompact(analytics?.monthlyInflow || 0)}`}
+                    hint="Estimated average inflows"
+                    accent="text-emerald-600"
+                />
+                <KpiCard
+                    label="Monthly Outflow"
+                    value={`-${formatNairaCompact(analytics?.monthlyOutflow || 0)}`}
+                    hint="COGS + operating expenses"
+                    accent="text-rose-600"
+                />
+                <KpiCard
+                    label="Net Cashflow"
+                    value={netCashflowLabel}
+                    hint="Monthly inflow minus outflow"
+                    accent={netCashflow >= 0 ? "text-emerald-600" : "text-rose-600"}
+                />
+                <KpiCard
+                    label="Daily Burn Rate"
+                    value={formatNairaCompact(analytics?.burnRate || 0)}
+                    hint="Average daily cash consumption"
+                    accent="text-amber-600"
+                />
+                <KpiCard
+                    label="Runway (Months)"
+                    value={runwayMonthsLabel}
+                    hint="Months of cash remaining"
+                    accent="text-indigo-600"
+                />
+                <KpiCard
+                    label="Runway (Days)"
+                    value={runwayDaysLabel}
+                    hint="Days of cash remaining"
+                    accent="text-cyan-600"
+                />
+                <KpiCard
+                    label="30-day Net Movement"
+                    value={`${trailingNetFlow >= 0 ? "+" : "-"}${formatNairaCompact(Math.abs(trailingNetFlow))}`}
+                    hint="Aggregate cash movement"
+                    accent={trailingNetFlow >= 0 ? "text-emerald-600" : "text-rose-600"}
+                />
+            </div>
 
-                {/* Treasury Movement Chart */}
-                <div className="rounded-2xl bg-transparent overflow-hidden">
-                    {/* Header */}
-                    <div className="py-3 md:py-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold !text-black dark:!text-white">Receipts vs Payments</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">30-day treasury movement (green up, red down)</p>
-                                </div>
-                            </div>
-
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                    <div className="flex items-center justify-between mb-4 gap-4">
+                        <div>
+                            <h2 className="text-base font-semibold text-gray-900">Receipts vs Payments</h2>
+                            <p className="text-xs text-gray-500">30-day treasury movement (green up, red down)</p>
                         </div>
                     </div>
 
-                    {/* Chart Body */}
-                    <div className="relative pt-4 pb-0 md:pt-6">
+                    <div className="relative pt-4 pb-0">
                         {/* Value axis on right */}
-                        <div className="absolute right-4 md:right-6 top-4 md:top-6 bottom-14 w-16 flex flex-col justify-between text-right z-10">
+                        <div className="absolute right-4 top-4 bottom-14 w-16 flex flex-col justify-between text-right z-10">
                             {cashBarData.length > 0 && [1, 0.5, 0, -0.5, -1].map((multiplier, i) => {
                                 const value = cashBarScale * multiplier;
                                 return (
-                                    <span key={i} className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-                                        {multiplier > 0 ? "+" : ""}{formatNaira(value)}
+                                    <span key={i} className="text-[10px] text-gray-500 font-mono">
+                                        {multiplier > 0 ? "+" : ""}{formatNairaCompact(value)}
                                     </span>
                                 );
                             })}
@@ -309,7 +302,7 @@ export default function CashIntelligencePage() {
                                     {/* Horizontal grid lines */}
                                     <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                                         {[...Array(5)].map((_, i) => (
-                                            <div key={i} className="w-full border-t border-dashed border-gray-200 dark:border-gray-800"></div>
+                                            <div key={i} className="w-full border-t border-dashed border-gray-200"></div>
                                         ))}
                                     </div>
 
@@ -355,18 +348,18 @@ export default function CashIntelligencePage() {
 
                                                     {/* Hover tooltip */}
                                                     <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg px-3 py-2 text-[11px] whitespace-nowrap">
-                                                            <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">{point.date}</div>
-                                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
+                                                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-[11px] leading-relaxed min-w-[170px] max-w-[220px]">
+                                                            <div className="text-gray-500 mb-1 font-medium">{point.date}</div>
+                                                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-gray-700">
                                                                 <span className="text-gray-400">Receipts:</span>
-                                                                <span className="text-right font-mono text-emerald-600 dark:text-emerald-400">+{formatNaira(point.receipts)}</span>
+                                                                <span className="text-right font-mono text-emerald-600 truncate">+{formatNairaCompact(point.receipts)}</span>
                                                                 <span className="text-gray-400">Payments:</span>
-                                                                <span className="text-right font-mono text-rose-600 dark:text-rose-400">-{formatNaira(point.payments)}</span>
+                                                                <span className="text-right font-mono text-rose-600 truncate">-{formatNairaCompact(point.payments)}</span>
                                                                 <span className="text-gray-400">Net:</span>
-                                                                <span className={`text-right font-mono font-medium ${netPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                                                    {point.net >= 0 ? "+" : "-"}{formatNaira(Math.abs(point.net))}
+                                                                <span className={`text-right font-mono font-medium ${netPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    {point.net >= 0 ? "+" : "-"}{formatNairaCompact(Math.abs(point.net))}
                                                                 </span>
-                                                                <span className="col-span-2 text-xs text-gray-400 mt-1 border-t border-gray-100 dark:border-gray-700 pt-1">
+                                                                <span className="col-span-2 text-xs text-gray-400 mt-1 border-t border-gray-100 pt-1">
                                                                     {point.txCount} cash transactions
                                                                 </span>
                                                             </div>
@@ -378,66 +371,73 @@ export default function CashIntelligencePage() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                                <div className="h-full flex items-center justify-center text-gray-400">
                                     <p>No data available</p>
                                 </div>
                             )}
                         </div>
 
                         {/* Time axis */}
-                        <div className="h-8 pr-20 flex justify-between items-center mt-2 border-t border-gray-100 dark:border-gray-800 pt-2">
+                        <div className="h-8 pr-20 flex justify-between items-center mt-2 border-t border-gray-100 pt-2">
                             {cashBarData.filter((_, i) => i % 5 === 0).map((point, idx) => (
-                                <span key={idx} className="text-[10px] text-gray-400 dark:text-gray-500">{point.date}</span>
+                                <span key={idx} className="text-[10px] text-gray-400">{point.date}</span>
                             ))}
                         </div>
                     </div>
 
                     {/* Footer with net movement */}
                     {cashBarData.length > 0 && (
-                        <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">30-day Net Movement</span>
-                            <span className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${trailingNetFlow >= 0
-                                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'
-                                : 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400'
-                                }`}>
-                                {trailingNetFlow >= 0 ? "+" : "-"}{formatNaira(Math.abs(trailingNetFlow))}
+                        <div className="mt-4 flex items-center justify-between">
+                            <span className="text-xs text-gray-500">30-day Net Movement</span>
+                            <span
+                                className={`px-3 py-1 rounded-full text-sm font-mono font-medium ${trailingNetFlow >= 0
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-rose-100 text-rose-700'
+                                    }`}
+                            >
+                                {trailingNetFlow >= 0 ? "+" : "-"}{formatNairaCompact(Math.abs(trailingNetFlow))}
                             </span>
                         </div>
                     )}
                 </div>
 
-                {/* Empty State */}
-                {
-                    (!analytics || analytics.monthlyInflow === 0) && (
-                        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
-                            <div className="p-5">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-amber-800">No Cashflow Data Yet</h3>
-                                        <p className="text-sm text-amber-700 mt-1">
-                                            Add transactions in Accounting Studio to see your cashflow metrics and run investment scenarios.
-                                        </p>
-                                        <a
-                                            href="/accounting"
-                                            className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                            </svg>
-                                            Go to Accounting Studio
-                                        </a>
-                                    </div>
-                                </div>
+                <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>Health status</span>
+                        <span className={`px-2 py-1 rounded-md font-medium ${healthBadge.bg} ${healthBadge.text}`}>{healthBadge.label}</span>
+                    </div>
+                    <div className={`w-full h-1.5 rounded-full mt-2 ${getHealthColor(analytics?.healthStatus || "moderate")}`} />
+                </div>
+            </div>
+
+            {(!analytics || analytics.monthlyInflow === 0) && (
+                <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
+                    <div className="p-5">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-amber-800">No Cashflow Data Yet</h3>
+                                <p className="text-sm text-amber-700 mt-1">
+                                    Add transactions in Accounting Studio to see your cashflow metrics and run investment scenarios.
+                                </p>
+                                <a
+                                    href="/accounting"
+                                    className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                    Go to Accounting Studio
+                                </a>
                             </div>
                         </div>
-                    )
-                }
-            </main >
-        </div >
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

@@ -32,7 +32,7 @@ const MODULES: {
         },
         {
             mode: "intelligence",
-            label: "Treasury Management",
+            label: "Financial Management",
             icon: (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />

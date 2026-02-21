@@ -1,0 +1,51 @@
+[
+  {
+    "id": "sale-001",
+    "entityId": "entity-default",
+    "date": "2026-01-10",
+    "description": "Service invoice to Blue Horizon Ltd",
+    "amount": 12000000,
+    "currency": "NGN",
+    "type": "sale"
+  },
+  {
+    "id": "expense-001",
+    "entityId": "entity-default",
+    "date": "2026-01-12",
+    "description": "Professional consulting fee",
+    "amount": 2000000,
+    "currency": "NGN",
+    "type": "expense"
+  },
+  {
+    "id": "purchase-001",
+    "entityId": "entity-default",
+    "date": "2026-01-20",
+    "description": "Purchase of office supplies",
+    "amount": 800000,
+    "currency": "NGN",
+    "type": "purchase"
+  },
+  {
+    "id": "asset-001",
+    "entityId": "entity-default",
+    "date": "2026-02-02",
+    "description": "Sale of company vehicle",
+    "amount": 3500000,
+    "currency": "NGN",
+    "type": "asset_disposal",
+    "metadata": {
+      "costBasis": 2500000
+    }
+  },
+  {
+    "id": "stamp-001",
+    "entityId": "entity-default",
+    "date": "2026-02-08",
+    "description": "Property deed agreement",
+    "amount": 50000000,
+    "currency": "NGN",
+    "type": "general",
+    "documentType": "deed"
+  }
+]

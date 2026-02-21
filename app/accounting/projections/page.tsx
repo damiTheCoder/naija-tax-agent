@@ -159,13 +159,34 @@ const nairaFormatter = new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 0,
 });
 
+const nairaCompactFormatter = new Intl.NumberFormat("en-NG", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
 
-const formatNaira = (value: number): string => nairaFormatter.format(Math.round(value || 0));
+const formatNaira = (value: number): string => {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const absolute = Math.abs(safeValue);
+  const sign = safeValue < 0 ? "-" : "";
+
+  if (absolute >= 1_000_000_000_000) {
+    return `${sign}₦${nairaCompactFormatter.format(absolute / 1_000_000_000_000)}t`;
+  }
+  if (absolute >= 1_000_000_000) {
+    return `${sign}₦${nairaCompactFormatter.format(absolute / 1_000_000_000)}b`;
+  }
+  if (absolute >= 1_000_000) {
+    return `${sign}₦${nairaCompactFormatter.format(absolute / 1_000_000)}m`;
+  }
+
+  return nairaFormatter.format(Math.round(safeValue || 0));
+};
 const formatPercent = (value: number): string => percentFormatter.format(value);
 
 function normalizeAssumptionToken(value: string): string {
@@ -1361,6 +1382,9 @@ export default function AccountingProjectionsPage() {
 
   const projectionContextSnapshot = useMemo(() => {
     const recent = timeline.slice(-6);
+    const recentWindow = recent.length ? `${recent[0].label}–${recent[recent.length - 1].label}` : "n/a";
+    const recentAvgRevenue = recent.length ? average(recent.map((point) => point.revenue)) : 0;
+    const recentAvgNet = recent.length ? average(recent.map((point) => point.netProfit)) : 0;
     const recentSummary = recent
       .map(
         (point) =>
@@ -1371,6 +1395,8 @@ export default function AccountingProjectionsPage() {
       .join(" | ");
 
     return [
+      "Context: projections",
+      `Updated at: ${new Date().toISOString()}`,
       `Projected annual revenue: ${Math.round(projectedRevenueAnnual)}`,
       `Projected net profit (6M): ${Math.round(projectedNetProfitSixMonth)}`,
       `Projected gross margin: ${(projectedGrossMargin * 100).toFixed(2)}%`,
@@ -1378,6 +1404,9 @@ export default function AccountingProjectionsPage() {
       `Projected cash balance: ${Math.round(projectedCashBalance)}`,
       `Runway months: ${runwayMonths || 18}`,
       `Break-even month: ${breakEven.monthLabel || "not reached"}`,
+      `Recent window: ${recentWindow}`,
+      `Recent avg revenue: ${Math.round(recentAvgRevenue)}`,
+      `Recent avg net profit: ${Math.round(recentAvgNet)}`,
       `Assumptions: revenueGrowthRate=${(assumptions.revenueGrowthRate * 100).toFixed(2)}%; operatingExpenseGrowthRate=${(
         assumptions.operatingExpenseGrowthRate * 100
       ).toFixed(2)}%; fixedCostInflationRate=${(assumptions.fixedCostInflationRate * 100).toFixed(2)}%; cogsRatio=${(

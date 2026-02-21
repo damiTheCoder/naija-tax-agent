@@ -11,6 +11,7 @@ type TaxType =
   | "TET"
   | "POLICE_LEVY"
   | "NASENI"
+  | "DEV_LEVY"
   | "OTHER";
 
 export interface TaxRemittancePdfPayload {

@@ -1049,12 +1049,19 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
       .slice(0, 3)
       .map((metric) => `${metric.label}: ${formatMetric(metric)}`)
       .join(" | ");
+    const topInputs = template.inputs
+      .slice(0, 4)
+      .map((definition) => `${definition.label}: ${formatInputValue(definition, inputs[definition.key] ?? 0)}`)
+      .join(" | ");
 
     const context = [
+      "Context: model",
+      `Updated at: ${new Date().toISOString()}`,
       `Financial Modelling: ${modelMeta.name}`,
       `Purpose: ${modelMeta.purpose}`,
       `Summary: ${computation.summary}`,
       `Top metrics: ${topMetrics}`,
+      topInputs ? `Key inputs: ${topInputs}` : "",
     ].join("\n");
 
     try {
@@ -1062,7 +1069,7 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
     } catch {
       // no-op
     }
-  }, [computation, modelMeta.name, modelMeta.purpose]);
+  }, [computation, inputs, modelMeta.name, modelMeta.purpose, template.inputs]);
 
   const handleDownloadPdf = async () => {
     if (isDownloadingPdf) return;

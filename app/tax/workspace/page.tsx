@@ -1,18 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TaxRuleMetadata, UserProfile } from "@/lib/types";
-import { CIT_CONFIG } from "@/lib/taxRules/config";
 import { clearAllData } from "@/lib/utils/system";
 import { buildTransactionsFromFiles } from "@/lib/accounting/statementEngine";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
+import { mapJournalEntriesToCompliance } from "@/lib/tax/compliance/adapters";
 import {
-  taxEngine,
-  detectTaxType,
+  runTaxComputation,
   type TaxComputationResult,
-  type TaxScheduleEntry,
-  type TaxTransaction,
-} from "@/lib/tax/taxEngine";
-import { getClientTaxRuleMetadata, refreshClientTaxRules } from "@/lib/taxRules/liveRatesClient";
+  type TaxSchedule,
+  type TaxIssue,
+  type FilingPackResult,
+  type AuditLogEntry,
+  type ComplianceTransaction,
+} from "@/lib/tax/compliance";
+import { generateFilingPack } from "@/lib/tax/compliance/filingPack";
+import { loadAuditLogs, loadFilingPacks, loadComplianceStatuses, loadPayments } from "@/lib/tax/compliance/store";
+import {
+  seedComplianceStatuses,
+  setComplianceStatus,
+  recordPayment,
+  type ComplianceStatusStage,
+} from "@/lib/tax/compliance/workflow";
 import { generateTaxRemittancePdf } from "@/lib/taxRemittancePdf";
 
 type WorkspaceDocument = {
@@ -21,14 +30,6 @@ type WorkspaceDocument = {
   size: number;
   extracted: number;
   uploadedAt: string;
-};
-
-type WorkspaceSnapshot = {
-  profile: UserProfile;
-  transactions: TaxTransaction[];
-  computations: TaxComputationResult[];
-  schedules: TaxScheduleEntry[];
-  lastUpdated: string;
 };
 
 type RemittanceAuditRecord = {
@@ -73,16 +74,14 @@ const formatDate = (dateStr?: string) => {
 
 
 export default function TaxWorkspacePage() {
-  const baseState = taxEngine.getState();
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>({
-    profile: baseState.profile,
-    transactions: [...baseState.transactions],
-    computations: [...baseState.computations],
-    schedules: [...baseState.schedules],
-    lastUpdated: baseState.lastUpdated,
-  });
-  const [summary, setSummary] = useState(() => taxEngine.getTaxSummary());
-  const [ruleMetadata, setRuleMetadata] = useState<TaxRuleMetadata>(() => getClientTaxRuleMetadata());
+  const [transactions, setTransactions] = useState<ComplianceTransaction[]>([]);
+  const [computation, setComputation] = useState<TaxComputationResult | null>(null);
+  const [issues, setIssues] = useState<TaxIssue[]>([]);
+  const [schedules, setSchedules] = useState<TaxSchedule[]>([]);
+  const [filingPacks, setFilingPacks] = useState<FilingPackResult[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [complianceStatuses, setComplianceStatuses] = useState(() => loadComplianceStatuses());
+  const [payments, setPayments] = useState(() => loadPayments());
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isRefreshingRules, setIsRefreshingRules] = useState(false);
@@ -92,7 +91,6 @@ export default function TaxWorkspacePage() {
   const [remittanceHistory, setRemittanceHistory] = useState<RemittanceAuditRecord[]>([]);
   const [isLoadingRemittanceHistory, setIsLoadingRemittanceHistory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const hydratedRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("timeline");
 
@@ -103,46 +101,64 @@ export default function TaxWorkspacePage() {
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
-    snapshot.transactions.forEach((tx) => {
+    transactions.forEach((tx) => {
       if (tx.date) {
         years.add(new Date(tx.date).getFullYear());
       }
     });
     years.add(new Date().getFullYear());
     return Array.from(years).sort((a, b) => b - a);
-  }, [snapshot.transactions]);
+  }, [transactions]);
 
-
-  const syncSnapshot = useCallback(() => {
-    const state = taxEngine.getState();
-    setSnapshot({
-      profile: { ...state.profile },
-      transactions: [...state.transactions],
-      computations: [...state.computations],
-      schedules: [...state.schedules],
-      lastUpdated: state.lastUpdated,
-    });
-    setSummary(taxEngine.getTaxSummary());
+  const refreshAudit = useCallback(() => {
+    setAuditLogs(loadAuditLogs());
+    setFilingPacks(loadFilingPacks());
+    setComplianceStatuses(loadComplianceStatuses());
+    setPayments(loadPayments());
   }, []);
 
+  const runComputation = useCallback(() => {
+    setIsRefreshingRules(true);
+    try {
+      accountingEngine.load();
+      const entries = accountingEngine.getState().journalEntries;
+      const mappedTransactions = mapJournalEntriesToCompliance("entity-default", entries);
+      setTransactions(mappedTransactions);
+
+      if (mappedTransactions.length === 0) {
+        setComputation(null);
+        setIssues([]);
+        setSchedules([]);
+        setStatusMessage("No accounting transactions found yet.");
+        return;
+      }
+
+      const result = runTaxComputation({
+        entityId: "entity-default",
+        period: "current",
+        transactions: mappedTransactions,
+      });
+      setComputation(result);
+      setIssues(result.issues);
+      setSchedules(result.schedules);
+      seedComplianceStatuses("entity-default", result.schedules);
+      refreshAudit();
+      setStatusMessage(`Computed ${result.schedules.length} schedules for ${result.period}.`);
+    } catch (computeError) {
+      console.error("Tax computation failed", computeError);
+      setError("Could not compute tax schedules. Please retry.");
+    } finally {
+      setIsRefreshingRules(false);
+    }
+  }, [refreshAudit]);
+
   useEffect(() => {
-    if (hydratedRef.current) return;
-    hydratedRef.current = true;
-    taxEngine.load();
-    syncSnapshot();
-    const unsubscribe = taxEngine.subscribe(() => {
-      syncSnapshot();
+    runComputation();
+    const unsubscribe = accountingEngine.subscribe(() => {
+      runComputation();
     });
     return () => unsubscribe();
-  }, [syncSnapshot]);
-
-  useEffect(() => {
-    const hydrateRules = async () => {
-      await refreshClientTaxRules();
-      setRuleMetadata(getClientTaxRuleMetadata());
-    };
-    hydrateRules();
-  }, []);
+  }, [runComputation]);
 
   const loadRemittanceHistory = useCallback(async () => {
     setIsLoadingRemittanceHistory(true);
@@ -181,25 +197,8 @@ export default function TaxWorkspacePage() {
         }));
         setDocuments((prev) => [...docEntries, ...prev].slice(0, 6));
 
-        const snippets: string[] = [];
-        extracted.forEach((tx) => {
-          const detection = detectTaxType(tx.description, tx.amount, tx.category);
-          taxEngine.processTransaction({
-            date: tx.date,
-            description: tx.description,
-            amount: tx.amount,
-            category: tx.category,
-            type: detection.transactionType,
-            isResident: true,
-          });
-          snippets.push(tx.description);
-        });
-
-        // Force a re-sync after processing
-        syncSnapshot();
-
         setStatusMessage(
-          `Processed ${extracted.length} transaction${extracted.length === 1 ? "" : "s"} from ${filesArray.length} file(s).`
+          `Uploaded ${filesArray.length} file(s). ${extracted.length} rows detected for review.`
         );
       } catch (err) {
         console.error("Upload ingest failed", err);
@@ -208,7 +207,7 @@ export default function TaxWorkspacePage() {
         setIsUploading(false);
       }
     },
-    [syncSnapshot]
+    []
   );
 
   const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,14 +227,14 @@ export default function TaxWorkspacePage() {
     }
   };
 
-  const handleGenerateRemittance = useCallback(async (schedule: TaxScheduleEntry) => {
+  const handleGenerateRemittance = useCallback(async (schedule: TaxSchedule) => {
     const paymentReference = await generateTaxRemittancePdf({
-      taxpayerName: snapshot.profile.fullName || "Authorized Taxpayer",
-      businessName: snapshot.profile.businessName,
-      taxType: schedule.taxType,
+      taxpayerName: "Authorized Taxpayer",
+      businessName: "Quantum Ledger",
+      taxType: schedule.taxType as any,
       period: schedule.period,
       dueDate: schedule.dueDate,
-      taxAmount: schedule.taxAmount,
+      taxAmount: schedule.totalTax,
       scheduleId: schedule.id,
     });
 
@@ -247,12 +246,12 @@ export default function TaxWorkspacePage() {
         },
         body: JSON.stringify({
           paymentReference,
-          taxpayerName: snapshot.profile.fullName || "Authorized Taxpayer",
-          businessName: snapshot.profile.businessName,
+          taxpayerName: "Authorized Taxpayer",
+          businessName: "Quantum Ledger",
           taxType: schedule.taxType,
           period: schedule.period,
           dueDate: schedule.dueDate,
-          taxAmount: schedule.taxAmount,
+          taxAmount: schedule.totalTax,
           scheduleId: schedule.id,
           source: "tax-workspace",
         }),
@@ -273,53 +272,75 @@ export default function TaxWorkspacePage() {
         `${schedule.taxType} remittance generated (PDF downloaded), but audit log save failed. Reference: ${paymentReference}`
       );
     }
-  }, [snapshot.profile.businessName, snapshot.profile.fullName]);
+  }, []);
 
-
-  const derivedStats = useMemo(() => {
-    let revenue = 0;
-    let deductible = 0;
-    snapshot.transactions.forEach((tx) => {
-      const amount = Math.abs(tx.amount);
-      if (["sale", "income", "property-sale", "share-transfer"].includes(tx.type)) {
-        revenue += amount;
-      } else if (["expense", "purchase", "service-payment", "rent-payment", "contract-payment"].includes(tx.type)) {
-        deductible += amount;
-      }
+  const handleGenerateFilingPack = useCallback(async (schedule: TaxSchedule, format: "pdf" | "csv") => {
+    const pack = await generateFilingPack({
+      entityId: "entity-default",
+      schedule,
+      format,
     });
-    const profit = revenue - deductible;
-    const turnover = revenue;
-    let citRate = CIT_CONFIG.largeCompanyRate;
-    if (turnover <= CIT_CONFIG.smallCompanyThreshold) {
-      citRate = CIT_CONFIG.smallCompanyRate;
-    } else if (turnover <= CIT_CONFIG.mediumCompanyThreshold) {
-      citRate = CIT_CONFIG.mediumCompanyRate;
+    setFilingPacks((prev) => [pack, ...prev]);
+    refreshAudit();
+    if (pack.blob) {
+      const url = URL.createObjectURL(pack.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = pack.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     }
-    const estimatedCIT = Math.max(0, profit) * citRate;
+  }, [refreshAudit]);
+
+
+  const taxSummary = useMemo(() => {
+    const vatSchedule = schedules.find((schedule) => schedule.taxType === "VAT");
+    const whtSchedule = schedules.find((schedule) => schedule.taxType === "WHT");
+    const cgtSchedule = schedules.find((schedule) => schedule.taxType === "CGT");
+    const stampSchedule = schedules.find((schedule) => schedule.taxType === "STAMP");
+    const citSchedule = schedules.find((schedule) => schedule.taxType === "CIT");
+    const vatMeta = (vatSchedule?.metadata || {}) as { outputVat?: number; inputVat?: number };
+    const citMeta = (citSchedule?.metadata || {}) as { turnover?: number; accountingProfit?: number; taxableProfit?: number };
+
     return {
-      revenue,
-      deductible,
-      profit,
-      turnover,
-      citRate,
-      estimatedCIT,
+      netVAT: vatSchedule?.totalTax || 0,
+      outputVAT: vatMeta.outputVat || 0,
+      inputVAT: vatMeta.inputVat || 0,
+      totalWHT: whtSchedule?.totalTax || 0,
+      totalCGT: cgtSchedule?.totalTax || 0,
+      totalStampDuty: stampSchedule?.totalTax || 0,
+      estimatedCIT: citSchedule?.totalTax || 0,
+      turnover: citMeta.turnover || 0,
+      profit: citMeta.accountingProfit || 0,
+      taxableProfit: citMeta.taxableProfit || 0,
     };
-  }, [snapshot.transactions]);
+  }, [schedules]);
 
-  // Apply filters to computations
-  const filteredComputations = useMemo(() => {
-    return snapshot.computations.filter(comp => {
-      const tx = snapshot.transactions.find(t => t.id === comp.transactionId);
-      if (!tx || !tx.date) return false;
+  const transactionMap = useMemo(() => {
+    return new Map(transactions.map((tx) => [tx.id, tx]));
+  }, [transactions]);
 
-      const txDate = new Date(tx.date);
-      if (txDate.getFullYear() !== selectedYear) return false;
-      if (dateFrom && txDate < new Date(dateFrom)) return false;
-      if (dateTo && txDate > new Date(dateTo)) return false;
-
-      return true;
-    }).reverse();
-  }, [snapshot.computations, snapshot.transactions, selectedYear, dateFrom, dateTo]);
+  const filteredLedgerEntries = useMemo(() => {
+    const ledgerEntries = computation?.ledgerEntries || [];
+    return ledgerEntries
+      .filter((entry) => {
+        if (!entry.transactionId) return false;
+        const tx = transactionMap.get(entry.transactionId);
+        if (!tx || !tx.date) return false;
+        const txDate = new Date(tx.date);
+        if (txDate.getFullYear() !== selectedYear) return false;
+        if (dateFrom && txDate < new Date(dateFrom)) return false;
+        if (dateTo && txDate > new Date(dateTo)) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const dateA = transactionMap.get(a.transactionId || "")?.date || "";
+        const dateB = transactionMap.get(b.transactionId || "")?.date || "";
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+  }, [computation?.ledgerEntries, transactionMap, selectedYear, dateFrom, dateTo]);
 
 
   const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
@@ -361,14 +382,8 @@ export default function TaxWorkspacePage() {
     }
   ];
 
-  const handleRefreshRules = async () => {
-    setIsRefreshingRules(true);
-    try {
-      await refreshClientTaxRules(true);
-      setRuleMetadata(getClientTaxRuleMetadata());
-    } finally {
-      setIsRefreshingRules(false);
-    }
+  const handleRefreshRules = () => {
+    runComputation();
   };
 
   return (
@@ -378,7 +393,9 @@ export default function TaxWorkspacePage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900">Tax Workspace</h1>
-            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200">{ruleMetadata.version}</span>
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-xs font-medium text-slate-600 border border-slate-200">
+              {computation?.ruleSetId ?? "2026.1"}
+            </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Manage tax liabilities, view schedules, and track compliance status.
@@ -418,10 +435,10 @@ export default function TaxWorkspacePage() {
       {/* Stats Summary Deck */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Net VAT", value: summary.netVATPayable, color: "indigo" },
-          { label: "WHT", value: summary.totalWHT, color: "emerald" },
-          { label: "CGT & Stamp", value: summary.totalCGT + summary.totalStampDuty, color: "amber" },
-          { label: "Est. CIT", value: derivedStats.estimatedCIT, color: "slate" },
+          { label: "Net VAT", value: taxSummary.netVAT, color: "indigo" },
+          { label: "WHT", value: taxSummary.totalWHT, color: "emerald" },
+          { label: "CGT & Stamp", value: taxSummary.totalCGT + taxSummary.totalStampDuty, color: "amber" },
+          { label: "Est. CIT", value: taxSummary.estimatedCIT, color: "slate" },
         ].map((stat, idx) => (
           <div key={idx} className="p-4 rounded-xl border bg-white border-gray-200/60">
             <p className={`text-xs font-semibold uppercase tracking-wide text-${stat.color}-600`}>{stat.label}</p>
@@ -480,7 +497,7 @@ export default function TaxWorkspacePage() {
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-gray-500">{snapshot.transactions.length} total entries</span>
+            <span className="text-xs text-gray-500">{transactions.length} total entries</span>
           </div>
         </div>
       </div>
@@ -514,43 +531,44 @@ export default function TaxWorkspacePage() {
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-900">Tax Computation Timeline</h2>
-                <p className="text-xs text-gray-500 mt-0.5">{filteredComputations.length} processed entries for {selectedYear}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{filteredLedgerEntries.length} ledger entries for {selectedYear}</p>
               </div>
             </div>
-            {filteredComputations.length === 0 ? (
+            {filteredLedgerEntries.length === 0 ? (
               <div className="px-6 py-12 text-center text-gray-400">
-                <p>No tax computations found for this period</p>
+                <p>No tax ledger activity found for this period</p>
                 <button onClick={() => setActiveTab("documents")} className="text-xs mt-2 text-[#2264ff] hover:underline">Upload documents to start</button>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {filteredComputations.map((comp) => {
-                  const tx = snapshot.transactions.find((t) => t.id === comp.transactionId);
+                {filteredLedgerEntries.map((entry) => {
+                  const tx = entry.transactionId ? transactionMap.get(entry.transactionId) : undefined;
                   return (
-                    <div key={comp.transactionId} className="p-4 hover:bg-gray-50/50 transition-colors">
+                    <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{comp.transactionId.slice(-6)}</span>
-                            {comp.taxesApplied.length > 0 ? (
-                              comp.taxesApplied?.map(t => (
-                                <span key={`${comp.transactionId} -${t.taxType} `} className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                                  {t.taxType}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">Exempt / No Tax</span>
-                            )}
+                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                              {(entry.transactionId || entry.id).slice(-6)}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                              {entry.taxType}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+                              {entry.ledger}
+                            </span>
                           </div>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{tx?.description}</p>
+                          <p className="text-sm font-medium text-gray-900 mt-1">{tx?.description || "Ledger adjustment"}</p>
                         </div>
                         <span className="text-xs text-gray-400">{formatDate(tx?.date)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-                        <span className="text-xs text-gray-500">Gross Amount: <span className="text-gray-900 font-medium">{formatCurrency(comp.amount)}</span></span>
+                        <span className="text-xs text-gray-500">
+                          Base Amount: <span className="text-gray-900 font-medium">{formatCurrency(entry.baseAmount)}</span>
+                        </span>
                         <div className="text-right">
                           <span className="text-xs text-gray-500 block">Tax Impact</span>
-                          <span className="text-sm font-mono font-bold text-gray-900">{formatCurrency(comp.totalTax)}</span>
+                          <span className="text-sm font-mono font-bold text-gray-900">{formatCurrency(entry.taxAmount)}</span>
                         </div>
                       </div>
                     </div>
@@ -568,24 +586,30 @@ export default function TaxWorkspacePage() {
               <h2 className="font-semibold text-gray-900">Statutory Schedules</h2>
               <p className="text-xs text-gray-500 mt-0.5">Upcoming tax filing obligations</p>
             </div>
-            {snapshot.schedules.length === 0 ? (
+            {schedules.length === 0 ? (
               <div className="px-6 py-12 text-center text-gray-400">
                 <p>No active schedules generated</p>
               </div>
             ) : (
               <div>
                 <div className="divide-y divide-gray-100">
-                  {snapshot.schedules.slice().reverse().map((schedule) => (
+                  {schedules.slice().reverse().map((schedule) => {
+                    const status = complianceStatuses.find(
+                      (item) => item.period === schedule.period && item.taxType === schedule.taxType
+                    );
+                    return (
                     <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
-                          <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">{schedule.status}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">
+                            {status?.stage || schedule.status}
+                          </span>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.taxAmount)}</p>
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.totalTax)}</p>
                         <button
                           type="button"
                           onClick={() => handleGenerateRemittance(schedule)}
@@ -593,9 +617,72 @@ export default function TaxWorkspacePage() {
                         >
                           Generate Remittance
                         </button>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateFilingPack(schedule, "pdf")}
+                            className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
+                          >
+                            Download PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateFilingPack(schedule, "csv")}
+                            className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
+                          >
+                            Export CSV
+                          </button>
+                        </div>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <select
+                            value={status?.stage || schedule.status}
+                            onChange={(event) => {
+                              setComplianceStatus({
+                                entityId: "entity-default",
+                                period: schedule.period,
+                                taxType: schedule.taxType,
+                                stage: event.target.value as ComplianceStatusStage,
+                                actor: "user",
+                              });
+                              setComplianceStatuses(loadComplianceStatuses());
+                            }}
+                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600"
+                          >
+                            {["draft", "review", "ready", "filed", "paid", "reconciled"].map((stage) => (
+                              <option key={stage} value={stage}>
+                                {stage}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              recordPayment({
+                                entityId: "entity-default",
+                                period: schedule.period,
+                                taxType: schedule.taxType,
+                                amount: schedule.totalTax,
+                                actor: "user",
+                              });
+                              setComplianceStatus({
+                                entityId: "entity-default",
+                                period: schedule.period,
+                                taxType: schedule.taxType,
+                                stage: "paid",
+                                actor: "user",
+                              });
+                              setComplianceStatuses(loadComplianceStatuses());
+                              setPayments(loadPayments());
+                            }}
+                            className="text-xs px-2 py-1 rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50"
+                          >
+                            Mark Paid
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="border-t border-gray-100 px-4 py-4 bg-gray-50/40">
@@ -660,15 +747,15 @@ export default function TaxWorkspacePage() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Output VAT collected</span>
-                    <span className="font-mono text-gray-900">{formatCurrency(summary.totalVAT)}</span>
+                    <span className="font-mono text-gray-900">{formatCurrency(taxSummary.outputVAT)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Input VAT credit</span>
-                    <span className="font-mono text-gray-900">({formatCurrency(summary.inputVATCredit)})</span>
+                    <span className="font-mono text-gray-900">({formatCurrency(taxSummary.inputVAT)})</span>
                   </div>
                   <div className="pt-2 border-t border-indigo-200/50 flex justify-between font-bold text-indigo-900">
                     <span>Net Payable</span>
-                    <span>{formatCurrency(summary.netVATPayable)}</span>
+                    <span>{formatCurrency(taxSummary.netVAT)}</span>
                   </div>
                 </div>
               </div>
@@ -684,17 +771,36 @@ export default function TaxWorkspacePage() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Turnover</span>
-                    <span className="font-mono text-gray-900">{formatCurrency(derivedStats.turnover)}</span>
+                    <span className="font-mono text-gray-900">{formatCurrency(taxSummary.turnover)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Est. Profit</span>
-                    <span className="font-mono text-gray-900">{formatCurrency(derivedStats.profit)}</span>
+                    <span className="font-mono text-gray-900">{formatCurrency(taxSummary.profit)}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
                     <span>Estimated Liability</span>
-                    <span>{formatCurrency(derivedStats.estimatedCIT)}</span>
+                    <span>{formatCurrency(taxSummary.estimatedCIT)}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+            <div className="px-6 pb-6">
+              <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-rose-900">Compliance Issues</h3>
+                  <span className="text-xs text-rose-600">{issues.length} open item(s)</span>
+                </div>
+                {issues.length === 0 ? (
+                  <p className="text-sm text-rose-700">No issues flagged. Your schedules reconcile with ledger entries.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {issues.slice(0, 4).map((issue) => (
+                      <div key={issue.id} className="rounded-lg bg-white border border-rose-100 px-3 py-2 text-sm text-rose-700">
+                        {issue.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -703,7 +809,7 @@ export default function TaxWorkspacePage() {
         {/* Documents Tab - Repurposed drag & drop area */}
         {activeTab === 'documents' && (
           <div
-            className={`flex flex - col items - center justify - center p - 12 transition - colors ${dragActive ? 'bg-blue-50' : 'bg-white'} `}
+            className={`flex flex-col items-center justify-center p-12 transition-colors ${dragActive ? "bg-blue-50" : "bg-white"}`}
             onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
             onDragOver={(e) => e.preventDefault()}
             onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
@@ -768,6 +874,65 @@ export default function TaxWorkspacePage() {
                 </div>
               </div>
             )}
+
+            <div className="mt-12 w-full max-w-4xl">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-gray-900">Filing Packs</h4>
+                    <span className="text-xs text-gray-400">{filingPacks.length} generated</span>
+                  </div>
+                  {filingPacks.length === 0 ? (
+                    <p className="text-xs text-gray-500 mt-3">No filing packs generated yet.</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {filingPacks.slice(0, 5).map((pack) => (
+                        <div key={pack.id} className="p-2 rounded-lg border border-gray-100 bg-gray-50/60">
+                          <p className="text-xs font-medium text-gray-900">{pack.taxType} • {pack.period}</p>
+                          <p className="text-[11px] text-gray-500">{pack.fileName}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-gray-900">Audit Log</h4>
+                    <span className="text-xs text-gray-400">{auditLogs.length} entries</span>
+                  </div>
+                  {auditLogs.length === 0 ? (
+                    <p className="text-xs text-gray-500 mt-3">No audit activity logged yet.</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {auditLogs.slice(0, 5).map((log) => (
+                        <div key={log.id} className="p-2 rounded-lg border border-gray-100 bg-gray-50/60">
+                          <p className="text-xs font-medium text-gray-900">{log.action}</p>
+                          <p className="text-[11px] text-gray-500">{new Date(log.createdAt).toLocaleString("en-NG")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-gray-900">Payments</h4>
+                  <span className="text-xs text-gray-400">{payments.length} records</span>
+                </div>
+                {payments.length === 0 ? (
+                  <p className="text-xs text-gray-500 mt-3">No payments recorded yet.</p>
+                ) : (
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {payments.slice(0, 6).map((payment) => (
+                      <div key={payment.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/60">
+                        <p className="text-xs font-semibold text-gray-900">{payment.taxType} • {payment.period}</p>
+                        <p className="text-[11px] text-gray-500">{formatCurrency(payment.amount)} • {payment.status}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

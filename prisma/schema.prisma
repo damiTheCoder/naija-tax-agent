@@ -319,3 +319,450 @@ model PayrollEntry {
   employee   Employee   @relation(fields: [employeeId], references: [id])
 }
 
+// ============================================================================
+// TAX COMPLIANCE ENGINE - Core Accounting + Tax Models
+// SQLite compatible (no enums - using String with defaults)
+// ============================================================================
+
+model Entity {
+  id        String   @id @default(cuid())
+  companyId String?
+  name      String
+  taxId     String?
+  type      String   @default("BUSINESS") // BUSINESS | INDIVIDUAL
+  currency  String   @default("NGN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company             Company?              @relation(fields: [companyId], references: [id])
+  transactions        Transaction[]
+  invoices            Invoice[]
+  bills               Bill[]
+  payments            Payment[]
+  vendors             Vendor[]
+  customers           Customer[]
+  chartOfAccounts     ChartOfAccount[]
+  taxRuleSets         TaxRuleSet[]
+  taxCategories       TaxCategory[]
+  taxRules            TaxRule[]
+  taxClassifications  TaxClassification[]
+  taxLedgerEntries    TaxLedgerEntry[]
+  taxPeriods          TaxPeriod[]
+  taxSchedules        TaxSchedule[]
+  complianceDeadlines ComplianceDeadline[]
+  complianceStatuses  ComplianceStatus[]
+  taxFilingPackages   TaxFilingPackage[]
+  taxPayments         TaxPayment[]
+  taxReconciliations  TaxReconciliation[]
+  auditLogs           AuditLog[]
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  entityId    String
+  date        DateTime
+  description String
+  amount      Float
+  currency    String   @default("NGN")
+  type        String   @default("general") // sale | purchase | expense | asset_disposal | payroll | etc.
+  source      String?  // accounting | import | api | manual
+  status      String   @default("posted") // draft | posted | voided
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entity             Entity              @relation(fields: [entityId], references: [id])
+  taxClassifications TaxClassification[]
+  taxLedgerEntries   TaxLedgerEntry[]
+
+  @@index([entityId, date])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  entityId    String
+  customerId  String?
+  invoiceNo   String
+  date        DateTime
+  dueDate     DateTime?
+  status      String   @default("draft") // draft | issued | paid | voided
+  currency    String   @default("NGN")
+  subtotal    Float    @default(0)
+  taxTotal    Float    @default(0)
+  total       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entity   Entity       @relation(fields: [entityId], references: [id])
+  customer Customer?    @relation(fields: [customerId], references: [id])
+  lines    InvoiceLine[]
+  payments Payment[]
+
+  @@index([entityId, date])
+  @@index([invoiceNo])
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float   @default(0)
+  taxRate     Float   @default(0)
+  taxAmount   Float   @default(0)
+  total       Float   @default(0)
+  metadata    Json?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Bill {
+  id        String   @id @default(cuid())
+  entityId  String
+  vendorId  String?
+  billNo    String
+  date      DateTime
+  dueDate   DateTime?
+  status    String   @default("draft") // draft | received | paid | voided
+  currency  String   @default("NGN")
+  subtotal  Float    @default(0)
+  taxTotal  Float    @default(0)
+  total     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity   Entity    @relation(fields: [entityId], references: [id])
+  vendor   Vendor?   @relation(fields: [vendorId], references: [id])
+  lines    BillLine[]
+  payments Payment[]
+
+  @@index([entityId, date])
+  @@index([billNo])
+}
+
+model BillLine {
+  id          String  @id @default(cuid())
+  billId      String
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float   @default(0)
+  taxRate     Float   @default(0)
+  taxAmount   Float   @default(0)
+  total       Float   @default(0)
+  metadata    Json?
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  entityId  String
+  invoiceId String?
+  billId    String?
+  date      DateTime
+  amount    Float
+  method    String   @default("bank_transfer")
+  reference String?
+  status    String   @default("completed") // pending | completed | failed
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  entity  Entity   @relation(fields: [entityId], references: [id])
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+  bill    Bill?    @relation(fields: [billId], references: [id])
+
+  @@index([entityId, date])
+}
+
+model Vendor {
+  id        String   @id @default(cuid())
+  entityId  String
+  name      String
+  type      String   @default("corporate") // corporate | individual
+  taxId     String?
+  email     String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id])
+  bills  Bill[]
+
+  @@index([entityId, name])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  entityId  String
+  name      String
+  taxId     String?
+  email     String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  entity   Entity   @relation(fields: [entityId], references: [id])
+  invoices Invoice[]
+
+  @@index([entityId, name])
+}
+
+model ChartOfAccount {
+  id          String   @id @default(cuid())
+  entityId    String
+  code        String
+  name        String
+  type        String   @default("expense") // asset | liability | equity | income | expense
+  category    String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id])
+
+  @@unique([entityId, code])
+}
+
+model TaxRuleSet {
+  id            String   @id @default(cuid())
+  entityId      String
+  version       String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  status        String   @default("active") // draft | active | retired
+  source        String   @default("internal") // internal | external
+  createdAt     DateTime @default(now())
+
+  entity        Entity    @relation(fields: [entityId], references: [id])
+  rules         TaxRule[]
+  schedules     TaxSchedule[]
+  ledgerEntries TaxLedgerEntry[]
+
+  @@index([entityId, version])
+}
+
+model TaxCategory {
+  id          String   @id @default(cuid())
+  entityId    String
+  name        String
+  taxType     String   // VAT | WHT | CIT | CGT | STAMP
+  description String?
+  createdAt   DateTime @default(now())
+
+  entity          Entity             @relation(fields: [entityId], references: [id])
+  rules           TaxRule[]
+  classifications TaxClassification[]
+
+  @@index([entityId, taxType])
+}
+
+model TaxRule {
+  id         String   @id @default(cuid())
+  entityId   String
+  ruleSetId  String
+  categoryId String?
+  taxType    String
+  name       String
+  rate       Float    @default(0)
+  rateType   String   @default("percentage") // percentage | fixed
+  priority   Int      @default(0)
+  conditions Json?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  entity      Entity       @relation(fields: [entityId], references: [id])
+  ruleSet     TaxRuleSet   @relation(fields: [ruleSetId], references: [id])
+  category    TaxCategory? @relation(fields: [categoryId], references: [id])
+  ledgerLines TaxLedgerEntry[]
+  classifications TaxClassification[]
+
+  @@index([ruleSetId, taxType])
+}
+
+model TaxClassification {
+  id            String   @id @default(cuid())
+  entityId      String
+  transactionId String
+  taxType       String
+  categoryId    String?
+  ruleId        String?
+  confidence    Float    @default(0.6)
+  status        String   @default("auto") // auto | manual
+  reason        String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entity      Entity       @relation(fields: [entityId], references: [id])
+  transaction Transaction  @relation(fields: [transactionId], references: [id])
+  category    TaxCategory? @relation(fields: [categoryId], references: [id])
+  rule        TaxRule?     @relation(fields: [ruleId], references: [id])
+
+  @@index([entityId, taxType])
+  @@index([transactionId, taxType])
+}
+
+model TaxLedgerEntry {
+  id            String   @id @default(cuid())
+  entityId      String
+  transactionId String?
+  taxType       String
+  ruleSetId     String
+  ruleId        String?
+  categoryId    String?
+  periodId      String?
+  baseAmount    Float    @default(0)
+  taxAmount     Float    @default(0)
+  direction     String   @default("payable") // payable | credit
+  ledger        String   @default("output") // output | input | adjustment
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  entity      Entity        @relation(fields: [entityId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  ruleSet     TaxRuleSet    @relation(fields: [ruleSetId], references: [id])
+  rule        TaxRule?      @relation(fields: [ruleId], references: [id])
+  category    TaxCategory?  @relation(fields: [categoryId], references: [id])
+  period      TaxPeriod?    @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+  @@index([periodId, taxType])
+}
+
+model TaxPeriod {
+  id        String   @id @default(cuid())
+  entityId  String
+  period    String   // 2026-Q1, 2026-01, 2026-FY
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("open") // open | closed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity        Entity           @relation(fields: [entityId], references: [id])
+  schedules     TaxSchedule[]
+  ledgerEntries TaxLedgerEntry[]
+  complianceDeadlines ComplianceDeadline[]
+  complianceStatuses  ComplianceStatus[]
+  taxFilingPackages   TaxFilingPackage[]
+  taxPayments         TaxPayment[]
+  taxReconciliations  TaxReconciliation[]
+
+  @@index([entityId, period])
+}
+
+model TaxSchedule {
+  id           String   @id @default(cuid())
+  entityId     String
+  periodId     String
+  ruleSetId    String
+  taxType      String
+  dueDate      DateTime
+  status       String   @default("draft") // draft | review | ready | filed | paid | reconciled
+  totalBase    Float    @default(0)
+  totalTax     Float    @default(0)
+  carryForward Float    @default(0)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  entity     Entity     @relation(fields: [entityId], references: [id])
+  period     TaxPeriod  @relation(fields: [periodId], references: [id])
+  ruleSet    TaxRuleSet @relation(fields: [ruleSetId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model ComplianceDeadline {
+  id        String   @id @default(cuid())
+  entityId  String
+  periodId  String
+  taxType   String
+  dueDate   DateTime
+  status    String   @default("open") // open | overdue | closed
+  createdAt DateTime @default(now())
+
+  entity Entity    @relation(fields: [entityId], references: [id])
+  period TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model ComplianceStatus {
+  id        String   @id @default(cuid())
+  entityId  String
+  periodId  String
+  taxType   String
+  stage     String   @default("draft") // draft | review | ready | filed | paid | reconciled
+  updatedAt DateTime @updatedAt
+
+  entity Entity    @relation(fields: [entityId], references: [id])
+  period TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model TaxFilingPackage {
+  id          String   @id @default(cuid())
+  entityId    String
+  periodId    String
+  taxType     String
+  format      String   @default("pdf") // pdf | xlsx | csv
+  fileUrl     String?
+  status      String   @default("generated") // generated | sent | archived
+  metadata    Json?
+  generatedAt DateTime @default(now())
+
+  entity Entity    @relation(fields: [entityId], references: [id])
+  period TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model TaxPayment {
+  id        String   @id @default(cuid())
+  entityId  String
+  periodId  String
+  taxType   String
+  amount    Float
+  paidAt    DateTime?
+  method    String   @default("bank_transfer")
+  reference String?
+  status    String   @default("pending") // pending | paid | failed
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  entity Entity    @relation(fields: [entityId], references: [id])
+  period TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model TaxReconciliation {
+  id        String   @id @default(cuid())
+  entityId  String
+  periodId  String
+  taxType   String
+  status    String   @default("open") // open | matched | mismatch
+  summary   Json?
+  createdAt DateTime @default(now())
+
+  entity Entity    @relation(fields: [entityId], references: [id])
+  period TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([entityId, taxType])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  entityId     String
+  actor        String   @default("system")
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id])
+
+  @@index([entityId, action])
+}

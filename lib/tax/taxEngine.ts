@@ -69,7 +69,18 @@ export interface TaxComputationResult {
 
 export interface TaxScheduleEntry {
   id: string;
-  taxType: "VAT" | "WHT" | "CIT" | "PIT" | "CGT" | "STAMP_DUTY" | "TET" | "POLICE_LEVY" | "NASENI" | "OTHER";
+  taxType:
+    | "VAT"
+    | "WHT"
+    | "CIT"
+    | "PIT"
+    | "CGT"
+    | "STAMP_DUTY"
+    | "TET"
+    | "POLICE_LEVY"
+    | "NASENI"
+    | "DEV_LEVY"
+    | "OTHER";
   period: string;  // e.g., "2025-Q1", "2025"
   grossAmount: number;
   taxAmount: number;
@@ -498,7 +509,7 @@ class TaxEngine {
       return `${year}-${String(month + 1).padStart(2, "0")}-21`;
     }
     // CIT/PIT due 6 months after year end
-    if (taxType === "CIT" || taxType === "PIT") {
+    if (taxType === "CIT" || taxType === "PIT" || taxType === "DEV_LEVY") {
       return `${parseInt(year) + 1}-06-30`;
     }
     // CGT due 30 days after disposal

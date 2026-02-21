@@ -4,6 +4,15 @@ import { accountingEngine, parseTransactionFromChatWithAI } from "@/lib/accounti
 import type { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { detectTaxType, taxEngine, type TaxTransactionType } from "@/lib/tax/taxEngine";
 import {
+  run_tax_computation,
+  generate_schedule as generateTaxSchedule,
+  list_issues as listTaxIssues,
+  apply_classification_rules as applyTaxClassificationRules,
+  generate_filing_pack as generateTaxFilingPack,
+  reconcile_tax as reconcileTaxReport,
+} from "@/lib/tax/compliance/agent";
+import type { TaxType as ComplianceTaxType } from "@/lib/tax/compliance/types";
+import {
   walletEngine,
   generateFundingResponse,
   generateTransferResponse,
@@ -26,6 +35,12 @@ const AGENT_MEMORY_MAX_ITEMS = 40;
 const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
   "accounting.postTransaction",
   "tax.recordTransaction",
+  "tax.runComputation",
+  "tax.generateSchedule",
+  "tax.listIssues",
+  "tax.applyClassificationRules",
+  "tax.generateFilingPack",
+  "tax.reconcile",
   "wallet.sendMoney",
   "wallet.fund",
   "projections.updateAssumption",
@@ -238,6 +253,99 @@ function toMetricNumber(value: string): number | null {
   if (!match) return null;
   const parsed = Number(match[0]);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCompactNumber(value: number): string {
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "")}t`;
+  if (absolute >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}b`;
+  if (absolute >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
+  return Math.round(value).toLocaleString("en-NG");
+}
+
+function formatCompactNaira(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "n/a";
+  const sign = value < 0 ? "-" : "";
+  const formatted = formatCompactNumber(Math.abs(value));
+  return `${sign}₦${formatted}`;
+}
+
+function formatSnapshotPercent(raw: string): string {
+  if (!raw) return "n/a";
+  if (/%/.test(raw)) return raw;
+  const value = toMetricNumber(raw);
+  if (value === null) return raw;
+  if (Math.abs(value) <= 1) return `${(value * 100).toFixed(2)}%`;
+  return `${value.toFixed(2)}%`;
+}
+
+function looksLikeProjectionSnapshotQuestion(message: string): boolean {
+  const lower = message.toLowerCase();
+  return /\b(projection|forecast|model|analysis|insight|summary|trend|revenue|profit|margin|runway|cash|break[- ]?even)\b/.test(
+    lower
+  );
+}
+
+function looksLikeProjectionAssumptionChange(message: string): boolean {
+  const lower = message.toLowerCase();
+  const verb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
+  const target = /(assumption|growth|cogs|baseline|collection|disbursement|marketing|opex|expense)/.test(lower);
+  return verb && target;
+}
+
+function buildProjectionSnapshotReply(contextSnapshot: string): string {
+  if (!contextSnapshot.trim()) {
+    return "Open the projections dashboard so I can read the live metrics first.";
+  }
+
+  const modelName = extractSnapshotMetric(contextSnapshot, "Financial Modelling");
+  const updatedAt = extractSnapshotMetric(contextSnapshot, "Updated at");
+
+  if (modelName) {
+    const summary = extractSnapshotMetric(contextSnapshot, "Summary");
+    const topMetrics = extractSnapshotMetric(contextSnapshot, "Top metrics");
+    const inputs = extractSnapshotMetric(contextSnapshot, "Key inputs");
+    const header = updatedAt ? `Model snapshot (updated ${updatedAt}): ${modelName}` : `Model snapshot: ${modelName}`;
+    const lines = [summary && `Summary: ${summary}`, topMetrics && `Top metrics: ${topMetrics}`, inputs && `Key inputs: ${inputs}`].filter(
+      Boolean
+    );
+    return [header, ...lines].join("\n");
+  }
+
+  const annualRevenue = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Projected annual revenue"));
+  const netProfit6m = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Projected net profit \\(6M\\)"));
+  const grossMargin = extractSnapshotMetric(contextSnapshot, "Projected gross margin");
+  const burnRate = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Burn rate"));
+  const cashBalance = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Projected cash balance"));
+  const runway = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Runway months"));
+  const breakEven = extractSnapshotMetric(contextSnapshot, "Break-even month");
+  const recentWindow = extractSnapshotMetric(contextSnapshot, "Recent window");
+  const recentAvgRevenue = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Recent avg revenue"));
+  const recentAvgNet = toMetricNumber(extractSnapshotMetric(contextSnapshot, "Recent avg net profit"));
+
+  const header = updatedAt ? `Current projections snapshot (updated ${updatedAt}):` : "Current projections snapshot:";
+  const lines = [
+    `Annual revenue (projected): ${formatCompactNaira(annualRevenue)}`,
+    `Net profit (next 6M): ${formatCompactNaira(netProfit6m)}`,
+    `Gross margin: ${formatSnapshotPercent(grossMargin)}`,
+    `Burn rate: ${burnRate && burnRate > 0 ? formatCompactNaira(burnRate) : "No burn"}`,
+    `Projected cash balance: ${formatCompactNaira(cashBalance)}`,
+    `Runway: ${runway ? `${Math.round(runway)} months` : "n/a"}`,
+    `Break-even: ${breakEven || "n/a"}`,
+  ];
+
+  if (recentWindow) {
+    const recentBits = [
+      `Recent window: ${recentWindow}`,
+      recentAvgRevenue ? `Avg revenue ${formatCompactNaira(recentAvgRevenue)}` : "",
+      recentAvgNet ? `Avg net ${formatCompactNaira(recentAvgNet)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    lines.push(recentBits);
+  }
+
+  return `${header}\n${lines.map((line) => `- ${line}`).join("\n")}`;
 }
 
 function buildProjectionHealthReply(contextSnapshot: string): string {
@@ -457,6 +565,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     );
   const taxIntent = /\b(vat|wht|cgt|tax|firs|stamp|withholding)\b/.test(lower);
   const cashflowIntent = /\b(cashflow|cash flow|runway|burn)\b/.test(lower);
+  const complianceIntent = /\b(compute tax|run tax|tax computation|generate schedule|filing pack|reconcile|list issues|classification)\b/.test(lower);
   const projectionAdjustmentVerb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
   const projectionAssumptionIntent =
     projectionAdjustmentVerb && /(assumption|growth|cogs|baseline|collection|disbursement|marketing|opex|expense)/.test(lower);
@@ -533,7 +642,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     });
   }
 
-  if ((taxIntent || moduleId === "tax") && amount) {
+  if ((taxIntent || moduleId === "tax") && amount && !complianceIntent) {
     actions.push({
       type: "tax.recordTransaction",
       payload: {
@@ -543,6 +652,68 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
       confidence: 0.64,
       reason: "Detected tax transaction instruction",
     });
+  }
+
+  if (moduleId === "tax" && complianceIntent) {
+    const periodMatch = message.match(/(20\\d{2}-Q[1-4]|20\\d{2}-\\d{2}|20\\d{2})/i);
+    const taxTypeMatch = message.match(/\\b(vat|wht|cgt|cit|stamp)\\b/i);
+    const period = periodMatch ? periodMatch[1].toUpperCase() : "current";
+    const taxType = taxTypeMatch ? taxTypeMatch[1].toUpperCase() : undefined;
+
+    if (/compute tax|run tax|tax computation/.test(lower)) {
+      actions.push({
+        type: "tax.runComputation",
+        payload: { period, taxTypes: taxType ? [taxType] : undefined },
+        confidence: 0.72,
+        reason: "Detected tax computation request",
+      });
+    }
+
+    if (/apply classification|classification rules/.test(lower)) {
+      actions.push({
+        type: "tax.applyClassificationRules",
+        payload: { period },
+        confidence: 0.7,
+        reason: "Detected classification rule request",
+      });
+    }
+
+    if (/list issues|issues/.test(lower)) {
+      actions.push({
+        type: "tax.listIssues",
+        payload: { period },
+        confidence: 0.7,
+        reason: "Detected tax issues request",
+      });
+    }
+
+    if (/generate schedule|schedule/.test(lower) && taxType) {
+      actions.push({
+        type: "tax.generateSchedule",
+        payload: { period, taxType },
+        confidence: 0.7,
+        reason: "Detected schedule generation request",
+      });
+    }
+
+    if (/filing pack|export|download/.test(lower) && taxType) {
+      const format = /csv/.test(lower) ? "csv" : /xlsx/.test(lower) ? "xlsx" : "pdf";
+      actions.push({
+        type: "tax.generateFilingPack",
+        payload: { period, taxType, format },
+        confidence: 0.68,
+        reason: "Detected filing pack request",
+      });
+    }
+
+    if (/reconcile/.test(lower) && taxType) {
+      actions.push({
+        type: "tax.reconcile",
+        payload: { period, taxType },
+        confidence: 0.7,
+        reason: "Detected reconciliation request",
+      });
+    }
   }
 
   if (cashflowIntent) {
@@ -1248,6 +1419,137 @@ function executeNavigate(action: UnifiedAgentAction): UnifiedActionExecutionResu
   };
 }
 
+function normalizeComplianceTaxType(value?: string): string | null {
+  if (!value) return null;
+  const upper = value.toUpperCase();
+  if (upper.includes("VAT")) return "VAT";
+  if (upper.includes("WHT") || upper.includes("WITHHOLD")) return "WHT";
+  if (upper.includes("CIT")) return "CIT";
+  if (upper.includes("CGT")) return "CGT";
+  if (upper.includes("STAMP")) return "STAMP";
+  return null;
+}
+
+function normalizeTaxTypes(value?: unknown): string[] | undefined {
+  if (!value) return undefined;
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeComplianceTaxType(String(item))).filter((item): item is string => Boolean(item));
+  }
+  const single = normalizeComplianceTaxType(String(value));
+  return single ? [single] : undefined;
+}
+
+async function executeTaxRunComputation(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period, "current");
+  const taxTypes = normalizeTaxTypes(payload.taxTypes) as ComplianceTaxType[] | undefined;
+  const result = await run_tax_computation(entityId, period, taxTypes);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Tax computation completed.",
+    data: result?.data,
+  };
+}
+
+async function executeTaxGenerateSchedule(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period);
+  const taxType = normalizeComplianceTaxType(toText(payload.taxType));
+  if (!period || !taxType) {
+    return {
+      type: action.type,
+      success: false,
+      message: "tax_type and period are required to generate a schedule.",
+    };
+  }
+  const result = await generateTaxSchedule(entityId, period, taxType as ComplianceTaxType);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Schedule generated.",
+    data: result?.data,
+  };
+}
+
+async function executeTaxListIssues(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period);
+  if (!period) {
+    return {
+      type: action.type,
+      success: false,
+      message: "period is required to list issues.",
+    };
+  }
+  const result = await listTaxIssues(entityId, period);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Issue list ready.",
+    data: result?.data,
+  };
+}
+
+async function executeTaxApplyClassification(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period, undefined);
+  const result = await applyTaxClassificationRules(entityId, period);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Classification rules applied.",
+    data: result?.data,
+  };
+}
+
+async function executeTaxGenerateFilingPack(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period);
+  const taxType = normalizeComplianceTaxType(toText(payload.taxType));
+  const format = toText(payload.format, "pdf").toLowerCase() as "pdf" | "csv" | "xlsx";
+  if (!period || !taxType) {
+    return {
+      type: action.type,
+      success: false,
+      message: "period and tax_type are required to generate a filing pack.",
+    };
+  }
+  const result = await generateTaxFilingPack(entityId, period, taxType as ComplianceTaxType, format);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Filing pack generated.",
+    data: result?.data,
+  };
+}
+
+async function executeTaxReconcile(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const entityId = toText(payload.entityId, "entity-default");
+  const period = toText(payload.period);
+  const taxType = normalizeComplianceTaxType(toText(payload.taxType));
+  if (!period || !taxType) {
+    return {
+      type: action.type,
+      success: false,
+      message: "period and tax_type are required to reconcile.",
+    };
+  }
+  const result = await reconcileTaxReport(entityId, period, taxType as ComplianceTaxType);
+  return {
+    type: action.type,
+    success: Boolean(result?.success),
+    message: result?.message || "Reconciliation complete.",
+    data: result?.data,
+  };
+}
+
 export async function executeUnifiedAgentActions(
   actions: UnifiedAgentAction[],
   options?: {
@@ -1263,6 +1565,18 @@ export async function executeUnifiedAgentActions(
         results.push(await executeAccountingPost(action));
       } else if (action.type === "tax.recordTransaction") {
         results.push(executeTaxPost(action));
+      } else if (action.type === "tax.runComputation") {
+        results.push(await executeTaxRunComputation(action));
+      } else if (action.type === "tax.generateSchedule") {
+        results.push(await executeTaxGenerateSchedule(action));
+      } else if (action.type === "tax.listIssues") {
+        results.push(await executeTaxListIssues(action));
+      } else if (action.type === "tax.applyClassificationRules") {
+        results.push(await executeTaxApplyClassification(action));
+      } else if (action.type === "tax.generateFilingPack") {
+        results.push(await executeTaxGenerateFilingPack(action));
+      } else if (action.type === "tax.reconcile") {
+        results.push(await executeTaxReconcile(action));
       } else if (action.type === "wallet.sendMoney") {
         results.push(await executeWalletSend(action));
       } else if (action.type === "wallet.fund") {
@@ -1514,6 +1828,7 @@ export async function runUnifiedAgentMessage(params: {
   const trimmedMessage = params.message.trim();
   const moduleId = normalizeModuleId(params.module);
   const objective = trimmedMessage;
+  const snapshot = typeof params.contextSnapshot === "string" ? params.contextSnapshot : "";
 
   if (pendingUiApproval && isCancelMessage(trimmedMessage)) {
     pendingUiApproval = null;
@@ -1550,6 +1865,23 @@ export async function runUnifiedAgentMessage(params: {
       execution,
       navigateTo,
       planSource: approval.planSource,
+    };
+  }
+
+  if (
+    moduleId === "projections" &&
+    snapshot.trim() &&
+    looksLikeProjectionSnapshotQuestion(trimmedMessage) &&
+    !looksLikeProjectionAssumptionChange(trimmedMessage)
+  ) {
+    const reply = buildProjectionSnapshotReply(snapshot);
+    return {
+      finalReply: reply,
+      baseReply: reply,
+      actions: [],
+      execution: [],
+      navigateTo: undefined,
+      planSource: "fallback",
     };
   }
 

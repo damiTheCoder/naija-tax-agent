@@ -107,7 +107,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto mt-2">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
+            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Financial Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           {navItems.map((item) => {
             // Exact match or exact path match (not startsWith to avoid /accounting matching /accounting/workspace)
@@ -135,7 +135,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 {/* Icon */}
                 <span className={`w-5 h-5 flex items-center justify-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
                   {isNavigating ? (
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                    <div className="w-3.5 h-3.5 rounded-full bg-white/20 animate-pulse" />
                   ) : (
                     <NavIconBadge icon={item.icon} className="w-4 h-4" />
                   )}
@@ -215,7 +215,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-hidden">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
-            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Treasury Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
+            {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Financial Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
           <button
             onClick={() => {
@@ -260,11 +260,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 `}
               >
                 {isNavigating && (
-                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  <div className="w-5 h-5 rounded-full bg-white/30 animate-pulse" />
                 )}
                 <span>{item.label}</span>
                 {isNavigating && (
-                  <span className="ml-auto text-xs opacity-60">Loading...</span>
+                  <span className="ml-auto h-2 w-12 rounded-full bg-white/20 animate-pulse" />
                 )}
               </button>
             );

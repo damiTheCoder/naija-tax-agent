@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense, useRef } from "react";
+import { useState, Suspense } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,58 +16,12 @@ import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import UserModeExperience from "@/components/UserModeExperience";
+import PageSkeleton from "@/components/PageSkeleton";
 
 const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
   ssr: false,
   loading: () => null,
 });
-
-// Skeleton loading component - shows placeholder shapes instead of spinner
-function PageLoadingSpinner() {
-  return (
-    <div className="min-h-[60vh] px-4 py-6 space-y-5">
-      {/* Header pill - centered */}
-      <div className="flex justify-center">
-        <div className="h-6 w-24 rounded-full bg-gray-300 dark:bg-gray-600" />
-      </div>
-
-      {/* Row with circle, text lines, and circle */}
-      <div className="flex items-center gap-3 pt-2">
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3 w-28 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-          <div className="h-2 w-16 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        </div>
-        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-      </div>
-
-      {/* Content bars - varying widths */}
-      <div className="space-y-3 pt-2">
-        <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        <div className="h-3 w-3/4 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        <div className="h-3 w-1/3 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-      </div>
-
-      {/* Search/input bar skeleton */}
-      <div className="h-12 w-full rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
-
-      {/* Large card skeleton */}
-      <div className="h-32 w-full rounded-2xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
-
-      {/* Bottom row - label and two cards */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <div className="h-3 w-20 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-          <div className="h-3 w-16 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="h-20 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
-          <div className="h-20 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -78,7 +32,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
   const { mode, mounted } = useMode();
-  const previousModeRef = useRef(mode);
+  const isModeMismatch = mounted && ((mode === "user" && !isPersonalRoute) || (mode === "enterprise" && isPersonalRoute));
 
   useEffect(() => {
     const routesToPrefetch = [
@@ -115,19 +69,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Navigate only when mode changes (do not override manual page navigation)
+  // Keep route aligned with experience mode to avoid cross-mode UI bleed.
   useEffect(() => {
     if (!mounted) return;
-
-    // Initialize previous mode after hydration without forcing a redirect.
-    if (previousModeRef.current === mode) {
-      return;
-    }
-
-    previousModeRef.current = mode;
-
     if (mode === "user") {
-      router.replace("/personal");
+      if (!pathname.startsWith("/personal")) router.replace("/personal");
     } else if (pathname.startsWith("/personal")) {
       router.replace("/accounting");
     }
@@ -137,6 +83,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'var(--cream)' }}>
         <main className="flex-1">{children}</main>
+      </div>
+    );
+  }
+
+  if (isModeMismatch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--app-bg)' }}>
+        <div className="w-full max-w-3xl">
+          <PageSkeleton />
+        </div>
       </div>
     );
   }
@@ -242,7 +198,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Page Content */}
         <main className="app-shell-content-main flex-1 px-2 py-4 lg:p-8">
           <div className="app-shell-content-container max-w-6xl mx-auto w-full">
-            <Suspense fallback={<PageLoadingSpinner />}>
+            <Suspense fallback={<PageSkeleton />}>
               {children}
             </Suspense>
           </div>

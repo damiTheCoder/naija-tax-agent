@@ -81,7 +81,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         : [
             { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
             { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
-            { id: "intelligence", label: "Treasury Management", items: INTELLIGENCE_NAV_ITEMS },
+            { id: "intelligence", label: "Financial Management", items: INTELLIGENCE_NAV_ITEMS },
             { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
             { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
         ];
@@ -173,7 +173,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                                     }}
                                                 >
                                                     {isNavigating ? (
-                                                        <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                                                        <div className="w-4 h-4 rounded-full bg-current/20 animate-pulse" />
                                                     ) : (
                                                         <NavIconBadge icon={item.icon} className="w-4 h-4" />
                                                     )}

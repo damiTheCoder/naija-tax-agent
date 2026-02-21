@@ -8,6 +8,12 @@ export interface AgentConversationMessage {
 export type UnifiedAgentActionType =
   | "accounting.postTransaction"
   | "tax.recordTransaction"
+  | "tax.runComputation"
+  | "tax.generateSchedule"
+  | "tax.listIssues"
+  | "tax.applyClassificationRules"
+  | "tax.generateFilingPack"
+  | "tax.reconcile"
   | "wallet.sendMoney"
   | "wallet.fund"
   | "cashflow.analyze"
