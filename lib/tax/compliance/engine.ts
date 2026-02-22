@@ -483,7 +483,7 @@ const computeCitLedger = (
     direction: "payable",
     ledger: "adjustment",
     createdAt: new Date().toISOString(),
-    metadata: reconciliation as Record<string, unknown>,
+    metadata: reconciliation as unknown as Record<string, unknown>,
   };
 
   const schedule: TaxSchedule = {
@@ -498,7 +498,7 @@ const computeCitLedger = (
     carryForward: 0,
     ruleSetId,
     ledgerEntryIds: [entry.id],
-    metadata: reconciliation as Record<string, unknown>,
+    metadata: reconciliation as unknown as Record<string, unknown>,
   };
 
   return { entries: [entry], schedule, reconciliation };

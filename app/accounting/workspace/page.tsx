@@ -18,13 +18,8 @@ function classifyJournalEntry(entry: JournalEntry): Exclude<JournalClass, "all">
   if (txType === "sale" || txType === "sale-return") return "sales";
   if (txType === "purchase" || txType === "purchase-return") return "purchase";
   if (txType === "expense") return "expense";
-  if (txType === "receipt" || txType === "payment" || txType === "transfer") return "cash";
 
-  const hasCashLine = entry.lines.some(
-    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
-  );
-  if (hasCashLine) return "cash";
-
+  // Prioritize account coding analysis over generic "hasCash" check
   const hasSalesLine = entry.lines.some((line) => line.accountCode.startsWith("4"));
   if (hasSalesLine) return "sales";
 
@@ -37,11 +32,18 @@ function classifyJournalEntry(entry: JournalEntry): Exclude<JournalClass, "all">
 
   const hasExpenseLine = entry.lines.some(
     (line) =>
-      line.accountCode.startsWith("5") ||
+      (line.accountCode.startsWith("5") && !line.accountCode.startsWith("50")) ||
       line.accountCode.startsWith("6") ||
       line.accountCode.startsWith("7")
   );
   if (hasExpenseLine) return "expense";
+
+  const hasCashLine = entry.lines.some(
+    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
+  );
+  if (hasCashLine) return "cash";
+
+  if (txType === "receipt" || txType === "payment" || txType === "transfer") return "cash";
 
   return "other";
 }
@@ -57,24 +59,26 @@ function formatJournalClassLabel(journalClass: Exclude<JournalClass, "all">): st
 function getJournalBookLabel(entry: JournalEntry): string {
   const classified = classifyJournalEntry(entry);
   const narration = entry.narration.toLowerCase();
-  const hasCashLine = entry.lines.some(
+
+  // Detect cash/bank movement details
+  const cashLines = entry.lines.filter(
     (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
   );
-  const hasRevenueCredit = entry.lines.some((line) => line.accountCode.startsWith("4") && line.credit > 0);
-  const hasExpenseDebit = entry.lines.some(
-    (line) =>
-      (line.accountCode.startsWith("5") || line.accountCode.startsWith("6") || line.accountCode.startsWith("7")) &&
-      line.debit > 0
-  );
+  const totalCashDebit = cashLines.reduce((sum, l) => sum + l.debit, 0);
+  const totalCashCredit = cashLines.reduce((sum, l) => sum + l.credit, 0);
+
+  const hasCashInflow = totalCashDebit > totalCashCredit;
+  const hasCashOutflow = totalCashCredit > totalCashDebit;
 
   if (classified === "sales") return "Sales Journal";
   if (classified === "purchase") return "Purchase Journal";
   if (classified === "expense") return "Expense Journal";
-  if (classified === "cash") {
-    if (hasCashLine && (hasRevenueCredit || /received|receipt|cash sale/.test(narration))) {
+
+  if (classified === "cash" || cashLines.length > 0) {
+    if (hasCashInflow || /received|receipt|cash sale/.test(narration)) {
       return "Cash Receipt Journal";
     }
-    if (hasCashLine && (hasExpenseDebit || /paid|payment|disburse|withdraw/.test(narration))) {
+    if (hasCashOutflow || /paid|payment|disburse|withdraw/.test(narration)) {
       return "Cash Payment Journal";
     }
     return "Cash Journal";
@@ -578,9 +582,8 @@ export default function WorkspacePage() {
                       <button
                         key={itemKey}
                         onClick={() => setJournalClass(itemKey)}
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                          active ? "bg-[#2264ff] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-[#2264ff] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
                       >
                         <span>{label}</span>
                         <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? "bg-white/20" : "bg-white"}`}>
@@ -645,13 +648,12 @@ export default function WorkspacePage() {
                               <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{journalLabel}</td>
                               <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">{formatCurrency(total)}</td>
                               <td className="px-2 py-3">
-                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  entry.status === "voided"
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${entry.status === "voided"
                                     ? "bg-red-100 text-red-700"
                                     : entry.status === "draft"
                                       ? "bg-amber-100 text-amber-700"
                                       : "bg-emerald-100 text-emerald-700"
-                                }`}>
+                                  }`}>
                                   {entry.status === "voided" ? "Voided" : entry.status === "draft" ? "Draft" : "Posted"}
                                 </span>
                               </td>
@@ -745,13 +747,12 @@ export default function WorkspacePage() {
                           </td>
                           <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">{formatCurrency(row.total)}</td>
                           <td className="px-2 py-3">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              row.status === "voided"
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "voided"
                                 ? "bg-red-100 text-red-700"
                                 : row.status === "draft"
                                   ? "bg-amber-100 text-amber-700"
                                   : "bg-emerald-100 text-emerald-700"
-                            }`}>
+                              }`}>
                               {row.status === "voided" ? "Voided" : row.status === "draft" ? "Draft" : "Posted"}
                             </span>
                           </td>

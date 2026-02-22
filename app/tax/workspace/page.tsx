@@ -13,6 +13,7 @@ import {
   type FilingPackResult,
   type AuditLogEntry,
   type ComplianceTransaction,
+  type ComplianceStatusStage,
 } from "@/lib/tax/compliance";
 import { generateFilingPack } from "@/lib/tax/compliance/filingPack";
 import { loadAuditLogs, loadFilingPacks, loadComplianceStatuses, loadPayments } from "@/lib/tax/compliance/store";
@@ -20,7 +21,6 @@ import {
   seedComplianceStatuses,
   setComplianceStatus,
   recordPayment,
-  type ComplianceStatusStage,
 } from "@/lib/tax/compliance/workflow";
 import { generateTaxRemittancePdf } from "@/lib/taxRemittancePdf";
 
@@ -509,11 +509,10 @@ export default function TaxWorkspacePage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap rounded-t-md ${
-                activeTab === tab.id
+              className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap rounded-t-md ${activeTab === tab.id
                   ? "border-[#2264ff] text-[#2264ff] bg-[#E8F4FF]"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
+                }`}
             >
               <span className="text-gray-400 shrink-0">{tab.icon}</span>
               <span>{tab.label}</span>
@@ -598,89 +597,89 @@ export default function TaxWorkspacePage() {
                       (item) => item.period === schedule.period && item.taxType === schedule.taxType
                     );
                     return (
-                    <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
-                          <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">
-                            {status?.stage || schedule.status}
-                          </span>
+                      <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
+                            <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">
+                              {status?.stage || schedule.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.totalTax)}</p>
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateRemittance(schedule)}
+                            className="text-xs text-[#2264ff] hover:underline font-medium mt-1"
+                          >
+                            Generate Remittance
+                          </button>
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateFilingPack(schedule, "pdf")}
+                              className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
+                            >
+                              Download PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateFilingPack(schedule, "csv")}
+                              className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
+                            >
+                              Export CSV
+                            </button>
+                          </div>
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <select
+                              value={status?.stage || schedule.status}
+                              onChange={(event) => {
+                                setComplianceStatus({
+                                  entityId: "entity-default",
+                                  period: schedule.period,
+                                  taxType: schedule.taxType,
+                                  stage: event.target.value as ComplianceStatusStage,
+                                  actor: "user",
+                                });
+                                setComplianceStatuses(loadComplianceStatuses());
+                              }}
+                              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600"
+                            >
+                              {["draft", "review", "ready", "filed", "paid", "reconciled"].map((stage) => (
+                                <option key={stage} value={stage}>
+                                  {stage}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                recordPayment({
+                                  entityId: "entity-default",
+                                  period: schedule.period,
+                                  taxType: schedule.taxType,
+                                  amount: schedule.totalTax,
+                                  actor: "user",
+                                });
+                                setComplianceStatus({
+                                  entityId: "entity-default",
+                                  period: schedule.period,
+                                  taxType: schedule.taxType,
+                                  stage: "paid",
+                                  actor: "user",
+                                });
+                                setComplianceStatuses(loadComplianceStatuses());
+                                setPayments(loadPayments());
+                              }}
+                              className="text-xs px-2 py-1 rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50"
+                            >
+                              Mark Paid
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900">{formatCurrency(schedule.totalTax)}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleGenerateRemittance(schedule)}
-                          className="text-xs text-[#2264ff] hover:underline font-medium mt-1"
-                        >
-                          Generate Remittance
-                        </button>
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateFilingPack(schedule, "pdf")}
-                            className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
-                          >
-                            Download PDF
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateFilingPack(schedule, "csv")}
-                            className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
-                          >
-                            Export CSV
-                          </button>
-                        </div>
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <select
-                            value={status?.stage || schedule.status}
-                            onChange={(event) => {
-                              setComplianceStatus({
-                                entityId: "entity-default",
-                                period: schedule.period,
-                                taxType: schedule.taxType,
-                                stage: event.target.value as ComplianceStatusStage,
-                                actor: "user",
-                              });
-                              setComplianceStatuses(loadComplianceStatuses());
-                            }}
-                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600"
-                          >
-                            {["draft", "review", "ready", "filed", "paid", "reconciled"].map((stage) => (
-                              <option key={stage} value={stage}>
-                                {stage}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              recordPayment({
-                                entityId: "entity-default",
-                                period: schedule.period,
-                                taxType: schedule.taxType,
-                                amount: schedule.totalTax,
-                                actor: "user",
-                              });
-                              setComplianceStatus({
-                                entityId: "entity-default",
-                                period: schedule.period,
-                                taxType: schedule.taxType,
-                                stage: "paid",
-                                actor: "user",
-                              });
-                              setComplianceStatuses(loadComplianceStatuses());
-                              setPayments(loadPayments());
-                            }}
-                            className="text-xs px-2 py-1 rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50"
-                          >
-                            Mark Paid
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                     );
                   })}
                 </div>
