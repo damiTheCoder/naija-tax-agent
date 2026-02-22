@@ -17,6 +17,8 @@ type ProjectionPoint = {
   cogs: number;
   fixedCosts: number;
   variableCosts: number;
+  marketingCosts: number;
+  operatingExpenses: number;
   totalExpenses: number;
   grossProfit: number;
   netProfit: number;
@@ -26,6 +28,7 @@ type ProjectionPoint = {
   cashInflow: number;
   cashOutflow: number;
   netCashflow: number;
+  burnRate: number;
   cashBalance: number;
   kind: "actual" | "projected";
 };
@@ -500,6 +503,8 @@ function buildActualSeries(entries: JournalEntry[], statements: { revenue: numbe
         cogs: value.cogs,
         fixedCosts: value.fixedCosts,
         variableCosts: value.variableCosts,
+        marketingCosts: 0,
+        operatingExpenses: value.fixedCosts,
         totalExpenses,
         grossProfit,
         netProfit,
@@ -509,6 +514,7 @@ function buildActualSeries(entries: JournalEntry[], statements: { revenue: numbe
         cashInflow: value.cashInflow,
         cashOutflow: value.cashOutflow,
         netCashflow,
+        burnRate: Math.max(0, -netCashflow),
         cashBalance: 0,
         kind: "actual" as const,
       };
@@ -537,6 +543,8 @@ function buildActualSeries(entries: JournalEntry[], statements: { revenue: numbe
         cogs: monthlyCogs,
         fixedCosts: monthlyOperating * 0.7,
         variableCosts: monthlyOperating * 0.3,
+        marketingCosts: 0,
+        operatingExpenses: monthlyOperating * 0.7,
         totalExpenses,
         grossProfit,
         netProfit,
@@ -546,6 +554,7 @@ function buildActualSeries(entries: JournalEntry[], statements: { revenue: numbe
         cashInflow,
         cashOutflow,
         netCashflow: cashInflow - cashOutflow,
+        burnRate: Math.max(0, -(cashInflow - cashOutflow)),
         cashBalance: 0,
         kind: "actual" as const,
       };
@@ -624,28 +633,31 @@ function buildExpectedProjection(actuals: ProjectionPoint[], assumptions: Projec
   const projected: ProjectionPoint[] = [];
 
   for (let monthIndex = 1; monthIndex <= months; monthIndex += 1) {
-    revenue = Math.max(0, revenue * (1 + assumptions.revenueGrowthRate));
-    fixedCosts = Math.max(0, fixedCosts * (1 + assumptions.fixedCostInflationRate));
-    variableCostRatio = clamp(
-      variableCostRatio * (1 + assumptions.operatingExpenseGrowthRate * 0.35),
-      0.01,
-      0.85
-    );
+    revenue = revenue * (1 + assumptions.revenueGrowthRate);
 
+    // Core Costs
     const cogs = revenue * assumptions.cogsRatio;
-    const variableCosts = revenue * variableCostRatio;
-    const totalExpenses = cogs + fixedCosts + variableCosts;
-    const grossProfit = revenue - cogs;
-    const netProfit = revenue - totalExpenses;
+    const variableCosts = revenue * assumptions.variableCostRatio;
+    const marketingCosts = revenue * assumptions.marketingSpendRatio;
+
+    // Fixed Costs with Inflation
+    fixedCosts = assumptions.fixedCostBaseline * Math.pow(1 + assumptions.fixedCostInflationRate, monthIndex);
+
+    const operatingExpenses = fixedCosts + marketingCosts;
+    const totalExpenses = cogs + variableCosts + operatingExpenses;
+
+    const grossProfit = revenue - cogs - variableCosts;
+    const netProfit = grossProfit - operatingExpenses;
 
     const estimatedInterestTax = Math.max(0, totalExpenses * 0.045);
     const estimatedDepreciation = Math.max(0, fixedCosts * 0.14);
     const ebitda = netProfit + estimatedDepreciation + estimatedInterestTax;
 
     const cashInflow = revenue * assumptions.cashCollectionRatio;
-    const cashOutflow = totalExpenses * assumptions.cashDisbursementRatio;
+    const cashOutflow = (cogs + variableCosts + operatingExpenses) * assumptions.cashDisbursementRatio;
     const netCashflow = cashInflow - cashOutflow;
     cashBalance += netCashflow;
+    const burnRate = Math.max(0, -netCashflow);
 
     const key = shiftMonthKey(last.key, monthIndex);
 
@@ -657,6 +669,9 @@ function buildExpectedProjection(actuals: ProjectionPoint[], assumptions: Projec
       cogs,
       fixedCosts,
       variableCosts,
+      marketingCosts,
+      operatingExpenses,
+      burnRate,
       totalExpenses,
       grossProfit,
       netProfit,
@@ -700,9 +715,11 @@ function buildScenarioProjection(expected: ProjectionPoint[], baseCashBalance: n
     const cogs = point.cogs * multipliers.cogs;
     const fixedCosts = point.fixedCosts * multipliers.fixed;
     const variableCosts = point.variableCosts * multipliers.variable;
-    const totalExpenses = cogs + fixedCosts + variableCosts;
-    const grossProfit = revenue - cogs;
-    const netProfit = revenue - totalExpenses;
+    const marketingCosts = point.marketingCosts || 0;
+    const operatingExpenses = fixedCosts + marketingCosts;
+    const totalExpenses = cogs + fixedCosts + variableCosts + marketingCosts;
+    const grossProfit = revenue - cogs - variableCosts;
+    const netProfit = grossProfit - operatingExpenses;
     const ebitda = netProfit + (point.ebitda - point.netProfit);
     const cashInflow = point.cashInflow * multipliers.inflow;
     const cashOutflow = point.cashOutflow * multipliers.outflow;
@@ -724,6 +741,7 @@ function buildScenarioProjection(expected: ProjectionPoint[], baseCashBalance: n
       cashInflow,
       cashOutflow,
       netCashflow,
+      burnRate: Math.max(0, -netCashflow),
       cashBalance,
       kind: "projected" as const,
     };
@@ -764,7 +782,7 @@ function MultiLineChart({
   minWidth = 680,
   valueType = "currency",
 }: {
-  data: Array<{ label: string; [key: string]: string | number }>;
+  data: Array<{ label: string;[key: string]: string | number }>;
   series: Array<{ key: string; color: string; dashed?: boolean; label?: string }>;
   projectedStartIndex?: number;
   allowNegative?: boolean;
@@ -1309,19 +1327,17 @@ export default function AccountingProjectionsPage() {
     [expectedSixMonth]
   );
   const projectedRevenueAnnual = useMemo(() => {
-    const avgRevenue = average(expectedSixMonth.map((point) => point.revenue));
-    return avgRevenue * 12;
-  }, [expectedSixMonth]);
+    return projectedRevenueSixMonth * 2;
+  }, [projectedRevenueSixMonth]);
 
   const projectedGrossMargin = useMemo(() => {
-    const revenue = expectedSixMonth.reduce((sum, point) => sum + point.revenue, 0);
-    const gross = expectedSixMonth.reduce((sum, point) => sum + point.grossProfit, 0);
-    return safeDivide(gross, revenue);
+    if (!expectedSixMonth.length) return 0;
+    return average(expectedSixMonth.map(p => p.grossMarginPct));
   }, [expectedSixMonth]);
 
   const burnRate = useMemo(() => {
-    const negative = expectedSixMonth.filter((point) => point.netCashflow < 0).map((point) => Math.abs(point.netCashflow));
-    return negative.length ? average(negative) : 0;
+    if (!expectedSixMonth.length) return 0;
+    return average(expectedSixMonth.map(p => p.burnRate));
   }, [expectedSixMonth]);
 
   const projectedCashBalance = useMemo(() => {
@@ -1330,16 +1346,16 @@ export default function AccountingProjectionsPage() {
   }, [expectedSixMonth, closingCashBalance]);
 
   const runwayMonths = useMemo(() => {
-    const result = extractRunwayMonths(expectedEighteenMonth);
-    return result;
-  }, [expectedEighteenMonth]);
+    if (burnRate <= 0) return null; // Infinite runway
+    return closingCashBalance / burnRate;
+  }, [closingCashBalance, burnRate]);
 
   const breakEven = useMemo(() => findBreakEven(expectedEighteenMonth), [expectedEighteenMonth]);
 
   const breakEvenRevenue = useMemo(() => {
-    const contributionRatio = 1 - assumptions.cogsRatio - assumptions.variableCostRatio;
-    if (contributionRatio <= 0) return null;
-    return assumptions.fixedCostBaseline / contributionRatio;
+    const margin = 1 - (assumptions.cogsRatio + assumptions.variableCostRatio + assumptions.marketingSpendRatio);
+    if (margin <= 0) return null;
+    return assumptions.fixedCostBaseline / margin;
   }, [assumptions]);
 
   const revenueData = useMemo(

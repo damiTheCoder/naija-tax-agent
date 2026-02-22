@@ -1,6 +1,7 @@
 // SuperSheet Formula Engine
 
 import { Sheet, parseCellRange, getCellValue, isFormula } from './spreadsheet';
+import { accountingEngine } from '../accounting/transactionBridge';
 
 // Supported functions
 type FormulaFunction = (args: (number | string | null)[], sheet: Sheet) => number | string;
@@ -51,10 +52,10 @@ function tokenize(formula: string): Token[] {
             continue;
         }
 
-        // Cell references, ranges, or function names
+        // Cell references, ranges, or function names (including QL. namespacing)
         if (/[A-Za-z]/.test(char)) {
             let name = '';
-            while (i < str.length && /[A-Za-z0-9]/.test(str[i])) {
+            while (i < str.length && /[A-Za-z0-9_.]/.test(str[i])) {
                 name += str[i++];
             }
 
@@ -302,6 +303,46 @@ const functions: Record<string, FormulaFunction> = {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         return now.getTime();
+    },
+
+    // QL Autonomous Live-Ledger Bindings
+    "QL.REVENUE": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.revenue;
+    },
+
+    "QL.CASH": () => {
+        let cash = 0;
+        const state = accountingEngine.getState();
+        state.ledgerAccounts.forEach(acc => {
+            if (acc.accountCode.startsWith('10')) cash += acc.closingBalance;
+        });
+        return cash;
+    },
+
+    "QL.PROFIT": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.revenue - statements.costOfSales - statements.operatingExpenses;
+    },
+
+    "QL.ASSETS": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.assets;
+    },
+
+    "QL.LIABILITIES": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.liabilities;
+    },
+
+    "QL.EQUITY": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.equity;
+    },
+
+    "QL.EXPENSES": () => {
+        const statements = accountingEngine.generateStatements();
+        return statements.costOfSales + statements.operatingExpenses;
     },
 
     // Financial functions
@@ -595,6 +636,10 @@ export function getAvailableFunctions(): { name: string; description: string; sy
         { name: 'TRIM', description: 'Remove extra spaces', syntax: 'TRIM(text)' },
         { name: 'NOW', description: 'Current timestamp', syntax: 'NOW()' },
         { name: 'TODAY', description: 'Today\'s date', syntax: 'TODAY()' },
+        { name: 'QL.REVENUE', description: 'Live total revenue from Ledger', syntax: 'QL.REVENUE()' },
+        { name: 'QL.CASH', description: 'Live total cash balance from Ledger', syntax: 'QL.CASH()' },
+        { name: 'QL.PROFIT', description: 'Live net profit from Ledger', syntax: 'QL.PROFIT()' },
+        { name: 'QL.EXPENSES', description: 'Live total expenses from Ledger', syntax: 'QL.EXPENSES()' },
         { name: 'PMT', description: 'Loan payment', syntax: 'PMT(rate, periods, present_value)' },
         { name: 'FV', description: 'Future value', syntax: 'FV(rate, periods, payment, present_value)' },
         { name: 'NPV', description: 'Net present value', syntax: 'NPV(rate, cash_flows...)' },

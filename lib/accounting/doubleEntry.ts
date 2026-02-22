@@ -221,6 +221,9 @@ export interface JournalEntry {
   confidence?: number;
   reasoning?: string;
   assumptions?: string[];
+  anomalyFlag?: string;
+  reconciliationStatus?: "unreconciled" | "reconciled";
+  matchedBankTransactionId?: string;
 }
 
 export type TransactionType =

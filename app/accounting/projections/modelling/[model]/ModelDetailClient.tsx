@@ -928,8 +928,8 @@ function MetricCard({ metric }: { metric: ModelMetric }) {
     metric.tone === "positive"
       ? "text-emerald-600"
       : metric.tone === "negative"
-      ? "text-rose-600"
-      : "text-gray-900";
+        ? "text-rose-600"
+        : "text-gray-900";
 
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -1004,11 +1004,10 @@ function ModelSwitcher({ activeId }: { activeId: FinancialModelId }) {
         <Link
           key={model.id}
           href={`/accounting/projections/modelling/${model.id}`}
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeId === model.id
-              ? "border-[#2264ff] bg-[#2264ff]/10 text-[#2264ff]"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeId === model.id
+            ? "border-[#2264ff] bg-[#2264ff]/10 text-[#2264ff]"
+            : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
         >
           {buildModelIcon(model.icon)}
           <span>{model.name}</span>
@@ -1136,12 +1135,6 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
           <p className="text-sm text-gray-500 mt-1">{modelMeta.purpose}. {modelMeta.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/accounting/projections/modelling" className="inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
-            Back to Model Hub
-          </Link>
-          <Link href="/accounting/projections" className="inline-flex text-sm font-medium text-gray-600 hover:text-gray-800">
-            Back to Financial Projections
-          </Link>
           <button
             type="button"
             onClick={handleDownloadPdf}
@@ -1200,6 +1193,6 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
           <OutputTable key={section.title} section={section} />
         ))}
       </div>
-    </div>
+    </div >
   );
 }

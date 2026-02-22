@@ -304,6 +304,31 @@ class AccountingEngine {
       throw new Error(`Entry not balanced: DR ${totalDebits} ≠ CR ${totalCredits}`);
     }
 
+    // Tax Anomaly Detection
+    let anomalyFlag: string | undefined = undefined;
+
+    // Check if any line in the manual entry touches a tax-applicable account
+    for (const line of entry.lines) {
+      const account = this.state.ledgerAccounts.get(line.accountCode);
+      if (account?.taxApplicable) {
+        // If tax is applicable, verify the user also included tax lines
+        const hasVatIncluded = entry.lines.some(l => l.accountCode === "2200" || l.accountCode === "1400");
+        const hasWhtIncluded = entry.lines.some(l => l.accountCode === "2220" || l.accountCode === "1410");
+
+        if (account.taxApplicable.vat && !hasVatIncluded) {
+          anomalyFlag = `Missing VAT: You posted to ${account.accountName} which requires VAT, but no VAT account (2200/1400) was found in this entry.`;
+          console.warn(`[Tax Anomaly] ${anomalyFlag}`);
+          break; // Stop checking, we found a high-priority anomaly
+        }
+
+        if (account.taxApplicable.wht && !hasWhtIncluded) {
+          anomalyFlag = `Missing WHT: You posted to ${account.accountName} which attracts WHT, but no WHT account (2220/1410) was found.`;
+          console.warn(`[Tax Anomaly] ${anomalyFlag}`);
+          break;
+        }
+      }
+    }
+
     // Create journal entry
     const journalEntry: JournalEntry = {
       id: generateJournalId(),
@@ -315,6 +340,7 @@ class AccountingEngine {
       totalDebits,
       totalCredits,
       transactionType: 'other' as TransactionType,
+      anomalyFlag,
       createdAt: new Date().toISOString(),
       postedAt: new Date().toISOString(),
       status: 'posted',
@@ -649,6 +675,155 @@ class AccountingEngine {
   }
 
   /**
+   * AUTONOMOUS BANK RECONCILIATION
+   * Automatically attempts to match a batch of raw bank transactions against 
+   * existing, unreconciled manual journal entries.
+   * If a match is found -> Links them & marks 'reconciled'.
+   * If no match -> Routes the remaining bank lines to the autonomous AI drafter.
+   * 
+   * Match criteria: Exact amount match within ±3 days.
+   */
+  autoReconcile(bankTransactions: RawTransaction[]): {
+    reconciledCount: number;
+    draftedCount: number;
+  } {
+    let reconciledCount = 0;
+    const unmatchedBankTxs: RawTransaction[] = [];
+
+    bankTransactions.forEach(bankTx => {
+      const bankAmount = Math.abs(bankTx.amount);
+      const bankDate = new Date(bankTx.date).getTime();
+      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+
+      // Find an unreconciled ledger entry that matches criteria
+      const matchingEntryIndex = this.state.journalEntries.findIndex(je => {
+        // Skip already reconciled entries
+        if (je.reconciliationStatus === "reconciled") return false;
+
+        // Skip draft or voided entries
+        if (je.status !== "posted") return false;
+
+        // Criteria 1: Exact amount match on either total debits or credits
+        if (je.totalDebits !== bankAmount && je.totalCredits !== bankAmount) return false;
+
+        // Criteria 2: Date within ±3 days
+        const jeDate = new Date(je.date).getTime();
+        if (Math.abs(jeDate - bankDate) > threeDaysMs) return false;
+
+        // Criteria 3: If bank TX is inflow (+), the journal entry must involve a debit to Cash/Bank (Asset).
+        // If bank TX is outflow (-), the journal entry must involve a credit to Cash/Bank (Asset).
+        const isBankInflow = bankTx.amount > 0 || bankTx.type === "income";
+
+        let involvesCashBank = false;
+        const cashBankCodes = ["1000", "1010", "1020", "1021"];
+
+        if (isBankInflow) {
+          // Look for debit lines to cash/bank
+          involvesCashBank = je.lines.some(l => cashBankCodes.includes(l.accountCode) && l.debit === bankAmount);
+        } else {
+          // Look for credit lines to cash/bank
+          involvesCashBank = je.lines.some(l => cashBankCodes.includes(l.accountCode) && l.credit === bankAmount);
+        }
+
+        return involvesCashBank;
+      });
+
+      if (matchingEntryIndex !== -1) {
+        // MATCH FOUND
+        console.log(`[Auto-Reconcile] Matched Bank TX (${bankTx.id}) with Ledger JE (${this.state.journalEntries[matchingEntryIndex].id})`);
+
+        // Update JournalEntry
+        this.state.journalEntries[matchingEntryIndex].reconciliationStatus = "reconciled";
+        this.state.journalEntries[matchingEntryIndex].matchedBankTransactionId = bankTx.id;
+        this.state.journalEntries[matchingEntryIndex].updatedAt = new Date().toISOString();
+
+        reconciledCount++;
+      } else {
+        // NO MATCH FOUND
+        unmatchedBankTxs.push(bankTx);
+      }
+    });
+
+    // Sub-route unmatched transactions to the AI Batch Drafter (Phase 2 feature)
+    let draftedCount = 0;
+    if (unmatchedBankTxs.length > 0) {
+      console.log(`[Auto-Reconcile] Routing ${unmatchedBankTxs.length} unmatched transactions to the AI Drafter...`);
+      const drafted = this.processBatchIntelligently(unmatchedBankTxs);
+      draftedCount = drafted.length;
+    }
+
+    if (reconciledCount > 0 || draftedCount > 0) {
+      this.notify();
+    }
+
+    return { reconciledCount, draftedCount };
+  }
+
+  /**
+   * AUTONOMOUS BATCH PROCESSOR
+   * Runs the 7-pass analyzer on an array of bank transactions in the background,
+   * queueing them up as "draft" status Journal Entries. 
+   * This prevents the user from having to manually categorize every sync.
+   */
+  processBatchIntelligently(rawTxs: RawTransaction[]): JournalEntry[] {
+    const draftedEntries: JournalEntry[] = [];
+
+    rawTxs.forEach(rawTx => {
+      // Step 1: Analyze transaction using word-by-word sentence analyzer
+      const amount = Math.abs(rawTx.amount);
+      const analysis = analyzeTransactionText(rawTx.description, amount);
+
+      // Step 2: Check for anomalies
+      const anomalyFlag = this.detectAnomalies(analysis.debitAccount.code, amount);
+
+      // Step 3: Create journal entry in DRAFT state
+      const journalId = generateJournalId();
+      const lines: JournalLine[] = [
+        {
+          accountCode: analysis.debitAccount.code,
+          accountName: analysis.debitAccount.name,
+          debit: amount,
+          credit: 0,
+        },
+        {
+          accountCode: analysis.creditAccount.code,
+          accountName: analysis.creditAccount.name,
+          debit: 0,
+          credit: amount,
+        },
+      ];
+
+      const journalEntry: JournalEntry = {
+        id: journalId,
+        date: rawTx.date || new Date().toISOString().split("T")[0],
+        narration: rawTx.description,
+        reference: rawTx.id, // Important: tie back to bank sync ID
+        lines,
+        isBalanced: true,
+        totalDebits: amount,
+        totalCredits: amount,
+        transactionType: "other", // Auto-classification
+        status: "draft", // CRITICAL: Do not post automatically
+        source: "auto-categorized",
+        confidence: Math.min(analysis.debitAccount.confidence, analysis.creditAccount.confidence),
+        assumptions: analysis.assumptions,
+        anomalyFlag,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Add to state, but DO NOT post to ledger yet
+      this.state.journalEntries.push(journalEntry);
+      draftedEntries.push(journalEntry);
+    });
+
+    if (draftedEntries.length > 0) {
+      this.notify();
+    }
+
+    return draftedEntries;
+  }
+
+  /**
    * ENHANCED TRANSACTION PROCESSOR
    * Uses word-by-word sentence analysis to identify BOTH accounts directly
    * from the transaction description with high accuracy.
@@ -660,6 +835,7 @@ class AccountingEngine {
    * 4. Identify debit and credit accounts with confidence scores
    * 5. Create balanced journal entry
    * 6. Run 7-pass validation
+   * 7. Scan local ledger history for spending anomalies
    */
   processTransactionEnhanced(rawTx: RawTransaction): {
     journalEntry: JournalEntry;
@@ -678,9 +854,15 @@ class AccountingEngine {
     console.log(`[Enhanced Analyzer] Credit: ${analysis.creditAccount.name} (${analysis.creditAccount.code}) - ${Math.round(analysis.creditAccount.confidence * 100)}%`);
     analysis.validationLog.forEach(log => console.log(`  ${log}`));
 
-    // Step 2: Create journal entry with analyzed accounts
+    // Step 2: Check for historical anomalies
+    const anomalyFlag = this.detectAnomalies(analysis.debitAccount.code, amount);
+    if (anomalyFlag) {
+      console.warn(`[Anomaly Detected] ${anomalyFlag}`);
+    }
+
+    // Step 3: Create journal entry with analyzed accounts
     const journalId = generateJournalId();
-    const lines: JournalLine[] = [
+    let lines: JournalLine[] = [
       {
         accountCode: analysis.debitAccount.code,
         accountName: analysis.debitAccount.name,
@@ -695,6 +877,89 @@ class AccountingEngine {
       },
     ];
 
+    // Step 4: Autonomous Tax Provisioning
+    // Check if the primary economic account attracts VAT or WHT
+    const economicAccountCode = analysis.flow === "inflow" ? analysis.creditAccount.code : analysis.debitAccount.code;
+    const economicAccount = this.state.ledgerAccounts.get(economicAccountCode);
+
+    let totalTaxProvisioned = 0;
+    let provisionedDebits = amount;
+    let provisionedCredits = amount;
+
+    if (economicAccount && economicAccount.taxApplicable) {
+      console.log(`[Tax Engine] Autonomous provisioning triggered for ${economicAccount.accountName}`);
+
+      const { vat, wht, whtRate } = economicAccount.taxApplicable;
+      const baseAmount = amount; // Assuming the raw amount is VAT-inclusive for this demo
+
+      // Calculate VAT (7.5% in Nigeria)
+      if (vat) {
+        // If revenue, output VAT payable. If expense, input VAT receivable.
+        const isRevenue = analysis.flow === "inflow";
+        const vatRatio = 7.5 / 107.5; // Back out 7.5% from gross
+        const vatAmount = Math.round(baseAmount * vatRatio);
+        totalTaxProvisioned += vatAmount;
+
+        if (isRevenue) {
+          // Reduce the credit to revenue, add credit to Output VAT Payable (Liability: 2200)
+          lines[1].credit -= vatAmount;
+          lines.push({
+            accountCode: "2200",
+            accountName: "Output VAT Payable",
+            debit: 0,
+            credit: vatAmount,
+            memo: "Auto-provisioned Output VAT"
+          });
+        } else {
+          // Reduce the debit to expense, add debit to Input VAT Receivable (Asset: 1400)
+          lines[0].debit -= vatAmount;
+          lines.push({
+            accountCode: "1400",
+            accountName: "Input VAT Receivable",
+            debit: vatAmount,
+            credit: 0,
+            memo: "Auto-provisioned Input VAT"
+          });
+        }
+      }
+
+      // Calculate WHT (variable rate based on account, e.g. 5% or 10%)
+      if (wht && whtRate) {
+        const isRevenue = analysis.flow === "inflow";
+        // WHT is calculated on the net amount (before VAT)
+        const netAmount = vat ? baseAmount - Math.round(baseAmount * (7.5 / 107.5)) : baseAmount;
+        const whtAmount = Math.round(netAmount * (whtRate / 100));
+        totalTaxProvisioned += whtAmount;
+
+        if (isRevenue) {
+          // WHT deducted from our revenue. We receive less cash (debit down), and get WHT Receivable (Asset: 1410)
+          lines[0].debit -= whtAmount;
+          lines.push({
+            accountCode: "1410",
+            accountName: "WHT Receivable",
+            debit: whtAmount,
+            credit: 0,
+            memo: `Auto-provisioned ${whtRate}% WHT Receivable`
+          });
+        } else {
+          // We deducted WHT from their payment. We pay less cash (credit down), and get WHT Payable (Liability: 2220)
+          lines[1].credit -= whtAmount;
+          lines.push({
+            accountCode: "2220",
+            accountName: "WHT Payable",
+            debit: 0,
+            credit: whtAmount,
+            memo: `Auto-provisioned ${whtRate}% WHT Payable`
+          });
+        }
+      }
+
+      // We must recalculate totals because WHT swaps cash for tax accounts 
+      // but total debits/credits must remain identical (or rather, balanced).
+      provisionedDebits = lines.reduce((sum, line) => sum + line.debit, 0);
+      provisionedCredits = lines.reduce((sum, line) => sum + line.credit, 0);
+    }
+
     const journalEntry: JournalEntry = {
       id: journalId,
       date,
@@ -704,15 +969,15 @@ class AccountingEngine {
       source: "enhanced-analyzer",
       confidence: Math.min(analysis.debitAccount.confidence, analysis.creditAccount.confidence),
       assumptions: analysis.assumptions,
-      // Required fields from doubleEntry.ts
-      isBalanced: true, // Assuming analysis logic ensures this or step 3 validates it
-      totalDebits: amount,
-      totalCredits: amount,
-      transactionType: "other", // Defaulting to other, or should be mapped from analysis
+      isBalanced: true,
+      totalDebits: provisionedDebits,
+      totalCredits: provisionedCredits,
+      transactionType: "other",
+      anomalyFlag,
       createdAt: new Date().toISOString(),
     };
 
-    // Step 3: Validate the entry is balanced
+    // Step 5: Validate the entry is balanced
     const validation = validateJournalEntry(journalEntry.lines);
     if (!validation.isBalanced) {
       console.error(`[Validation Failed] Debits: ${validation.totalDebits}, Credits: ${validation.totalCredits}, Diff: ${validation.difference}`);
@@ -720,17 +985,54 @@ class AccountingEngine {
     }
     console.log(`[Validation Passed] Entry balanced: Debits=${validation.totalDebits}, Credits=${validation.totalCredits}`);
 
-    // Step 4: Post to ledger
+    // Step 6: Post to ledger
     this.postToLedger(journalEntry);
 
-    // Step 5: Add to state
+    // Step 7: Add to state
     this.state.journalEntries.push(journalEntry);
     this.notify();
 
-    // Step 6: Generate chat response
-    const chatResponse = this.generateEnhancedChatResponse(journalEntry, analysis);
+    // Step 8: Generate chat response
+    let chatResponse = this.generateEnhancedChatResponse(journalEntry, analysis);
+    if (totalTaxProvisioned > 0) {
+      chatResponse += `\n\n🛡️ **Tax Engine**: Autonomously engineered compliance lines (VAT/WHT) into the double-entry matrix prior to posting.`;
+    }
 
     return { journalEntry, analysis, chatResponse };
+  }
+
+  /**
+   * Scans the trailing 6 months of ledger history to detect if a specific
+   * expense amount is significantly higher (>40%) than the historical average.
+   */
+  private detectAnomalies(accountCode: string, currentAmount: number): string | undefined {
+    // Only flag expense accounts
+    if (!accountCode.startsWith('5') && !accountCode.startsWith('6') && !accountCode.startsWith('7')) {
+      return undefined;
+    }
+
+    const account = this.state.ledgerAccounts.get(accountCode);
+    if (!account || account.entries.length === 0) return undefined;
+
+    // Filter to last 6 months of entries
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const recentEntries = account.entries.filter(e => new Date(e.date) >= sixMonthsAgo && e.debit > 0);
+
+    // Need at least 3 historical data points to establish a somewhat reliable baseline
+    if (recentEntries.length < 3) return undefined;
+
+    const totalHistoricalAmount = recentEntries.reduce((sum, entry) => sum + entry.debit, 0);
+    const averageExpense = totalHistoricalAmount / recentEntries.length;
+
+    // If the new expense is >40% higher than the historical average, flag it.
+    // Also ensure the amount is materially significant (e.g. > ₦10,000) to avoid noisy flags on small deviations.
+    if (currentAmount > 10000 && currentAmount > averageExpense * 1.4) {
+      return `This ${account.accountName} expense is ₦${Math.round(currentAmount - averageExpense).toLocaleString()} higher than your historical average.`;
+    }
+
+    return undefined;
   }
 
   /**
