@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { retrieveKnowledge, buildContextSnippet } from "@/lib/agent/rag";
 import type { KnowledgeEntry } from "@/lib/agent/knowledge";
+import { FPA_PROJECTION_MASTER_PROMPT } from "@/lib/agent/fpaProjectionMasterPrompt";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -86,6 +87,13 @@ function toTranscript(messages: ChatMessage[]): string {
 }
 
 function buildHumanStyleSystemPrompt(module?: string): string {
+  const normalized = (module || "general").toLowerCase();
+  const shouldApplyFpaProtocol =
+    normalized === "projections" ||
+    normalized === "cashflow" ||
+    normalized === "dashboard" ||
+    normalized === "reporting";
+
   return `You are NaijaTaxAgent AI, the enterprise assistant inside Quantum Ledger.
 ${getModulePersona(module)}
 
@@ -95,7 +103,8 @@ Tone and style requirements:
 - Avoid robotic phrases, filler, and excessive formatting.
 - Keep the response direct and practical.
 - Preserve all amounts, dates, rates, and factual constraints exactly as provided.
-- If assumptions are required, state them briefly.`;
+- If assumptions are required, state them briefly.
+${shouldApplyFpaProtocol ? `\n\nFP&A MASTER PROTOCOL:\n${FPA_PROJECTION_MASTER_PROMPT}` : ""}`;
 }
 
 async function generateWithGemini({

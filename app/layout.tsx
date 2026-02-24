@@ -9,9 +9,9 @@ import { ConnectedAppsProvider } from "@/lib/ConnectedAppsContext";
 import GlobalSpinner from "@/components/GlobalSpinner";
 import { ModeProvider } from "@/lib/ModeContext";
 
-const siteTitle = "Quantum Ledger - Smart Nigerian Tax Manager";
+const siteTitle = "Quantum Ledger";
 const siteDescription =
-  "Estimate your Nigerian taxes (CGT, CIT, PIT, VAT) with Quantum Ledger. Your personal AI tax assistant.";
+  "Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities.";
 
 export const metadata: Metadata = {
   title: siteTitle,

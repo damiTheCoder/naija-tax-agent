@@ -287,12 +287,15 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
 
       const cfo = netIncome + inputs.depreciation - inputs.workingCapitalChange;
       const cfi = -inputs.capex;
-      const cff = inputs.debtDrawdown - inputs.debtRepayment - inputs.interest;
+      const cff = inputs.debtDrawdown - inputs.debtRepayment;
       const netCashChange = cfo + cfi + cff;
       const endingCash = inputs.openingCash + netCashChange;
 
-      const ppe = Math.max(0, inputs.capex - inputs.depreciation);
-      const totalAssets = Math.max(0, endingCash) + ppe;
+      // Derive closing non-cash operating assets so A = L + E reconciles under the same assumptions.
+      const openingNetOperatingAssets = inputs.openingDebt + inputs.openingEquity - inputs.openingCash;
+      const closingNetOperatingAssets =
+        openingNetOperatingAssets + inputs.capex - inputs.depreciation + inputs.workingCapitalChange;
+      const totalAssets = endingCash + closingNetOperatingAssets;
       const endingDebt = inputs.openingDebt + inputs.debtDrawdown - inputs.debtRepayment;
       const endingEquity = inputs.openingEquity + netIncome;
       const liabilitiesAndEquity = endingDebt + endingEquity;
@@ -344,6 +347,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           {
             title: "Balance Sheet (Simplified)",
             rows: [
+              { label: "Net Operating Assets (ex-cash)", value: formatCurrency(closingNetOperatingAssets) },
               { label: "Total Assets", value: formatCurrency(totalAssets) },
               { label: "Debt", value: formatCurrency(endingDebt) },
               { label: "Equity", value: formatCurrency(endingEquity) },
@@ -433,6 +437,8 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
       const years = Math.round(clamp(inputs.years, 3, 10));
       const discountRate = pct(inputs.discountRate);
       const terminalGrowth = pct(inputs.terminalGrowth);
+      const adjustedDiscountRate = Math.max(discountRate, 0.01);
+      const adjustedTerminalGrowth = Math.max(0, Math.min(terminalGrowth, adjustedDiscountRate - 0.005));
 
       let revenue = inputs.year1Revenue;
       let previousRevenue = 0;
@@ -447,9 +453,10 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
         const ebit = revenue * pct(inputs.ebitMargin);
         const nopat = ebit * (1 - pct(inputs.taxRate));
         const capex = revenue * pct(inputs.capexRate);
+        const depreciation = capex * 0.6;
         const wcDelta = (revenue - previousRevenue) * pct(inputs.wcRate);
-        const freeCashFlow = nopat - capex - wcDelta;
-        const pv = freeCashFlow / Math.pow(1 + discountRate, year);
+        const freeCashFlow = nopat + depreciation - capex - wcDelta;
+        const pv = freeCashFlow / Math.pow(1 + adjustedDiscountRate, year);
 
         fcfSeries.push(freeCashFlow);
         pvCashFlows.push(pv);
@@ -458,11 +465,9 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
       }
 
       const lastFcf = fcfSeries[fcfSeries.length - 1] || 0;
-      const terminalValue =
-        discountRate > terminalGrowth
-          ? (lastFcf * (1 + terminalGrowth)) / (discountRate - terminalGrowth)
-          : lastFcf * 8;
-      const pvTerminal = terminalValue / Math.pow(1 + discountRate, years);
+      const terminalSpread = Math.max(0.005, adjustedDiscountRate - adjustedTerminalGrowth);
+      const terminalValue = (lastFcf * (1 + adjustedTerminalGrowth)) / terminalSpread;
+      const pvTerminal = terminalValue / Math.pow(1 + adjustedDiscountRate, years);
 
       const enterpriseValue = sum(pvCashFlows) + pvTerminal;
       const equityValue = enterpriseValue - inputs.netDebt;
@@ -484,6 +489,10 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
             title: "DCF Components",
             rows: [
               { label: "Sum PV(FCF)", value: formatCurrency(sum(pvCashFlows)) },
+              {
+                label: "Terminal Growth Used",
+                value: `${numberFormatter.format(adjustedTerminalGrowth * 100)}%`,
+              },
               { label: "Terminal Value", value: formatCurrency(terminalValue) },
               { label: "PV(Terminal Value)", value: formatCurrency(pvTerminal) },
               { label: "Enterprise Value", value: formatCurrency(enterpriseValue) },
@@ -603,8 +612,8 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           { label: "Average Monthly Net", value: average(monthlyNet), format: "currency", tone: average(monthlyNet) >= 0 ? "positive" : "negative" },
           {
             label: "Runway",
-            value: runwayMonths ?? months,
-            format: "months",
+            value: runwayMonths === null ? `>${months}` : runwayMonths,
+            format: runwayMonths === null ? "text" : "months",
             hint: runwayMonths ? "Months before cash turns negative" : `No cash-out within ${months} months`,
             tone: runwayMonths ? "negative" : "positive",
           },
@@ -688,15 +697,18 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
     compute: (inputs) => {
       const contributionPerUnit = inputs.pricePerUnit - inputs.variableCostPerUnit;
       const contributionMarginRatio = safeDivide(contributionPerUnit, inputs.pricePerUnit);
-      const breakEvenUnits = contributionPerUnit > 0 ? inputs.fixedCosts / contributionPerUnit : 0;
-      const breakEvenRevenue = breakEvenUnits * inputs.pricePerUnit;
-      const marginOfSafety = safeDivide(inputs.expectedUnits - breakEvenUnits, inputs.expectedUnits);
+      const hasPositiveContribution = contributionPerUnit > 0;
+      const breakEvenUnits = hasPositiveContribution ? inputs.fixedCosts / contributionPerUnit : Number.POSITIVE_INFINITY;
+      const breakEvenRevenue = hasPositiveContribution ? breakEvenUnits * inputs.pricePerUnit : Number.POSITIVE_INFINITY;
+      const marginOfSafety = hasPositiveContribution
+        ? safeDivide(inputs.expectedUnits - breakEvenUnits, inputs.expectedUnits)
+        : -1;
       const expectedProfit = (inputs.expectedUnits * contributionPerUnit) - inputs.fixedCosts;
 
       return {
         metrics: [
-          { label: "Break-even Units", value: breakEvenUnits, format: "integer" },
-          { label: "Break-even Revenue", value: breakEvenRevenue, format: "currency" },
+          { label: "Break-even Units", value: hasPositiveContribution ? breakEvenUnits : "Not reachable", format: hasPositiveContribution ? "integer" : "text" },
+          { label: "Break-even Revenue", value: hasPositiveContribution ? breakEvenRevenue : "Not reachable", format: hasPositiveContribution ? "currency" : "text" },
           { label: "Contribution Margin", value: contributionMarginRatio, format: "percent" },
           { label: "Expected Profit", value: expectedProfit, format: "currency", tone: expectedProfit >= 0 ? "positive" : "negative" },
         ],
@@ -714,13 +726,20 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
             title: "Break-even Equations",
             rows: [
               { label: "Contribution per Unit", value: `${formatCurrency(inputs.pricePerUnit)} - ${formatCurrency(inputs.variableCostPerUnit)} = ${formatCurrency(contributionPerUnit)}` },
-              { label: "Break-even Units", value: `${formatCurrency(inputs.fixedCosts)} / ${formatCurrency(contributionPerUnit)} = ${Math.round(breakEvenUnits).toLocaleString("en-US")}` },
-              { label: "Break-even Revenue", value: formatCurrency(breakEvenRevenue) },
+              {
+                label: "Break-even Units",
+                value: hasPositiveContribution
+                  ? `${formatCurrency(inputs.fixedCosts)} / ${formatCurrency(contributionPerUnit)} = ${Math.round(breakEvenUnits).toLocaleString("en-US")}`
+                  : "Not reachable while contribution per unit is zero or negative",
+              },
+              { label: "Break-even Revenue", value: hasPositiveContribution ? formatCurrency(breakEvenRevenue) : "Not reachable" },
               { label: "Margin of Safety", value: formatPercent(marginOfSafety) },
             ],
           },
         ],
-        summary: `Break-even reached at ${Math.round(breakEvenUnits).toLocaleString("en-US")} units (${formatCurrency(breakEvenRevenue)}).`,
+        summary: hasPositiveContribution
+          ? `Break-even reached at ${Math.round(breakEvenUnits).toLocaleString("en-US")} units (${formatCurrency(breakEvenRevenue)}).`
+          : "Break-even is not reachable under the current price and variable-cost assumptions.",
       };
     },
   },
@@ -847,7 +866,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
       const churn = pct(inputs.churnRate);
       const ltv = churn > 0 ? safeDivide(contributionPerCustomer, churn) : contributionPerCustomer * 48;
       const ltvCac = safeDivide(ltv, inputs.cac);
-      const paybackMonths = contributionPerCustomer > 0 ? safeDivide(inputs.cac, contributionPerCustomer) : 0;
+      const paybackMonths = contributionPerCustomer > 0 ? safeDivide(inputs.cac, contributionPerCustomer) : null;
       const cohortProfit = (ltv - inputs.cac) * inputs.newCustomers;
 
       return {
@@ -855,7 +874,12 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           { label: "LTV", value: ltv, format: "currency" },
           { label: "CAC", value: inputs.cac, format: "currency" },
           { label: "LTV / CAC", value: ltvCac, format: "number", tone: ltvCac >= 3 ? "positive" : "negative" },
-          { label: "Payback", value: paybackMonths, format: "months", tone: paybackMonths > 0 && paybackMonths <= 12 ? "positive" : "negative" },
+          {
+            label: "Payback",
+            value: paybackMonths === null ? "No payback" : paybackMonths,
+            format: paybackMonths === null ? "text" : "months",
+            tone: paybackMonths !== null && paybackMonths <= 12 ? "positive" : "negative",
+          },
         ],
         bars: {
           title: "Unit Economics Components",
@@ -879,7 +903,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
             ],
           },
         ],
-        summary: `Unit economics model: LTV ${formatCurrency(ltv)}, CAC ${formatCurrency(inputs.cac)}, LTV/CAC ${numberFormatter.format(ltvCac)}.`,
+        summary: `Unit economics model: LTV ${formatCurrency(ltv)}, CAC ${formatCurrency(inputs.cac)}, LTV/CAC ${numberFormatter.format(ltvCac)}${paybackMonths === null ? ", no payback under current contribution." : `, payback ${numberFormatter.format(paybackMonths)} months.`}`,
       };
     },
   },

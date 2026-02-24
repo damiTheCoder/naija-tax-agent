@@ -35,7 +35,7 @@ export default function HeaderNav() {
           </div>
           <div>
             <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Quantum Ledger</h1>
-            <p className="hidden text-xs text-[#666666] sm:block">Smart Nigerian Tax Manager</p>
+            <p className="hidden text-xs text-[#666666] sm:block">Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities</p>
           </div>
         </Link>
 

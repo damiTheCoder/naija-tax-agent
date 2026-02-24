@@ -161,6 +161,75 @@ function inferNavigationRoute(message: string, currentRoute: string): string | n
   return null;
 }
 
+function isExplicitActionIntent(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  return (
+    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
+      lower
+    ) ||
+    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile)\b/.test(
+      lower
+    ) ||
+    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile)\b/.test(
+      lower
+    )
+  );
+}
+
+function isDataLookupIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  const asksQuestion = /\?|(?:\bwhat(?:'s| is)?\b)|\b(show|give|list|how much|how many|summari[sz]e|analy[sz]e|check)\b/.test(lower);
+  const userScoped = /\b(my|our|current|latest|today|this|last)\b/.test(lower) || /\bhow much did i\b/.test(lower);
+  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt)\b/.test(
+    lower
+  );
+  return asksQuestion && userScoped && metricTopic;
+}
+
+function isExplainOnlyIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  const explanationPrompt =
+    /\b(what is|what's|what does|meaning of|mean by|define|definition|explain|how does|difference between|why does|why is)\b/.test(
+      lower
+    );
+  return explanationPrompt && !isExplicitActionIntent(message) && !isDataLookupIntent(message);
+}
+
+function buildDeterministicConversationalReply(message: string, context: BuiltModuleContext): string {
+  const lower = message.toLowerCase();
+
+  if (isExplainOnlyIntent(message)) {
+    if (/\brunway\b/.test(lower)) {
+      return "Runway is how long your available cash can cover net burn before cash reaches zero.";
+    }
+    if (/\bburn\b/.test(lower)) {
+      return "Burn rate is the average net cash your business uses over a period, usually monthly.";
+    }
+    if (/\bvat\b/.test(lower)) {
+      return "VAT is Value Added Tax charged on taxable goods and services, then remitted after allowable input offsets.";
+    }
+    if (/\bwht|withholding\b/.test(lower)) {
+      return "WHT is tax withheld at source from qualifying payments and credited to the beneficiary's tax position.";
+    }
+    if (/\bdebit\b/.test(lower) && /\bcredit\b/.test(lower)) {
+      return "In double-entry accounting, every transaction posts at least one debit and one matching credit.";
+    }
+    return "I understand. Ask the question naturally and I will explain it clearly. If you want an in-app action, tell me the exact action and I will run it.";
+  }
+
+  if (context.module === "financial") {
+    return "I can explain accounting questions and also execute tasks like posting transactions or navigation when you ask directly.";
+  }
+  if (context.module === "reporting") {
+    return "I can explain the metrics and also run reporting or projection actions when you request them.";
+  }
+  if (context.module === "payment") {
+    return "I can explain wallet flows and execute payment actions when you provide the details.";
+  }
+
+  return "I understood your request. If you want an in-app action, tell me directly; if you want an explanation, ask naturally and I will respond in kind.";
+}
+
 function buildExecutionReplyForAction(request: ToolRequest): string {
   switch (request.name) {
     case "createTransaction":
@@ -191,6 +260,13 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
   const allowed = new Set(context.availableFunctions);
   const generated: ToolRequest[] = [];
   const amount = extractAmount(message);
+  const explicitActionIntent = isExplicitActionIntent(message);
+  const dataLookupIntent = isDataLookupIntent(message);
+  const explainOnlyIntent = isExplainOnlyIntent(message);
+
+  if (explainOnlyIntent) {
+    return [];
+  }
 
   const addRequest = (request: ToolRequest): void => {
     if (!allowed.has(request.name)) return;
@@ -238,7 +314,10 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
     });
   }
 
-  if (/\b(runway|burn|cash ?flow|cashflow)\b/.test(lower)) {
+  if (
+    /\b(runway|burn|cash ?flow|cashflow)\b/.test(lower) &&
+    (explicitActionIntent || dataLookupIntent || /\b(analy[sz]e|check|show|summari[sz]e)\b/.test(lower))
+  ) {
     addRequest({
       name: "analyzeCashflow",
       arguments: {
@@ -443,13 +522,13 @@ export class AIOrchestrator {
         reply:
           deterministic.length > 0
             ? buildExecutionReplyForAction(deterministic[0])
-            : "AI service is not configured. Add Gemini API key to continue.",
+            : buildDeterministicConversationalReply(message, context),
         actions: this.aiService.toActions(deterministic),
         confidence: deterministic.length > 0 ? 0.62 : 0,
         reasoning:
           deterministic.length > 0
             ? "Gemini API key missing; deterministic action compiler produced executable action."
-            : "Gemini API key missing",
+            : "Gemini API key missing; deterministic conversational fallback used.",
         planSource: "fallback",
       };
     }
@@ -466,7 +545,7 @@ export class AIOrchestrator {
         reply:
           deterministic.length > 0
             ? buildExecutionReplyForAction(deterministic[0])
-            : "AI service is temporarily unavailable for this request. Please retry.",
+            : buildDeterministicConversationalReply(message, context),
         actions: this.aiService.toActions(deterministic),
         confidence: deterministic.length > 0 ? 0.6 : 0,
         reasoning:

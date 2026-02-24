@@ -397,6 +397,40 @@ function looksLikeProjectionQualityQuestion(message: string): boolean {
   );
 }
 
+function isExplicitActionIntent(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  return (
+    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
+      lower
+    ) ||
+    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile)\b/.test(
+      lower
+    ) ||
+    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile)\b/.test(
+      lower
+    )
+  );
+}
+
+function isDataLookupIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  const asksQuestion = /\?|(?:\bwhat(?:'s| is)?\b)|\b(show|give|list|how much|how many|summari[sz]e|analy[sz]e|check)\b/.test(lower);
+  const userScoped = /\b(my|our|current|latest|today|this|last)\b/.test(lower) || /\bhow much did i\b/.test(lower);
+  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt)\b/.test(
+    lower
+  );
+  return asksQuestion && userScoped && metricTopic;
+}
+
+function isExplainOnlyIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  const explanationPrompt =
+    /\b(what is|what's|what does|meaning of|mean by|define|definition|explain|how does|difference between|why does|why is)\b/.test(
+      lower
+    );
+  return explanationPrompt && !isExplicitActionIntent(message) && !isDataLookupIntent(message);
+}
+
 function buildNaturalQuestionReply(message: string, moduleId: string): string {
   const lower = message.toLowerCase();
 
@@ -569,11 +603,14 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   const projectionAdjustmentVerb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
   const projectionAssumptionIntent =
     projectionAdjustmentVerb && /(assumption|growth|cogs|baseline|collection|disbursement|marketing|opex|expense)/.test(lower);
+  const explicitActionIntent = isExplicitActionIntent(message);
+  const dataLookupIntent = isDataLookupIntent(message);
+  const explainOnlyIntent = isExplainOnlyIntent(message);
 
   const projectionAction = buildProjectionFallbackAction(message, moduleId);
-  if (projectionAction) actions.push(projectionAction);
+  if (projectionAction && !explainOnlyIntent) actions.push(projectionAction);
 
-  if (uiIntent && !walletIntent && !transactionIntent && !taxIntent && !cashflowIntent) {
+  if (uiIntent && explicitActionIntent && !walletIntent && !transactionIntent && !taxIntent && !cashflowIntent && !explainOnlyIntent) {
     const uiAction = buildUiFallbackAction(message);
     if (uiAction) actions.push(uiAction);
   }
@@ -609,7 +646,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     };
   }
 
-  if (walletIntent && amount) {
+  if (walletIntent && amount && !explainOnlyIntent) {
     if (/fund|top up/.test(lower)) {
       actions.push({
         type: "wallet.fund",
@@ -630,7 +667,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     }
   }
 
-  if (transactionIntent && amount && actions.length === 0) {
+  if (transactionIntent && amount && actions.length === 0 && !explainOnlyIntent) {
     actions.push({
       type: "accounting.postTransaction",
       payload: {
@@ -642,7 +679,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     });
   }
 
-  if ((taxIntent || moduleId === "tax") && amount && !complianceIntent) {
+  if ((taxIntent || moduleId === "tax") && amount && !complianceIntent && !explainOnlyIntent) {
     actions.push({
       type: "tax.recordTransaction",
       payload: {
@@ -654,7 +691,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     });
   }
 
-  if (moduleId === "tax" && complianceIntent) {
+  if (moduleId === "tax" && complianceIntent && !explainOnlyIntent && explicitActionIntent) {
     const periodMatch = message.match(/(20\\d{2}-Q[1-4]|20\\d{2}-\\d{2}|20\\d{2})/i);
     const taxTypeMatch = message.match(/\\b(vat|wht|cgt|cit|stamp)\\b/i);
     const period = periodMatch ? periodMatch[1].toUpperCase() : "current";
@@ -716,7 +753,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     }
   }
 
-  if (cashflowIntent) {
+  if (cashflowIntent && (!explainOnlyIntent || dataLookupIntent || explicitActionIntent)) {
     actions.push({
       type: "cashflow.analyze",
       payload: {
@@ -744,7 +781,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     };
   }
 
-  if (walletIntent) {
+  if (walletIntent && !explainOnlyIntent) {
     return {
       reply: "I can run that wallet request. Please include both amount and recipient in one sentence.",
       actions: [],

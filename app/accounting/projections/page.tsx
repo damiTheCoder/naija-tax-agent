@@ -60,6 +60,33 @@ type ProjectionAssumptions = {
   salesConversionRateProxy: number;
 };
 
+type ProjectionOutput = {
+  monthly_revenue: number[];
+  monthly_cogs: number[];
+  monthly_opex: number[];
+  monthly_net_profit: number[];
+  monthly_cash_flow: number[];
+  monthly_cash_balance: number[];
+  total_revenue: number;
+  total_profit: number;
+  burn_rate: number;
+  runway: number;
+  break_even_month: number | null;
+  break_even_revenue: number | null;
+  projection_status: "VALID" | "INVALID";
+  error_message: string | null;
+};
+
+type ProjectionComputationResult = {
+  points: ProjectionPoint[];
+  output: ProjectionOutput;
+  validationIssues: string[];
+  baseline: {
+    baselineRevenueMonthly: number;
+    startingCash: number;
+  };
+};
+
 type EditableAssumptionKey =
   | "revenueGrowthRate"
   | "operatingExpenseGrowthRate"
@@ -621,46 +648,218 @@ function deriveAssumptions(
   };
 }
 
-function buildExpectedProjection(actuals: ProjectionPoint[], assumptions: ProjectionAssumptions, months: number): ProjectionPoint[] {
-  if (actuals.length === 0 || months <= 0) return [];
+function buildEmptyProjectionOutput(): ProjectionOutput {
+  return {
+    monthly_revenue: [],
+    monthly_cogs: [],
+    monthly_opex: [],
+    monthly_net_profit: [],
+    monthly_cash_flow: [],
+    monthly_cash_balance: [],
+    total_revenue: 0,
+    total_profit: 0,
+    burn_rate: 0,
+    runway: Number.POSITIVE_INFINITY,
+    break_even_month: null,
+    break_even_revenue: null,
+    projection_status: "VALID",
+    error_message: null,
+  };
+}
+
+function extractBaselineMetrics(actuals: ProjectionPoint[]): {
+  baselineRevenueAnnual: number;
+  baselineRevenueMonthly: number;
+  cogsRatio: number;
+  opexRatio: number;
+  variableCostRatio: number;
+  fixedCostBaseline: number;
+  netMargin: number;
+  cashCollectionRatio: number;
+  currentCashBalance: number;
+} {
+  const base = actuals.slice(-12);
+  const fallbackCash = actuals.length ? actuals[actuals.length - 1].cashBalance : 0;
+
+  if (base.length === 0) {
+    return {
+      baselineRevenueAnnual: 0,
+      baselineRevenueMonthly: 0,
+      cogsRatio: 0.35,
+      opexRatio: 0.4,
+      variableCostRatio: 0.22,
+      fixedCostBaseline: 0,
+      netMargin: 0,
+      cashCollectionRatio: 1,
+      currentCashBalance: fallbackCash,
+    };
+  }
+
+  const totalRevenue = base.reduce((sum, point) => sum + point.revenue, 0);
+  const totalCogs = base.reduce((sum, point) => sum + point.cogs, 0);
+  const totalOpex = base.reduce((sum, point) => sum + Math.max(0, point.totalExpenses - point.cogs), 0);
+  const totalVariableCosts = base.reduce((sum, point) => sum + point.variableCosts + point.marketingCosts, 0);
+  const totalFixedCosts = base.reduce((sum, point) => sum + point.fixedCosts, 0);
+  const totalNet = base.reduce((sum, point) => sum + point.netProfit, 0);
+  const totalCashInflow = base.reduce((sum, point) => sum + point.cashInflow, 0);
+
+  const baselineRevenueAnnual = totalRevenue;
+  const baselineRevenueMonthly = safeDivide(baselineRevenueAnnual, 12);
+
+  return {
+    baselineRevenueAnnual,
+    baselineRevenueMonthly,
+    cogsRatio: clamp(safeDivide(totalCogs, Math.max(totalRevenue, 1)), 0.02, 0.9),
+    opexRatio: clamp(safeDivide(totalOpex, Math.max(totalRevenue, 1)), 0.05, 0.95),
+    variableCostRatio: clamp(safeDivide(totalVariableCosts, Math.max(totalRevenue, 1)), 0.01, 0.9),
+    fixedCostBaseline: Math.max(0, safeDivide(totalFixedCosts, Math.max(1, base.length))),
+    netMargin: clamp(safeDivide(totalNet, Math.max(totalRevenue, 1)), -0.95, 0.95),
+    cashCollectionRatio: clamp(safeDivide(totalCashInflow, Math.max(totalRevenue, 1)), 0.4, 1.6),
+    currentCashBalance: fallbackCash,
+  };
+}
+
+function validateProjectionConsistency(
+  series: ProjectionPoint[],
+  startingCash: number,
+  revenueGrowthRate: number,
+  baselineRevenueMonthly: number
+): string[] {
+  if (!series.length) return [];
+  const issues: string[] = [];
+
+  for (let i = 0; i < series.length; i += 1) {
+    const point = series[i];
+    if (
+      point.cogs < 0 ||
+      point.operatingExpenses < 0 ||
+      point.totalExpenses < 0 ||
+      point.fixedCosts < 0 ||
+      point.variableCosts < 0 ||
+      point.marketingCosts < 0
+    ) {
+      issues.push(`Negative cost detected in ${point.label}.`);
+    }
+    if (point.revenue > 0 && point.operatingExpenses <= 0) {
+      issues.push(`Operating expenses cannot be zero in ${point.label} while revenue is positive.`);
+    }
+    if (point.netProfit > point.grossProfit + 1) {
+      issues.push(`Net profit exceeds gross profit in ${point.label}.`);
+    }
+    if (point.revenue > 0 && safeDivide(point.netProfit, point.revenue) > 0.95) {
+      issues.push(`Net margin above 95% in ${point.label}.`);
+    }
+
+    if (i > 0) {
+      const previous = series[i - 1];
+      const expectedRevenue = previous.revenue * (1 + revenueGrowthRate);
+      const tolerance = Math.max(1, Math.abs(expectedRevenue) * 0.002);
+      if (Math.abs(point.revenue - expectedRevenue) > tolerance) {
+        issues.push(`Projected revenue in ${point.label} is inconsistent with growth assumptions.`);
+      }
+      if (point.cashBalance > previous.cashBalance + 0.5 && point.netCashflow <= 0) {
+        issues.push(`Cash increased without positive net cash flow in ${point.label}.`);
+      }
+    }
+  }
+
+  if (Math.abs(revenueGrowthRate) < 1e-9) {
+    const actualTotalRevenue = series.reduce((sum, point) => sum + point.revenue, 0);
+    const expectedTotalRevenue = baselineRevenueMonthly * series.length;
+    const tolerance = Math.max(1, Math.abs(expectedTotalRevenue) * 0.001);
+    if (Math.abs(actualTotalRevenue - expectedTotalRevenue) > tolerance) {
+      issues.push("Projection invalid: revenue cannot grow when growth rate is 0.");
+    }
+  }
+
+  const summedNetCash = series.reduce((sum, point) => sum + point.netCashflow, 0);
+  const expectedEndingCash = startingCash + summedNetCash;
+  const actualEndingCash = series[series.length - 1].cashBalance;
+  if (Math.abs(expectedEndingCash - actualEndingCash) > 1) {
+    issues.push("Cash flow reconciliation failed.");
+  }
+
+  const breakEvenIndex = series.findIndex((point) => point.netProfit >= 0);
+  if (breakEvenIndex >= 0 && series[breakEvenIndex].netProfit < 0) {
+    issues.push("Break-even month is inconsistent with projected losses.");
+  }
+
+  return Array.from(new Set(issues));
+}
+
+function buildProjectionEngineResult(
+  actuals: ProjectionPoint[],
+  assumptions: ProjectionAssumptions,
+  months: number
+): ProjectionComputationResult {
+  const baseline = extractBaselineMetrics(actuals);
+  const emptyOutput = buildEmptyProjectionOutput();
+
+  if (actuals.length === 0 || months <= 0) {
+    return {
+      points: [],
+      output: emptyOutput,
+      validationIssues: [],
+      baseline: {
+        baselineRevenueMonthly: baseline.baselineRevenueMonthly,
+        startingCash: baseline.currentCashBalance,
+      },
+    };
+  }
 
   const last = actuals[actuals.length - 1];
-  let revenue = Math.max(0, last.revenue);
-  let fixedCosts = Math.max(0, last.fixedCosts || assumptions.fixedCostBaseline);
-  let variableCostRatio = assumptions.variableCostRatio;
-  let cashBalance = last.cashBalance;
-
   const projected: ProjectionPoint[] = [];
 
+  let previousRevenue = Math.max(0, baseline.baselineRevenueMonthly || last.revenue);
+  let cashBalance = baseline.currentCashBalance;
+
+  const revenueGrowthRate = clamp(assumptions.revenueGrowthRate, -0.2, 0.6);
+  const cogsRatio = clamp(assumptions.cogsRatio || baseline.cogsRatio, 0.01, 0.9);
+  const variableCostRatio = clamp(
+    assumptions.variableCostRatio > 0 ? assumptions.variableCostRatio : baseline.variableCostRatio,
+    0.01,
+    0.9
+  );
+  const marketingRatio = clamp(assumptions.marketingSpendRatio, 0, Math.min(0.5, variableCostRatio));
+  const nonMarketingVariableCostRatio = Math.max(0, variableCostRatio - marketingRatio);
+  const fixedCostGrowthRate = clamp(
+    Math.max(assumptions.fixedCostInflationRate, assumptions.operatingExpenseGrowthRate),
+    -0.1,
+    0.35
+  );
+  const fixedCostBaseline = Math.max(
+    0,
+    assumptions.fixedCostBaseline > 0 ? assumptions.fixedCostBaseline : baseline.fixedCostBaseline
+  );
+  const cashCollectionRatio = clamp(
+    assumptions.cashCollectionRatio > 0 ? assumptions.cashCollectionRatio : baseline.cashCollectionRatio,
+    0.4,
+    1.6
+  );
+  const taxRate = 0.15;
+
   for (let monthIndex = 1; monthIndex <= months; monthIndex += 1) {
-    revenue = revenue * (1 + assumptions.revenueGrowthRate);
+    const revenue = previousRevenue * (1 + revenueGrowthRate);
+    previousRevenue = revenue;
 
-    // Core Costs
-    const cogs = revenue * assumptions.cogsRatio;
-    const variableCosts = revenue * assumptions.variableCostRatio;
-    const marketingCosts = revenue * assumptions.marketingSpendRatio;
+    const cogs = revenue * cogsRatio;
+    const marketingCosts = revenue * marketingRatio;
+    const variableCosts = revenue * nonMarketingVariableCostRatio;
+    const fixedCosts = fixedCostBaseline * Math.pow(1 + fixedCostGrowthRate, monthIndex - 1);
+    const operatingExpenses = fixedCosts + revenue * variableCostRatio;
 
-    // Fixed Costs with Inflation
-    fixedCosts = assumptions.fixedCostBaseline * Math.pow(1 + assumptions.fixedCostInflationRate, monthIndex);
+    const grossProfit = revenue - cogs;
+    const operatingProfit = grossProfit - operatingExpenses;
+    const taxes = operatingProfit > 0 ? operatingProfit * taxRate : 0;
+    const netProfit = operatingProfit - taxes;
+    const totalExpenses = cogs + operatingExpenses + taxes;
 
-    const operatingExpenses = fixedCosts + marketingCosts;
-    const totalExpenses = cogs + variableCosts + operatingExpenses;
-
-    const grossProfit = revenue - cogs - variableCosts;
-    const netProfit = grossProfit - operatingExpenses;
-
-    const estimatedInterestTax = Math.max(0, totalExpenses * 0.045);
-    const estimatedDepreciation = Math.max(0, fixedCosts * 0.14);
-    const ebitda = netProfit + estimatedDepreciation + estimatedInterestTax;
-
-    const cashInflow = revenue * assumptions.cashCollectionRatio;
-    const cashOutflow = (cogs + variableCosts + operatingExpenses) * assumptions.cashDisbursementRatio;
+    const cashInflow = revenue * cashCollectionRatio;
+    const cashOutflow = cogs + operatingExpenses + taxes;
     const netCashflow = cashInflow - cashOutflow;
     cashBalance += netCashflow;
-    const burnRate = Math.max(0, -netCashflow);
 
     const key = shiftMonthKey(last.key, monthIndex);
-
     projected.push({
       key,
       label: monthLabel(key),
@@ -671,22 +870,61 @@ function buildExpectedProjection(actuals: ProjectionPoint[], assumptions: Projec
       variableCosts,
       marketingCosts,
       operatingExpenses,
-      burnRate,
       totalExpenses,
       grossProfit,
       netProfit,
-      ebitda,
+      ebitda: operatingProfit,
       grossMarginPct: safeDivide(grossProfit, revenue),
       netMarginPct: safeDivide(netProfit, revenue),
       cashInflow,
       cashOutflow,
       netCashflow,
+      burnRate: Math.max(0, -netCashflow),
       cashBalance,
       kind: "projected",
     });
   }
 
-  return projected;
+  const validationIssues = validateProjectionConsistency(
+    projected,
+    baseline.currentCashBalance,
+    revenueGrowthRate,
+    baseline.baselineRevenueMonthly
+  );
+  const negativeNetCashflow = projected
+    .map((point) => point.netCashflow)
+    .filter((value) => value < 0)
+    .map((value) => Math.abs(value));
+  const burnRate = negativeNetCashflow.length ? average(negativeNetCashflow) : 0;
+  const runway = burnRate > 0 ? Math.max(0, baseline.currentCashBalance / burnRate) : Number.POSITIVE_INFINITY;
+  const breakEvenIndex = projected.findIndex((point) => point.netProfit >= 0);
+
+  const output: ProjectionOutput = {
+    monthly_revenue: projected.map((point) => point.revenue),
+    monthly_cogs: projected.map((point) => point.cogs),
+    monthly_opex: projected.map((point) => point.operatingExpenses),
+    monthly_net_profit: projected.map((point) => point.netProfit),
+    monthly_cash_flow: projected.map((point) => point.netCashflow),
+    monthly_cash_balance: projected.map((point) => point.cashBalance),
+    total_revenue: projected.reduce((sum, point) => sum + point.revenue, 0),
+    total_profit: projected.reduce((sum, point) => sum + point.netProfit, 0),
+    burn_rate: burnRate,
+    runway,
+    break_even_month: breakEvenIndex >= 0 ? breakEvenIndex + 1 : null,
+    break_even_revenue: breakEvenIndex >= 0 ? projected[breakEvenIndex].revenue : null,
+    projection_status: validationIssues.length ? "INVALID" : "VALID",
+    error_message: validationIssues.length ? "Projection violates financial consistency rules" : null,
+  };
+
+  return {
+    points: projected,
+    output,
+    validationIssues,
+    baseline: {
+      baselineRevenueMonthly: baseline.baselineRevenueMonthly,
+      startingCash: baseline.currentCashBalance,
+    },
+  };
 }
 
 function scenarioMultipliers(scenario: Scenario): {
@@ -716,9 +954,9 @@ function buildScenarioProjection(expected: ProjectionPoint[], baseCashBalance: n
     const fixedCosts = point.fixedCosts * multipliers.fixed;
     const variableCosts = point.variableCosts * multipliers.variable;
     const marketingCosts = point.marketingCosts || 0;
-    const operatingExpenses = fixedCosts + marketingCosts;
-    const totalExpenses = cogs + fixedCosts + variableCosts + marketingCosts;
-    const grossProfit = revenue - cogs - variableCosts;
+    const operatingExpenses = fixedCosts + variableCosts + marketingCosts;
+    const totalExpenses = cogs + operatingExpenses;
+    const grossProfit = revenue - cogs;
     const netProfit = grossProfit - operatingExpenses;
     const ebitda = netProfit + (point.ebitda - point.netProfit);
     const cashInflow = point.cashInflow * multipliers.inflow;
@@ -748,14 +986,8 @@ function buildScenarioProjection(expected: ProjectionPoint[], baseCashBalance: n
   });
 }
 
-function extractRunwayMonths(series: ProjectionPoint[]): number | null {
-  const index = series.findIndex((point) => point.cashBalance < 0);
-  if (index < 0) return null;
-  return index + 1;
-}
-
 function findBreakEven(series: ProjectionPoint[]): { monthLabel: string | null; revenuePoint: number | null; index: number | null } {
-  const index = series.findIndex((point) => point.revenue >= point.totalExpenses);
+  const index = series.findIndex((point) => point.netProfit >= 0);
   if (index < 0) return { monthLabel: null, revenuePoint: null, index: null };
   return {
     monthLabel: series[index].label,
@@ -1202,6 +1434,7 @@ function InflowOutflowBars({ points }: { points: ProjectionPoint[] }) {
 
 export default function AccountingProjectionsPage() {
   const [state, setState] = useState<AccountingState | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [statementSnapshot, setStatementSnapshot] = useState<{
     revenue: number;
     costOfSales: number;
@@ -1303,8 +1536,16 @@ export default function AccountingProjectionsPage() {
     setAssumptionOverrides((prev) => ({ ...prev, [key]: value }));
   };
 
-  const expectedSixMonth = useMemo(() => buildExpectedProjection(actualSeries, assumptions, 6), [actualSeries, assumptions]);
-  const expectedEighteenMonth = useMemo(() => buildExpectedProjection(actualSeries, assumptions, 18), [actualSeries, assumptions]);
+  const expectedSixMonthResult = useMemo(
+    () => buildProjectionEngineResult(actualSeries, assumptions, 6),
+    [actualSeries, assumptions]
+  );
+  const expectedEighteenMonthResult = useMemo(
+    () => buildProjectionEngineResult(actualSeries, assumptions, 18),
+    [actualSeries, assumptions]
+  );
+  const expectedSixMonth = expectedSixMonthResult.points;
+  const expectedEighteenMonth = expectedEighteenMonthResult.points;
 
   const conservativeScenario = useMemo(() => {
     const baseCash = actualSeries.length ? actualSeries[actualSeries.length - 1].cashBalance : 0;
@@ -1318,45 +1559,44 @@ export default function AccountingProjectionsPage() {
 
   const timeline = useMemo(() => [...actualSeries, ...expectedSixMonth], [actualSeries, expectedSixMonth]);
 
-  const projectedRevenueSixMonth = useMemo(
-    () => expectedSixMonth.reduce((sum, point) => sum + point.revenue, 0),
-    [expectedSixMonth]
-  );
-  const projectedNetProfitSixMonth = useMemo(
-    () => expectedSixMonth.reduce((sum, point) => sum + point.netProfit, 0),
-    [expectedSixMonth]
-  );
+  const projectedRevenueSixMonth = useMemo(() => expectedSixMonthResult.output.total_revenue, [expectedSixMonthResult]);
+  const projectedNetProfitSixMonth = useMemo(() => expectedSixMonthResult.output.total_profit, [expectedSixMonthResult]);
   const projectedRevenueAnnual = useMemo(() => {
     return projectedRevenueSixMonth * 2;
   }, [projectedRevenueSixMonth]);
 
   const projectedGrossMargin = useMemo(() => {
     if (!expectedSixMonth.length) return 0;
-    return average(expectedSixMonth.map(p => p.grossMarginPct));
+    return average(expectedSixMonth.map((point) => point.grossMarginPct));
   }, [expectedSixMonth]);
 
-  const burnRate = useMemo(() => {
-    if (!expectedSixMonth.length) return 0;
-    return average(expectedSixMonth.map(p => p.burnRate));
-  }, [expectedSixMonth]);
+  const burnRate = useMemo(() => expectedSixMonthResult.output.burn_rate, [expectedSixMonthResult]);
+
+  const projectionValidationIssues = useMemo(() => {
+    const issues = [...expectedEighteenMonthResult.validationIssues];
+    if (expectedEighteenMonthResult.output.projection_status === "INVALID" && expectedEighteenMonthResult.output.error_message) {
+      issues.unshift(expectedEighteenMonthResult.output.error_message);
+    }
+    return Array.from(new Set(issues));
+  }, [expectedEighteenMonthResult]);
+
+  const projectionStatus = expectedEighteenMonthResult.output.projection_status;
 
   const projectedCashBalance = useMemo(() => {
-    if (!expectedSixMonth.length) return closingCashBalance;
-    return expectedSixMonth[expectedSixMonth.length - 1].cashBalance;
-  }, [expectedSixMonth, closingCashBalance]);
+    const balances = expectedSixMonthResult.output.monthly_cash_balance;
+    if (!balances.length) return closingCashBalance;
+    return balances[balances.length - 1];
+  }, [closingCashBalance, expectedSixMonthResult]);
 
   const runwayMonths = useMemo(() => {
-    if (burnRate <= 0) return null; // Infinite runway
-    return closingCashBalance / burnRate;
-  }, [closingCashBalance, burnRate]);
+    const runway = expectedEighteenMonthResult.output.runway;
+    if (!Number.isFinite(runway)) return null;
+    return runway;
+  }, [expectedEighteenMonthResult]);
 
   const breakEven = useMemo(() => findBreakEven(expectedEighteenMonth), [expectedEighteenMonth]);
 
-  const breakEvenRevenue = useMemo(() => {
-    const margin = 1 - (assumptions.cogsRatio + assumptions.variableCostRatio + assumptions.marketingSpendRatio);
-    if (margin <= 0) return null;
-    return assumptions.fixedCostBaseline / margin;
-  }, [assumptions]);
+  const breakEvenRevenue = useMemo(() => breakEven.revenuePoint, [breakEven.revenuePoint]);
 
   const revenueData = useMemo(
     () => timeline.map((point) => ({ label: point.label, revenue: point.revenue, kind: point.kind })),
@@ -1392,8 +1632,8 @@ export default function AccountingProjectionsPage() {
   }, [expectedSixMonth, conservativeScenario, aggressiveScenario]);
 
   const breakEvenChartData = useMemo(
-    () => expectedSixMonth.map((point) => ({ label: point.label, revenue: point.revenue, expenses: point.totalExpenses })),
-    [expectedSixMonth]
+    () => expectedEighteenMonth.map((point) => ({ label: point.label, revenue: point.revenue, expenses: point.totalExpenses })),
+    [expectedEighteenMonth]
   );
 
   const projectionContextSnapshot = useMemo(() => {
@@ -1413,13 +1653,15 @@ export default function AccountingProjectionsPage() {
     return [
       "Context: projections",
       `Updated at: ${new Date().toISOString()}`,
+      `Projection status: ${projectionStatus}`,
       `Projected annual revenue: ${Math.round(projectedRevenueAnnual)}`,
       `Projected net profit (6M): ${Math.round(projectedNetProfitSixMonth)}`,
       `Projected gross margin: ${(projectedGrossMargin * 100).toFixed(2)}%`,
       `Burn rate: ${Math.round(burnRate)}`,
       `Projected cash balance: ${Math.round(projectedCashBalance)}`,
-      `Runway months: ${runwayMonths || 18}`,
+      `Runway months: ${runwayMonths ?? "infinite"}`,
       `Break-even month: ${breakEven.monthLabel || "not reached"}`,
+      `Break-even revenue: ${Math.round(breakEvenRevenue || 0)}`,
       `Recent window: ${recentWindow}`,
       `Recent avg revenue: ${Math.round(recentAvgRevenue)}`,
       `Recent avg net profit: ${Math.round(recentAvgNet)}`,
@@ -1432,12 +1674,18 @@ export default function AccountingProjectionsPage() {
       ).toFixed(2)}%; cashCollectionRatio=${assumptions.cashCollectionRatio.toFixed(3)}; cashDisbursementRatio=${assumptions.cashDisbursementRatio.toFixed(
         3
       )}; fixedCostBaseline=${Math.round(assumptions.fixedCostBaseline)}`,
+      `Validation issues: ${projectionValidationIssues.length ? projectionValidationIssues.join(" | ") : "none"}`,
+      `Projection output (18M): ${JSON.stringify(expectedEighteenMonthResult.output)}`,
       `Recent trend: ${recentSummary || "No trend data available."}`,
     ].join("\n");
   }, [
     assumptions,
     breakEven.monthLabel,
+    breakEvenRevenue,
     burnRate,
+    expectedEighteenMonthResult.output,
+    projectionStatus,
+    projectionValidationIssues,
     projectedCashBalance,
     projectedGrossMargin,
     projectedNetProfitSixMonth,
@@ -1484,11 +1732,20 @@ export default function AccountingProjectionsPage() {
     }
   }, [projectionContextSnapshot]);
 
-  const handlePrintDashboard = () => {
-    if (typeof window === "undefined") return;
-    window.requestAnimationFrame(() => {
-      window.print();
-    });
+  const handleDownloadDashboardPdf = async () => {
+    if (typeof window === "undefined" || isDownloadingPdf) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      window.requestAnimationFrame(() => {
+        window.print();
+      });
+    } catch (error) {
+      console.error("Failed to download projections PDF:", error);
+      window.alert("Could not open print dialog right now. Please try again.");
+    } finally {
+      window.setTimeout(() => setIsDownloadingPdf(false), 600);
+    }
   };
 
   if (!state) {
@@ -1530,14 +1787,15 @@ export default function AccountingProjectionsPage() {
         <div className="print-hidden flex items-center gap-2">
           <button
             type="button"
-            onClick={handlePrintDashboard}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-            title="Print projections dashboard"
+            onClick={handleDownloadDashboardPdf}
+            disabled={isDownloadingPdf}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Download projections dashboard PDF"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V4h12v5M6 14H4a2 2 0 01-2-2v-1a3 3 0 013-3h14a3 3 0 013 3v1a2 2 0 01-2 2h-2M6 14v6h12v-6M9 18h6" />
             </svg>
-            Print PDF
+            {isDownloadingPdf ? "Generating PDF..." : "Download PDF"}
           </button>
         </div>
       </div>
@@ -1575,23 +1833,39 @@ export default function AccountingProjectionsPage() {
         />
         <KpiCard
           label="Runway"
-          value={runwayMonths ? `${runwayMonths} months` : "> 18 months"}
-          hint="Months before projected cash dips below zero"
+          value={runwayMonths !== null ? `${runwayMonths.toFixed(1)} months` : "> 18 months"}
+          hint="Months before projected cash dips below zero (or infinite)"
           accent="text-amber-600"
         />
         <KpiCard
           label="Break-even Month"
           value={breakEven.monthLabel || "Not in 18M"}
-          hint="Month revenue overtakes total expenses"
+          hint="First month where projected net profit is non-negative"
           accent="text-fuchsia-600"
         />
         <KpiCard
           label="Break-even Revenue"
           value={breakEvenRevenue ? formatNaira(breakEvenRevenue) : "N/A"}
-          hint="Monthly revenue needed to break even"
+          hint="Projected revenue in break-even month"
           accent="text-cyan-600"
         />
       </div>
+
+      {projectionValidationIssues.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-900">Projection Validation Alerts ({projectionStatus})</h2>
+          <p className="mt-1 text-xs text-amber-800">
+            These flags indicate mathematically inconsistent or high-risk outputs based on current assumptions.
+          </p>
+          <div className="mt-2 space-y-1">
+            {projectionValidationIssues.map((issue, idx) => (
+              <p key={`${issue}-${idx}`} className="text-xs text-amber-900">
+                • {issue}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
@@ -1714,7 +1988,7 @@ export default function AccountingProjectionsPage() {
           />
           <div className="mt-4 rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600">
             {breakEven.monthLabel
-              ? `Revenue is projected to cross total expenses by ${breakEven.monthLabel} (${formatNaira(breakEven.revenuePoint || 0)}).`
+              ? `Net profit is projected to turn non-negative by ${breakEven.monthLabel} (${formatNaira(breakEven.revenuePoint || 0)} revenue).`
               : "Break-even is not reached in the current 18-month forecast window."}
           </div>
         </div>

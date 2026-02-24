@@ -2,6 +2,7 @@ import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import type { BuiltModuleContext } from "@/lib/agent/contextBuilder";
 import { getToolsForDomain, type ToolRequest, toUnifiedAction } from "@/lib/agent/toolRegistry";
 import { GeminiClient } from "@/lib/agent/geminiClient";
+import { FPA_PROJECTION_MASTER_PROMPT } from "@/lib/agent/fpaProjectionMasterPrompt";
 
 export interface GeminiPlannerResponse {
   reply: string;
@@ -88,16 +89,34 @@ function buildToolSpecText(context: BuiltModuleContext): string {
     .join("\n");
 }
 
+function shouldApplyFpaProtocol(context: BuiltModuleContext): boolean {
+  const route = (context.route || "").toLowerCase();
+  return (
+    context.module === "reporting" ||
+    route.startsWith("/accounting/projections") ||
+    route.startsWith("/cashflow-intelligence")
+  );
+}
+
 function buildSystemInstruction(context: BuiltModuleContext): string {
-  return [
+  const baseInstruction = [
     "You are the AI assistant embedded inside a financial operating system.",
     "You have access to financial records, reporting systems, customer/payment modules, and operational workflows.",
     `Active module: ${context.moduleLabel} (${context.module}).`,
     `Module capabilities: ${context.moduleDescription}`,
     "You must ground your response in provided context, available functions, and entities.",
     "Avoid generic or stateless chatbot responses.",
+    "First classify intent: EXECUTE_SOFTWARE_ACTION, ANSWER_OR_EXPLAIN, or HYBRID.",
+    "If the user is asking for meaning/definition/explanation, answer naturally and return toolRequests: [].",
+    "If the user is asking to perform an in-product task, request only the minimal safe action tools needed.",
     "When an operation is required, choose the best tool request.",
   ].join(" ");
+
+  if (!shouldApplyFpaProtocol(context)) return baseInstruction;
+  return `${baseInstruction}
+
+FP&A MASTER PROTOCOL:
+${FPA_PROJECTION_MASTER_PROMPT}`;
 }
 
 function buildPlannerPrompt(params: {
@@ -170,7 +189,9 @@ Return strict JSON only with this schema:
 Rules:
 - Always respond as a deeply embedded system agent with contextual awareness.
 - Ground every response in module context and system capabilities.
-- If this is normal conversation, return toolRequests: [] and provide a natural, human response.
+- If this is normal conversation, explanatory Q&A, or a definition request, return toolRequests: [] and provide a natural, human response.
+- Never request action tools for pure meaning/definition/explanation questions.
+- For user-data lookup questions (for example, "what is my runway"), use relevant analysis tools when needed.
 - If toolRequests include action tools, include only what is necessary and safe.
 - Never output markdown fences or extra prose outside the JSON.`;
 }

@@ -241,5 +241,5 @@ function getPageDescription(pathname: string): string {
   if (pathname.includes("/tax-tools/wht")) return "Record payments subject to WHT";
   if (pathname.includes("/tax-tools/vat")) return "Quick VAT estimator";
   if (pathname.includes("/tax-tools/cgt")) return "Capture asset disposals";
-  return "Smart Nigerian Tax Manager";
+  return "Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities";
 }
