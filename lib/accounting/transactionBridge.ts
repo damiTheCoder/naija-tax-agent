@@ -309,20 +309,20 @@ class AccountingEngine {
 
     // Check if any line in the manual entry touches a tax-applicable account
     for (const line of entry.lines) {
-      const account = this.state.ledgerAccounts.get(line.accountCode);
+      const account = getAccount(line.accountCode);
       if (account?.taxApplicable) {
         // If tax is applicable, verify the user also included tax lines
         const hasVatIncluded = entry.lines.some(l => l.accountCode === "2200" || l.accountCode === "1400");
         const hasWhtIncluded = entry.lines.some(l => l.accountCode === "2220" || l.accountCode === "1410");
 
         if (account.taxApplicable.vat && !hasVatIncluded) {
-          anomalyFlag = `Missing VAT: You posted to ${account.accountName} which requires VAT, but no VAT account (2200/1400) was found in this entry.`;
+          anomalyFlag = `Missing VAT: You posted to ${account.name} which requires VAT, but no VAT account (2200/1400) was found in this entry.`;
           console.warn(`[Tax Anomaly] ${anomalyFlag}`);
           break; // Stop checking, we found a high-priority anomaly
         }
 
         if (account.taxApplicable.wht && !hasWhtIncluded) {
-          anomalyFlag = `Missing WHT: You posted to ${account.accountName} which attracts WHT, but no WHT account (2220/1410) was found.`;
+          anomalyFlag = `Missing WHT: You posted to ${account.name} which attracts WHT, but no WHT account (2220/1410) was found.`;
           console.warn(`[Tax Anomaly] ${anomalyFlag}`);
           break;
         }
@@ -880,14 +880,14 @@ class AccountingEngine {
     // Step 4: Autonomous Tax Provisioning
     // Check if the primary economic account attracts VAT or WHT
     const economicAccountCode = analysis.flow === "inflow" ? analysis.creditAccount.code : analysis.debitAccount.code;
-    const economicAccount = this.state.ledgerAccounts.get(economicAccountCode);
+    const economicAccount = getAccount(economicAccountCode);
 
     let totalTaxProvisioned = 0;
     let provisionedDebits = amount;
     let provisionedCredits = amount;
 
     if (economicAccount && economicAccount.taxApplicable) {
-      console.log(`[Tax Engine] Autonomous provisioning triggered for ${economicAccount.accountName}`);
+      console.log(`[Tax Engine] Autonomous provisioning triggered for ${economicAccount.name}`);
 
       const { vat, wht, whtRate } = economicAccount.taxApplicable;
       const baseAmount = amount; // Assuming the raw amount is VAT-inclusive for this demo

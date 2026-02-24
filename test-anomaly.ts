@@ -49,14 +49,16 @@ const drafted = accountingEngine.processBatchIntelligently([
     date: new Date().toISOString().split("T")[0],
     description: "Uber Ride to Airport",
     amount: -12000,
-    type: "expense"
+    type: "expense",
+    category: "transport"
   },
   {
     id: "batch-2",
     date: new Date().toISOString().split("T")[0],
     description: "Stripe Payout",
     amount: 1500000,
-    type: "income"
+    type: "income",
+    category: "sales"
   }
 ]);
 
@@ -64,4 +66,3 @@ console.log("\nDrafted Entries:");
 console.log(`Count: ${drafted.length}`);
 console.log(`Status of first entry: ${drafted[0].status}`);
 console.log(`Account assigned to first entry: ${drafted[0].lines[0].accountName}`);
-
