@@ -95,30 +95,39 @@ const parsePeriod = (
 };
 
 const getYearFromPeriod = (period: string): number => {
-  const match = period.match(/^(\d{4})/);
-  return match ? Number(match[1]) : new Date().getFullYear();
+  if (typeof period !== "string") return new Date().getFullYear();
+  const normalized = period.trim();
+  if (normalized.length < 4) return new Date().getFullYear();
+  const yearPart = normalized.slice(0, 4);
+  const year = Number(yearPart);
+  return Number.isInteger(year) && yearPart.length === 4 ? year : new Date().getFullYear();
 };
 
 const getVatWhtDueDate = (period: string): string => {
-  const year = getYearFromPeriod(period);
-  const quarterMatch = period.match(/^(\d{4})-Q(\d)$/i);
-  if (quarterMatch) {
-    const q = Number(quarterMatch[2]);
+  const normalized = typeof period === "string" ? period.trim().toUpperCase() : "";
+  const year = getYearFromPeriod(normalized);
+  const quarterParts = normalized.split("-Q");
+  if (quarterParts.length === 2) {
+    const q = Number(quarterParts[1]);
     let month = q * 3 + 1;
     let dueYear = year;
-    if (month > 12) {
+    if (q >= 1 && q <= 4 && month > 12) {
       month -= 12;
       dueYear += 1;
+    } else if (q < 1 || q > 4) {
+      return `${year}-12-21`;
     }
     return `${dueYear}-${String(month).padStart(2, "0")}-21`;
   }
-  const monthMatch = period.match(/^(\d{4})-(\d{2})$/);
-  if (monthMatch) {
-    let month = Number(monthMatch[2]) + 1;
+  const monthParts = normalized.split("-");
+  if (monthParts.length === 2 && monthParts[0].length === 4 && monthParts[1].length === 2) {
+    let month = Number(monthParts[1]) + 1;
     let dueYear = year;
-    if (month > 12) {
+    if (monthParts[1] >= "01" && monthParts[1] <= "12" && month > 12) {
       month = 1;
       dueYear += 1;
+    } else if (monthParts[1] < "01" || monthParts[1] > "12") {
+      return `${year}-12-21`;
     }
     return `${dueYear}-${String(month).padStart(2, "0")}-21`;
   }

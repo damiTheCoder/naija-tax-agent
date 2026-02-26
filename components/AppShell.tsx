@@ -39,6 +39,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       "/accounting",
       "/dashboard",
       "/accounting/workspace",
+      "/accounting/assets",
+      "/accounting/depreciation",
       "/accounting/projections",
       "/accounting/projections/modelling",
       "/tax/computation",
@@ -230,6 +232,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/accounting/projections")) return "Financial Projections";
   if (pathname.includes("/accounting/workspace")) return "Accounting Records";
+  if (pathname.includes("/accounting/assets")) return "Fixed Assets";
+  if (pathname.includes("/accounting/depreciation")) return "Depreciation";
   if (pathname.includes("/accounting")) return "Accounting Studio";
   if (pathname.includes("/dashboard")) return "Dashboard";
   if (pathname.includes("/tax/computation")) return "Tax Computation";
@@ -246,6 +250,8 @@ function getPageTitle(pathname: string): string {
 function getPageDescription(pathname: string): string {
   if (pathname.includes("/accounting/projections")) return "Forward-looking forecasts from your accounting records";
   if (pathname.includes("/accounting/workspace")) return "Real-time journals, ledgers, and statements";
+  if (pathname.includes("/accounting/assets")) return "Track fixed assets, accumulated depreciation, and net book values";
+  if (pathname.includes("/accounting/depreciation")) return "Automatic depreciation schedule with monthly journal guidance";
   if (pathname.includes("/accounting")) return "Generate financial statements before tax";
   if (pathname.includes("/dashboard")) return "Business metrics and analytics overview";
   if (pathname.includes("/tax/computation")) return "Transparent CIT, VAT, WHT, and PAYE computations from your accounting data";

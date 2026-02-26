@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTransactionsFromFiles } from "@/lib/accounting/statementEngine";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import type { JournalEntry } from "@/lib/accounting/doubleEntry";
+import { generateTaxSchedule } from "@/lib/accounting/transactionTaxAnalyzer";
 import { mapJournalEntriesToCompliance } from "@/lib/tax/compliance/adapters";
 import {
   runTaxComputation,
@@ -121,6 +122,26 @@ const formatDate = (dateStr?: string) => {
   });
 };
 
+const getYearPrefix = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (normalized.length < 4) return null;
+  const yearPart = normalized.slice(0, 4);
+  const year = Number(yearPart);
+  if (!Number.isInteger(year) || yearPart.length !== 4) return null;
+  return year;
+};
+
+const dedupeJournalEntries = (entries: JournalEntry[]): JournalEntry[] => {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = entry.id || `${entry.date || ""}::${entry.narration || ""}::${entry.createdAt || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const PAYE_RATE_ESTIMATE = 0.15;
 const EDUCATION_TAX_RATE = 0.03;
 const FILED_STAGES = new Set<ComplianceStatusStage | string>(["filed", "paid", "reconciled"]);
@@ -192,8 +213,7 @@ export default function TaxWorkspacePage() {
     if (!isMountedRef.current) return;
     setIsRefreshingRules(true);
     try {
-      accountingEngine.load();
-      const entries = accountingEngine.getState().journalEntries;
+      const entries = dedupeJournalEntries(accountingEngine.getState().journalEntries);
       if (!isMountedRef.current) return;
       setJournalEntries(entries.filter((entry) => entry.status === "posted"));
       const mappedTransactions = mapJournalEntriesToCompliance("entity-default", entries);
@@ -233,6 +253,7 @@ export default function TaxWorkspacePage() {
   }, [refreshAudit]);
 
   useEffect(() => {
+    accountingEngine.load();
     runComputation();
     const unsubscribe = accountingEngine.subscribe(() => {
       runComputation();
@@ -452,9 +473,8 @@ export default function TaxWorkspacePage() {
     };
 
     const periodMatchesScope = (period: string) => {
-      const yearMatch = period.match(/^(\d{4})/);
-      if (!yearMatch) return false;
-      const year = Number(yearMatch[1]);
+      const year = getYearPrefix(period);
+      if (year === null) return false;
       return year === selectedYear;
     };
 
@@ -535,10 +555,10 @@ export default function TaxWorkspacePage() {
       });
     });
 
-    // Keep breakdown aligned with timeline ledger impacts for VAT/WHT/CIT.
-    breakdown.CIT = Math.max(0, taxImpactByType.CIT.payable);
-    breakdown.VAT = Math.max(0, taxImpactByType.VAT.payable);
-    breakdown.WHT = Math.max(0, taxImpactByType.WHT.payable);
+    // Keep breakdown aligned with net liabilities (payable less credits).
+    breakdown.CIT = Math.max(0, taxImpactByType.CIT.net);
+    breakdown.VAT = Math.max(0, taxImpactByType.VAT.net);
+    breakdown.WHT = Math.max(0, taxImpactByType.WHT.net);
 
     let payeFromLedger = 0;
     let payrollExpense = 0;
@@ -626,6 +646,40 @@ export default function TaxWorkspacePage() {
         paidByType[taxType] += Math.max(0, payment.amount || 0);
       }
     });
+
+    // Align tax payables with Financial Reporting tax schedule engine for consistency.
+    const reportingTaxSummary = generateTaxSchedule(
+      journalEntries.filter((entry) => entry.status === "posted" && inScope(entry.date || entry.createdAt)),
+      { isVatRegistered: true }
+    ).summary;
+    const vatNetPayable = Number.isFinite(reportingTaxSummary.vatPayable) ? reportingTaxSummary.vatPayable : 0;
+    const citPayable = Math.max(0, reportingTaxSummary.citPayable || 0);
+    const whtPayable = Math.max(0, reportingTaxSummary.whtPayable || 0);
+    const payePayableFromReporting = Math.max(0, reportingTaxSummary.payePayable || 0);
+    const educationTaxPayableFromReporting = Math.max(0, reportingTaxSummary.developmentLevy || 0);
+
+    taxImpactByType.CIT = { payable: citPayable, credit: 0, net: citPayable };
+    taxImpactByType.VAT = {
+      payable: Math.max(0, vatNetPayable),
+      credit: vatNetPayable < 0 ? Math.abs(vatNetPayable) : 0,
+      net: vatNetPayable,
+    };
+    taxImpactByType.WHT = { payable: whtPayable, credit: 0, net: whtPayable };
+    taxImpactByType.PAYE = {
+      payable: payePayableFromReporting,
+      credit: 0,
+      net: payePayableFromReporting,
+    };
+    taxImpactByType.EDT = {
+      payable: educationTaxPayableFromReporting,
+      credit: 0,
+      net: educationTaxPayableFromReporting,
+    };
+    breakdown.CIT = Math.max(0, taxImpactByType.CIT.net);
+    breakdown.VAT = Math.max(0, taxImpactByType.VAT.net);
+    breakdown.WHT = Math.max(0, taxImpactByType.WHT.net);
+    breakdown.PAYE = Math.max(0, taxImpactByType.PAYE.net);
+    breakdown.EDT = Math.max(0, taxImpactByType.EDT.net);
 
     trend.forEach((point, monthIndex) => {
       if (point.paye > 0) {

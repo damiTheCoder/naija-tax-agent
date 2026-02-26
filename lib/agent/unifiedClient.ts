@@ -1308,6 +1308,8 @@ type AccountingUiMirrorLine = {
 };
 
 type AccountingUiMirrorPayload = {
+  entryId: string;
+  date: string;
   narration: string;
   lines: AccountingUiMirrorLine[];
 };
@@ -1330,6 +1332,8 @@ function toAccountingUiMirrorPayload(fallbackNarration: string): AccountingUiMir
   if (lines.length === 0) return null;
 
   return {
+    entryId: toText(latest.id),
+    date: toText(latest.date, getTodayDate()),
     narration: toText(latest.narration, fallbackNarration) || fallbackNarration,
     lines,
   };
@@ -1352,6 +1356,11 @@ async function runAccountingUiMirror(payload: AccountingUiMirrorPayload): Promis
         {
           action: "click",
           target: { selector: '[data-agent-target="open-post-journal-entry"]' },
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-date"]' },
+          value: payload.date,
         },
         {
           action: "type",
@@ -1393,6 +1402,29 @@ async function runAccountingUiMirror(payload: AccountingUiMirrorPayload): Promis
   };
 
   const mirrorResult = await executeUiOperate(previewAction, { rollbackOnStop: false });
+  if (mirrorResult.success) {
+    window.dispatchEvent(
+      new CustomEvent("accounting-agent-preview", {
+        detail: {
+          entryId: payload.entryId,
+          date: payload.date,
+          narration: payload.narration,
+          lines: [
+            {
+              accountCode: primaryDebit.accountCode,
+              debit: primaryDebit.debit,
+              credit: 0,
+            },
+            {
+              accountCode: primaryCredit.accountCode,
+              debit: 0,
+              credit: primaryCredit.credit,
+            },
+          ],
+        },
+      })
+    );
+  }
   return mirrorResult.success ? "Live UI preview updated in Post Journal Entry form." : "";
 }
 
@@ -2142,6 +2174,7 @@ export async function runUnifiedAgentMessage(params: {
   shouldStop?: () => boolean;
   rollbackOnStop?: boolean;
   autoApproveUiActions?: boolean;
+  onExecutionStart?: () => void;
 }): Promise<{
   finalReply: string;
   baseReply: string;
@@ -2155,6 +2188,16 @@ export async function runUnifiedAgentMessage(params: {
   const objective = trimmedMessage;
   const snapshot = typeof params.contextSnapshot === "string" ? params.contextSnapshot : "";
   const shouldStop = () => Boolean(params.shouldStop?.());
+  let executionStartNotified = false;
+  const notifyExecutionStart = () => {
+    if (executionStartNotified) return;
+    executionStartNotified = true;
+    try {
+      params.onExecutionStart?.();
+    } catch {
+      // Ignore UI callback failures to keep agent execution deterministic.
+    }
+  };
 
   if (pendingUiApproval && isCancelMessage(trimmedMessage)) {
     pendingUiApproval = null;
@@ -2171,6 +2214,7 @@ export async function runUnifiedAgentMessage(params: {
   if (pendingUiApproval && isConfirmMessage(trimmedMessage)) {
     const approval = pendingUiApproval;
     pendingUiApproval = null;
+    if (approval.actions.length > 0) notifyExecutionStart();
     const execution = await executeUnifiedAgentActions(approval.actions, {
       customActionExecutor: params.customActionExecutor,
       shouldStop: params.shouldStop,
@@ -2206,6 +2250,7 @@ export async function runUnifiedAgentMessage(params: {
         contextSnapshot: params.contextSnapshot,
       });
       if (Array.isArray(inferredPlan.actions) && inferredPlan.actions.length > 0) {
+        notifyExecutionStart();
         const execution = await executeUnifiedAgentActions(inferredPlan.actions, {
           customActionExecutor: params.customActionExecutor,
           shouldStop: params.shouldStop,
@@ -2308,6 +2353,7 @@ export async function runUnifiedAgentMessage(params: {
 
     aggregateActions.push(...actionsToExecute);
 
+    if (actionsToExecute.length > 0) notifyExecutionStart();
     const execution = await executeUnifiedAgentActions(actionsToExecute, {
       customActionExecutor: params.customActionExecutor,
       shouldStop: params.shouldStop,

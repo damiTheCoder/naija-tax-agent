@@ -148,6 +148,8 @@ function inferNavigationRoute(message: string, currentRoute: string): string | n
   if (!/(go to|open|navigate|take me to)/.test(lower)) return null;
 
   if (/\bprojection|forecast|model\b/.test(lower)) return "/accounting/projections";
+  if (/\bfixed asset|asset register|assets page\b/.test(lower)) return "/accounting/assets";
+  if (/\bdepreciation|accumulated depreciation\b/.test(lower)) return "/accounting/depreciation";
   if (/\breconciliation\b/.test(lower)) return "/accounting/reconciliation";
   if (/\breport\b/.test(lower)) return "/accounting/reports";
   if (/\btax\b/.test(lower)) return "/tax-tools";

@@ -138,6 +138,12 @@ export default function PageSkeleton({ overridePath }: { overridePath?: string |
   if (resolvedPath?.startsWith("/accounting/reports")) {
     return <ReportsSkeleton />;
   }
+  if (resolvedPath?.startsWith("/accounting/assets")) {
+    return <ReportsSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/accounting/depreciation")) {
+    return <ReportsSkeleton />;
+  }
   if (resolvedPath?.startsWith("/accounting/reconciliation")) {
     return <ReconciliationSkeleton />;
   }

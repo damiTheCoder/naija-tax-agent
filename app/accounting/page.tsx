@@ -111,6 +111,51 @@ function formatFullNaira(value: number): string {
   return `₦${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
+type EntrySignatureLineInput = {
+  accountCode?: string;
+  debit?: number | string;
+  credit?: number | string;
+};
+
+type AgentPreviewDetail = {
+  entryId?: string;
+  date?: string;
+  narration?: string;
+  lines?: Array<{ accountCode: string; debit: number; credit: number }>;
+};
+
+const normalizeSignatureAmount = (value: number | string | undefined): number => {
+  const numeric = typeof value === "string" ? parseFloat(value) : Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round(Math.abs(numeric) * 100) / 100;
+};
+
+const normalizeEntrySignatureLines = (lines: EntrySignatureLineInput[]) =>
+  lines
+    .map((line) => ({
+      accountCode: String(line.accountCode || "").trim(),
+      debit: normalizeSignatureAmount(line.debit),
+      credit: normalizeSignatureAmount(line.credit),
+    }))
+    .filter((line) => line.accountCode && (line.debit > 0 || line.credit > 0))
+    .sort((a, b) => {
+      if (a.accountCode !== b.accountCode) return a.accountCode.localeCompare(b.accountCode);
+      if (a.debit !== b.debit) return a.debit - b.debit;
+      return a.credit - b.credit;
+    });
+
+const buildEntrySignature = (
+  date: string | undefined,
+  narration: string | undefined,
+  lines: EntrySignatureLineInput[]
+): string | null => {
+  const normalizedDate = String(date || "").trim();
+  const normalizedNarration = String(narration || "").trim().toLowerCase();
+  const normalizedLines = normalizeEntrySignatureLines(lines);
+  if (!normalizedDate || !normalizedNarration || normalizedLines.length === 0) return null;
+  return `${normalizedDate}|${normalizedNarration}|${JSON.stringify(normalizedLines)}`;
+};
+
 export default function AccountingPage() {
   const { theme } = useTheme();
   const router = useRouter();
@@ -164,6 +209,8 @@ export default function AccountingPage() {
     { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
   ]);
   const [postEntryError, setPostEntryError] = useState("");
+  const [agentMirroredEntryId, setAgentMirroredEntryId] = useState<string | null>(null);
+  const [agentMirroredSignature, setAgentMirroredSignature] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<{ isValid?: boolean; fixed?: boolean; reasoning?: string; suggestedCorrections?: { lines: Array<{ accountCode: string; accountName: string; debit: number; credit: number }> } } | null>(null);
 
@@ -177,6 +224,19 @@ export default function AccountingPage() {
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
   const [cashHeadlineMode, setCashHeadlineMode] = useState<CashHeadlineMode>("inflow");
+
+  const cloneAccountingState = useCallback((next: AccountingState): AccountingState => ({
+    ...next,
+    journalEntries: [...next.journalEntries],
+    customAccounts: [...next.customAccounts],
+    ledgerAccounts: new Map(next.ledgerAccounts),
+  }), []);
+
+  const syncAccountingState = useCallback((next: AccountingState) => {
+    const cloned = cloneAccountingState(next);
+    setAccountingState(cloned);
+    setJournalEntries(cloned.journalEntries);
+  }, [cloneAccountingState]);
 
 
 
@@ -208,6 +268,23 @@ export default function AccountingPage() {
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
     return { totalDebit, totalCredit, isBalanced };
   }, [postEntryLines]);
+
+  const currentPostEntrySignature = useMemo(
+    () => buildEntrySignature(postEntryDate, postEntryNarration, postEntryLines),
+    [postEntryDate, postEntryNarration, postEntryLines]
+  );
+
+  const postedEntryIds = useMemo(
+    () => new Set(journalEntries.filter((entry) => entry.status === "posted").map((entry) => entry.id)),
+    [journalEntries]
+  );
+
+  const isAgentMirroredAlreadyPosted =
+    Boolean(agentMirroredEntryId) &&
+    postedEntryIds.has(agentMirroredEntryId as string) &&
+    Boolean(agentMirroredSignature) &&
+    agentMirroredSignature === currentPostEntrySignature &&
+    postEntryNarration.trim().length > 0;
 
   // Calculate edit entry totals
   const editEntryTotals = useMemo(() => {
@@ -302,8 +379,7 @@ export default function AccountingPage() {
     // Defer heavy localStorage load to allow page to render first
     const loadEngine = () => {
       accountingEngine.load();
-      setAccountingState(accountingEngine.getState());
-      setJournalEntries(accountingEngine.getState().journalEntries);
+      syncAccountingState(accountingEngine.getState());
     };
 
     // Use requestIdleCallback if available, otherwise setTimeout
@@ -315,8 +391,7 @@ export default function AccountingPage() {
 
     // Subscribe to updates from the engine
     const unsubscribe = accountingEngine.subscribe((state) => {
-      setAccountingState(state);
-      setJournalEntries(state.journalEntries);
+      syncAccountingState(state);
     });
 
     // Listen for custom accounting-update events (from chat transactions)
@@ -324,8 +399,7 @@ export default function AccountingPage() {
       console.log("[Accounting Page] Received accounting-update event, refreshing state...");
       accountingEngine.load(); // Reload from localStorage to get latest data
       const state = accountingEngine.getState();
-      setAccountingState(state);
-      setJournalEntries(state.journalEntries);
+      syncAccountingState(state);
 
       // Also regenerate financial statements
       const statements = accountingEngine.generateStatements();
@@ -333,6 +407,42 @@ export default function AccountingPage() {
       console.log("[Accounting Page] Statements regenerated:", statements);
     };
     window.addEventListener("accounting-update", handleAccountingUpdate);
+
+    const handleAgentPreview = (event: Event) => {
+      const customEvent = event as CustomEvent<AgentPreviewDetail>;
+      const detail = customEvent.detail;
+      if (!detail || !Array.isArray(detail.lines) || detail.lines.length === 0) return;
+
+      const nextDate = detail.date || new Date().toISOString().split("T")[0];
+      const nextNarration = String(detail.narration || "").trim();
+      const nextLines: PostEntryLine[] = detail.lines.map((line, index) => ({
+        id: String(index + 1),
+        accountCode: line.accountCode || "",
+        accountName: allAccountsForSelect.find((account) => account.code === line.accountCode)?.name || "",
+        debit: line.debit > 0 ? String(line.debit) : "",
+        credit: line.credit > 0 ? String(line.credit) : "",
+      }));
+
+      while (nextLines.length < 2) {
+        nextLines.push({
+          id: String(nextLines.length + 1),
+          accountCode: "",
+          accountName: "",
+          debit: "",
+          credit: "",
+        });
+      }
+
+      setShowPostEntry(true);
+      setPostEntryError("");
+      setPostEntryDate(nextDate);
+      setPostEntryNarration(nextNarration);
+      setPostEntryLines(nextLines);
+      const signature = buildEntrySignature(nextDate, nextNarration, nextLines);
+      setAgentMirroredEntryId(detail.entryId || null);
+      setAgentMirroredSignature(signature);
+    };
+    window.addEventListener("accounting-agent-preview", handleAgentPreview as EventListener);
 
     // Also listen for storage events for cross-tab sync
     const handleStorageEvent = (e: StorageEvent) => {
@@ -348,8 +458,17 @@ export default function AccountingPage() {
       unsubscribe();
       window.removeEventListener("accounting-update", handleAccountingUpdate);
       window.removeEventListener("storage", handleStorageEvent);
+      window.removeEventListener("accounting-agent-preview", handleAgentPreview as EventListener);
     };
-  }, []);
+  }, [allAccountsForSelect, syncAccountingState]);
+
+  useEffect(() => {
+    if (!agentMirroredSignature || !currentPostEntrySignature) return;
+    if (agentMirroredSignature !== currentPostEntrySignature) {
+      setAgentMirroredEntryId(null);
+      setAgentMirroredSignature(null);
+    }
+  }, [agentMirroredSignature, currentPostEntrySignature]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -844,6 +963,10 @@ export default function AccountingPage() {
       setPostEntryError("Entry must be balanced (Total DR = Total CR)");
       return;
     }
+    if (isAgentMirroredAlreadyPosted) {
+      setPostEntryError("This entry is already posted by the agent. Edit any field to post a new one.");
+      return;
+    }
 
     try {
       const entry = accountingEngine.postManualJournalEntry({
@@ -853,11 +976,17 @@ export default function AccountingPage() {
           .filter((l) => l.accountCode && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
           .map((l) => ({
             accountCode: l.accountCode,
-            accountName: l.accountName,
+            accountName:
+              l.accountName ||
+              allAccountsForSelect.find((account) => account.code === l.accountCode)?.name ||
+              l.accountCode,
             debit: parseFloat(l.debit) || 0,
             credit: parseFloat(l.credit) || 0,
           })),
       });
+
+      // Ensure UI refreshes from a cloned engine snapshot immediately after posting.
+      syncAccountingState(accountingEngine.getState());
 
       appendMessage("assistant", `✅ Posted journal entry ${entry.id}: ${postEntryNarration}`);
       pushAutomationActivity("Manual entry", `Posted: ${entry.id}`);
@@ -870,21 +999,23 @@ export default function AccountingPage() {
         { id: "1", accountCode: "", accountName: "", debit: "", credit: "" },
         { id: "2", accountCode: "", accountName: "", debit: "", credit: "" },
       ]);
+      setAgentMirroredEntryId(null);
+      setAgentMirroredSignature(null);
     } catch (err: unknown) {
       setPostEntryError(err instanceof Error ? err.message : "Failed to post entry");
     }
   };
 
   const addPostEntryLine = () => {
-    setPostEntryLines([
-      ...postEntryLines,
+    setPostEntryLines((previous) => [
+      ...previous,
       { id: Date.now().toString(), accountCode: "", accountName: "", debit: "", credit: "" },
     ]);
   };
 
   const updatePostEntryLine = (id: string, field: string, value: string) => {
-    setPostEntryLines(
-      postEntryLines.map((l) => {
+    setPostEntryLines((previous) =>
+      previous.map((l) => {
         if (l.id !== id) return l;
         if (field === "accountCode") {
           const account = allAccountsForSelect.find((a) => a.code === value);
@@ -897,7 +1028,7 @@ export default function AccountingPage() {
 
   const removePostEntryLine = (id: string) => {
     if (postEntryLines.length > 2) {
-      setPostEntryLines(postEntryLines.filter((l) => l.id !== id));
+      setPostEntryLines((previous) => previous.filter((l) => l.id !== id));
     }
   };
 
@@ -930,8 +1061,7 @@ export default function AccountingPage() {
       try {
         const draftEntry = accountingEngine.resetJournalEntryToDraft(entry.id);
         const updatedState = accountingEngine.getState();
-        setAccountingState(updatedState);
-        setJournalEntries(updatedState.journalEntries);
+        syncAccountingState(updatedState);
         targetEntry = updatedState.journalEntries.find((j) => j.id === entry.id) || draftEntry;
         appendMessage("assistant", `📝 Entry ${entry.id} reset to draft. Update and save to repost.`);
         pushAutomationActivity("Entry reset to draft", `Draft: ${entry.id}`);
@@ -942,7 +1072,7 @@ export default function AccountingPage() {
     }
 
     openEditEntry(targetEntry);
-  }, [appendMessage, openEditEntry, pushAutomationActivity]);
+  }, [appendMessage, openEditEntry, pushAutomationActivity, syncAccountingState]);
 
   const editEntryIdParam = searchParams.get("editEntry");
   const shouldResetDraftParam = searchParams.get("resetDraft") === "1";
@@ -980,6 +1110,9 @@ export default function AccountingPage() {
     }
 
     autoNewEntryHandledRef.current = true;
+    setAgentMirroredEntryId(null);
+    setAgentMirroredSignature(null);
+    setPostEntryError("");
     setShowPostEntry(true);
     router.replace("/accounting");
   }, [router, shouldOpenNewEntryParam]);
@@ -1026,8 +1159,7 @@ export default function AccountingPage() {
       // If entry not found, refresh state and close modal
       if (err instanceof Error && err.message.includes("not found")) {
         const updatedState = accountingEngine.getState();
-        setAccountingState(updatedState);
-        setJournalEntries(updatedState.journalEntries);
+        syncAccountingState(updatedState);
         setShowEditEntry(false);
         setEditingEntryId(null);
         appendMessage("assistant", `ℹ️ Entry ${editingEntryId} no longer exists. View has been refreshed.`);
@@ -1052,8 +1184,7 @@ export default function AccountingPage() {
 
       // Force refresh state from engine after delete
       const updatedState = accountingEngine.getState();
-      setAccountingState(updatedState);
-      setJournalEntries(updatedState.journalEntries);
+      syncAccountingState(updatedState);
 
       appendMessage("assistant", `🧾 Voided journal entry ${entryId}`);
       pushAutomationActivity("Entry voided", `Voided: ${entryId}`);
@@ -1065,8 +1196,7 @@ export default function AccountingPage() {
       if (err instanceof Error && err.message.includes("not found")) {
         console.log("[Delete] Entry not found - refreshing state to remove stale data");
         const updatedState = accountingEngine.getState();
-        setAccountingState(updatedState);
-        setJournalEntries(updatedState.journalEntries);
+        syncAccountingState(updatedState);
         appendMessage("assistant", `ℹ️ Entry ${entryId} was already removed or doesn't exist. Refreshed the view.`);
       } else {
         appendMessage("assistant", `❌ Failed to delete entry: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -1075,15 +1205,15 @@ export default function AccountingPage() {
   };
 
   const addEditEntryLine = () => {
-    setEditEntryLines([
-      ...editEntryLines,
+    setEditEntryLines((previous) => [
+      ...previous,
       { id: Date.now().toString(), accountCode: "", accountName: "", debit: "", credit: "" },
     ]);
   };
 
   const updateEditEntryLine = (id: string, field: string, value: string) => {
-    setEditEntryLines(
-      editEntryLines.map((l) => {
+    setEditEntryLines((previous) =>
+      previous.map((l) => {
         if (l.id !== id) return l;
         if (field === "accountCode") {
           const account = allAccountsForSelect.find((a) => a.code === value);
@@ -1096,7 +1226,7 @@ export default function AccountingPage() {
 
   const removeEditEntryLine = (id: string) => {
     if (editEntryLines.length > 2) {
-      setEditEntryLines(editEntryLines.filter((l) => l.id !== id));
+      setEditEntryLines((previous) => previous.filter((l) => l.id !== id));
     }
   };
 
@@ -1263,7 +1393,12 @@ export default function AccountingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Post Journal Entry Button */}
                   <button
-                    onClick={() => setShowPostEntry(true)}
+                    onClick={() => {
+                      setAgentMirroredEntryId(null);
+                      setAgentMirroredSignature(null);
+                      setPostEntryError("");
+                      setShowPostEntry(true);
+                    }}
                     data-agent-target="open-post-journal-entry"
                     className={`
                       w-full rounded-2xl border transition-all p-5 group
@@ -1536,6 +1671,7 @@ export default function AccountingPage() {
                       type="date"
                       value={postEntryDate}
                       onChange={(e) => setPostEntryDate(e.target.value)}
+                      data-agent-target="post-entry-date"
                       className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     />
                   </div>
@@ -1734,6 +1870,15 @@ export default function AccountingPage() {
                   </div>
                 )}
 
+                {isAgentMirroredAlreadyPosted && (
+                  <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 px-4 py-3 rounded-lg border border-blue-100">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5-1a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Entry {agentMirroredEntryId ? `${agentMirroredEntryId} ` : ""}was already posted by the agent.
+                  </div>
+                )}
+
                 {!postEntryTotals.isBalanced && postEntryTotals.totalDebit > 0 && (
                   <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
                     <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1761,10 +1906,10 @@ export default function AccountingPage() {
                       }
                     }}
                     data-agent-target="post-entry-submit"
-                    disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim()}
+                    disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim() || isAgentMirroredAlreadyPosted}
                     className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Post Entry
+                    {isAgentMirroredAlreadyPosted ? "Already Posted" : "Post Entry"}
                   </button>
                 </div>
               </div>

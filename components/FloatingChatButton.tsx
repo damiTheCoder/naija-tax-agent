@@ -360,6 +360,8 @@ function resolvePreferredAgentRoute(message: string, currentPath: string): strin
     if (inAccounting || accountingIntent) {
         if (/(reconcil|bank statement|match transactions?)/.test(lower)) return "/accounting/reconciliation";
         if (/(projection|forecast|model|scenario)/.test(lower)) return "/accounting/projections";
+        if (/(fixed asset|assets register|asset register|asset schedule)/.test(lower)) return "/accounting/assets";
+        if (/(depreciation|depreciate|accumulated depreciation)/.test(lower)) return "/accounting/depreciation";
         if (/(invoice|bill customer|quotation)/.test(lower)) return "/accounting/invoices";
         if (/(receipt|expense receipt|upload receipt)/.test(lower)) return "/accounting/receipts";
         if (/(payroll|employee salary|salary run|employee tax)/.test(lower)) return "/accounting/payroll";
@@ -1030,10 +1032,15 @@ _Ask me anything about bank reconciliation!_`;
                 appendMessage("assistant", response);
             } else {
                 setIsAgentPerforming(true);
-                setIsModalOpen(false);
-                await new Promise((resolve) => setTimeout(resolve, 240));
+                let hasClosedForExecution = false;
+                const closeModalForExecution = () => {
+                    if (hasClosedForExecution) return;
+                    hasClosedForExecution = true;
+                    setIsModalOpen(false);
+                };
                 const preferredRoute = resolvePreferredAgentRoute(trimmed, pathname);
                 if (preferredRoute && preferredRoute !== pathname) {
+                    closeModalForExecution();
                     activeRoute = preferredRoute;
                     activeModuleId = getModuleFromPath(preferredRoute).id;
                     router.push(preferredRoute);
@@ -1050,6 +1057,7 @@ _Ask me anything about bank reconciliation!_`;
                     shouldStop: () => stopAgentRef.current,
                     rollbackOnStop: true,
                     autoApproveUiActions: true,
+                    onExecutionStart: closeModalForExecution,
                 });
 
                 const response = result.finalReply;
@@ -1152,27 +1160,27 @@ _Ask me anything about bank reconciliation!_`;
                                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
                                         {currentModule.name}
                                     </span>
-                                    <div className="flex items-center gap-1.5">
-                                        <svg
-                                            className="h-4 w-4 text-gray-500"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            aria-hidden="true"
-                                        >
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l2.4 4.9L20 9l-4 3.9.9 5.5L12 16l-4.9 2.4.9-5.5L4 9l5.6-1.1L12 3z" />
-                                        </svg>
+                                    <div className="flex items-center">
                                         <div className="relative">
                                             <select
                                                 value={agentChatMode}
                                                 onChange={(e) => setAgentChatMode(e.target.value as AgentChatMode)}
-                                                className="h-7 appearance-none rounded-full border border-gray-300 bg-white pl-2 pr-6 text-[11px] font-medium text-gray-700 outline-none transition-colors focus:border-blue-400"
+                                                className="h-7 w-[108px] appearance-none rounded-full border border-gray-300 bg-white pl-6 pr-6 text-[10px] font-semibold text-gray-700 outline-none transition-colors focus:border-blue-400"
                                                 aria-label="Assistant mode"
                                             >
-                                                <option value="response-only">Response only</option>
-                                                <option value="full-agentic">Full agentic</option>
+                                                <option value="response-only">Response</option>
+                                                <option value="full-agentic">Agentic</option>
                                             </select>
+                                            <svg
+                                                className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                                aria-hidden="true"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l2.4 4.9L20 9l-4 3.9.9 5.5L12 16l-4.9 2.4.9-5.5L4 9l5.6-1.1L12 3z" />
+                                            </svg>
                                             <svg
                                                 className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
                                                 viewBox="0 0 20 20"
@@ -1212,7 +1220,7 @@ _Ask me anything about bank reconciliation!_`;
                                                     {msg.content}
                                                 </div>
                                             ) : (
-                                                <div className="text-sm leading-relaxed text-gray-900 dark:text-gray-200 whitespace-pre-wrap">
+                                                <div className="inline-block max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
                                                     {msg.content}
                                                 </div>
                                             )}

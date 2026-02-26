@@ -52,6 +52,22 @@ const icons = {
 // Color palette for charts
 const CHART_COLORS = ["#2264ff", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
 
+function formatCompactNaira(amount: number): string {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  const abs = Math.abs(safe);
+  const sign = safe < 0 ? "-" : "";
+
+  const formatWithSuffix = (divisor: number, suffix: "K" | "M" | "B") => {
+    const compact = (abs / divisor).toFixed(abs / divisor >= 100 ? 0 : 1).replace(/\.0$/, "");
+    return `${sign}₦${compact}${suffix}`;
+  };
+
+  if (abs >= 1_000_000_000) return formatWithSuffix(1_000_000_000, "B");
+  if (abs >= 1_000_000) return formatWithSuffix(1_000_000, "M");
+  if (abs >= 1_000) return formatWithSuffix(1_000, "K");
+  return `${sign}₦${abs.toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+}
+
 // Pie Chart Component
 function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
@@ -133,7 +149,7 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
             >
               {item.value > 0 && (
                 <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                  ₦{item.value >= 1000000 ? (item.value / 1000000).toFixed(1) + 'M' : item.value >= 1000 ? (item.value / 1000).toFixed(0) + 'K' : item.value.toLocaleString()}
+                  {formatCompactNaira(item.value)}
                 </div>
               )}
             </div>
@@ -192,45 +208,6 @@ function EmptyState() {
         Go to Accounting Studio
         {icons.arrowRight}
       </Link>
-    </div>
-  );
-}
-
-// Morning Briefing Component
-function MorningBriefing({ data }: { data: any }) {
-  const isHealthy = data.netProfit >= 0;
-
-  return (
-    <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-6 mb-6 shadow-xl relative overflow-hidden">
-      {/* Decorative background element */}
-      <div className="absolute right-0 top-0 w-64 h-64 bg-blue-500 opacity-10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-
-      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center relative z-10">
-        <div className="w-14 h-14 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
-          <span className="text-2xl">✨</span>
-        </div>
-
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-            Morning Briefing <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">Live AI</span>
-          </h2>
-          <p className="text-gray-300 text-sm leading-relaxed max-w-3xl">
-            Good morning. Your current cash balance across tracked ledger accounts is <strong className="text-white">₦{data.assets.toLocaleString()}</strong>.
-            So far, you have generated <strong className="text-white">₦{data.totalRevenue.toLocaleString()}</strong> in revenue, with a net profit margin of <strong className={isHealthy ? "text-emerald-400" : "text-red-400"}>{data.profitMargin > 0 ? data.profitMargin.toFixed(1) : 0}%</strong>.
-            {data.journalEntryCount > 0 ? ` I have processed ${data.journalEntryCount} journal entries for you.` : " No entries have been processed yet."}
-          </p>
-        </div>
-
-        <div className="flex-shrink-0 flex gap-3 w-full md:w-auto mt-4 md:mt-0">
-          <div className="bg-black/30 rounded-xl px-4 py-3 border border-white/10 w-full md:w-40 backdrop-blur-sm">
-            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Status</p>
-            <p className="text-sm font-semibold text-emerald-400 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Ledger Synced
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -510,9 +487,9 @@ export default function DashboardPage() {
     };
   }, [transactions, engineStatements, journalCount]);
 
-  // Format currency - always show precise amounts
+  // Format currency as compact K/M/B
   const formatCurrency = (amount: number): string => {
-    return `₦${amount.toLocaleString()}`;
+    return formatCompactNaira(amount);
   };
 
   const metrics: MetricCard[] = useMemo(
@@ -589,9 +566,6 @@ export default function DashboardPage() {
         <EmptyState />
       ) : (
         <>
-          {/* Morning Briefing Widget */}
-          <MorningBriefing data={calculatedData} />
-
           {/* Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((metric, index) => (
@@ -713,7 +687,7 @@ export default function DashboardPage() {
                       <span
                         className={`text-sm font-bold flex-shrink-0 whitespace-nowrap ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}
                       >
-                        {tx.type === "income" ? "+" : "-"}₦{Math.abs(tx.amount).toLocaleString()}
+                        {tx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
                       </span>
                     </div>
                   ))

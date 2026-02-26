@@ -142,6 +142,20 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     description: "View accounts and post manual entries",
     mode: "accounting",
   },
+  {
+    label: "Fixed Assets",
+    href: "/accounting/assets",
+    icon: "ledger",
+    description: "Track fixed assets and net book values from the ledger",
+    mode: "accounting",
+  },
+  {
+    label: "Depreciation",
+    href: "/accounting/depreciation",
+    icon: "trend",
+    description: "Automatic depreciation schedule and monthly journal guidance",
+    mode: "accounting",
+  },
 ];
 
 // Payroll & Compliance navigation

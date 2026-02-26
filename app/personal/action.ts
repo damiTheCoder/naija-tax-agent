@@ -2,6 +2,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ConnectedApp } from "@/lib/ConnectedAppsContext";
+import { resolveGeminiApiKey } from "@/lib/agent/geminiClient";
 
 
 
@@ -33,7 +34,7 @@ const queryCache = new Map<string, { response: string, timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
 export async function generatePfmResponse(message: string, connectedApps: ConnectedApp[]): Promise<string> {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY || "";
+  const apiKey = resolveGeminiApiKey();
 
   // 1. Check Cache
   const cacheKey = message.trim().toLowerCase();
@@ -45,7 +46,7 @@ export async function generatePfmResponse(message: string, connectedApps: Connec
 
   if (!apiKey) {
     console.warn("[Gemini PFM] API Key is missing");
-    return "⚠️ Google Gemini API Key is missing. Please configure it in your environment variables.";
+    return "Google AI is not connected yet. On Render, set GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY), then redeploy.";
   }
 
   try {
@@ -84,7 +85,7 @@ Based on the connected apps, provide a helpful response. If they ask for data fr
     // Check for specific error types if possible
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes("API_KEY_INVALID")) {
-      return "❌ The Gemini API key provided is invalid. Please check your .env.local file.";
+      return "The Gemini API key is invalid. Update GOOGLE_GEMINI_API_KEY in Render and redeploy.";
     }
     if (errorMessage.includes("quota")) {
       return "⏳ Gemini free tier quota exceeded. Please try again in a few minutes.";
