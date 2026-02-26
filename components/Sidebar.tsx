@@ -105,7 +105,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-2 space-y-1 overflow-y-auto mt-2">
+        <nav className="sidebar-nav-scrollbar flex-1 px-2 pr-1 space-y-1 overflow-y-auto mt-2">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
             {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Financial Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>
@@ -148,7 +148,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
 
         {/* Chat History Section */}
-        <div className="px-2 mt-4 space-y-1 overflow-y-auto max-h-44 pt-4 pb-4">
+        <div className="sidebar-nav-scrollbar px-2 pr-1 mt-4 space-y-1 overflow-y-auto max-h-44 pt-4 pb-4">
           <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
             Chat History
           </p>
@@ -213,7 +213,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-4 space-y-2 overflow-hidden">
+        <nav className="sidebar-nav-scrollbar flex-1 p-4 space-y-2 overflow-y-auto">
           <p className="px-3 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
             {mode === "personal" ? "Personal OS" : mode === "tax" ? "Tax Tools" : mode === "intelligence" ? "Financial Management" : mode === "wallet" ? "Wallet" : mode === "supersheet" ? "SuperSheet" : mode === "marketplace" ? "Marketplace" : mode === "payroll" ? "Payroll & Compliance" : "Accounting"}
           </p>

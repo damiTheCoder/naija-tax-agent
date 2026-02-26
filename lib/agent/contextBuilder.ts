@@ -55,7 +55,7 @@ const MODULE_PROFILES: ModuleProfile[] = [
     description: "Tax, treasury, compliance, and system workflow operations.",
     relevantEntities: ["TaxRecord", "ComplianceTask", "RunwayMetric", "SystemAction"],
     databaseEntities: ["tax_transactions", "compliance_records", "system_events"],
-    routes: ["/tax", "/tax-tools", "/main", "/cashflow-intelligence/chat"],
+    routes: ["/tax", "/tax-tools", "/cashflow-intelligence/chat"],
   },
 ];
 

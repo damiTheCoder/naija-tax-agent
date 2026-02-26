@@ -132,6 +132,11 @@ export interface CITReconciliation {
   turnover: number;
   rate: number;
   minimumTax: number;
+  grossTaxBeforeCredits?: number;
+  taxCredits?: number;
+  manualDeductions?: number;
+  manualAllowances?: number;
+  manualAdjustments?: number;
   taxPayable: number;
 }
 

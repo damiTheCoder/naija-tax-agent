@@ -22,24 +22,39 @@ import {
 import { applyClassificationRules } from "./classification";
 import { recordAuditLog } from "./audit";
 import { buildIssues } from "./issues";
+import { applyTaxSettingsToRuleSet } from "@/lib/tax/settings";
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-const parsePeriod = (periodInput: string | undefined, transactions: ComplianceTransaction[]) => {
+const parsePeriod = (
+  periodInput: string | undefined,
+  transactions: ComplianceTransaction[],
+  fiscalStartMonth = 1
+) => {
   const today = new Date();
-  const fallbackDate = transactions.length
-    ? new Date(transactions[transactions.length - 1].date)
-    : today;
+  const fallbackDate = transactions.reduce((latest, tx) => {
+    const date = new Date(tx.date);
+    if (Number.isNaN(date.getTime())) return latest;
+    return date > latest ? date : latest;
+  }, new Date(0));
+  const resolvedFallbackDate =
+    Number.isNaN(fallbackDate.getTime()) || fallbackDate.getTime() <= 0 ? today : fallbackDate;
   const period = periodInput && periodInput !== "current" ? periodInput : undefined;
 
   if (!period) {
-    const year = fallbackDate.getFullYear();
-    const quarter = Math.ceil((fallbackDate.getMonth() + 1) / 3);
-    const startMonth = (quarter - 1) * 3;
-    const startDate = new Date(year, startMonth, 1);
-    const endDate = new Date(year, startMonth + 3, 0);
+    const normalizedFiscalStartMonth = Math.min(12, Math.max(1, Math.round(fiscalStartMonth)));
+    const fiscalStartIndex = normalizedFiscalStartMonth - 1;
+    const monthIndex = resolvedFallbackDate.getMonth();
+    const shiftedMonth = (monthIndex - fiscalStartIndex + 12) % 12;
+    const quarter = Math.floor(shiftedMonth / 3) + 1;
+    const fiscalYear =
+      monthIndex >= fiscalStartIndex
+        ? resolvedFallbackDate.getFullYear()
+        : resolvedFallbackDate.getFullYear() - 1;
+    const startDate = new Date(fiscalYear, fiscalStartIndex + (quarter - 1) * 3, 1);
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 3, 0);
     return {
-      period: `${year}-Q${quarter}`,
+      period: `${fiscalYear}-Q${quarter}`,
       startDate,
       endDate,
     };
@@ -124,6 +139,8 @@ const filterTransactions = (transactions: ComplianceTransaction[], start: Date, 
 const sumLedger = (entries: TaxLedgerEntry[]) =>
   entries.reduce((sum, entry) => sum + entry.taxAmount, 0);
 
+const readNumber = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
 const computeVatLedger = (
   entityId: string,
   period: string,
@@ -141,9 +158,12 @@ const computeVatLedger = (
     if (!tx) return;
     const vatInclusive = tx.metadata?.vatInclusive !== false;
     const baseAmount = vatInclusive ? tx.amount / (1 + vatRate) : tx.amount;
-    const vatAmount = vatInclusive ? tx.amount - baseAmount : tx.amount * vatRate;
+    const computedVatAmount = vatInclusive ? tx.amount - baseAmount : tx.amount * vatRate;
+    const manualOutputVat = readNumber(tx.metadata?.vatOutputAmount);
+    const manualInputVat = readNumber(tx.metadata?.vatInputAmount);
 
     if (cls.category === "output") {
+      const vatAmount = manualOutputVat > 0 ? manualOutputVat : computedVatAmount;
       outputEntries.push({
         id: makeId("ledger"),
         entityId,
@@ -158,8 +178,14 @@ const computeVatLedger = (
         direction: "payable",
         ledger: "output",
         createdAt: new Date().toISOString(),
+        metadata: {
+          source: manualOutputVat > 0 ? "accounting_line" : "computed",
+          manualVatAmount: manualOutputVat || undefined,
+          computedVatAmount,
+        },
       });
     } else if (cls.category === "input") {
+      const vatAmount = manualInputVat > 0 ? manualInputVat : computedVatAmount;
       inputEntries.push({
         id: makeId("ledger"),
         entityId,
@@ -174,6 +200,11 @@ const computeVatLedger = (
         direction: "credit",
         ledger: "input",
         createdAt: new Date().toISOString(),
+        metadata: {
+          source: manualInputVat > 0 ? "accounting_line" : "computed",
+          manualVatAmount: manualInputVat || undefined,
+          computedVatAmount,
+        },
       });
     }
   });
@@ -239,7 +270,12 @@ const computeWhtLedger = (
       const tx = transactions.find((item) => item.id === cls.transactionId);
       if (!tx) return;
       const rate = rates[cls.category] ?? 0.05;
-      const taxAmount = tx.amount * rate;
+      const manualPayable = readNumber(tx.metadata?.whtPayableAmount);
+      const manualReceivable = readNumber(tx.metadata?.whtReceivableAmount);
+      const computedTaxAmount = tx.amount * rate;
+      const hasManualPayable = manualPayable > 0;
+      const hasManualReceivable = !hasManualPayable && manualReceivable > 0;
+      const taxAmount = hasManualPayable ? manualPayable : hasManualReceivable ? -manualReceivable : computedTaxAmount;
       entries.push({
         id: makeId("ledger"),
         entityId,
@@ -251,9 +287,15 @@ const computeWhtLedger = (
         period,
         baseAmount: tx.amount,
         taxAmount,
-        direction: "payable",
-        ledger: "output",
+        direction: hasManualReceivable ? "credit" : "payable",
+        ledger: hasManualReceivable ? "input" : "output",
         createdAt: new Date().toISOString(),
+        metadata: {
+          source: hasManualPayable || hasManualReceivable ? "accounting_line" : "computed",
+          manualPayable: hasManualPayable ? manualPayable : undefined,
+          manualReceivable: hasManualReceivable ? manualReceivable : undefined,
+          computedTaxAmount,
+        },
       });
     });
 
@@ -265,7 +307,7 @@ const computeWhtLedger = (
     dueDate: getVatWhtDueDate(period),
     status: "draft",
     totalBase: entries.reduce((sum, entry) => sum + entry.baseAmount, 0),
-    totalTax: entries.reduce((sum, entry) => sum + entry.taxAmount, 0),
+    totalTax: Math.max(0, entries.reduce((sum, entry) => sum + entry.taxAmount, 0)),
     carryForward: 0,
     ruleSetId,
     ledgerEntryIds: entries.map((entry) => entry.id),
@@ -421,28 +463,51 @@ const computeCitLedger = (
   });
 
   const accountingProfit = revenue - expenses;
-  const disallowable = classifications
+  const manualOverrides = transactions.reduce(
+    (acc, tx) => {
+      const metadata = tx.metadata || {};
+      const manualAdjustmentAmount = readNumber(metadata.manualAdjustmentAmount);
+      acc.manualDeductions += Math.max(0, readNumber(metadata.manualDeductionAmount));
+      acc.manualAllowances +=
+        Math.max(0, readNumber(metadata.manualAllowanceAmount)) +
+        Math.max(0, readNumber(metadata.manualCapitalAllowanceAmount));
+      acc.manualAdjustments += manualAdjustmentAmount;
+      acc.taxCredits += Math.max(0, readNumber(metadata.taxCreditAmount));
+      return acc;
+    },
+    {
+      manualDeductions: 0,
+      manualAllowances: 0,
+      manualAdjustments: 0,
+      taxCredits: 0,
+    }
+  );
+
+  const disallowableBase = classifications
     .filter((cls) => cls.taxType === "CIT" && cls.category === "disallowable")
     .reduce((sum, cls) => {
       const tx = transactions.find((item) => item.id === cls.transactionId);
       return sum + (tx ? tx.amount : 0);
     }, 0);
-  const nonTaxable = classifications
+  const nonTaxableBase = classifications
     .filter((cls) => cls.taxType === "CIT" && cls.category === "non_taxable")
     .reduce((sum, cls) => {
       const tx = transactions.find((item) => item.id === cls.transactionId);
       return sum + (tx ? tx.amount : 0);
     }, 0);
-  const capitalAllowance = classifications
+  const capitalAllowanceBase = classifications
     .filter((cls) => cls.taxType === "CIT" && cls.category === "capital_allowance")
     .reduce((sum, cls) => {
       const tx = transactions.find((item) => item.id === cls.transactionId);
       return sum + (tx ? tx.amount : 0);
     }, 0);
   const lossCarryForward = transactions.reduce((sum, tx) => {
-    const loss = typeof tx.metadata?.lossCarryForward === "number" ? (tx.metadata?.lossCarryForward as number) : 0;
-    return sum + loss;
+    return sum + Math.max(0, readNumber(tx.metadata?.lossCarryForward));
   }, 0);
+
+  const disallowable = disallowableBase + Math.max(0, manualOverrides.manualAdjustments);
+  const nonTaxable = nonTaxableBase + manualOverrides.manualDeductions + Math.abs(Math.min(0, manualOverrides.manualAdjustments));
+  const capitalAllowance = capitalAllowanceBase + manualOverrides.manualAllowances;
 
   const taxableProfit = Math.max(0, accountingProfit + disallowable - nonTaxable - capitalAllowance - lossCarryForward);
   const turnover = revenue;
@@ -456,7 +521,8 @@ const computeCitLedger = (
 
   const computedTax = taxableProfit * rate;
   const minimumTax = turnover * config.minimumTaxRate;
-  const taxPayable = rate === 0 ? 0 : Math.max(computedTax, minimumTax);
+  const grossTaxBeforeCredits = rate === 0 ? 0 : Math.max(computedTax, minimumTax);
+  const taxPayable = Math.max(0, grossTaxBeforeCredits - manualOverrides.taxCredits);
 
   const reconciliation: CITReconciliation = {
     accountingProfit,
@@ -468,6 +534,11 @@ const computeCitLedger = (
     turnover,
     rate,
     minimumTax,
+    grossTaxBeforeCredits,
+    taxCredits: manualOverrides.taxCredits,
+    manualDeductions: manualOverrides.manualDeductions,
+    manualAllowances: manualOverrides.manualAllowances,
+    manualAdjustments: manualOverrides.manualAdjustments,
     taxPayable,
   };
 
@@ -532,8 +603,13 @@ export function runTaxComputation(params: {
   transactions: ComplianceTransaction[];
   ruleSetVersion?: string;
 }): TaxComputationResult {
-  const ruleSet = getRuleSet(params.ruleSetVersion);
-  const { period, startDate, endDate } = parsePeriod(params.period, params.transactions);
+  const baseRuleSet = getRuleSet(params.ruleSetVersion);
+  const ruleSet = applyTaxSettingsToRuleSet(params.entityId, baseRuleSet);
+  const { period, startDate, endDate } = parsePeriod(
+    params.period,
+    params.transactions,
+    ruleSet.fiscalStartMonth
+  );
   const inPeriod = filterTransactions(params.transactions, startDate, endDate);
 
   const classifications = applyClassificationRules(params.entityId, inPeriod, ruleSet, params.taxTypes);

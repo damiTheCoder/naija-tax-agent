@@ -41,6 +41,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       "/accounting/workspace",
       "/accounting/projections",
       "/accounting/projections/modelling",
+      "/tax/computation",
+      "/tax/adjustments",
+      "/tax/settings",
+      "/tax/file-taxes",
+      "/tax/calendar",
+      "/tax/payments",
+      "/tax/returns",
       "/tax-tools",
       "/wallet",
       "/marketplace",
@@ -225,10 +232,14 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/accounting/workspace")) return "Accounting Records";
   if (pathname.includes("/accounting")) return "Accounting Studio";
   if (pathname.includes("/dashboard")) return "Dashboard";
-  if (pathname.includes("/main")) return "Main Tax Computation";
-  if (pathname.includes("/tax-tools/wht")) return "Withholding Tax";
-  if (pathname.includes("/tax-tools/vat")) return "Value Added Tax";
-  if (pathname.includes("/tax-tools/cgt")) return "Capital Gains Tax";
+  if (pathname.includes("/tax/computation")) return "Tax Computation";
+  if (pathname.includes("/tax/adjustments")) return "Tax Adjustments";
+  if (pathname.includes("/tax/settings")) return "Tax Settings";
+  if (pathname.includes("/tax/calendar")) return "Tax Calendar";
+  if (pathname.includes("/tax/file-taxes")) return "File Taxes";
+  if (pathname.includes("/tax/payments")) return "Tax Payments";
+  if (pathname.includes("/tax/returns")) return "Tax Returns";
+  if (pathname.includes("/tax/transactions")) return "Tax Transactions";
   return "Quantum Ledger";
 }
 
@@ -237,9 +248,13 @@ function getPageDescription(pathname: string): string {
   if (pathname.includes("/accounting/workspace")) return "Real-time journals, ledgers, and statements";
   if (pathname.includes("/accounting")) return "Generate financial statements before tax";
   if (pathname.includes("/dashboard")) return "Business metrics and analytics overview";
-  if (pathname.includes("/main")) return "Overview and core tax form";
-  if (pathname.includes("/tax-tools/wht")) return "Record payments subject to WHT";
-  if (pathname.includes("/tax-tools/vat")) return "Quick VAT estimator";
-  if (pathname.includes("/tax-tools/cgt")) return "Capture asset disposals";
+  if (pathname.includes("/tax/computation")) return "Transparent CIT, VAT, WHT, and PAYE computations from your accounting data";
+  if (pathname.includes("/tax/adjustments")) return "Accountant-level deductions, allowances, tax credits, and manual tax adjustments";
+  if (pathname.includes("/tax/settings")) return "Configure tax jurisdiction, tax rates, company profile, and fiscal year settings";
+  if (pathname.includes("/tax/calendar")) return "Compliance tracking calendar for filing, payments, and reminders";
+  if (pathname.includes("/tax/file-taxes")) return "Generate return documents, download PDFs, upload filings, and track submission history";
+  if (pathname.includes("/tax/payments")) return "Track payment history, outstanding taxes, paid taxes, receipts, and proof uploads";
+  if (pathname.includes("/tax/returns")) return "Filing center with period, status, tax amount, and filing dates";
+  if (pathname.includes("/tax/transactions")) return "Source-of-truth taxable transactions with classification and overrides";
   return "Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities";
 }

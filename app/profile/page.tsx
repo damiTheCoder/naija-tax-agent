@@ -1,441 +1,437 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import { useTheme } from "@/lib/ThemeContext";
 
 export default function ProfilePage() {
-    const { profile, updateProfile, workspaces, currentWorkspace, createWorkspace, deleteWorkspace, renameWorkspace, switchWorkspace } = useWorkspace();
-    const { theme, setTheme } = useTheme();
+  const {
+    profile,
+    updateProfile,
+    workspaces,
+    currentWorkspace,
+    createWorkspace,
+    deleteWorkspace,
+    renameWorkspace,
+    switchWorkspace,
+    isLoaded,
+  } = useWorkspace();
+  const { theme, setTheme, mounted } = useTheme();
 
-    const [isEditing, setIsEditing] = useState(false);
-    const [editName, setEditName] = useState(profile.name);
-    const [editEmail, setEditEmail] = useState(profile.email);
-    const [editPhone, setEditPhone] = useState(profile.phone || "");
-    const [editCompany, setEditCompany] = useState(profile.company || "");
+  const [isEditing, setIsEditing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-    const [newWorkspaceName, setNewWorkspaceName] = useState("");
-    const [isCreating, setIsCreating] = useState(false);
+  const [editName, setEditName] = useState(profile.name);
+  const [editEmail, setEditEmail] = useState(profile.email);
+  const [editPhone, setEditPhone] = useState(profile.phone || "");
+  const [editCompany, setEditCompany] = useState(profile.company || "");
 
-    const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
-    const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
 
-    const handleSaveProfile = () => {
-        updateProfile({
-            name: editName,
-            email: editEmail,
-            phone: editPhone,
-            company: editCompany
-        });
-        setIsEditing(false);
-    };
+  useEffect(() => {
+    setEditName(profile.name);
+    setEditEmail(profile.email);
+    setEditPhone(profile.phone || "");
+    setEditCompany(profile.company || "");
+  }, [profile.company, profile.email, profile.name, profile.phone]);
 
-    const handleCreateWorkspace = () => {
-        if (newWorkspaceName.trim()) {
-            const workspace = createWorkspace(newWorkspaceName.trim());
-            setNewWorkspaceName("");
-            setIsCreating(false);
-            switchWorkspace(workspace.id);
-        }
-    };
+  const isDark = mounted ? theme === "dark" : false;
 
-    const handleRenameWorkspace = (id: string) => {
-        if (editingWorkspaceName.trim()) {
-            renameWorkspace(id, editingWorkspaceName.trim());
-            setEditingWorkspaceId(null);
-            setEditingWorkspaceName("");
-        }
-    };
+  const initials = useMemo(() => {
+    const value = profile.name?.trim() || "User";
+    return value
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }, [profile.name]);
 
-    const isDark = theme === "dark";
+  const profileCompletion = useMemo(() => {
+    const fields = [profile.name, profile.email, profile.phone, profile.company];
+    const completed = fields.filter((value) => String(value || "").trim().length > 0).length;
+    return Math.round((completed / fields.length) * 100);
+  }, [profile.company, profile.email, profile.name, profile.phone]);
 
-    // Get initials for avatar
-    const initials = profile.name
-        ? profile.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-        : "U";
-
-    return (
-        <div className="space-y-6 pb-32">
-            <section className="relative min-h-[75vh]">
-                <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-36 space-y-3 md:space-y-5">
-                    <div className="space-y-4">
-
-                        {/* Profile Header */}
-                        <div>
-                            <p className={`text-xs font-medium mb-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Profile</p>
-                            <p className="text-2xl font-bold" style={{ color: '#2264ff' }}>
-                                {profile.name || "Your Name"}
-                            </p>
-                        </div>
-
-                        {/* Profile Card */}
-                        <div className={`rounded-2xl border p-5 ${isDark ? 'border-gray-600 bg-[#0a0a0a]' : 'border-gray-300 bg-white'}`}>
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
-                                        {initials}
-                                    </div>
-                                    <div>
-                                        <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                                            {profile.name || "User"}
-                                        </h2>
-                                        <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                                            {profile.email || "No email set"}
-                                        </p>
-                                        {profile.company && (
-                                            <p className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                                                {profile.company}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        if (isEditing) {
-                                            handleSaveProfile();
-                                        } else {
-                                            setEditName(profile.name);
-                                            setEditEmail(profile.email);
-                                            setEditPhone(profile.phone || "");
-                                            setEditCompany(profile.company || "");
-                                            setIsEditing(true);
-                                        }
-                                    }}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isEditing
-                                        ? "bg-blue-600 text-white hover:bg-blue-700"
-                                        : isDark
-                                            ? "bg-white/10 text-white hover:bg-white/20"
-                                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                        }`}
-                                >
-                                    {isEditing ? "Save" : "Edit"}
-                                </button>
-                            </div>
-
-                            {isEditing && (
-                                <div className={`space-y-4 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={`block text-sm font-medium mb-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                                                Name
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editName}
-                                                onChange={(e) => setEditName(e.target.value)}
-                                                className={`w-full px-4 py-2.5 rounded-lg border text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDark
-                                                    ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
-                                                    : "bg-white border-gray-200 text-gray-900"
-                                                    }`}
-                                                placeholder="Your name"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className={`block text-sm font-medium mb-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                                                Email
-                                            </label>
-                                            <input
-                                                type="email"
-                                                value={editEmail}
-                                                onChange={(e) => setEditEmail(e.target.value)}
-                                                className={`w-full px-4 py-2.5 rounded-lg border text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDark
-                                                    ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
-                                                    : "bg-white border-gray-200 text-gray-900"
-                                                    }`}
-                                                placeholder="your@email.com"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className={`block text-sm font-medium mb-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                                                Phone
-                                            </label>
-                                            <input
-                                                type="tel"
-                                                value={editPhone}
-                                                onChange={(e) => setEditPhone(e.target.value)}
-                                                className={`w-full px-4 py-2.5 rounded-lg border text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDark
-                                                    ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
-                                                    : "bg-white border-gray-200 text-gray-900"
-                                                    }`}
-                                                placeholder="+234 800 000 0000"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className={`block text-sm font-medium mb-1.5 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                                                Company
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editCompany}
-                                                onChange={(e) => setEditCompany(e.target.value)}
-                                                className={`w-full px-4 py-2.5 rounded-lg border text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDark
-                                                    ? "bg-gray-800 border-gray-700 text-white placeholder-gray-500"
-                                                    : "bg-white border-gray-200 text-gray-900"
-                                                    }`}
-                                                placeholder="Your Company Ltd"
-                                            />
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setIsEditing(false)}
-                                        className={`text-sm ${isDark ? "text-gray-400 hover:text-gray-300" : "text-gray-500 hover:text-gray-700"}`}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Workspaces Section Header */}
-                        <div className="pt-4">
-                            <p className={`text-xs font-medium mb-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Workspaces</p>
-                            <div className="flex items-center justify-between">
-                                <p className="text-2xl font-bold" style={{ color: '#2264ff' }}>
-                                    {workspaces.length}
-                                    <span className={`text-sm font-normal ml-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>workspace{workspaces.length !== 1 ? 's' : ''}</span>
-                                </p>
-                                <button
-                                    onClick={() => setIsCreating(true)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                    </svg>
-                                    New
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Appearance Controls */}
-                        <div className={`rounded-2xl border p-5 space-y-4 ${isDark ? "border-gray-600 bg-[#050505]" : "border-gray-200 bg-white"}`}>
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                                        Appearance
-                                    </p>
-                                    <p className={`text-xs mt-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                                        Choose how Quantum Ledger should look on this device.
-                                    </p>
-                                </div>
-                                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-3 py-1 rounded-full ${isDark ? "bg-white/10 text-gray-200" : "bg-blue-50 text-blue-600"}`}>
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    Saves per profile
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => setTheme("light")}
-                                    className={`rounded-2xl border p-4 text-left transition-all ${theme === "light" ? "ring-2 ring-offset-2 ring-blue-500" : ""} ${isDark ? "bg-[#0d0d0d] border-gray-700 hover:border-gray-500" : "bg-gray-50 border-gray-200 hover:border-gray-400"}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-200 to-amber-400 flex items-center justify-center">
-                                            <svg className="w-5 h-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414m0-11.314L7.05 7.05m10.607 10.607l1.414 1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Daylight</p>
-                                            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Bright UI for offices</p>
-                                        </div>
-                                    </div>
-                                </button>
-                                <button
-                                    onClick={() => setTheme("dark")}
-                                    className={`rounded-2xl border p-4 text-left transition-all ${theme === "dark" ? "ring-2 ring-offset-2 ring-blue-500" : ""} ${isDark ? "bg-[#090909] border-gray-600 hover:border-gray-400" : "bg-gray-50 border-gray-200 hover:border-gray-400"}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-gray-900 flex items-center justify-center">
-                                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Night shift</p>
-                                            <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Low-light trading floors</p>
-                                        </div>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Create Workspace Form */}
-                        {isCreating && (
-                            <div className={`rounded-2xl border p-4 ${isDark ? "bg-[#0a0a0a] border-gray-600" : "bg-white border-gray-300"}`}>
-                                <label className={`block text-sm font-medium mb-2 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                                    Workspace Name
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newWorkspaceName}
-                                        onChange={(e) => setNewWorkspaceName(e.target.value)}
-                                        className={`flex-1 px-4 py-2.5 rounded-lg border text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDark
-                                            ? "bg-gray-800 border-gray-600 text-white placeholder-gray-500"
-                                            : "bg-white border-gray-200 text-gray-900"
-                                            }`}
-                                        placeholder="e.g., My Business, Side Project"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") handleCreateWorkspace();
-                                            if (e.key === "Escape") setIsCreating(false);
-                                        }}
-                                    />
-                                    <button
-                                        onClick={handleCreateWorkspace}
-                                        disabled={!newWorkspaceName.trim()}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        Create
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setIsCreating(false);
-                                            setNewWorkspaceName("");
-                                        }}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDark
-                                            ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                            }`}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Workspace List */}
-                        <div className="space-y-2">
-                            {workspaces.map((workspace) => (
-                                <div
-                                    key={workspace.id}
-                                    className={`rounded-2xl border p-4 transition-all ${workspace.id === currentWorkspace?.id
-                                        ? isDark
-                                            ? "bg-blue-900/20 border-blue-700"
-                                            : "bg-blue-50 border-blue-200"
-                                        : isDark
-                                            ? "bg-[#0a0a0a] border-gray-600 hover:bg-[#1a1a1a] hover:border-gray-500"
-                                            : "bg-white border-gray-300 hover:bg-gray-50 hover:border-gray-400"
-                                        }`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-semibold ${workspace.id === currentWorkspace?.id
-                                                ? "bg-gradient-to-br from-blue-500 to-purple-600"
-                                                : "bg-gray-600"
-                                                }`}>
-                                                {workspace.name.charAt(0).toUpperCase()}
-                                            </div>
-
-                                            {editingWorkspaceId === workspace.id ? (
-                                                <div className="flex items-center gap-2 flex-1">
-                                                    <input
-                                                        type="text"
-                                                        value={editingWorkspaceName}
-                                                        onChange={(e) => setEditingWorkspaceName(e.target.value)}
-                                                        className={`flex-1 px-3 py-1.5 rounded-lg border text-sm ${isDark
-                                                            ? "bg-gray-900 border-gray-600 text-white"
-                                                            : "bg-white border-gray-200 text-gray-900"
-                                                            }`}
-                                                        autoFocus
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter") handleRenameWorkspace(workspace.id);
-                                                            if (e.key === "Escape") {
-                                                                setEditingWorkspaceId(null);
-                                                                setEditingWorkspaceName("");
-                                                            }
-                                                        }}
-                                                    />
-                                                    <button
-                                                        onClick={() => handleRenameWorkspace(workspace.id)}
-                                                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium"
-                                                    >
-                                                        Save
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="min-w-0">
-                                                    <p className={`font-medium truncate ${isDark ? "text-white" : "text-gray-900"}`}>
-                                                        {workspace.name}
-                                                    </p>
-                                                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                                                        Created {new Date(workspace.createdAt).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center gap-2 ml-4">
-                                            {workspace.id === currentWorkspace?.id ? (
-                                                <span className="px-2.5 py-1 bg-green-500/20 text-green-500 rounded-full text-xs font-medium">
-                                                    Active
-                                                </span>
-                                            ) : (
-                                                <button
-                                                    onClick={() => switchWorkspace(workspace.id)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark
-                                                        ? "bg-white/10 text-white hover:bg-white/20"
-                                                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                                        }`}
-                                                >
-                                                    Switch
-                                                </button>
-                                            )}
-
-                                            {/* Actions */}
-                                            <button
-                                                onClick={() => {
-                                                    setEditingWorkspaceId(workspace.id);
-                                                    setEditingWorkspaceName(workspace.name);
-                                                }}
-                                                className={`p-1.5 rounded-lg transition-colors ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-gray-200 text-gray-500"}`}
-                                                title="Rename"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-                                                </svg>
-                                            </button>
-                                            {workspaces.length > 1 && workspace.id !== currentWorkspace?.id && (
-                                                <button
-                                                    onClick={() => {
-                                                        if (confirm(`Delete "${workspace.name}"? This cannot be undone.`)) {
-                                                            deleteWorkspace(workspace.id);
-                                                        }
-                                                    }}
-                                                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                                    </svg>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Info Note */}
-                        <div className={`flex items-start gap-3 p-4 rounded-2xl ${isDark ? "bg-blue-900/20" : "bg-blue-50"}`}>
-                            <svg className={`w-5 h-5 mt-0.5 ${isDark ? "text-blue-400" : "text-blue-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                            </svg>
-                            <div>
-                                <p className={`text-sm font-medium ${isDark ? "text-blue-300" : "text-blue-900"}`}>
-                                    Data Isolation
-                                </p>
-                                <p className={`text-xs mt-0.5 ${isDark ? "text-blue-400/70" : "text-blue-700/70"}`}>
-                                    Each workspace has completely separate transactions, bank connections, invoices, and tax records.
-                                </p>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            </section>
-        </div>
+  const accountAgeDays = useMemo(() => {
+    if (!workspaces.length) return 0;
+    const earliest = Math.min(
+      ...workspaces.map((workspace) => {
+        const date = new Date(workspace.createdAt);
+        return Number.isNaN(date.getTime()) ? Date.now() : date.getTime();
+      })
     );
+    const diff = Date.now() - earliest;
+    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  }, [workspaces]);
+
+  const handleSaveProfile = () => {
+    updateProfile({
+      name: editName.trim() || "User",
+      email: editEmail.trim(),
+      phone: editPhone.trim(),
+      company: editCompany.trim(),
+    });
+    setIsEditing(false);
+    setStatusMessage("Profile updated.");
+  };
+
+  const handleCreateWorkspace = () => {
+    const name = newWorkspaceName.trim();
+    if (!name) return;
+    const workspace = createWorkspace(name);
+    setNewWorkspaceName("");
+    setStatusMessage(`Workspace "${workspace.name}" created.`);
+    switchWorkspace(workspace.id);
+  };
+
+  const handleRenameWorkspace = (id: string) => {
+    const value = editingWorkspaceName.trim();
+    if (!value) return;
+    renameWorkspace(id, value);
+    setEditingWorkspaceId(null);
+    setEditingWorkspaceName("");
+    setStatusMessage("Workspace renamed.");
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="space-y-4 pb-24">
+        <div className="h-36 animate-pulse rounded-3xl border border-gray-200 bg-white" />
+        <div className="grid gap-4 lg:grid-cols-12">
+          <div className="h-80 animate-pulse rounded-3xl border border-gray-200 bg-white lg:col-span-7" />
+          <div className="h-80 animate-pulse rounded-3xl border border-gray-200 bg-white lg:col-span-5" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-24">
+      <section
+        className={`relative overflow-hidden rounded-[28px] border px-5 py-6 sm:px-7 sm:py-8 ${
+          isDark ? "border-gray-700 bg-[#0c111a]" : "border-[#dbe4ff] bg-[#f6f9ff]"
+        }`}
+      >
+        <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#2264ff]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -left-10 bottom-[-60px] h-44 w-44 rounded-full bg-[#0b0f19]/10 blur-3xl" />
+
+        <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+          <div>
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${isDark ? "text-blue-300" : "text-blue-700"}`}>
+              Profile Command Center
+            </p>
+            <div className="mt-3 flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2264ff] to-[#0b0f19] text-xl font-bold text-white shadow-lg">
+                {initials}
+              </div>
+              <div>
+                <h1 className={`text-2xl font-bold sm:text-3xl ${isDark ? "text-white" : "text-[#0b1220]"}`}>
+                  {profile.name || "User"}
+                </h1>
+                <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+                  {profile.email || "No email added yet"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <MetricTile label="Completion" value={`${profileCompletion}%`} isDark={isDark} />
+              <MetricTile label="Workspaces" value={`${workspaces.length}`} isDark={isDark} />
+              <MetricTile label="Account Age" value={`${accountAgeDays}d`} isDark={isDark} />
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border p-4 ${isDark ? "border-gray-700 bg-black/30" : "border-white bg-white/80"}`}>
+            <p className={`text-xs uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>Environment</p>
+            <p className={`mt-1 text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+              Active workspace: {currentWorkspace?.name || "None"}
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setTheme("light")}
+                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
+                  theme === "light"
+                    ? "border-[#2264ff] bg-[#e9f0ff] text-[#1e4fd6]"
+                    : isDark
+                      ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Daylight
+              </button>
+              <button
+                onClick={() => setTheme("dark")}
+                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
+                  theme === "dark"
+                    ? "border-[#2264ff] bg-[#15213d] text-[#8fb0ff]"
+                    : isDark
+                      ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Night Shift
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {statusMessage && (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${isDark ? "border-gray-700 bg-[#0b1220] text-blue-200" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+          {statusMessage}
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-12">
+        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-7 ${isDark ? "border-gray-700 bg-[#0a0a0a]" : "border-gray-200 bg-white"}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Personal Profile</h2>
+              <p className={`mt-1 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                Update your identity and business details used across the platform.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {isEditing && (
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditName(profile.name);
+                    setEditEmail(profile.email);
+                    setEditPhone(profile.phone || "");
+                    setEditCompany(profile.company || "");
+                  }}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${isDark ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (isEditing) handleSaveProfile();
+                  else setIsEditing(true);
+                }}
+                className="rounded-lg bg-[#2264ff] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1c52d4]"
+              >
+                {isEditing ? "Save Changes" : "Edit Profile"}
+              </button>
+            </div>
+          </div>
+
+          {isEditing ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Field label="Full Name" value={editName} onChange={setEditName} isDark={isDark} />
+              <Field label="Email Address" type="email" value={editEmail} onChange={setEditEmail} isDark={isDark} />
+              <Field label="Phone Number" value={editPhone} onChange={setEditPhone} isDark={isDark} />
+              <Field label="Company Name" value={editCompany} onChange={setEditCompany} isDark={isDark} />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <InfoCell label="Full Name" value={profile.name || "Not set"} isDark={isDark} />
+              <InfoCell label="Email Address" value={profile.email || "Not set"} isDark={isDark} />
+              <InfoCell label="Phone Number" value={profile.phone || "Not set"} isDark={isDark} />
+              <InfoCell label="Company Name" value={profile.company || "Not set"} isDark={isDark} />
+            </div>
+          )}
+
+          <div className={`mt-5 rounded-2xl border px-4 py-3 ${isDark ? "border-[#1d2945] bg-[#0b1220]" : "border-[#d7e4ff] bg-[#f7faff]"}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-blue-300" : "text-blue-700"}`}>
+              Data Isolation
+            </p>
+            <p className={`mt-1 text-xs ${isDark ? "text-blue-200/80" : "text-blue-800/80"}`}>
+              Each workspace keeps separate accounting, tax, and reporting records.
+            </p>
+          </div>
+        </section>
+
+        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-5 ${isDark ? "border-gray-700 bg-[#0a0a0a]" : "border-gray-200 bg-white"}`}>
+          <div>
+            <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Workspace Studio</h2>
+            <p className={`mt-1 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+              Create, rename, switch, and manage your workspaces.
+            </p>
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={newWorkspaceName}
+              onChange={(event) => setNewWorkspaceName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleCreateWorkspace();
+              }}
+              placeholder="New workspace name"
+              className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm ${
+                isDark ? "border-gray-600 bg-[#111827] text-white placeholder:text-gray-500" : "border-gray-200 bg-white text-gray-900 placeholder:text-gray-400"
+              }`}
+            />
+            <button
+              onClick={handleCreateWorkspace}
+              disabled={!newWorkspaceName.trim()}
+              className="rounded-xl bg-[#2264ff] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1c52d4] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Create
+            </button>
+          </div>
+
+          <div className="sidebar-nav-scrollbar mt-4 max-h-[430px] space-y-2 overflow-y-auto pr-1">
+            {workspaces.map((workspace) => {
+              const isCurrent = workspace.id === currentWorkspace?.id;
+              return (
+                <div
+                  key={workspace.id}
+                  className={`rounded-2xl border p-3 transition ${
+                    isCurrent
+                      ? isDark
+                        ? "border-[#3056d8] bg-[#0f1f4a]"
+                        : "border-[#bcd0ff] bg-[#edf3ff]"
+                      : isDark
+                        ? "border-gray-700 bg-[#0b0f1a] hover:border-gray-500"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {editingWorkspaceId === workspace.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editingWorkspaceName}
+                            onChange={(event) => setEditingWorkspaceName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") handleRenameWorkspace(workspace.id);
+                              if (event.key === "Escape") {
+                                setEditingWorkspaceId(null);
+                                setEditingWorkspaceName("");
+                              }
+                            }}
+                            className={`min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-xs ${
+                              isDark ? "border-gray-600 bg-[#111827] text-white" : "border-gray-200 bg-white text-gray-900"
+                            }`}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleRenameWorkspace(workspace.id)}
+                            className="rounded-lg bg-[#2264ff] px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className={`truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+                            {workspace.name}
+                          </p>
+                          <p className={`mt-1 text-[11px] ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                            Created {new Date(workspace.createdAt).toLocaleDateString("en-NG")}
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    {isCurrent ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? "bg-[#1f3b8a] text-blue-200" : "bg-[#dbe7ff] text-[#1f4dd8]"}`}>
+                        Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => switchWorkspace(workspace.id)}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+                          isDark ? "border-gray-600 text-gray-200 hover:bg-gray-800" : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        Switch
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingWorkspaceId(workspace.id);
+                        setEditingWorkspaceName(workspace.name);
+                      }}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+                        isDark ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      Rename
+                    </button>
+                    {workspaces.length > 1 && !isCurrent && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${workspace.name}"? This cannot be undone.`)) {
+                            deleteWorkspace(workspace.id);
+                            setStatusMessage(`Workspace "${workspace.name}" deleted.`);
+                          }
+                        }}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+                          isDark ? "border-rose-900 text-rose-300 hover:bg-rose-950/40" : "border-rose-200 text-rose-600 hover:bg-rose-50"
+                        }`}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function MetricTile({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
+  return (
+    <div className={`rounded-2xl border px-3 py-3 ${isDark ? "border-gray-700 bg-black/30" : "border-white bg-white/75"}`}>
+      <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
+      <p className={`mt-1 text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  isDark,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  isDark: boolean;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className={`mb-1 block text-xs font-semibold uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`w-full rounded-xl border px-3 py-2 text-sm ${
+          isDark ? "border-gray-600 bg-[#111827] text-white placeholder:text-gray-500" : "border-gray-200 bg-white text-gray-900 placeholder:text-gray-400"
+        }`}
+      />
+    </div>
+  );
+}
+
+function InfoCell({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 ${isDark ? "border-gray-700 bg-[#0f172a]" : "border-gray-200 bg-[#fafcff]"}`}>
+      <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
+      <p className={`mt-1 truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
+    </div>
+  );
 }

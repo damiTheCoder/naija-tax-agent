@@ -5,19 +5,20 @@ import { TAX_NAV_ITEMS } from "@/lib/navigation";
 import { NavIconBadge } from "@/components/NavIconBadge";
 
 export default function TaxToolsLanding() {
+  const activeTaxPages = TAX_NAV_ITEMS.filter((item) => item.href.startsWith("/tax/"));
+
   return (
     <div className="max-w-4xl mx-auto py-10 px-4 space-y-8">
       <div className="text-center space-y-3">
-        <p className="text-sm uppercase tracking-wide text-[var(--muted)]">Quick Tax Tools</p>
-        <h1 className="text-3xl font-bold">Specialised Nigerian Tax Calculators</h1>
+        <p className="text-sm uppercase tracking-wide text-[var(--muted)]">Tax Module</p>
+        <h1 className="text-3xl font-bold">Tax Operations</h1>
         <p className="text-[var(--muted)] max-w-2xl mx-auto">
-          Choose a calculator to focus on a specific tax. Each experience keeps the friendly NaijaTaxAgent
-          styling and walks you through what&apos;s required for Withholding Tax, VAT, or Capital Gains Tax.
+          Manage tax workflows from the core module pages.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        {TAX_NAV_ITEMS.filter((item) => item.href.startsWith("/tax-tools")).map((item) => (
+      <div className="grid md:grid-cols-2 gap-4">
+        {activeTaxPages.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -30,7 +31,7 @@ export default function TaxToolsLanding() {
               {item.label}
             </div>
             <p className="text-sm text-[var(--muted)]">{item.description}</p>
-            <span className="text-sm font-medium text-[var(--primary)]">Open calculator →</span>
+            <span className="text-sm font-medium text-[var(--primary)]">Open page →</span>
           </Link>
         ))}
       </div>

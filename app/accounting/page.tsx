@@ -37,6 +37,8 @@ type ChatMessage = {
   timestamp: number;
 };
 
+type CashHeadlineMode = "inflow" | "outflow" | "balance";
+
 type AutomationLogEntry = {
   title: string;
   detail: string;
@@ -90,6 +92,23 @@ function getContextJournalLabel(entry: JournalEntry): string {
   if (txType === "opening-balance") return "Opening Journal";
   if (txType === "closing") return "Closing Journal";
   return "General Journal";
+}
+
+function formatCompactNaira(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  const asCompact = (divisor: number, suffix: "K" | "M" | "B") =>
+    `${sign}${(abs / divisor).toFixed(abs / divisor >= 100 ? 0 : 1).replace(/\.0$/, "")}${suffix}`;
+
+  if (abs >= 1_000_000_000) return asCompact(1_000_000_000, "B");
+  if (abs >= 1_000_000) return asCompact(1_000_000, "M");
+  if (abs >= 1_000) return asCompact(1_000, "K");
+  return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 1 })}`;
+}
+
+function formatFullNaira(value: number): string {
+  return `₦${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
 export default function AccountingPage() {
@@ -157,6 +176,7 @@ export default function AccountingPage() {
   type EditEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
+  const [cashHeadlineMode, setCashHeadlineMode] = useState<CashHeadlineMode>("inflow");
 
 
 
@@ -1080,6 +1100,42 @@ export default function AccountingPage() {
     }
   };
 
+  const cashHeadlineTotals = useMemo(() => {
+    let inflow = 0;
+    let outflow = 0;
+
+    accountingState?.journalEntries.forEach((entry) => {
+      entry.lines.forEach((line) => {
+        const isCashAccount = line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName);
+        if (!isCashAccount) return;
+        inflow += line.debit || 0;
+        outflow += line.credit || 0;
+      });
+    });
+
+    return {
+      inflow,
+      outflow,
+      balance: inflow - outflow,
+    };
+  }, [accountingState]);
+
+  const cashHeadlineLabelMap: Record<CashHeadlineMode, string> = {
+    inflow: "Inflow",
+    outflow: "Outflow",
+    balance: "Balance",
+  };
+
+  const cashHeadlineValue = cashHeadlineTotals[cashHeadlineMode];
+
+  const cycleCashHeadlineMode = useCallback(() => {
+    setCashHeadlineMode((previous) => {
+      if (previous === "inflow") return "outflow";
+      if (previous === "outflow") return "balance";
+      return "inflow";
+    });
+  }, []);
+
   return (
     <>
 
@@ -1090,15 +1146,28 @@ export default function AccountingPage() {
             <div className="flex-1 overflow-y-auto px-2 md:px-6 pt-4 md:pt-6 pb-24 md:pb-36 space-y-3 md:space-y-5">
               <div className="space-y-4">
                 {/* Inflow Section */}
-                <div>
-                  <p className={`text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Inflow</p>
-                  <p className="text-2xl font-bold" style={{ color: '#2264ff' }}>
-                    ₦{accountingState?.journalEntries
-                      ?.filter(e => e.lines.some(l => l.accountCode.startsWith('4')))
-                      ?.reduce((sum, e) => sum + e.lines.filter(l => l.accountCode.startsWith('4')).reduce((s, l) => s + l.credit, 0), 0)
-                      ?.toLocaleString() || '0'}
-                    <span className={`text-sm font-normal ml-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>/mo</span>
-                  </p>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className={`text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {cashHeadlineLabelMap[cashHeadlineMode]}
+                    </p>
+                    <p className="text-2xl font-bold" style={{ color: "#2264ff" }} title={formatFullNaira(cashHeadlineValue)}>
+                      ₦{formatCompactNaira(cashHeadlineValue)}
+                      <span className={`text-sm font-normal ml-1 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>/mo</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cycleCashHeadlineMode}
+                    className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-sm transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40"
+                    aria-label="Toggle cash metric"
+                    title="Switch between Inflow, Outflow and Balance"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14" />
+                      <path d="m13 6 6 6-6 6" />
+                    </svg>
+                  </button>
                 </div>
 
                 {/* Embedded Finance Products - Horizontal Scroll */}
@@ -1195,6 +1264,7 @@ export default function AccountingPage() {
                   {/* Post Journal Entry Button */}
                   <button
                     onClick={() => setShowPostEntry(true)}
+                    data-agent-target="open-post-journal-entry"
                     className={`
                       w-full rounded-2xl border transition-all p-5 group
                       ${theme === 'dark'
@@ -1476,6 +1546,7 @@ export default function AccountingPage() {
                       value={postEntryNarration}
                       onChange={(e) => setPostEntryNarration(e.target.value)}
                       placeholder="e.g., Purchased office equipment"
+                      data-agent-target="post-entry-narration"
                       className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     />
                   </div>
@@ -1503,12 +1574,13 @@ export default function AccountingPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {postEntryLines.map((line) => (
+                        {postEntryLines.map((line, index) => (
                           <tr key={line.id}>
                             <td className="px-4 py-3">
                               <select
                                 value={line.accountCode}
                                 onChange={(e) => updatePostEntryLine(line.id, "accountCode", e.target.value)}
+                                data-agent-target={`post-entry-line-${index + 1}-account`}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                               >
                                 <option value="">Select account...</option>
@@ -1525,6 +1597,7 @@ export default function AccountingPage() {
                                 value={line.debit}
                                 onChange={(e) => updatePostEntryLine(line.id, "debit", e.target.value)}
                                 placeholder="0"
+                                data-agent-target={`post-entry-line-${index + 1}-debit`}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                               />
                             </td>
@@ -1534,6 +1607,7 @@ export default function AccountingPage() {
                                 value={line.credit}
                                 onChange={(e) => updatePostEntryLine(line.id, "credit", e.target.value)}
                                 placeholder="0"
+                                data-agent-target={`post-entry-line-${index + 1}-credit`}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                               />
                             </td>
@@ -1686,6 +1760,7 @@ export default function AccountingPage() {
                         setShowPostEntry(false);
                       }
                     }}
+                    data-agent-target="post-entry-submit"
                     disabled={!postEntryTotals.isBalanced || !postEntryNarration.trim()}
                     className="px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >

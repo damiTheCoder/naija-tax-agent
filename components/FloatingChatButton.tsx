@@ -6,7 +6,13 @@ import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/tra
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
-import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource, type UnifiedCustomActionExecutor } from "@/lib/agent/unifiedClient";
+import {
+    formatPlanSourceLabel,
+    requestUnifiedAgentPlan,
+    runUnifiedAgentMessage,
+    type AgentPlanSource,
+    type UnifiedCustomActionExecutor
+} from "@/lib/agent/unifiedClient";
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import {
     addChatHistoryEntry,
@@ -55,6 +61,7 @@ type ProjectionActionUpdate = {
 const PROJECTIONS_CONTEXT_STORAGE_KEY = "ql::projections-context";
 const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
 const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
+const AGENT_CHAT_MODE_STORAGE_KEY = "ql::agent-chat-mode";
 
 function readProjectionsContextSnapshot(): string {
     if (typeof window === "undefined") return "";
@@ -144,6 +151,8 @@ type ChatMessage = {
     content: string;
     timestamp: number;
 };
+
+type AgentChatMode = "response-only" | "full-agentic";
 
 type ModuleConfig = {
     id: string;
@@ -341,6 +350,40 @@ function createIntroMessage(module: ModuleConfig): ChatMessage {
     };
 }
 
+function resolvePreferredAgentRoute(message: string, currentPath: string): string | null {
+    const lower = message.toLowerCase();
+    const inAccounting = currentPath.startsWith("/accounting");
+    const inTax = currentPath.startsWith("/tax") || currentPath.startsWith("/tax-tools");
+    const accountingIntent = /\b(accounting|journal|ledger|trial balance|income statement|balance sheet|cash flow|invoice|receipt|payroll|reconciliation|transaction)\b/.test(lower);
+    const taxIntent = /\b(tax|vat|wht|cit|paye|firs|filing|return)\b/.test(lower);
+
+    if (inAccounting || accountingIntent) {
+        if (/(reconcil|bank statement|match transactions?)/.test(lower)) return "/accounting/reconciliation";
+        if (/(projection|forecast|model|scenario)/.test(lower)) return "/accounting/projections";
+        if (/(invoice|bill customer|quotation)/.test(lower)) return "/accounting/invoices";
+        if (/(receipt|expense receipt|upload receipt)/.test(lower)) return "/accounting/receipts";
+        if (/(payroll|employee salary|salary run|employee tax)/.test(lower)) return "/accounting/payroll";
+        if (/(bank account|connect bank|bank link)/.test(lower)) return "/accounting/banks";
+        if (/(report|financial statement|trial balance|p&l|profit|balance sheet|cash flow)/.test(lower)) return "/accounting/reports";
+        if (/(workspace|ledger|journal entries|tax payables|cashbook)/.test(lower)) return "/accounting/workspace";
+        if (/(post|record|create|journal|entry|transaction|sold|paid|received|buy|bought|expense|purchase)/.test(lower)) return "/accounting";
+    }
+
+    if (inTax || taxIntent) {
+        if (/(calendar|deadline|reminder)/.test(lower)) return "/tax/calendar";
+        if (/(payment|pay|receipt|outstanding)/.test(lower)) return "/tax/payments";
+        if (/(file tax|submit|upload filing|download return|tax authority)/.test(lower)) return "/tax/file-taxes";
+        if (/(return|filed|draft|ready)/.test(lower)) return "/tax/returns";
+        if (/(adjustment|deduction|allowance|tax credit|loss carryforward)/.test(lower)) return "/tax/adjustments";
+        if (/(setting|jurisdiction|rate|fiscal year|company info)/.test(lower)) return "/tax/settings";
+        if (/(transaction|classif|bulk edit|vat eligible|withholding applicable)/.test(lower)) return "/tax/transactions";
+        if (/(compute|computation|cit|vat|wht|paye|education tax|tax payable)/.test(lower)) return "/tax/computation";
+        return "/tax/workspace";
+    }
+
+    return null;
+}
+
 export default function FloatingChatButton() {
     const pathname = usePathname();
     const router = useRouter();
@@ -350,10 +393,13 @@ export default function FloatingChatButton() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isAgentPerforming, setIsAgentPerforming] = useState(false);
     const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
+    const [agentChatMode, setAgentChatMode] = useState<AgentChatMode>("response-only");
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const stopAgentRef = useRef(false);
 
     // Detect module from pathname
     useEffect(() => {
@@ -454,6 +500,19 @@ export default function FloatingChatButton() {
             taxEngine.load();
         }
     }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const savedMode = window.localStorage.getItem(AGENT_CHAT_MODE_STORAGE_KEY);
+        if (savedMode === "response-only" || savedMode === "full-agentic") {
+            setAgentChatMode(savedMode);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        window.localStorage.setItem(AGENT_CHAT_MODE_STORAGE_KEY, agentChatMode);
+    }, [agentChatMode]);
 
     // Animate the "Chat" text
     useEffect(() => {
@@ -924,50 +983,109 @@ _Ask me anything about bank reconciliation!_`;
     }, []);
 
 
+    const handleStopAgent = useCallback(() => {
+        if (!isAgentPerforming) return;
+        if (stopAgentRef.current) return;
+        stopAgentRef.current = true;
+        appendMessage("assistant", "Stopping agent actions...");
+    }, [appendMessage, isAgentPerforming]);
+
     const handleSend = useCallback(async () => {
         const trimmed = inputValue.trim();
-        if (!trimmed || isLoading) return;
+        if (!trimmed || isLoading || isAgentPerforming) return;
 
         appendMessage("user", trimmed);
         setInputValue("");
         setIsLoading(true);
+        stopAgentRef.current = false;
 
         try {
+            let activeRoute = pathname;
+            let activeModuleId = currentModule.id;
             const conversation = [...messages, { role: "user" as const, content: trimmed }]
                 .slice(-12)
                 .map((msg) => ({ role: msg.role, content: msg.content }));
-            const result = await runUnifiedAgentMessage({
-                message: trimmed,
-                module: currentModule.id,
-                route: pathname,
-                conversation,
-                contextSnapshot: currentModule.id === "projections" ? readProjectionsContextSnapshot() : undefined,
-                customActionExecutor: currentModule.id === "projections" ? executeProjectionAction : undefined,
-            });
+            if (agentChatMode === "response-only") {
+                const plan = await requestUnifiedAgentPlan({
+                    message: trimmed,
+                    module: activeModuleId,
+                    route: activeRoute,
+                    conversation,
+                    contextSnapshot: activeModuleId === "projections" ? readProjectionsContextSnapshot() : undefined,
+                });
+                const normalizedPlanSource: AgentPlanSource =
+                    plan.planSource === "fast-path" || plan.planSource === "gemini" || plan.planSource === "fallback"
+                        ? plan.planSource
+                        : "fallback";
+                setPlanSource(normalizedPlanSource);
+                const response = plan.actions.length > 0
+                    ? `${plan.reply}\n\nSwitch to "Full agentic" mode to run this action in your workspace.`
+                    : plan.reply;
+                addChatHistoryEntry({
+                    module: activeModuleId,
+                    route: pathname,
+                    prompt: trimmed,
+                    response,
+                });
+                appendMessage("assistant", response);
+            } else {
+                setIsAgentPerforming(true);
+                setIsModalOpen(false);
+                await new Promise((resolve) => setTimeout(resolve, 240));
+                const preferredRoute = resolvePreferredAgentRoute(trimmed, pathname);
+                if (preferredRoute && preferredRoute !== pathname) {
+                    activeRoute = preferredRoute;
+                    activeModuleId = getModuleFromPath(preferredRoute).id;
+                    router.push(preferredRoute);
+                    await new Promise((resolve) => setTimeout(resolve, 850));
+                }
 
-            const response = result.finalReply;
-            setPlanSource(result.planSource);
-            if (result.navigateTo && result.navigateTo !== pathname) {
-                router.push(result.navigateTo);
+                const result = await runUnifiedAgentMessage({
+                    message: trimmed,
+                    module: activeModuleId,
+                    route: activeRoute,
+                    conversation,
+                    contextSnapshot: activeModuleId === "projections" ? readProjectionsContextSnapshot() : undefined,
+                    customActionExecutor: activeModuleId === "projections" ? executeProjectionAction : undefined,
+                    shouldStop: () => stopAgentRef.current,
+                    rollbackOnStop: true,
+                    autoApproveUiActions: true,
+                });
+
+                const response = result.finalReply;
+                setPlanSource(result.planSource);
+                if (result.navigateTo && result.navigateTo !== activeRoute) {
+                    router.push(result.navigateTo);
+                }
+
+                addChatHistoryEntry({
+                    module: activeModuleId,
+                    route: pathname,
+                    prompt: trimmed,
+                    response,
+                });
+                setIsModalOpen(true);
+                await new Promise((resolve) => setTimeout(resolve, 120));
+                appendMessage("assistant", response);
+                const executedAnyAction = result.execution.some((step) => step.success);
+                if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(response)) {
+                    appendMessage("assistant", "Request complete.");
+                }
             }
-
-            addChatHistoryEntry({
-                module: currentModule.id,
-                route: pathname,
-                prompt: trimmed,
-                response,
-            });
-            appendMessage("assistant", response);
         } catch {
             setPlanSource("fallback");
+            setIsModalOpen(true);
             appendMessage("assistant", "Sorry, I couldn't process that. Please try again.");
         } finally {
+            setIsAgentPerforming(false);
             setIsLoading(false);
+            stopAgentRef.current = false;
         }
-    }, [inputValue, isLoading, currentModule.id, pathname, appendMessage, messages, executeProjectionAction, router]);
+    }, [inputValue, isLoading, isAgentPerforming, currentModule.id, pathname, appendMessage, messages, executeProjectionAction, router, agentChatMode]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (isAgentPerforming) return;
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleSend();
@@ -1034,6 +1152,41 @@ _Ask me anything about bank reconciliation!_`;
                                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
                                         {currentModule.name}
                                     </span>
+                                    <div className="flex items-center gap-1.5">
+                                        <svg
+                                            className="h-4 w-4 text-gray-500"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            aria-hidden="true"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l2.4 4.9L20 9l-4 3.9.9 5.5L12 16l-4.9 2.4.9-5.5L4 9l5.6-1.1L12 3z" />
+                                        </svg>
+                                        <div className="relative">
+                                            <select
+                                                value={agentChatMode}
+                                                onChange={(e) => setAgentChatMode(e.target.value as AgentChatMode)}
+                                                className="h-7 appearance-none rounded-full border border-gray-300 bg-white pl-2 pr-6 text-[11px] font-medium text-gray-700 outline-none transition-colors focus:border-blue-400"
+                                                aria-label="Assistant mode"
+                                            >
+                                                <option value="response-only">Response only</option>
+                                                <option value="full-agentic">Full agentic</option>
+                                            </select>
+                                            <svg
+                                                className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
+                                                viewBox="0 0 20 20"
+                                                fill="currentColor"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    fillRule="evenodd"
+                                                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.156l3.71-3.925a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                                                    clipRule="evenodd"
+                                                />
+                                            </svg>
+                                        </div>
+                                    </div>
                                     <button
                                         onClick={() => setIsModalOpen(false)}
                                         className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -1044,7 +1197,7 @@ _Ask me anything about bank reconciliation!_`;
                                     </button>
                                 </div>
                                 <div className="px-4 sm:px-5 pb-2 text-[11px] text-gray-500 dark:text-gray-400">
-                                    {formatPlanSourceLabel(planSource)}
+                                    {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
                                 </div>
 
                                 {/* Messages */}
@@ -1103,11 +1256,17 @@ _Ask me anything about bank reconciliation!_`;
                                         </button>
 
                                         <button
-                                            onClick={handleSend}
-                                            disabled={!inputValue.trim() || isLoading}
-                                            className="w-10 h-10 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-gray-50 dark:hover:bg-gray-600"
+                                            onClick={isAgentPerforming ? handleStopAgent : handleSend}
+                                            disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all ${isAgentPerforming
+                                                ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                                                : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
+                                                }`}
+                                            title={isAgentPerforming ? "Stop agent" : "Send"}
                                         >
-                                            {inputValue.trim() ? (
+                                            {isAgentPerforming ? (
+                                                <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
+                                            ) : inputValue.trim() ? (
                                                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
                                                 </svg>

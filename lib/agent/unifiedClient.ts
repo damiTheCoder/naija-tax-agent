@@ -30,6 +30,8 @@ let enginesLoaded = false;
 const PLAN_TIMEOUT_MS = 30000;
 const ACCOUNTING_PARSE_TIMEOUT_MS = 7000;
 const UI_SNAPSHOT_MAX_ITEMS = 14;
+const UI_STEP_DELAY_MS = 260;
+const UI_SCROLL_SETTLE_DELAY_MS = 180;
 const AGENT_LOOP_MAX_CYCLES = 3;
 const AGENT_MEMORY_MAX_ITEMS = 40;
 const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
@@ -53,6 +55,7 @@ export type UnifiedCustomActionExecutor = (
   action: UnifiedAgentAction
 ) => Promise<UnifiedActionExecutionResult | null | undefined> | UnifiedActionExecutionResult | null | undefined;
 type UiStepAction = "click" | "type" | "select" | "check" | "focus";
+type UiRollbackHandler = () => void;
 
 type ProjectionAssumptionMeta = {
   key: string;
@@ -403,10 +406,11 @@ function isExplicitActionIntent(message: string): boolean {
     /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
       lower
     ) ||
-    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile)\b/.test(
+    /^(please\s+)?(?:put|increase|decrease)\b/.test(lower) ||
+    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
       lower
     ) ||
-    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile)\b/.test(
+    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
       lower
     )
   );
@@ -479,14 +483,36 @@ function buildProjectionFallbackAction(message: string, moduleId: string): Unifi
     };
   }
 
-  const updateIntent = /(set|update|change|adjust|input|apply).*(assumption|growth|ratio|baseline|cogs|marketing|collection|disbursement)/.test(
+  const updateIntent = /(set|update|change|adjust|input|apply|put|increase|decrease).*(assumption|growth|ratio|baseline|cogs|marketing|collection|disbursement|across all|all assumptions?)/.test(
     lower
   );
   if (!updateIntent) return null;
 
-  const assumption = findProjectionAssumption(message);
   const value = extractSignedNumber(message);
-  if (!assumption || value === null) return null;
+  if (value === null) return null;
+
+  const acrossAllIntent = /\b(across all(?: assumptions)?|all assumptions?|all growth(?: rates?)?|all rates?)\b/.test(lower);
+  if (acrossAllIntent) {
+    const percentAssumptions = PROJECTION_ASSUMPTION_META.filter((assumption) => assumption.kind === "percent");
+    if (percentAssumptions.length === 0) return null;
+    return {
+      type: "projections.updateAssumption",
+      payload: {
+        updates: percentAssumptions.map((assumption) => ({
+          key: assumption.key,
+          value,
+          unit: "percent",
+          min: assumption.min,
+          max: assumption.max,
+        })),
+      },
+      confidence: 0.74,
+      reason: "Detected bulk projection assumption update instruction",
+    };
+  }
+
+  const assumption = findProjectionAssumption(message);
+  if (!assumption) return null;
   const explicitPercent = /%|percent/.test(lower);
 
   return {
@@ -1024,11 +1050,40 @@ function uiActionNeedsConfirmation(action: UnifiedAgentAction): boolean {
 }
 
 function isConfirmMessage(message: string): boolean {
-  return /^(confirm|yes|proceed|go ahead|continue|do it)$/i.test(message.trim());
+  return /^(confirm|yes|yes proceed|proceed|go ahead|continue|do it|yes please|ok proceed|okay proceed|proceed now)$/i.test(
+    message.trim().toLowerCase()
+  );
 }
 
 function isCancelMessage(message: string): boolean {
   return /^(cancel|stop|no|don't|do not)$/i.test(message.trim());
+}
+
+function extractPendingInstructionFromConversation(
+  conversation: AgentConversationMessage[] | undefined,
+  confirmationMessage: string
+): string | null {
+  if (!isConfirmMessage(confirmationMessage) || !Array.isArray(conversation) || conversation.length === 0) return null;
+  const normalizedConfirmation = confirmationMessage.trim().toLowerCase();
+  const lastIndex = conversation.length - 1;
+  if (lastIndex < 0) return null;
+  const lastMessage = conversation[lastIndex];
+  if (!lastMessage || lastMessage.role !== "user" || lastMessage.content.trim().toLowerCase() !== normalizedConfirmation) return null;
+
+  const prior = conversation.slice(0, -1);
+  const assistantIndex = [...prior].reverse().findIndex(
+    (item) => item.role === "assistant" && /\b(confirm|proceed|approve|go ahead|continue)\b/i.test(item.content)
+  );
+  if (assistantIndex < 0) return null;
+
+  const absoluteAssistantIndex = prior.length - 1 - assistantIndex;
+  for (let i = absoluteAssistantIndex - 1; i >= 0; i -= 1) {
+    const item = prior[i];
+    if (item.role === "user" && item.content.trim()) {
+      return item.content.trim();
+    }
+  }
+  return null;
 }
 
 function captureUiSnapshot(): string {
@@ -1066,7 +1121,55 @@ function captureUiSnapshot(): string {
     .slice(0, 2200);
 }
 
-function executeUiOperate(action: UnifiedAgentAction): UnifiedActionExecutionResult {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function flashUiTarget(element: HTMLElement): void {
+  const previousOutline = element.style.outline;
+  const previousOutlineOffset = element.style.outlineOffset;
+  const previousBoxShadow = element.style.boxShadow;
+  const previousTransition = element.style.transition;
+
+  element.style.transition = "box-shadow 140ms ease, outline-color 140ms ease";
+  element.style.outline = "2px solid rgba(37, 99, 235, 0.9)";
+  element.style.outlineOffset = "2px";
+  element.style.boxShadow = "0 0 0 4px rgba(37, 99, 235, 0.18)";
+
+  window.setTimeout(() => {
+    element.style.outline = previousOutline;
+    element.style.outlineOffset = previousOutlineOffset;
+    element.style.boxShadow = previousBoxShadow;
+    element.style.transition = previousTransition;
+  }, 520);
+}
+
+function restoreCheckboxLikeInput(element: HTMLInputElement, checked: boolean): void {
+  element.checked = checked;
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function rollbackUiSteps(rollback: UiRollbackHandler[], notes: string[]): number {
+  let restored = 0;
+  for (let i = rollback.length - 1; i >= 0; i -= 1) {
+    try {
+      rollback[i]();
+      restored += 1;
+    } catch {
+      notes.push("Rollback skipped for one step.");
+    }
+  }
+  return restored;
+}
+
+async function executeUiOperate(
+  action: UnifiedAgentAction,
+  options?: {
+    shouldStop?: () => boolean;
+    rollbackOnStop?: boolean;
+  }
+): Promise<UnifiedActionExecutionResult> {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return {
       type: "ui.operate",
@@ -1085,7 +1188,20 @@ function executeUiOperate(action: UnifiedAgentAction): UnifiedActionExecutionRes
   }
 
   const notes: string[] = [];
+  const rollbackHandlers: UiRollbackHandler[] = [];
   for (const step of steps) {
+    if (options?.shouldStop?.()) {
+      const restoredCount = options.rollbackOnStop === false ? 0 : rollbackUiSteps(rollbackHandlers, notes);
+      return {
+        type: "ui.operate",
+        success: false,
+        message:
+          options.rollbackOnStop === false
+            ? `Agent action stopped by user. ${notes.join("\n")}`
+            : `Agent action stopped by user and rolled back ${restoredCount} reversible UI step(s).\n${notes.join("\n")}`,
+      };
+    }
+
     const element = resolveUiTargetElement(step.target);
     if (!element) {
       notes.push(`Could not find ${describeUiTarget(step.target)}.`);
@@ -1093,33 +1209,53 @@ function executeUiOperate(action: UnifiedAgentAction): UnifiedActionExecutionRes
     }
 
     element.scrollIntoView({ behavior: "smooth", block: "center" });
+    flashUiTarget(element);
+    await sleep(UI_SCROLL_SETTLE_DELAY_MS);
 
     if (step.action === "focus") {
+      const previousActive = document.activeElement;
+      if (previousActive instanceof HTMLElement) {
+        rollbackHandlers.push(() => previousActive.focus());
+      }
       element.focus();
       notes.push(`Focused ${describeUiTarget(step.target)}.`);
+      await sleep(UI_STEP_DELAY_MS);
       continue;
     }
 
     if (step.action === "click") {
+      if (element instanceof HTMLInputElement && (element.type === "checkbox" || element.type === "radio")) {
+        const previousChecked = element.checked;
+        rollbackHandlers.push(() => restoreCheckboxLikeInput(element, previousChecked));
+      }
       element.click();
       notes.push(`Clicked ${describeUiTarget(step.target)}.`);
+      await sleep(UI_STEP_DELAY_MS);
       continue;
     }
 
     if (step.action === "type") {
       const value = step.value || "";
       if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        const previousValue = element.value;
+        rollbackHandlers.push(() => setReactLikeInputValue(element, previousValue));
         setReactLikeInputValue(element, value);
         notes.push(`Entered text in ${describeUiTarget(step.target)}.`);
       } else {
         notes.push(`Could not type into ${describeUiTarget(step.target)}.`);
       }
+      await sleep(UI_STEP_DELAY_MS);
       continue;
     }
 
     if (step.action === "select") {
       const value = step.value || "";
       if (element instanceof HTMLSelectElement) {
+        const previousValue = element.value;
+        rollbackHandlers.push(() => {
+          element.value = previousValue;
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+        });
         const optionByValue = Array.from(element.options).find((option) => normalizeUiText(option.value) === normalizeUiText(value));
         const optionByText = Array.from(element.options).find((option) => normalizeUiText(option.textContent || "") === normalizeUiText(value));
         element.value = (optionByValue || optionByText)?.value || value;
@@ -1129,17 +1265,21 @@ function executeUiOperate(action: UnifiedAgentAction): UnifiedActionExecutionRes
         element.click();
         notes.push(`Opened selector ${describeUiTarget(step.target)}.`);
       }
+      await sleep(UI_STEP_DELAY_MS);
       continue;
     }
 
     if (step.action === "check") {
       if (element instanceof HTMLInputElement && (element.type === "checkbox" || element.type === "radio")) {
+        const previousChecked = element.checked;
+        rollbackHandlers.push(() => restoreCheckboxLikeInput(element, previousChecked));
         if (!element.checked) element.click();
         notes.push(`Checked ${describeUiTarget(step.target)}.`);
       } else {
         element.click();
         notes.push(`Toggled ${describeUiTarget(step.target)}.`);
       }
+      await sleep(UI_STEP_DELAY_MS);
     }
   }
 
@@ -1159,6 +1299,101 @@ function shouldTryAdvancedAccountingParse(description: string, transactionType: 
     /\b(vat|wht|debit|credit|accrual|deferred|allocate|split|reclass|adjustment|amort|depreciation)\b/i;
   const isLongRequest = description.split(/\s+/).length >= 12;
   return transactionType === "other" || complexPattern.test(description) || isLongRequest;
+}
+
+type AccountingUiMirrorLine = {
+  accountCode: string;
+  debit: number;
+  credit: number;
+};
+
+type AccountingUiMirrorPayload = {
+  narration: string;
+  lines: AccountingUiMirrorLine[];
+};
+
+function toAccountingUiMirrorPayload(fallbackNarration: string): AccountingUiMirrorPayload | null {
+  if (typeof window === "undefined") return null;
+  const entries = accountingEngine.getState().journalEntries || [];
+  if (entries.length === 0) return null;
+  const latest = entries[entries.length - 1];
+  if (!latest || !Array.isArray(latest.lines)) return null;
+
+  const lines = latest.lines
+    .map((line) => ({
+      accountCode: toText(line.accountCode),
+      debit: Math.max(0, toNumber(line.debit)),
+      credit: Math.max(0, toNumber(line.credit)),
+    }))
+    .filter((line) => line.accountCode && (line.debit > 0 || line.credit > 0));
+
+  if (lines.length === 0) return null;
+
+  return {
+    narration: toText(latest.narration, fallbackNarration) || fallbackNarration,
+    lines,
+  };
+}
+
+async function runAccountingUiMirror(payload: AccountingUiMirrorPayload): Promise<string> {
+  if (typeof window === "undefined" || typeof document === "undefined") return "";
+  if (!window.location.pathname.startsWith("/accounting")) return "";
+  const openButton = document.querySelector('[data-agent-target="open-post-journal-entry"]');
+  if (!(openButton instanceof HTMLElement)) return "";
+
+  const primaryDebit = payload.lines.find((line) => line.debit > 0);
+  const primaryCredit = payload.lines.find((line) => line.credit > 0);
+  if (!primaryDebit || !primaryCredit) return "";
+
+  const previewAction: UnifiedAgentAction = {
+    type: "ui.operate",
+    payload: {
+      steps: [
+        {
+          action: "click",
+          target: { selector: '[data-agent-target="open-post-journal-entry"]' },
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-narration"]' },
+          value: payload.narration,
+        },
+        {
+          action: "select",
+          target: { selector: '[data-agent-target="post-entry-line-1-account"]' },
+          value: primaryDebit.accountCode,
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-line-1-debit"]' },
+          value: String(primaryDebit.debit),
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-line-1-credit"]' },
+          value: "",
+        },
+        {
+          action: "select",
+          target: { selector: '[data-agent-target="post-entry-line-2-account"]' },
+          value: primaryCredit.accountCode,
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-line-2-debit"]' },
+          value: "",
+        },
+        {
+          action: "type",
+          target: { selector: '[data-agent-target="post-entry-line-2-credit"]' },
+          value: String(primaryCredit.credit),
+        },
+      ],
+    },
+  };
+
+  const mirrorResult = await executeUiOperate(previewAction, { rollbackOnStop: false });
+  return mirrorResult.success ? "Live UI preview updated in Post Journal Entry form." : "";
 }
 
 async function executeAccountingPost(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
@@ -1223,10 +1458,12 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
 
         window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "unified-agent" } }));
         window.dispatchEvent(new StorageEvent("storage", { key: "insight::accounting-engine" }));
+        const mirrorPayload = toAccountingUiMirrorPayload(description);
+        const mirrorNote = mirrorPayload ? await runAccountingUiMirror(mirrorPayload) : "";
         return {
           type: "accounting.postTransaction",
           success: true,
-          message: response.chatResponse,
+          message: mirrorNote ? `${response.chatResponse}\n${mirrorNote}` : response.chatResponse,
         };
       }
     } catch (error) {
@@ -1238,10 +1475,12 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
     const result = accountingEngine.processTransactionEnhanced(rawTx);
     window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "unified-agent" } }));
     window.dispatchEvent(new StorageEvent("storage", { key: "insight::accounting-engine" }));
+    const mirrorPayload = toAccountingUiMirrorPayload(description);
+    const mirrorNote = mirrorPayload ? await runAccountingUiMirror(mirrorPayload) : "";
     return {
       type: "accounting.postTransaction",
       success: true,
-      message: result.chatResponse,
+      message: mirrorNote ? `${result.chatResponse}\n${mirrorNote}` : result.chatResponse,
     };
   } catch (error) {
     return {
@@ -1591,12 +1830,42 @@ export async function executeUnifiedAgentActions(
   actions: UnifiedAgentAction[],
   options?: {
     customActionExecutor?: UnifiedCustomActionExecutor;
+    shouldStop?: () => boolean;
+    rollbackOnStop?: boolean;
   }
 ): Promise<UnifiedActionExecutionResult[]> {
   ensureEnginesLoaded();
   const results: UnifiedActionExecutionResult[] = [];
+  const executedDedupeKeys = new Set<string>();
+
+  const getExecutionDedupeKey = (action: UnifiedAgentAction): string | null => {
+    if (action.type !== "accounting.postTransaction") return null;
+    const payload = action.payload || {};
+    const description = toText(payload.description).toLowerCase().replace(/\s+/g, " ").trim();
+    const amount = Math.round(Math.abs(toNumber(payload.amount)) * 100) / 100;
+    const date = toText(payload.date, getTodayDate());
+    if (!description || amount <= 0) return null;
+    return `${action.type}|${description}|${amount}|${date}`;
+  };
 
   for (const action of actions || []) {
+    if (options?.shouldStop?.()) {
+      results.push({
+        type: action.type,
+        success: false,
+        message: "Stopped by user before this action could run.",
+      });
+      break;
+    }
+
+    const dedupeKey = getExecutionDedupeKey(action);
+    if (dedupeKey) {
+      if (executedDedupeKeys.has(dedupeKey)) {
+        continue;
+      }
+      executedDedupeKeys.add(dedupeKey);
+    }
+
     try {
       if (action.type === "accounting.postTransaction") {
         results.push(await executeAccountingPost(action));
@@ -1623,7 +1892,7 @@ export async function executeUnifiedAgentActions(
       } else if (action.type === "navigate") {
         results.push(executeNavigate(action));
       } else if (action.type === "ui.operate") {
-        results.push(executeUiOperate(action));
+        results.push(await executeUiOperate(action, { shouldStop: options?.shouldStop, rollbackOnStop: options?.rollbackOnStop }));
       } else if (options?.customActionExecutor) {
         const customResult = await options.customActionExecutor(action);
         if (customResult) {
@@ -1648,6 +1917,10 @@ export async function executeUnifiedAgentActions(
         success: false,
         message: `Action failed (${action.type}): ${error instanceof Error ? error.message : "Unknown error"}`,
       });
+    }
+
+    if (options?.shouldStop?.()) {
+      break;
     }
   }
 
@@ -1740,16 +2013,28 @@ export async function requestUnifiedAgentPlan(
     }
 
     const data = (await response.json()) as UnifiedAgentResponse;
+    const remoteActions = Array.isArray(data.actions) ? data.actions : [];
+    const localActions = Array.isArray(localFallbackPlan.actions) ? localFallbackPlan.actions : [];
+    const shouldPromoteLocalActions = localActions.length > 0 && remoteActions.length === 0 && isExplicitActionIntent(request.message);
+    const actions = shouldPromoteLocalActions ? localActions : remoteActions;
+
     return {
       reply: typeof data.reply === "string" && data.reply.trim() ? data.reply.trim() : serviceErrorPlan.reply,
-      actions: Array.isArray(data.actions) ? data.actions : [],
+      actions,
       confidence:
         typeof data.confidence === "number" && Number.isFinite(data.confidence)
           ? Math.max(0, Math.min(1, data.confidence))
           : serviceErrorPlan.confidence,
-      reasoning: typeof data.reasoning === "string" ? data.reasoning : serviceErrorPlan.reasoning,
+      reasoning:
+        shouldPromoteLocalActions
+          ? `${typeof data.reasoning === "string" ? data.reasoning : serviceErrorPlan.reasoning} | Promoted local deterministic actions to avoid reply-only plan.`
+          : typeof data.reasoning === "string"
+            ? data.reasoning
+            : serviceErrorPlan.reasoning,
       planSource:
-        data.planSource === "gemini" || data.planSource === "fallback"
+        shouldPromoteLocalActions
+          ? "fallback"
+          : data.planSource === "gemini" || data.planSource === "fallback"
           ? data.planSource
           : "fallback",
     };
@@ -1854,6 +2139,9 @@ export async function runUnifiedAgentMessage(params: {
   enableUiOperator?: boolean;
   contextSnapshot?: string;
   customActionExecutor?: UnifiedCustomActionExecutor;
+  shouldStop?: () => boolean;
+  rollbackOnStop?: boolean;
+  autoApproveUiActions?: boolean;
 }): Promise<{
   finalReply: string;
   baseReply: string;
@@ -1866,6 +2154,7 @@ export async function runUnifiedAgentMessage(params: {
   const moduleId = normalizeModuleId(params.module);
   const objective = trimmedMessage;
   const snapshot = typeof params.contextSnapshot === "string" ? params.contextSnapshot : "";
+  const shouldStop = () => Boolean(params.shouldStop?.());
 
   if (pendingUiApproval && isCancelMessage(trimmedMessage)) {
     pendingUiApproval = null;
@@ -1884,6 +2173,8 @@ export async function runUnifiedAgentMessage(params: {
     pendingUiApproval = null;
     const execution = await executeUnifiedAgentActions(approval.actions, {
       customActionExecutor: params.customActionExecutor,
+      shouldStop: params.shouldStop,
+      rollbackOnStop: params.rollbackOnStop,
     });
     const navigateTo = execution.find((result) => result.navigateTo)?.navigateTo;
     const observation = buildObservation(execution, navigateTo);
@@ -1903,6 +2194,43 @@ export async function runUnifiedAgentMessage(params: {
       navigateTo,
       planSource: approval.planSource,
     };
+  }
+
+  if (!pendingUiApproval && isConfirmMessage(trimmedMessage)) {
+    const pendingInstruction = extractPendingInstructionFromConversation(params.conversation, trimmedMessage);
+    if (pendingInstruction) {
+      const inferredPlan = buildLocalFallbackPlan({
+        message: pendingInstruction,
+        module: params.module,
+        route: params.route,
+        contextSnapshot: params.contextSnapshot,
+      });
+      if (Array.isArray(inferredPlan.actions) && inferredPlan.actions.length > 0) {
+        const execution = await executeUnifiedAgentActions(inferredPlan.actions, {
+          customActionExecutor: params.customActionExecutor,
+          shouldStop: params.shouldStop,
+          rollbackOnStop: params.rollbackOnStop,
+        });
+        const navigateTo = execution.find((result) => result.navigateTo)?.navigateTo;
+        const observation = buildObservation(execution, navigateTo);
+        appendAgentMemory(moduleId, {
+          timestamp: Date.now(),
+          module: moduleId,
+          objective,
+          actionTypes: inferredPlan.actions.map((action) => action.type),
+          observation,
+          success: execution.every((result) => result.success),
+        });
+        return {
+          finalReply: buildFinalReplyFromExecution("Confirmed. Executing the pending request now.", execution),
+          baseReply: "Confirmed. Executing the pending request now.",
+          actions: inferredPlan.actions,
+          execution,
+          navigateTo,
+          planSource: "fallback",
+        };
+      }
+    }
   }
 
   if (
@@ -1938,6 +2266,12 @@ export async function runUnifiedAgentMessage(params: {
   const seenSignatures = new Set<string>();
 
   for (let cycle = 0; cycle < AGENT_LOOP_MAX_CYCLES; cycle += 1) {
+    if (shouldStop()) {
+      latestReply = latestReply || "Stopped by user.";
+      pendingUiApproval = null;
+      break;
+    }
+
     const loopPrompt = trimmedMessage;
 
     const plan = await requestUnifiedAgentPlan({
@@ -1969,13 +2303,15 @@ export async function runUnifiedAgentMessage(params: {
 
     const uiActions = plan.actions.filter((action) => action.type === "ui.operate");
     const nonUiActions = plan.actions.filter((action) => action.type !== "ui.operate");
-    const requiresUiApproval = uiActions.some(uiActionNeedsConfirmation);
+    const requiresUiApproval = params.autoApproveUiActions ? false : uiActions.some(uiActionNeedsConfirmation);
     const actionsToExecute = requiresUiApproval ? nonUiActions : plan.actions;
 
     aggregateActions.push(...actionsToExecute);
 
     const execution = await executeUnifiedAgentActions(actionsToExecute, {
       customActionExecutor: params.customActionExecutor,
+      shouldStop: params.shouldStop,
+      rollbackOnStop: params.rollbackOnStop,
     });
     aggregateExecution.push(...execution);
     latestNavigateTo = execution.find((result) => result.navigateTo)?.navigateTo || latestNavigateTo;
@@ -2001,6 +2337,11 @@ export async function runUnifiedAgentMessage(params: {
     pendingUiApproval = null;
 
     const hasFailure = execution.some((result) => !result.success);
+    if (shouldStop()) {
+      latestReply = `${latestReply}\n\nAgent run stopped by user. Reversible UI changes were rolled back where possible.`;
+      break;
+    }
+
     if (hasFailure) {
       latestReply = `${latestReply}\n\nI stopped after a failed step. You can adjust the instruction and I’ll continue.`;
       break;

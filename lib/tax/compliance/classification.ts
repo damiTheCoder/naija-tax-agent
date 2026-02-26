@@ -15,10 +15,60 @@ const keywordMatch = (value: unknown, keywords: string[]) => {
   return keywords.some((keyword) => text.includes(keyword));
 };
 
+const readNumber = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
+const readStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
+const accountMatches = (codes: string[], prefixes: string[]) =>
+  codes.some((code) => prefixes.some((prefix) => code.startsWith(prefix)));
+
 const classifyVat = (tx: ComplianceTransaction): TaxClassification | null => {
   const desc = typeof tx.description === "string" ? tx.description.toLowerCase() : "";
   const type = typeof tx.type === "string" ? tx.type : "";
   const metadata = tx.metadata || {};
+  const inferredType = typeof metadata.inferredType === "string" ? metadata.inferredType : "";
+  const debitCodes = readStringArray(metadata.debitAccountCodes);
+  const creditCodes = readStringArray(metadata.creditAccountCodes);
+  const vatOutputAmount = readNumber(metadata.vatOutputAmount);
+  const vatInputAmount = readNumber(metadata.vatInputAmount);
+
+  if (vatOutputAmount > 0) {
+    return {
+      id: makeId("cls"),
+      entityId: tx.entityId,
+      transactionId: tx.id,
+      taxType: "VAT",
+      category: "output",
+      confidence: 0.95,
+      status: "auto",
+      reason: "Detected Output VAT line (2200) from accounting entry",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { source: "ledger_line" },
+    };
+  }
+
+  if (vatInputAmount > 0) {
+    return {
+      id: makeId("cls"),
+      entityId: tx.entityId,
+      transactionId: tx.id,
+      taxType: "VAT",
+      category: "input",
+      confidence: 0.95,
+      status: "auto",
+      reason: "Detected Input VAT line (1400) from accounting entry",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { source: "ledger_line" },
+    };
+  }
+
+  if (type.includes("payroll") || inferredType === "payroll" || keywordMatch(desc, ["salary", "payroll", "wages"])) {
+    return null;
+  }
+
   if (metadata.vatExempt) {
     return {
       id: makeId("cls"),
@@ -48,6 +98,38 @@ const classifyVat = (tx: ComplianceTransaction): TaxClassification | null => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: { source: "metadata" },
+    };
+  }
+
+  if (accountMatches(creditCodes, ["4"])) {
+    return {
+      id: makeId("cls"),
+      entityId: tx.entityId,
+      transactionId: tx.id,
+      taxType: "VAT",
+      category: "output",
+      confidence: 0.82,
+      status: "auto",
+      reason: "Detected revenue credit account for output VAT",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { source: "account_code" },
+    };
+  }
+
+  if (accountMatches(debitCodes, ["5", "6", "12"])) {
+    return {
+      id: makeId("cls"),
+      entityId: tx.entityId,
+      transactionId: tx.id,
+      taxType: "VAT",
+      category: "input",
+      confidence: 0.8,
+      status: "auto",
+      reason: "Detected expense/purchase debit account for input VAT",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { source: "account_code" },
     };
   }
 
@@ -86,6 +168,13 @@ const classifyVat = (tx: ComplianceTransaction): TaxClassification | null => {
 
 const classifyWhtCategory = (tx: ComplianceTransaction): string | null => {
   const desc = typeof tx.description === "string" ? tx.description.toLowerCase() : "";
+  const metadata = tx.metadata || {};
+  const accountCodes = readStringArray(metadata.accountCodes);
+  if (accountCodes.some((code) => ["5900", "5910", "5920"].includes(code))) return "professional_services";
+  if (accountCodes.some((code) => ["5600", "4220"].includes(code))) return "rent";
+  if (accountCodes.some((code) => ["4020"].includes(code))) return "contract";
+  if (accountCodes.some((code) => ["4200"].includes(code))) return "interest";
+  if (accountCodes.some((code) => ["4210"].includes(code))) return "dividend";
   if (keywordMatch(desc, ["consult", "professional", "advisory", "audit", "legal"])) return "professional_services";
   if (keywordMatch(desc, ["rent", "lease"])) return "rent";
   if (keywordMatch(desc, ["contract", "construction", "project"])) return "contract";
@@ -96,19 +185,31 @@ const classifyWhtCategory = (tx: ComplianceTransaction): string | null => {
 };
 
 const classifyWht = (tx: ComplianceTransaction): TaxClassification | null => {
+  const metadata = tx.metadata || {};
+  const whtPayableAmount = readNumber(metadata.whtPayableAmount);
+  const whtReceivableAmount = readNumber(metadata.whtReceivableAmount);
   const category = classifyWhtCategory(tx);
-  if (!category) return null;
+  if (!category && whtPayableAmount <= 0 && whtReceivableAmount <= 0) return null;
+  const resolvedCategory = category || "professional_services";
   return {
     id: makeId("cls"),
     entityId: tx.entityId,
     transactionId: tx.id,
     taxType: "WHT",
-    category,
-    confidence: 0.74,
+    category: resolvedCategory,
+    confidence: whtPayableAmount > 0 || whtReceivableAmount > 0 ? 0.95 : 0.74,
     status: "auto",
-    reason: "Matched WHT category by description",
+    reason:
+      whtPayableAmount > 0 || whtReceivableAmount > 0
+        ? "Detected WHT line (2220/1410) from accounting entry"
+        : "Matched WHT category by description",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    metadata: {
+      ...(tx.metadata || {}),
+      whtPayableAmount,
+      whtReceivableAmount,
+    },
   };
 };
 

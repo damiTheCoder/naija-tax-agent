@@ -3,7 +3,7 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
- * Skeleton that matches chat pages (/personal, /accounting, /tax/chat).
+ * Skeleton that matches chat pages (/personal, /accounting).
  * Shows a centred welcome area with logo, greeting, 2×2 suggestion cards,
  * and a floating composer bar at the bottom.
  */

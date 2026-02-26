@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
     automationEngine,
     EMBEDDED_FINANCE_PRODUCTS,
@@ -19,7 +19,7 @@ import {
     type CashflowAnalytics,
 } from "@/lib/cashflow/investmentCalculator";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
-import { SendHorizontal, Plus, Trash2, Power, TrendingUp } from "lucide-react";
+import { SendHorizontal, Plus, Trash2, Power, TrendingUp, ArrowRight } from "lucide-react";
 import { runUnifiedAgentMessage } from "@/lib/agent/unifiedClient";
 import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 
@@ -33,6 +33,23 @@ type ChatMessage = {
     content: string;
     timestamp: number;
 };
+
+type CashMetricMode = "inflow" | "outflow" | "balance";
+
+function formatNairaCompact(amount: number): string {
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? "-" : "";
+
+    const build = (divisor: number, suffix: "K" | "M" | "B") => {
+        const compact = (abs / divisor).toFixed(abs / divisor >= 100 ? 0 : 1).replace(/\.0$/, "");
+        return `${sign}₦${compact}${suffix}`;
+    };
+
+    if (abs >= 1_000_000_000) return build(1_000_000_000, "B");
+    if (abs >= 1_000_000) return build(1_000_000, "M");
+    if (abs >= 1_000) return build(1_000, "K");
+    return `${sign}₦${abs.toLocaleString("en-NG", { maximumFractionDigits: 1 })}`;
+}
 
 // =============================================================================
 // EMBEDDED FINANCE CARD COMPONENT
@@ -209,6 +226,7 @@ export default function CashflowChatPage() {
     const [automationState, setAutomationState] = useState<AutomationState | null>(null);
     const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
+    const [cashMetricMode, setCashMetricMode] = useState<CashMetricMode>("inflow");
 
     // Quick automation sliders
     const [tbillsPercent, setTbillsPercent] = useState(0);
@@ -406,6 +424,25 @@ export default function CashflowChatPage() {
 
     const canSend = composerInput.trim().length > 0;
     const rules = automationState?.rules || [];
+    const cashMetricLabelMap: Record<CashMetricMode, string> = {
+        inflow: "Inflow",
+        outflow: "Outflow",
+        balance: "Balance",
+    };
+    const cashMetricValueMap = useMemo(() => ({
+        inflow: analytics?.monthlyInflow || 0,
+        outflow: analytics?.monthlyOutflow || 0,
+        balance: analytics?.netCashflow || 0,
+    }), [analytics]);
+    const displayedCashMetric = cashMetricValueMap[cashMetricMode];
+
+    const cycleCashMetricMode = useCallback(() => {
+        setCashMetricMode((prev) => {
+            if (prev === "inflow") return "outflow";
+            if (prev === "outflow") return "balance";
+            return "inflow";
+        });
+    }, []);
 
     if (loading) {
         return (
@@ -421,11 +458,22 @@ export default function CashflowChatPage() {
                 <main className="px-3 space-y-4">
                     {/* Inflow Display */}
                     {analytics && (
-                        <div>
-                            <p className="text-xs font-medium text-gray-500 mb-0.5">Inflow</p>
-                            <p className="text-2xl font-bold text-blue-500" style={{ color: '#2264ff' }}>
-                                {formatNaira(analytics.monthlyInflow)}<span className="text-sm text-gray-400 font-normal ml-1">/mo</span>
-                            </p>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-medium text-gray-500 mb-0.5">{cashMetricLabelMap[cashMetricMode]}</p>
+                                <p className="text-2xl font-bold text-blue-500" style={{ color: "#2264ff" }} title={formatNaira(displayedCashMetric)}>
+                                    {formatNairaCompact(displayedCashMetric)}<span className="text-sm text-gray-400 font-normal ml-1">/mo</span>
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={cycleCashMetricMode}
+                                className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-sm transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40"
+                                aria-label="Toggle cash metric"
+                                title="Switch between Inflow, Outflow and Balance"
+                            >
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
                         </div>
                     )}
 

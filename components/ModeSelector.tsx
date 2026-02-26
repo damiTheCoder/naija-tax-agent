@@ -39,7 +39,7 @@ export default function ModeSelector() {
         if (mode === newMode) return;
 
         if (newMode === "tax") {
-            navigateTo("/main");
+            navigateTo("/tax/workspace");
         } else if (newMode === "intelligence") {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {

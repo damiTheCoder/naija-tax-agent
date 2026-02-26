@@ -9,7 +9,6 @@ import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
 import InvestmentDashboardSkeleton from "@/components/skeletons/InvestmentDashboardSkeleton";
 import WalletSkeleton from "@/components/skeletons/WalletSkeleton";
 import CashflowIntelligenceSkeleton from "@/components/skeletons/CashflowIntelligenceSkeleton";
-import TaxFormSkeleton from "@/components/skeletons/TaxFormSkeleton";
 import ConnectedAppsSkeleton from "@/components/skeletons/ConnectedAppsSkeleton";
 import WorkspaceSkeleton from "@/components/skeletons/WorkspaceSkeleton";
 import BankConnectionsSkeleton from "@/components/skeletons/BankConnectionsSkeleton";
@@ -89,11 +88,29 @@ export default function PageSkeleton({ overridePath }: { overridePath?: string |
   if (resolvedPath?.startsWith("/tax/workspace")) {
     return <TaxWorkspaceSkeleton />;
   }
-  if (resolvedPath?.startsWith("/tax/chat")) {
-    return <ChatSkeleton />;
+  if (resolvedPath?.startsWith("/tax/computation")) {
+    return <TaxWorkspaceSkeleton />;
   }
-  if (resolvedPath?.startsWith("/main")) {
-    return <TaxFormSkeleton />;
+  if (resolvedPath?.startsWith("/tax/adjustments")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/settings")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/calendar")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/file-taxes")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/payments")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/returns")) {
+    return <TaxWorkspaceSkeleton />;
+  }
+  if (resolvedPath?.startsWith("/tax/transactions")) {
+    return <TaxWorkspaceSkeleton />;
   }
   if (resolvedPath?.startsWith("/tax-tools")) {
     return <TaxToolSkeleton />;
