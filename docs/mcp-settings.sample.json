@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "quantum-ledger-financial": {
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp-financial-server.ts"],
+      "cwd": "/Users/admin/Desktop/Cash Operating System/naija-tax-agent",
+      "env": {
+        "GEMINI_API_KEY": "YOUR_GEMINI_API_KEY"
+      }
+    }
+  }
+}

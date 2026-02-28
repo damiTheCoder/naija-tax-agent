@@ -44,7 +44,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         // Estimate burn rate (assuming 30-day period)
         const daysOfData = Math.max(state.journalEntries.length, 1);
         const dailyBurnRate = expenses / Math.max(daysOfData, 30);
-        const runwayDays = dailyBurnRate > 0 ? Math.round(cashBalance / dailyBurnRate) : 999;
+        const netDailyBurnRate = Math.max(0, (expenses - revenue) / Math.max(daysOfData, 30));
+        const runwayDays = cashBalance <= 0 ? 0 : netDailyBurnRate > 0 ? Math.round(cashBalance / netDailyBurnRate) : 999;
 
         let result: Record<string, unknown> = {
             asOf: new Date().toISOString(),

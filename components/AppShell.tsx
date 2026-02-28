@@ -43,6 +43,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       "/accounting/depreciation",
       "/accounting/projections",
       "/accounting/projections/modelling",
+      "/budgeting/dashboard",
+      "/budgeting/budgets",
+      "/budgeting/forecasting",
+      "/budgeting/scenarios",
       "/tax/computation",
       "/tax/adjustments",
       "/tax/settings",
@@ -231,6 +235,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/accounting/projections")) return "Financial Projections";
+  if (pathname.includes("/budgeting/dashboard")) return "Budget Dashboard";
+  if (pathname.includes("/budgeting/budgets/new")) return "Create Budget";
+  if (pathname.includes("/budgeting/budgets")) return "Budgets";
+  if (pathname.includes("/budgeting/categories")) return "Category Budgets";
+  if (pathname.includes("/budgeting/departments")) return "Department Budgets";
+  if (pathname.includes("/budgeting/forecasting")) return "Budget Forecasting";
+  if (pathname.includes("/budgeting/scenarios")) return "Scenario Planning";
+  if (pathname.includes("/budgeting/variance")) return "Variance Analysis";
+  if (pathname.includes("/budgeting/budget-vs-actual")) return "Budget vs Actual";
+  if (pathname.includes("/budgeting/templates")) return "Budget Templates";
+  if (pathname.includes("/budgeting/ai-assistant")) return "AI Budget Assistant";
   if (pathname.includes("/accounting/workspace")) return "Accounting Records";
   if (pathname.includes("/accounting/assets")) return "Fixed Assets";
   if (pathname.includes("/accounting/depreciation")) return "Depreciation";
@@ -249,6 +264,17 @@ function getPageTitle(pathname: string): string {
 
 function getPageDescription(pathname: string): string {
   if (pathname.includes("/accounting/projections")) return "Forward-looking forecasts from your accounting records";
+  if (pathname.includes("/budgeting/dashboard")) return "Plan, track, and control budget performance across your business";
+  if (pathname.includes("/budgeting/budgets/new")) return "Create or edit a budget with categories, departments, and controls";
+  if (pathname.includes("/budgeting/budgets")) return "Manage all budget plans, utilization, and status";
+  if (pathname.includes("/budgeting/categories")) return "Control and monitor budget allocation by spending category";
+  if (pathname.includes("/budgeting/departments")) return "Track budget utilization by department";
+  if (pathname.includes("/budgeting/forecasting")) return "Forecast cash runway and budget outcomes";
+  if (pathname.includes("/budgeting/scenarios")) return "Simulate scenario impact on budget and runway";
+  if (pathname.includes("/budgeting/variance")) return "Analyze budget variance against actual performance";
+  if (pathname.includes("/budgeting/budget-vs-actual")) return "Visual comparisons of planned versus actual spending";
+  if (pathname.includes("/budgeting/templates")) return "Reusable templates for common budgeting models";
+  if (pathname.includes("/budgeting/ai-assistant")) return "AI support for optimization, risk alerts, and budget decisions";
   if (pathname.includes("/accounting/workspace")) return "Real-time journals, ledgers, and statements";
   if (pathname.includes("/accounting/assets")) return "Track fixed assets, accumulated depreciation, and net book values";
   if (pathname.includes("/accounting/depreciation")) return "Automatic depreciation schedule with monthly journal guidance";

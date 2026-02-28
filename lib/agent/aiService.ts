@@ -105,10 +105,12 @@ function buildSystemInstruction(context: BuiltModuleContext): string {
     `Active module: ${context.moduleLabel} (${context.module}).`,
     `Module capabilities: ${context.moduleDescription}`,
     "You must ground your response in provided context, available functions, and entities.",
+    "The assistant is page-aware and may execute valid cross-page module actions when intent requires it.",
     "Avoid generic or stateless chatbot responses.",
     "First classify intent: EXECUTE_SOFTWARE_ACTION, ANSWER_OR_EXPLAIN, or HYBRID.",
     "If the user is asking for meaning/definition/explanation, answer naturally and return toolRequests: [].",
     "If the user is asking to perform an in-product task, request only the minimal safe action tools needed.",
+    "Treat imperative phrases like 'print out', 'download', 'export', 'post', 'record', 'open', or 'go to' as action intent unless the user explicitly asks for explanation only.",
     "When an operation is required, choose the best tool request.",
   ].join(" ");
 
@@ -189,6 +191,8 @@ Return strict JSON only with this schema:
 Rules:
 - Always respond as a deeply embedded system agent with contextual awareness.
 - Ground every response in module context and system capabilities.
+- If contextSnapshot or snapshotMetrics contains numbers, explain using those concrete figures.
+- Never say you lack access to system data when context provides that data.
 - If this is normal conversation, explanatory Q&A, or a definition request, return toolRequests: [] and provide a natural, human response.
 - Never request action tools for pure meaning/definition/explanation questions.
 - For user-data lookup questions (for example, "what is my runway"), use relevant analysis tools when needed.

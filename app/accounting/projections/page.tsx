@@ -895,8 +895,19 @@ function buildProjectionEngineResult(
     .map((point) => point.netCashflow)
     .filter((value) => value < 0)
     .map((value) => Math.abs(value));
-  const burnRate = negativeNetCashflow.length ? average(negativeNetCashflow) : 0;
-  const runway = burnRate > 0 ? Math.max(0, baseline.currentCashBalance / burnRate) : Number.POSITIVE_INFINITY;
+  const operatingOutflows = projected.map((point) => point.cashOutflow).filter((value) => value > 0);
+  const fallbackBurnRate = operatingOutflows.length ? average(operatingOutflows) : 0;
+  const burnRate = negativeNetCashflow.length
+    ? average(negativeNetCashflow)
+    : baseline.currentCashBalance < 0
+      ? fallbackBurnRate
+      : 0;
+  const runway =
+    baseline.currentCashBalance <= 0
+      ? 0
+      : burnRate > 0
+        ? Math.max(0, baseline.currentCashBalance / burnRate)
+        : Number.POSITIVE_INFINITY;
   const breakEvenIndex = projected.findIndex((point) => point.netProfit >= 0);
 
   const output: ProjectionOutput = {
@@ -1587,6 +1598,7 @@ export default function AccountingProjectionsPage() {
     if (!balances.length) return closingCashBalance;
     return balances[balances.length - 1];
   }, [closingCashBalance, expectedSixMonthResult]);
+  const hasCashDeficit = projectedCashBalance < 0 || closingCashBalance < 0;
 
   const runwayMonths = useMemo(() => {
     const runway = expectedEighteenMonthResult.output.runway;
@@ -1821,8 +1833,8 @@ export default function AccountingProjectionsPage() {
         />
         <KpiCard
           label="Burn Rate"
-          value={burnRate > 0 ? formatNaira(burnRate) : "No Burn"}
-          hint="Average monthly net cash burn"
+          value={burnRate > 0 ? formatNaira(burnRate) : hasCashDeficit ? "Deficit" : "No Burn"}
+          hint={hasCashDeficit ? "Cash is below zero. Restore liquidity while monitoring burn." : "Average monthly net cash burn"}
           accent="text-rose-600"
         />
         <KpiCard

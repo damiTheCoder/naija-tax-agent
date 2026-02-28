@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 
@@ -92,6 +93,16 @@ const icons = {
         </svg>
     ),
 };
+
+function KpiCard({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+            <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
+            <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{value}</p>
+            <p className="text-xs text-gray-500 mt-2">{hint}</p>
+        </div>
+    );
+}
 
 // =============================================================================
 // COMPONENT
@@ -302,127 +313,71 @@ export default function InvoiceManagementPage() {
     return (
         <div className="space-y-6 pb-10 sm:pb-14">
             {/* Header */}
-            <div
-                className="rounded-2xl border px-6 py-6"
-                style={{
-                    background: theme === "dark" ? "#1a1a1a" : "white",
-                    borderColor: theme === "dark" ? "#333" : "#e5e7eb",
-                }}
-            >
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
-                            {icons.invoice}
-                        </div>
-                        <div>
-                            <h1
-                                className="text-xl font-bold"
-                                style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                            >
-                                Invoice Management
-                            </h1>
-                            <p
-                                className="text-sm"
-                                style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }}
-                            >
-                                Create and manage sales invoices
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
-                    >
-                        {icons.plus}
-                        Create Invoice
-                    </button>
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Invoice Management</h1>
+                    <p className="text-sm text-gray-500 mt-1">Create and manage sales invoices in one place.</p>
+                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+                        Open Accounting Workspace
+                    </Link>
                 </div>
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                    {icons.plus}
+                    Create Invoice
+                </button>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    {
-                        label: "Outstanding",
-                        value: formatCurrency(stats.totalOutstanding),
-                        icon: icons.clock,
-                        color: "text-amber-600",
-                        bg: "bg-amber-100",
-                    },
-                    {
-                        label: "Paid This Month",
-                        value: formatCurrency(stats.paidThisMonth),
-                        icon: icons.money,
-                        color: "text-blue-600",
-                        bg: "bg-blue-100",
-                    },
-                    {
-                        label: "Overdue",
-                        value: formatCurrency(stats.overdueAmount),
-                        icon: icons.alert,
-                        color: "text-red-600",
-                        bg: "bg-red-100",
-                    },
-                    {
-                        label: "Total Invoices",
-                        value: stats.totalInvoices.toString(),
-                        icon: icons.invoice,
-                        color: "text-blue-600",
-                        bg: "bg-blue-100",
-                    },
-                ].map((stat, i) => (
-                    <div
-                        key={i}
-                        className="rounded-2xl border p-5"
-                        style={{
-                            background: theme === "dark" ? "#1a1a1a" : "white",
-                            borderColor: theme === "dark" ? "#333" : "#f3f4f6",
-                        }}
-                    >
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center ${stat.color}`}>
-                                {stat.icon}
-                            </div>
-                            <span style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }} className="text-sm">
-                                {stat.label}
-                            </span>
-                        </div>
-                        <p
-                            className="text-2xl font-bold"
-                            style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                        >
-                            {stat.value}
-                        </p>
-                    </div>
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <KpiCard
+                    label="Outstanding"
+                    value={formatCurrency(stats.totalOutstanding)}
+                    hint="Invoices still awaiting payment"
+                    accent="text-amber-600"
+                />
+                <KpiCard
+                    label="Paid This Month"
+                    value={formatCurrency(stats.paidThisMonth)}
+                    hint="Cash collected from paid invoices"
+                    accent="text-blue-600"
+                />
+                <KpiCard
+                    label="Overdue"
+                    value={formatCurrency(stats.overdueAmount)}
+                    hint="Total overdue invoice balance"
+                    accent="text-red-600"
+                />
+                <KpiCard
+                    label="Total Invoices"
+                    value={stats.totalInvoices.toString()}
+                    hint="All created invoice records"
+                    accent="text-indigo-600"
+                />
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-                {(["all", "draft", "sent", "paid", "overdue", "cancelled"] as const).map(status => (
-                    <button
-                        key={status}
-                        onClick={() => setFilterStatus(status)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === status
-                            ? "bg-[#2264ff] text-white"
-                            : theme === "dark"
-                                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                    {(["all", "draft", "sent", "paid", "overdue", "cancelled"] as const).map(status => (
+                        <button
+                            key={status}
+                            onClick={() => setFilterStatus(status)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === status
+                                ? "bg-[#2264ff] text-white"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            }`}
-                    >
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </button>
-                ))}
+                                }`}
+                        >
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Invoice List */}
-            <div
-                className="rounded-2xl border overflow-hidden"
-                style={{
-                    background: theme === "dark" ? "#1a1a1a" : "white",
-                    borderColor: theme === "dark" ? "#333" : "#f3f4f6",
-                }}
-            >
+            <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
                 {filteredInvoices.length === 0 ? (
                     <div className="p-12 text-center">
                         <div
@@ -462,16 +417,13 @@ export default function InvoiceManagementPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="divide-y" style={{ borderColor: theme === "dark" ? "#333" : "#f3f4f6" }}>
+                    <div className="divide-y divide-gray-100">
                         {filteredInvoices.map(invoice => {
                             const statusStyle = getStatusStyle(invoice.status);
                             return (
                                 <div
                                     key={invoice.id}
-                                    className="p-5 hover:bg-opacity-50 transition-colors"
-                                    style={{
-                                        background: theme === "dark" ? "transparent" : "transparent",
-                                    }}
+                                    className="p-5 hover:bg-gray-50 transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">

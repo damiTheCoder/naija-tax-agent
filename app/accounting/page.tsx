@@ -279,12 +279,21 @@ export default function AccountingPage() {
     [journalEntries]
   );
 
-  const isAgentMirroredAlreadyPosted =
-    Boolean(agentMirroredEntryId) &&
-    postedEntryIds.has(agentMirroredEntryId as string) &&
-    Boolean(agentMirroredSignature) &&
-    agentMirroredSignature === currentPostEntrySignature &&
-    postEntryNarration.trim().length > 0;
+  const isAgentMirroredAlreadyPosted = useMemo(() => {
+    if (!agentMirroredEntryId || !agentMirroredSignature || !currentPostEntrySignature) return false;
+    if (agentMirroredSignature !== currentPostEntrySignature) return false;
+    if (postEntryNarration.trim().length === 0) return false;
+    if (postedEntryIds.has(agentMirroredEntryId)) return true;
+    return accountingEngine
+      .getState()
+      .journalEntries.some((entry) => entry.id === agentMirroredEntryId && entry.status === "posted");
+  }, [
+    agentMirroredEntryId,
+    agentMirroredSignature,
+    currentPostEntrySignature,
+    postEntryNarration,
+    postedEntryIds,
+  ]);
 
   // Calculate edit entry totals
   const editEntryTotals = useMemo(() => {
@@ -963,7 +972,17 @@ export default function AccountingPage() {
       setPostEntryError("Entry must be balanced (Total DR = Total CR)");
       return;
     }
-    if (isAgentMirroredAlreadyPosted) {
+    const signature = buildEntrySignature(postEntryDate, postEntryNarration, postEntryLines);
+    const alreadyPostedByAgent =
+      Boolean(agentMirroredEntryId) &&
+      Boolean(agentMirroredSignature) &&
+      Boolean(signature) &&
+      signature === agentMirroredSignature &&
+      accountingEngine
+        .getState()
+        .journalEntries.some((entry) => entry.id === agentMirroredEntryId && entry.status === "posted");
+
+    if (isAgentMirroredAlreadyPosted || alreadyPostedByAgent) {
       setPostEntryError("This entry is already posted by the agent. Edit any field to post a new one.");
       return;
     }
@@ -1694,6 +1713,7 @@ export default function AccountingPage() {
                     <label className="block text-sm font-medium text-gray-700">Entry Lines</label>
                     <button
                       onClick={addPostEntryLine}
+                      data-agent-target="post-entry-add-line"
                       className="text-sm text-purple-600 hover:text-purple-700 font-medium"
                     >
                       + Add Line

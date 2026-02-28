@@ -512,6 +512,11 @@ export default function TaxWorkspacePage() {
       WHT: { payable: 0, credit: 0, net: 0 },
       EDT: { payable: 0, credit: 0, net: 0 },
     };
+    const hasLedgerImpactByType = {
+      CIT: false,
+      VAT: false,
+      WHT: false,
+    };
 
     const deadlineItems: DeadlineItem[] = [];
 
@@ -529,6 +534,9 @@ export default function TaxWorkspacePage() {
 
       if (entry.taxType === "VAT" || entry.taxType === "WHT" || entry.taxType === "CIT") {
         const target = taxImpactByType[entry.taxType];
+        if (Math.abs(entry.taxAmount) > 0.005) {
+          hasLedgerImpactByType[entry.taxType] = true;
+        }
         target.net += entry.taxAmount;
         if (entry.taxAmount >= 0) target.payable += entry.taxAmount;
         else target.credit += Math.abs(entry.taxAmount);
@@ -647,7 +655,7 @@ export default function TaxWorkspacePage() {
       }
     });
 
-    // Align tax payables with Financial Reporting tax schedule engine for consistency.
+    // Align with Financial Reporting summary, but do not erase in-scope tax timeline impact.
     const reportingTaxSummary = generateTaxSchedule(
       journalEntries.filter((entry) => entry.status === "posted" && inScope(entry.date || entry.createdAt)),
       { isVatRegistered: true }
@@ -657,24 +665,35 @@ export default function TaxWorkspacePage() {
     const whtPayable = Math.max(0, reportingTaxSummary.whtPayable || 0);
     const payePayableFromReporting = Math.max(0, reportingTaxSummary.payePayable || 0);
     const educationTaxPayableFromReporting = Math.max(0, reportingTaxSummary.developmentLevy || 0);
+    const hasImpact = (impact: TaxTypeImpact) =>
+      Math.abs(impact.net) > 0.005 || impact.payable > 0.005 || impact.credit > 0.005;
+    const reportingImpactByType: Record<DashboardTaxType, TaxTypeImpact> = {
+      CIT: { payable: citPayable, credit: 0, net: citPayable },
+      VAT: {
+        payable: Math.max(0, vatNetPayable),
+        credit: vatNetPayable < 0 ? Math.abs(vatNetPayable) : 0,
+        net: vatNetPayable,
+      },
+      WHT: { payable: whtPayable, credit: 0, net: whtPayable },
+      PAYE: { payable: payePayableFromReporting, credit: 0, net: payePayableFromReporting },
+      EDT: { payable: educationTaxPayableFromReporting, credit: 0, net: educationTaxPayableFromReporting },
+    };
 
-    taxImpactByType.CIT = { payable: citPayable, credit: 0, net: citPayable };
-    taxImpactByType.VAT = {
-      payable: Math.max(0, vatNetPayable),
-      credit: vatNetPayable < 0 ? Math.abs(vatNetPayable) : 0,
-      net: vatNetPayable,
-    };
-    taxImpactByType.WHT = { payable: whtPayable, credit: 0, net: whtPayable };
-    taxImpactByType.PAYE = {
-      payable: payePayableFromReporting,
-      credit: 0,
-      net: payePayableFromReporting,
-    };
-    taxImpactByType.EDT = {
-      payable: educationTaxPayableFromReporting,
-      credit: 0,
-      net: educationTaxPayableFromReporting,
-    };
+    if (!hasLedgerImpactByType.CIT && hasImpact(reportingImpactByType.CIT)) {
+      taxImpactByType.CIT = reportingImpactByType.CIT;
+    }
+    if (!hasLedgerImpactByType.VAT && hasImpact(reportingImpactByType.VAT)) {
+      taxImpactByType.VAT = reportingImpactByType.VAT;
+    }
+    if (!hasLedgerImpactByType.WHT && hasImpact(reportingImpactByType.WHT)) {
+      taxImpactByType.WHT = reportingImpactByType.WHT;
+    }
+    if (hasImpact(reportingImpactByType.PAYE)) {
+      taxImpactByType.PAYE = reportingImpactByType.PAYE;
+    }
+    if (hasImpact(reportingImpactByType.EDT)) {
+      taxImpactByType.EDT = reportingImpactByType.EDT;
+    }
     breakdown.CIT = Math.max(0, taxImpactByType.CIT.net);
     breakdown.VAT = Math.max(0, taxImpactByType.VAT.net);
     breakdown.WHT = Math.max(0, taxImpactByType.WHT.net);
@@ -701,17 +720,18 @@ export default function TaxWorkspacePage() {
       }
     });
 
-    if (educationTaxPayable > 0) {
+    const educationTaxDueForDeadline = Math.max(educationTaxPayable, breakdown.EDT);
+    if (educationTaxDueForDeadline > 0) {
       const citSchedule = schedules.find((schedule) => schedule.taxType === "CIT");
       const dueDate = citSchedule?.dueDate || `${selectedYear + 1}-06-30`;
-      const filed = paidByType.EDT >= educationTaxPayable;
+      const filed = paidByType.EDT >= educationTaxDueForDeadline;
       const overdue = !filed && new Date(dueDate) < now;
       deadlineItems.push({
         id: `derived-edt-${selectedYear}`,
         taxType: "EDT",
         period: `${selectedYear}-FY`,
         dueDate,
-        amount: educationTaxPayable,
+        amount: educationTaxDueForDeadline,
         filingState: filed ? "Filed" : overdue ? "Overdue" : "Pending",
         stage: filed ? "paid" : "pending",
         source: "derived",

@@ -139,8 +139,8 @@ export function calculateSurplusRate(entries: JournalEntry[], days: number): num
  * Calculate runway in days based on available cash and burn rate
  */
 export function calculateRunway(availableCash: number, burnRate: number): number {
-    if (burnRate <= 0) return Infinity;
     if (availableCash <= 0) return 0;
+    if (burnRate <= 0) return Infinity;
     return Math.floor(availableCash / burnRate);
 }
 
@@ -174,7 +174,9 @@ export function calculateCashflowMetrics(
 
     // Determine status
     let status: "healthy" | "caution" | "critical";
-    if (runwayDays > 90 && netCashflowRate >= 0) {
+    if (position.availableCash <= 0) {
+        status = "critical";
+    } else if (runwayDays > 90 && netCashflowRate >= 0) {
         status = "healthy";
     } else if (runwayDays > 30 || netCashflowRate >= 0) {
         status = "caution";

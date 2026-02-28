@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { UnifiedAgentRequest } from "@/lib/agent/unifiedTypes";
 import { AIOrchestrator } from "@/lib/agent/aiOrchestrator";
+import { runMcpGeminiBridge } from "@/lib/mcp/geminiBridge";
 
 const orchestrator = new AIOrchestrator();
 
@@ -11,6 +12,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!message) {
       return NextResponse.json({ error: "message is required" }, { status: 400 });
+    }
+
+    // MCP bridge path: chat modal remains the single user entry point while
+    // Gemini orchestrates module tools through MCP.
+    const mcpBridgeResponse = await runMcpGeminiBridge({
+      ...body,
+      message,
+    });
+
+    if (mcpBridgeResponse) {
+      return NextResponse.json(mcpBridgeResponse);
     }
 
     const response = await orchestrator.orchestrate({

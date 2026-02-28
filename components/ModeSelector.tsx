@@ -28,6 +28,7 @@ export default function ModeSelector() {
         if (pathname.startsWith("/marketplace")) return "marketplace";
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
+        if (pathname.startsWith("/budgeting")) return "budgeting";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
         return "tax";
     };
@@ -40,6 +41,8 @@ export default function ModeSelector() {
 
         if (newMode === "tax") {
             navigateTo("/tax/workspace");
+        } else if (newMode === "budgeting") {
+            navigateTo("/budgeting/dashboard");
         } else if (newMode === "intelligence") {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {
@@ -55,6 +58,7 @@ export default function ModeSelector() {
         switch (m) {
             case "tax": return "Tax Manager";
             case "intelligence": return "Financial Management";
+            case "budgeting": return "Budgeting";
             case "accounting": return "Accounting";
             case "wallet": return "Wallet";
             case "marketplace": return "Marketplace";
@@ -99,6 +103,12 @@ export default function ModeSelector() {
                             label="Tax Manager"
                             currentMode={mode}
                             onClick={() => handleModeSwitch("tax")}
+                        />
+                        <ModeOption
+                            mode="budgeting"
+                            label="Budgeting"
+                            currentMode={mode}
+                            onClick={() => handleModeSwitch("budgeting")}
                         />
                         <ModeOption
                             mode="intelligence"

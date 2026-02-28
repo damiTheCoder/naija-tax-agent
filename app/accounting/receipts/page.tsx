@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/lib/ThemeContext";
 
@@ -108,6 +109,16 @@ const icons = {
         </svg>
     ),
 };
+
+function KpiCard({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
+    return (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+            <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
+            <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{value}</p>
+            <p className="text-xs text-gray-500 mt-2">{hint}</p>
+        </div>
+    );
+}
 
 // =============================================================================
 // COMPONENT
@@ -357,108 +368,58 @@ export default function ReceiptsManagementPage() {
     return (
         <div className="space-y-6 pb-10 sm:pb-14">
             {/* Header */}
-            <div
-                className="rounded-2xl border px-6 py-6"
-                style={{
-                    background: theme === "dark" ? "#1a1a1a" : "white",
-                    borderColor: theme === "dark" ? "#333" : "#e5e7eb",
-                }}
-            >
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-teal-600">
-                            {icons.receipt}
-                        </div>
-                        <div>
-                            <h1
-                                className="text-xl font-bold"
-                                style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                            >
-                                Receipts Management
-                            </h1>
-                            <p
-                                className="text-sm"
-                                style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }}
-                            >
-                                Track and organize expense receipts
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Upload Receipt
-                    </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*,.pdf"
-                        onChange={e => handleFileUpload(e.target.files)}
-                        className="hidden"
-                    />
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Receipts Management</h1>
+                    <p className="text-sm text-gray-500 mt-1">Track and organize expense receipts from one workspace.</p>
+                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+                        Open Accounting Workspace
+                    </Link>
                 </div>
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Upload Receipt
+                </button>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={e => handleFileUpload(e.target.files)}
+                    className="hidden"
+                />
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    {
-                        label: "Total Expenses",
-                        value: formatCurrency(stats.totalExpenses),
-                        icon: icons.money,
-                        color: "text-teal-600",
-                        bg: "bg-teal-100",
-                    },
-                    {
-                        label: "This Month",
-                        value: formatCurrency(stats.thisMonthExpenses),
-                        icon: icons.folder,
-                        color: "text-blue-600",
-                        bg: "bg-blue-100",
-                    },
-                    {
-                        label: "Total Receipts",
-                        value: stats.totalReceipts.toString(),
-                        icon: icons.document,
-                        color: "text-purple-600",
-                        bg: "bg-purple-100",
-                    },
-                    {
-                        label: "Verified",
-                        value: `${stats.verifiedReceipts}/${stats.totalReceipts}`,
-                        icon: icons.ai,
-                        color: "text-green-600",
-                        bg: "bg-green-100",
-                    },
-                ].map((stat, i) => (
-                    <div
-                        key={i}
-                        className="rounded-2xl border p-5"
-                        style={{
-                            background: theme === "dark" ? "#1a1a1a" : "white",
-                            borderColor: theme === "dark" ? "#333" : "#f3f4f6",
-                        }}
-                    >
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center ${stat.color}`}>
-                                {stat.icon}
-                            </div>
-                            <span style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }} className="text-sm">
-                                {stat.label}
-                            </span>
-                        </div>
-                        <p
-                            className="text-2xl font-bold"
-                            style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                        >
-                            {stat.value}
-                        </p>
-                    </div>
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <KpiCard
+                    label="Total Expenses"
+                    value={formatCurrency(stats.totalExpenses)}
+                    hint="All receipt expenses to date"
+                    accent="text-teal-600"
+                />
+                <KpiCard
+                    label="This Month"
+                    value={formatCurrency(stats.thisMonthExpenses)}
+                    hint="Receipt spend in current month"
+                    accent="text-blue-600"
+                />
+                <KpiCard
+                    label="Total Receipts"
+                    value={stats.totalReceipts.toString()}
+                    hint="Uploaded and tracked receipts"
+                    accent="text-indigo-600"
+                />
+                <KpiCard
+                    label="Verified"
+                    value={`${stats.verifiedReceipts}/${stats.totalReceipts}`}
+                    hint="AI validated receipt records"
+                    accent="text-emerald-600"
+                />
             </div>
 
             {/* Upload Drop Zone */}
@@ -468,40 +429,29 @@ export default function ReceiptsManagementPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${isDragging
-                    ? "border-[#2264ff] bg-blue-50 dark:bg-blue-900/20"
-                    : theme === "dark"
-                        ? "border-gray-700 hover:border-gray-600 bg-gray-900/50"
-                        : "border-gray-300 hover:border-gray-400 bg-gray-50"
+                    ? "border-[#2264ff] bg-blue-50"
+                    : "border-gray-300 hover:border-gray-400 bg-white"
                     }`}
             >
                 {isProcessing ? (
                     <div className="flex flex-col items-center gap-3">
                         <div className="w-10 h-10 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
-                        <p style={{ color: theme === "dark" ? "#fff" : "#111827" }} className="font-medium">
+                        <p className="font-medium text-gray-900">
                             Processing receipt...
                         </p>
-                        <p style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }} className="text-sm">
+                        <p className="text-sm text-gray-500">
                             Extracting data with AI
                         </p>
                     </div>
                 ) : (
                     <>
-                        <div
-                            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                            style={{ background: theme === "dark" ? "#333" : "#e5e7eb" }}
-                        >
-                            <span style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }}>{icons.upload}</span>
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-gray-100">
+                            <span className="text-gray-500">{icons.upload}</span>
                         </div>
-                        <p
-                            className="font-medium mb-1"
-                            style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                        >
+                        <p className="font-medium mb-1 text-gray-900">
                             Drop receipt here or click to upload
                         </p>
-                        <p
-                            className="text-sm"
-                            style={{ color: theme === "dark" ? "#9ca3af" : "#6b7280" }}
-                        >
+                        <p className="text-sm text-gray-500">
                             Supports JPEG, PNG, WebP, and PDF files
                         </p>
                     </>
@@ -509,42 +459,34 @@ export default function ReceiptsManagementPage() {
             </div>
 
             {/* Category Filter */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-                <button
-                    onClick={() => setFilterCategory("all")}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === "all"
-                        ? "bg-[#2264ff] text-white"
-                        : theme === "dark"
-                            ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                >
-                    All Categories
-                </button>
-                {Object.entries(categoryConfig).map(([key, config]) => (
+            <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                <div className="flex gap-2 overflow-x-auto pb-1">
                     <button
-                        key={key}
-                        onClick={() => setFilterCategory(key as ReceiptCategory)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === key
+                        onClick={() => setFilterCategory("all")}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === "all"
                             ? "bg-[#2264ff] text-white"
-                            : theme === "dark"
-                                ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             }`}
                     >
-                        {config.label}
+                        All Categories
                     </button>
-                ))}
+                    {Object.entries(categoryConfig).map(([key, config]) => (
+                        <button
+                            key={key}
+                            onClick={() => setFilterCategory(key as ReceiptCategory)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === key
+                                ? "bg-[#2264ff] text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                }`}
+                        >
+                            {config.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Receipts List */}
-            <div
-                className="rounded-2xl border overflow-hidden"
-                style={{
-                    background: theme === "dark" ? "#1a1a1a" : "white",
-                    borderColor: theme === "dark" ? "#333" : "#f3f4f6",
-                }}
-            >
+            <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
                 {filteredReceipts.length === 0 ? (
                     <div className="p-12 text-center">
                         <div
@@ -589,13 +531,13 @@ export default function ReceiptsManagementPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="divide-y" style={{ borderColor: theme === "dark" ? "#333" : "#f3f4f6" }}>
+                    <div className="divide-y divide-gray-100">
                         {filteredReceipts.map(receipt => {
                             const catConfig = categoryConfig[receipt.category];
                             return (
                                 <div
                                     key={receipt.id}
-                                    className="p-5 hover:bg-opacity-50 transition-colors"
+                                    className="p-5 hover:bg-gray-50 transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -676,19 +618,8 @@ export default function ReceiptsManagementPage() {
 
             {/* Category Breakdown */}
             {Object.keys(stats.categoryBreakdown).length > 0 && (
-                <div
-                    className="rounded-2xl border p-6"
-                    style={{
-                        background: theme === "dark" ? "#1a1a1a" : "white",
-                        borderColor: theme === "dark" ? "#333" : "#f3f4f6",
-                    }}
-                >
-                    <h3
-                        className="font-semibold mb-4"
-                        style={{ color: theme === "dark" ? "#fff" : "#111827" }}
-                    >
-                        Expense Breakdown
-                    </h3>
+                <div className="rounded-2xl bg-white border border-gray-100 p-6">
+                    <h3 className="text-base font-semibold text-gray-900 mb-4">Expense Breakdown</h3>
                     <div className="space-y-3">
                         {Object.entries(stats.categoryBreakdown)
                             .sort(([, a], [, b]) => b - a)

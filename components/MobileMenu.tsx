@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
     TAX_NAV_ITEMS,
     ACCOUNTING_NAV_ITEMS,
+    BUDGETING_NAV_ITEMS,
     INTELLIGENCE_NAV_ITEMS,
     WALLET_NAV_ITEMS,
     MARKETPLACE_NAV_ITEMS,
@@ -66,6 +67,8 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         ? "personal"
         : pathname.startsWith("/wallet")
             ? "wallet"
+            : pathname.startsWith("/budgeting")
+                ? "budgeting"
             : pathname.startsWith("/cashflow-intelligence")
                 ? "intelligence"
                 : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
@@ -80,6 +83,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         ]
         : [
             { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
+            { id: "budgeting", label: "Budgeting", items: BUDGETING_NAV_ITEMS },
             { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
             { id: "intelligence", label: "Financial Management", items: INTELLIGENCE_NAV_ITEMS },
             { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },

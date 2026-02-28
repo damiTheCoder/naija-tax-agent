@@ -122,6 +122,16 @@ const icons = {
   ),
 };
 
+function KpiCard({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+      <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
+      <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{value}</p>
+      <p className="text-xs text-gray-500 mt-2">{hint}</p>
+    </div>
+  );
+}
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -308,21 +318,18 @@ export default function BankConnectionsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="rounded-2xl bg-white border border-gray-200 px-6 py-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-              {icons.bank}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Bank Connections</h1>
-              <p className="text-sm text-gray-500">Connect accounts for automatic transaction sync</p>
-            </div>
-          </div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Bank Connections</h1>
+          <p className="text-sm text-gray-500 mt-1">Connect bank accounts, sync transactions, and keep treasury records in one place.</p>
+          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+            Open Accounting Workspace
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowConnectModal(true)}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
           >
             {icons.plus}
             Connect Bank
@@ -330,30 +337,67 @@ export default function BankConnectionsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Connected Banks", value: stats.connectedBanks.toString(), icon: icons.link, color: "text-blue-600", bg: "bg-blue-100" },
-          { label: "Total Accounts", value: stats.totalAccounts.toString(), icon: icons.card, color: "text-blue-600", bg: "bg-blue-100" },
-          { label: "Transactions", value: stats.totalTransactions.toLocaleString(), icon: icons.document, color: "text-purple-600", bg: "bg-purple-100" },
-          { label: "Total Balance", value: formatCurrency(stats.totalBalance), icon: icons.chart, color: "text-amber-600", bg: "bg-amber-100" },
-        ].map((stat, i) => (
-          <div key={i} className="rounded-2xl bg-white border border-gray-100 p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center ${stat.color}`}>
-                {stat.icon}
-              </div>
-              <span className="text-sm text-gray-500">{stat.label}</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+      {/* Supported Banks (aligned to accounting explore-strip design) */}
+      <div className="rounded-2xl overflow-hidden border-0 bg-transparent">
+        <div className="py-2">
+          <h2 className="text-base font-semibold text-gray-900">Supported Banks</h2>
+          <p className="text-xs text-gray-500 mt-1">Tap a bank to connect instantly or see connection status.</p>
+        </div>
+        <div className="overflow-x-auto hide-scrollbar">
+          <div className="flex gap-1 px-2 py-2 min-w-max">
+            {SUPPORTED_BANKS.map((bank) => {
+              const isConnected = connections.some((c) => c.bankCode === bank.code);
+              const isDisabled = !bank.supported || isConnected;
+
+              return (
+                <button
+                  key={bank.code}
+                  onClick={() => !isDisabled && handleConnectBank(bank)}
+                  disabled={isDisabled}
+                  className={`relative flex-shrink-0 flex flex-col items-center gap-2 p-3 group transition-all ${
+                    isDisabled ? "opacity-80" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="relative">
+                    <div
+                      className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:scale-110 transition-transform"
+                      style={{ backgroundColor: bank.color }}
+                    >
+                      {bank.shortName.slice(0, 2)}
+                    </div>
+                    {isConnected ? (
+                      <div className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-gray-900">{bank.shortName}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {isConnected ? "Connected" : bank.supported ? bank.connectionType.replace("_", " ") : "Coming soon"}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        ))}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard label="Connected Banks" value={stats.connectedBanks.toString()} hint="Active open-banking links" accent="text-blue-600" />
+        <KpiCard label="Total Accounts" value={stats.totalAccounts.toString()} hint="Accounts linked to CashOS" accent="text-indigo-600" />
+        <KpiCard label="Synced Transactions" value={stats.totalTransactions.toLocaleString()} hint="Imported transaction records" accent="text-emerald-600" />
+        <KpiCard label="Total NGN Balance" value={formatCurrency(stats.totalBalance)} hint="Combined linked account balances" accent="text-amber-600" />
       </div>
 
       {/* Connected Banks */}
       <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Your Banks</h2>
+          <h2 className="text-base font-semibold text-gray-900">Your Banks</h2>
         </div>
 
         {connections.length === 0 ? (
@@ -462,7 +506,7 @@ export default function BankConnectionsPage() {
       {recentTransactions.length > 0 && (
         <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2>
+            <h2 className="text-base font-semibold text-gray-900">Recent Transactions</h2>
             <Link href="/accounting/workspace" className="text-sm text-[#2264ff] hover:underline font-medium">
               View all →
             </Link>
@@ -490,54 +534,6 @@ export default function BankConnectionsPage() {
           </div>
         </div>
       )}
-
-      {/* Supported Banks */}
-      <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Supported Banks</h2>
-        </div>
-        <div className="p-6">
-          <div className="flex gap-4 overflow-x-auto -mx-1 px-1 hide-scrollbar pb-2">
-            {SUPPORTED_BANKS.map((bank) => {
-              const isConnected = connections.some(c => c.bankCode === bank.code);
-
-              return (
-                <button
-                  key={bank.code}
-                  onClick={() => !isConnected && bank.supported && handleConnectBank(bank)}
-                  disabled={!bank.supported || isConnected}
-                  className={`relative flex-shrink-0 flex flex-col items-center gap-3 p-4 rounded-2xl min-w-[140px] transition-all ${isConnected
-                    ? "bg-blue-50/50 border border-blue-100" // Light blue bg for connected
-                    : bank.supported
-                      ? "bg-white hover:bg-gray-50 border border-gray-200"
-                      : "bg-gray-50 border border-gray-100 opacity-50"
-                    }`}
-                >
-                  {isConnected && (
-                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm z-10">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  )}
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm"
-                    style={{ backgroundColor: bank.color }}
-                  >
-                    {bank.shortName.slice(0, 2)}
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-medium text-gray-900 block mb-1">{bank.shortName}</span>
-                    <span className="text-xs text-gray-400 block max-w-[120px] leading-tight loading-tight">
-                      {isConnected ? "Connected" : bank.supported ? bank.connectionType.replace("_", " ") : "Coming soon"}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
 
       {/* Security Notice */}
       <div className="rounded-2xl bg-blue-50 border border-blue-100 p-6">

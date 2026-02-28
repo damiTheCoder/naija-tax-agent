@@ -129,6 +129,24 @@ function toKnowledgeContext(conversation: AgentConversationMessage[]): string {
   return buildContextSnippet(entries);
 }
 
+function resolveCrossDomainFunctions(primary: ModuleDomain): string[] {
+  const orderedDomains: ModuleDomain[] = [
+    primary,
+    "financial",
+    "reporting",
+    "operations",
+    "payment",
+    "customer",
+  ];
+  const unique = new Set<string>();
+  for (const domain of orderedDomains) {
+    for (const name of listToolNamesForDomain(domain)) {
+      unique.add(name);
+    }
+  }
+  return Array.from(unique);
+}
+
 export interface BuiltModuleContext {
   module: ModuleDomain;
   moduleLabel: string;
@@ -164,9 +182,9 @@ export function buildModuleContext(request: UnifiedAgentRequest): BuiltModuleCon
   return {
     module: profile.domain,
     moduleLabel: profile.label,
-    moduleDescription: profile.description,
+    moduleDescription: `${profile.description} Cross-page execution is enabled when user intent maps to another module.`,
     route,
-    availableFunctions: listToolNamesForDomain(profile.domain),
+    availableFunctions: resolveCrossDomainFunctions(profile.domain),
     relevantEntities: profile.relevantEntities,
     databaseEntities: profile.databaseEntities,
     userState: {

@@ -1,6 +1,6 @@
 export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop" | "message-square";
 
-export type AppMode = "tax" | "accounting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
+export type AppMode = "tax" | "accounting" | "budgeting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
 
 export interface TaxNavItem {
   label: string;
@@ -155,6 +155,87 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     icon: "trend",
     description: "Automatic depreciation schedule and monthly journal guidance",
     mode: "accounting",
+  },
+];
+
+// Budgeting module navigation
+export const BUDGETING_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Budget Dashboard",
+    href: "/budgeting/dashboard",
+    icon: "chart",
+    description: "Overview of budget utilization, alerts, and risks",
+    mode: "budgeting",
+  },
+  {
+    label: "Budgets",
+    href: "/budgeting/budgets",
+    icon: "folder",
+    description: "View and manage all budgets",
+    mode: "budgeting",
+  },
+  {
+    label: "Create / Edit Budget",
+    href: "/budgeting/budgets/new",
+    icon: "calculator",
+    description: "Create a new budget or edit an existing one",
+    mode: "budgeting",
+  },
+  {
+    label: "Categories Budget",
+    href: "/budgeting/categories",
+    icon: "ledger",
+    description: "Control budgets per spending category",
+    mode: "budgeting",
+  },
+  {
+    label: "Department Budgets",
+    href: "/budgeting/departments",
+    icon: "users",
+    description: "Allocate and monitor departmental budgets",
+    mode: "budgeting",
+  },
+  {
+    label: "Forecasting",
+    href: "/budgeting/forecasting",
+    icon: "trend",
+    description: "Forecast cash, expense, and revenue outcomes",
+    mode: "budgeting",
+  },
+  {
+    label: "Scenario Planning",
+    href: "/budgeting/scenarios",
+    icon: "spreadsheet",
+    description: "Simulate financial what-if scenarios",
+    mode: "budgeting",
+  },
+  {
+    label: "Variance Analysis",
+    href: "/budgeting/variance",
+    icon: "report",
+    description: "Analyze plan vs actual variance by category",
+    mode: "budgeting",
+  },
+  {
+    label: "Budget vs Actual",
+    href: "/budgeting/budget-vs-actual",
+    icon: "cashflow",
+    description: "Visual comparison of budgeted and actual amounts",
+    mode: "budgeting",
+  },
+  {
+    label: "Budget Templates",
+    href: "/budgeting/templates",
+    icon: "bank",
+    description: "Use reusable budget templates",
+    mode: "budgeting",
+  },
+  {
+    label: "AI Budget Assistant",
+    href: "/budgeting/ai-assistant",
+    icon: "chat",
+    description: "AI guidance for optimization and budgeting decisions",
+    mode: "budgeting",
   },
 ];
 

@@ -30,6 +30,22 @@ async function createStyledPdfDoc(options?: { orientation?: "portrait" | "landsc
     return doc;
 }
 
+export type PdfOutputMode = "download" | "blob";
+
+export interface PdfOutputOptions {
+    outputMode?: PdfOutputMode;
+    fileName?: string;
+}
+
+type PdfOutputResult = void | Blob;
+
+function finalizePdfOutput(doc: jsPDF, defaultFileName: string, options?: PdfOutputOptions): PdfOutputResult {
+    if (options?.outputMode === "blob") {
+        return doc.output("blob");
+    }
+    doc.save(options?.fileName || defaultFileName);
+}
+
 /**
  * Format number as Nigerian Naira currency
  * Uses simple string formatting to avoid character spacing issues in PDF
@@ -293,8 +309,9 @@ interface TrialBalanceData {
  */
 export async function generateIncomeStatementPDF(
     data: FinancialStatementData,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -347,7 +364,7 @@ export async function generateIncomeStatementPDF(
     ], y, margin, contentWidth);
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`income-statement-${data.year}.pdf`);
+    return finalizePdfOutput(doc, `income-statement-${data.year}.pdf`, options);
 }
 
 /**
@@ -355,8 +372,9 @@ export async function generateIncomeStatementPDF(
  */
 export async function generateBalanceSheetPDF(
     data: FinancialStatementData,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -406,7 +424,7 @@ export async function generateBalanceSheetPDF(
     ], y, margin, contentWidth);
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`balance-sheet-${data.year}.pdf`);
+    return finalizePdfOutput(doc, `balance-sheet-${data.year}.pdf`, options);
 }
 
 /**
@@ -414,8 +432,9 @@ export async function generateBalanceSheetPDF(
  */
 export async function generateFinancialStatementsPDF(
     data: FinancialStatementData,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -591,7 +610,7 @@ export async function generateFinancialStatementsPDF(
     }
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`financial-statements-${data.year}.pdf`);
+    return finalizePdfOutput(doc, `financial-statements-${data.year}.pdf`, options);
 }
 
 /**
@@ -600,8 +619,9 @@ export async function generateFinancialStatementsPDF(
 export async function generateJournalsPDF(
     entries: JournalEntry[],
     year: number,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc({ orientation: "landscape" });
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -700,7 +720,7 @@ export async function generateJournalsPDF(
     ], y, margin, contentWidth);
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`journal-entries-${year}.pdf`);
+    return finalizePdfOutput(doc, `journal-entries-${year}.pdf`, options);
 }
 
 /**
@@ -709,8 +729,9 @@ export async function generateJournalsPDF(
 export async function generateTrialBalancePDF(
     data: TrialBalanceData,
     asAtDate: string,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -786,7 +807,7 @@ export async function generateTrialBalancePDF(
     }
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`trial-balance-${asAtDate.replace(/\s/g, "-")}.pdf`);
+    return finalizePdfOutput(doc, `trial-balance-${asAtDate.replace(/\s/g, "-")}.pdf`, options);
 }
 
 /**
@@ -794,8 +815,9 @@ export async function generateTrialBalancePDF(
  */
 export async function generateCashFlowStatementPDF(
     data: CashFlowData,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -845,7 +867,7 @@ export async function generateCashFlowStatementPDF(
     ], y, margin, contentWidth);
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`cash-flow-statement-${data.year}.pdf`);
+    return finalizePdfOutput(doc, `cash-flow-statement-${data.year}.pdf`, options);
 }
 
 /**
@@ -853,8 +875,9 @@ export async function generateCashFlowStatementPDF(
  */
 export async function generateEquityStatementPDF(
     data: EquityStatementData,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -901,7 +924,7 @@ export async function generateEquityStatementPDF(
     ], y, margin, contentWidth);
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`equity-statement-${data.year}.pdf`);
+    return finalizePdfOutput(doc, `equity-statement-${data.year}.pdf`, options);
 }
 
 export async function generateAccountingPackagePDF(
@@ -909,12 +932,12 @@ export async function generateAccountingPackagePDF(
     journals: JournalEntry[],
     trialBalance: TrialBalanceData,
     businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+): Promise<PdfOutputResult> {
     void journals;
     void trialBalance;
     // For now, generate individual PDFs
     // In the future, could combine into single PDF with multiple sections
-    await generateFinancialStatementsPDF(statements, businessName);
+    return generateFinancialStatementsPDF(statements, businessName);
 }
 
 /**
@@ -952,8 +975,9 @@ export interface TaxPayablesData {
  */
 export async function generateTaxPayablesPDF(
     schedule: TaxPayablesSchedule,
-    businessName: string = "Quantum Ledger Business"
-): Promise<void> {
+    businessName: string = "Quantum Ledger Business",
+    options?: PdfOutputOptions
+): Promise<PdfOutputResult> {
     const doc = await createStyledPdfDoc();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -1150,5 +1174,5 @@ export async function generateTaxPayablesPDF(
     }
 
     drawFooter(doc, pageWidth, pageHeight);
-    doc.save(`tax-payables-schedule-${schedule.asAtDate}.pdf`);
+    return finalizePdfOutput(doc, `tax-payables-schedule-${schedule.asAtDate}.pdf`, options);
 }

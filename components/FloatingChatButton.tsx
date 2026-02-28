@@ -5,10 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
 import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
+import { walletEngine } from "@/lib/wallet/walletEngine";
+import { calculateCashPosition, calculateCashflowMetrics } from "@/lib/cashflow/cashflowEngine";
+import { loadBudgetingState } from "@/lib/budgeting/store";
+import { payrollEngine } from "@/lib/payroll/payrollEngine";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
 import {
     formatPlanSourceLabel,
-    requestUnifiedAgentPlan,
     runUnifiedAgentMessage,
     type AgentPlanSource,
     type UnifiedCustomActionExecutor
@@ -150,9 +153,16 @@ type ChatMessage = {
     role: "user" | "assistant";
     content: string;
     timestamp: number;
+    attachment?: ChatAttachmentDownload;
 };
 
 type AgentChatMode = "response-only" | "full-agentic";
+type ChatAttachmentDownload = {
+    kind: "download";
+    fileName: string;
+    url: string;
+    mimeType?: string;
+};
 
 type ModuleConfig = {
     id: string;
@@ -341,11 +351,203 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     return moduleConfigs.default;
 }
 
-function createIntroMessage(module: ModuleConfig): ChatMessage {
+type PageAssistantProfile = {
+    label: string;
+    guidance: string;
+    crossPagePolicy: string;
+};
+
+function getPageAssistantProfile(pathname: string): PageAssistantProfile {
+    const route = pathname || "/";
+    if (route.startsWith("/accounting/projections")) {
+        return {
+            label: "Accounting Projections",
+            guidance: "Analyze forecasts, update assumptions, and explain projection outcomes.",
+            crossPagePolicy: "If user gives transaction instructions, execute accounting posting logic and sync ledger immediately.",
+        };
+    }
+    if (route.startsWith("/accounting/reports")) {
+        return {
+            label: "Accounting Reports",
+            guidance: "Generate statements, review balances, and export report outputs.",
+            crossPagePolicy: "If user gives transaction instructions, execute accounting posting logic and refresh reports.",
+        };
+    }
+    if (route.startsWith("/accounting/reconciliation")) {
+        return {
+            label: "Bank Reconciliation",
+            guidance: "Match ledger to bank records, explain discrepancies, and provide reconciliation actions.",
+            crossPagePolicy: "If user gives transaction instructions, execute accounting posting logic first, then continue reconciliation context.",
+        };
+    }
+    if (route.startsWith("/accounting")) {
+        return {
+            label: "Accounting Workspace",
+            guidance: "Post journal entries, manage ledgers, and keep statements accurate.",
+            crossPagePolicy: "Handle accounting actions directly and use tax/wallet actions when explicitly requested.",
+        };
+    }
+    if (route.startsWith("/tax")) {
+        return {
+            label: "Tax Workspace",
+            guidance: "Compute liabilities, track filings, schedules, and compliance data.",
+            crossPagePolicy: "If user gives accounting transaction instructions, post to accounting logic and keep tax computation in sync.",
+        };
+    }
+    if (route.startsWith("/wallet")) {
+        return {
+            label: "Wallet",
+            guidance: "Handle funding, transfers, and wallet balance activity.",
+            crossPagePolicy: "If user gives accounting or tax requests, run those module actions in background while preserving wallet context.",
+        };
+    }
+    return {
+        label: "Workspace",
+        guidance: "Use page context and conversation intent to decide execution steps.",
+        crossPagePolicy: "Always execute the user intent in the correct module, even if it belongs to a different page.",
+    };
+}
+
+function formatSnapshotNaira(value: number): string {
+    const safe = Number.isFinite(value) ? value : 0;
+    const sign = safe < 0 ? "-" : "";
+    return `${sign}₦${Math.abs(safe).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
+}
+
+function buildGlobalDataSnapshot(): string {
+    if (typeof window === "undefined") return "";
+
+    try {
+        const accountingState = accountingEngine.getState();
+        if (accountingState.journalEntries.length === 0 && window.localStorage.getItem("insight::accounting-engine")) {
+            accountingEngine.load();
+        }
+    } catch {
+        // Ignore accounting load failures
+    }
+
+    try {
+        const taxState = taxEngine.getState();
+        if (taxState.transactions.length === 0 && window.localStorage.getItem("insight::tax-engine")) {
+            taxEngine.load();
+        }
+    } catch {
+        // Ignore tax load failures
+    }
+
+    try {
+        if (window.localStorage.getItem("naija-wallet-state")) {
+            walletEngine.load();
+        }
+    } catch {
+        // Ignore wallet load failures
+    }
+
+    const lines: string[] = ["Cross-module live data snapshot:"];
+
+    try {
+        const accountingState = accountingEngine.getState();
+        const statements = accountingEngine.generateStatements();
+        const recentEntries = [...accountingState.journalEntries]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5)
+            .map((entry) => `${entry.date} | ${entry.narration} | ${formatSnapshotNaira(entry.totalDebits || 0)}`);
+        lines.push(
+            `Accounting: entries=${accountingState.journalEntries.length}, revenue=${formatSnapshotNaira(statements.revenue || 0)}, expenses=${formatSnapshotNaira(((statements.costOfSales || 0) + (statements.operatingExpenses || 0)))}, netIncome=${formatSnapshotNaira(statements.netIncome || 0)}, assets=${formatSnapshotNaira(statements.assets || 0)}, liabilities=${formatSnapshotNaira(statements.liabilities || 0)}, equity=${formatSnapshotNaira(statements.equity || 0)}`
+        );
+        if (recentEntries.length > 0) {
+            lines.push(`Recent journal entries: ${recentEntries.join(" ; ")}`);
+        }
+    } catch {
+        lines.push("Accounting: unavailable");
+    }
+
+    try {
+        const taxState = taxEngine.getState();
+        const taxSummary = taxEngine.getTaxSummary();
+        lines.push(
+            `Tax: txns=${taxState.transactions.length}, schedules=${taxState.schedules.length}, VAT=${formatSnapshotNaira(taxSummary.totalVAT)}, inputVATCredit=${formatSnapshotNaira(taxSummary.inputVATCredit)}, netVATPayable=${formatSnapshotNaira(taxSummary.netVATPayable)}, WHT=${formatSnapshotNaira(taxSummary.totalWHT)}, CGT=${formatSnapshotNaira(taxSummary.totalCGT)}, totalTaxPayable=${formatSnapshotNaira(taxSummary.grandTotal)}`
+        );
+    } catch {
+        lines.push("Tax: unavailable");
+    }
+
+    try {
+        const walletState = walletEngine.getState();
+        lines.push(
+            `Wallet: balance=${formatSnapshotNaira(walletState.balance || 0)}, transactions=${walletState.transactions?.length || 0}, cards=${walletState.cards?.length || 0}`
+        );
+    } catch {
+        lines.push("Wallet: unavailable");
+    }
+
+    try {
+        const accountingState = accountingEngine.getState();
+        const cashPosition = calculateCashPosition(accountingState);
+        const cashMetrics = calculateCashflowMetrics(accountingState, 30);
+        lines.push(
+            `Cashflow: availableCash=${formatSnapshotNaira(cashPosition.availableCash)}, receivables=${formatSnapshotNaira(cashPosition.receivables)}, payables=${formatSnapshotNaira(cashPosition.payables)}, burnRate30d=${formatSnapshotNaira(cashMetrics.burnRate)}, runwayDays=${cashMetrics.runwayDays}, status=${cashMetrics.status}`
+        );
+    } catch {
+        lines.push("Cashflow: unavailable");
+    }
+
+    try {
+        const budgetingState = loadBudgetingState();
+        const budgetedTotal = (budgetingState.budgets || []).reduce((sum, budget) => sum + (budget.totalAmount || 0), 0);
+        lines.push(
+            `Budgeting: budgets=${budgetingState.budgets?.length || 0}, scenarios=${budgetingState.scenarios?.length || 0}, totalBudgeted=${formatSnapshotNaira(budgetedTotal)}, fiscalStartMonth=${budgetingState.settings?.fiscalYearStartMonth || 1}`
+        );
+    } catch {
+        lines.push("Budgeting: unavailable");
+    }
+
+    try {
+        const runs = payrollEngine.getRuns();
+        const latest = runs[0];
+        lines.push(
+            latest
+                ? `Payroll: runs=${runs.length}, latest=${latest.month} ${latest.year}, status=${latest.status}, totalNet=${formatSnapshotNaira(latest.totalNet)}, totalTax=${formatSnapshotNaira(latest.totalTax)}`
+                : "Payroll: runs=0"
+        );
+    } catch {
+        lines.push("Payroll: unavailable");
+    }
+
+    return lines.join("\n");
+}
+
+function buildPageContextSnapshot(pathname: string, moduleId: string): string {
+    const profile = getPageAssistantProfile(pathname);
+    const lines = [
+        `Active route: ${pathname || "/"}`,
+        `Active module id: ${moduleId || "general"}`,
+        `Active page: ${profile.label}`,
+        `Page guidance: ${profile.guidance}`,
+        `Cross-page policy: ${profile.crossPagePolicy}`,
+    ];
+
+    const globalDataSnapshot = buildGlobalDataSnapshot();
+    if (globalDataSnapshot.trim()) {
+        lines.push(globalDataSnapshot);
+    }
+
+    if (pathname.startsWith("/accounting/projections") || moduleId === "projections") {
+        const projectionSnapshot = readProjectionsContextSnapshot();
+        if (projectionSnapshot.trim()) {
+            lines.push(`Projection snapshot:\n${projectionSnapshot}`);
+        }
+    }
+
+    return lines.join("\n");
+}
+
+function createIntroMessage(module: ModuleConfig, pathname: string): ChatMessage {
+    const pageProfile = getPageAssistantProfile(pathname);
     return {
         id: "intro",
         role: "assistant",
-        content: `${module.greeting}\n\nExamples:\n• ${module.examples.join('\n• ')}`,
+        content: `${module.greeting}\n\nCurrent page: ${pageProfile.label}\nI am page-aware here and can also execute valid cross-page tasks when needed.\n\nExamples:\n• ${module.examples.join('\n• ')}`,
         timestamp: Date.now(),
     };
 }
@@ -386,6 +588,25 @@ function resolvePreferredAgentRoute(message: string, currentPath: string): strin
     return null;
 }
 
+function extractDownloadAttachment(data: unknown): ChatAttachmentDownload | null {
+    if (!data || typeof data !== "object") return null;
+    const record = data as Record<string, unknown>;
+    const download = record.download;
+    if (!download || typeof download !== "object") return null;
+    const payload = download as Record<string, unknown>;
+    const kind = typeof payload.kind === "string" ? payload.kind : "download";
+    const fileName = typeof payload.fileName === "string" ? payload.fileName : "";
+    const url = typeof payload.url === "string" ? payload.url : "";
+    const mimeType = typeof payload.mimeType === "string" ? payload.mimeType : undefined;
+    if (!fileName || !url) return null;
+    return {
+        kind: kind === "download" ? "download" : "download",
+        fileName,
+        url,
+        mimeType,
+    };
+}
+
 export default function FloatingChatButton() {
     const pathname = usePathname();
     const router = useRouter();
@@ -402,13 +623,26 @@ export default function FloatingChatButton() {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
+    const blobUrlsRef = useRef<string[]>([]);
+
+    const revokeBlobUrls = useCallback(() => {
+        for (const url of blobUrlsRef.current) {
+            try {
+                URL.revokeObjectURL(url);
+            } catch {
+                // Ignore bad/revoked URLs.
+            }
+        }
+        blobUrlsRef.current = [];
+    }, []);
 
     // Detect module from pathname
     useEffect(() => {
         const activeModule = getModuleFromPath(pathname);
         setCurrentModule(activeModule);
-        const introMessage = createIntroMessage(activeModule);
+        const introMessage = createIntroMessage(activeModule, pathname);
         const selected = consumeSelectedChatHistory({ pathname });
+        revokeBlobUrls();
 
         if (selected && selected.module !== "personal") {
             const restoredMessages: ChatMessage[] = [introMessage];
@@ -436,7 +670,7 @@ export default function FloatingChatButton() {
 
         // Reset messages with module-specific greeting when module changes
         setMessages([introMessage]);
-    }, [pathname]);
+    }, [pathname, revokeBlobUrls]);
 
     useEffect(() => {
         const handleHistorySelection = () => {
@@ -445,7 +679,7 @@ export default function FloatingChatButton() {
 
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
-            const introMessage = createIntroMessage(activeModule);
+            const introMessage = createIntroMessage(activeModule, pathname);
             const baseTs = selected.timestamp || Date.now();
             const restoredMessages: ChatMessage[] = [
                 introMessage,
@@ -516,6 +750,12 @@ export default function FloatingChatButton() {
         window.localStorage.setItem(AGENT_CHAT_MODE_STORAGE_KEY, agentChatMode);
     }, [agentChatMode]);
 
+    useEffect(() => {
+        return () => {
+            revokeBlobUrls();
+        };
+    }, [revokeBlobUrls]);
+
     // Animate the "Chat" text
     useEffect(() => {
         const interval = setInterval(() => {
@@ -569,7 +809,10 @@ export default function FloatingChatButton() {
         }
     }, [isModalOpen, clarificationData]);
 
-    const appendMessage = useCallback((role: ChatMessage["role"], content: string) => {
+    const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload) => {
+        if (attachment?.url && attachment.url.startsWith("blob:")) {
+            blobUrlsRef.current.push(attachment.url);
+        }
         setMessages(prev => [
             ...prev,
             {
@@ -577,6 +820,7 @@ export default function FloatingChatButton() {
                 role,
                 content,
                 timestamp: Date.now(),
+                attachment,
             },
         ]);
     }, []);
@@ -1008,21 +1252,21 @@ _Ask me anything about bank reconciliation!_`;
                 .slice(-12)
                 .map((msg) => ({ role: msg.role, content: msg.content }));
             if (agentChatMode === "response-only") {
-                const plan = await requestUnifiedAgentPlan({
+                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
+                const result = await runUnifiedAgentMessage({
                     message: trimmed,
                     module: activeModuleId,
                     route: activeRoute,
                     conversation,
-                    contextSnapshot: activeModuleId === "projections" ? readProjectionsContextSnapshot() : undefined,
+                    contextSnapshot: runtimeContextSnapshot,
+                    customActionExecutor: activeModuleId === "projections" ? executeProjectionAction : undefined,
+                    enableUiOperator: false,
+                    executionMode: "background",
+                    autoApproveUiActions: false,
                 });
-                const normalizedPlanSource: AgentPlanSource =
-                    plan.planSource === "fast-path" || plan.planSource === "gemini" || plan.planSource === "fallback"
-                        ? plan.planSource
-                        : "fallback";
+                const normalizedPlanSource: AgentPlanSource = result.planSource;
                 setPlanSource(normalizedPlanSource);
-                const response = plan.actions.length > 0
-                    ? `${plan.reply}\n\nSwitch to "Full agentic" mode to run this action in your workspace.`
-                    : plan.reply;
+                const response = result.finalReply;
                 addChatHistoryEntry({
                     module: activeModuleId,
                     route: pathname,
@@ -1030,6 +1274,17 @@ _Ask me anything about bank reconciliation!_`;
                     response,
                 });
                 appendMessage("assistant", response);
+                const downloadAttachments = result.execution
+                    .filter((step) => step.success)
+                    .map((step) => extractDownloadAttachment(step.data))
+                    .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
+                downloadAttachments.forEach((attachment) => {
+                    appendMessage("assistant", `Report ready: ${attachment.fileName}`, attachment);
+                });
+                const executedAnyAction = result.execution.some((step) => step.success);
+                if (executedAnyAction) {
+                    appendMessage("assistant", "Completed in background.");
+                }
             } else {
                 setIsAgentPerforming(true);
                 let hasClosedForExecution = false;
@@ -1046,17 +1301,19 @@ _Ask me anything about bank reconciliation!_`;
                     router.push(preferredRoute);
                     await new Promise((resolve) => setTimeout(resolve, 850));
                 }
+                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
 
                 const result = await runUnifiedAgentMessage({
                     message: trimmed,
                     module: activeModuleId,
                     route: activeRoute,
                     conversation,
-                    contextSnapshot: activeModuleId === "projections" ? readProjectionsContextSnapshot() : undefined,
+                    contextSnapshot: runtimeContextSnapshot,
                     customActionExecutor: activeModuleId === "projections" ? executeProjectionAction : undefined,
                     shouldStop: () => stopAgentRef.current,
                     rollbackOnStop: true,
                     autoApproveUiActions: true,
+                    executionMode: "interactive",
                     onExecutionStart: closeModalForExecution,
                 });
 
@@ -1075,6 +1332,13 @@ _Ask me anything about bank reconciliation!_`;
                 setIsModalOpen(true);
                 await new Promise((resolve) => setTimeout(resolve, 120));
                 appendMessage("assistant", response);
+                const downloadAttachments = result.execution
+                    .filter((step) => step.success)
+                    .map((step) => extractDownloadAttachment(step.data))
+                    .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
+                downloadAttachments.forEach((attachment) => {
+                    appendMessage("assistant", `Report ready: ${attachment.fileName}`, attachment);
+                });
                 const executedAnyAction = result.execution.some((step) => step.success);
                 if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(response)) {
                     appendMessage("assistant", "Request complete.");
@@ -1220,8 +1484,23 @@ _Ask me anything about bank reconciliation!_`;
                                                     {msg.content}
                                                 </div>
                                             ) : (
-                                                <div className="inline-block max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
-                                                    {msg.content}
+                                                <div className="inline-block max-w-[90%]">
+                                                    <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
+                                                        {msg.content}
+                                                    </div>
+                                                    {msg.attachment?.kind === "download" && (
+                                                        <a
+                                                            href={msg.attachment.url}
+                                                            download={msg.attachment.fileName}
+                                                            className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                                        >
+                                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                                <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
+                                                                <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+                                                            </svg>
+                                                            Download PDF
+                                                        </a>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

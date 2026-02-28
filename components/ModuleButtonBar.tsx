@@ -31,6 +31,16 @@ const MODULES: {
             ),
         },
         {
+            mode: "budgeting",
+            label: "Budgeting",
+            icon: (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16v-3M12 16V8M16 16v-6M20 16v-9" />
+                </svg>
+            ),
+        },
+        {
             mode: "intelligence",
             label: "Financial Management",
             icon: (
@@ -88,6 +98,7 @@ export default function ModuleButtonBar() {
         if (pathname.startsWith("/marketplace")) return "marketplace";
         if (pathname.startsWith("/wallet")) return "wallet";
         if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
+        if (pathname.startsWith("/budgeting")) return "budgeting";
         if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) return "payroll";
         if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
         return "tax";
@@ -100,6 +111,8 @@ export default function ModuleButtonBar() {
 
         if (newMode === "tax") {
             navigateTo("/tax/workspace");
+        } else if (newMode === "budgeting") {
+            navigateTo("/budgeting/dashboard");
         } else if (newMode === "intelligence") {
             navigateTo("/cashflow-intelligence");
         } else if (newMode === "wallet") {

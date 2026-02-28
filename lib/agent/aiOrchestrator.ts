@@ -144,7 +144,7 @@ function findProjectionAssumption(message: string): ProjectionAssumptionMeta | n
 }
 
 function inferNavigationRoute(message: string, currentRoute: string): string | null {
-  const lower = message.toLowerCase();
+  const lower = normalizeIntentText(message);
   if (!/(go to|open|navigate|take me to)/.test(lower)) return null;
 
   if (/\bprojection|forecast|model\b/.test(lower)) return "/accounting/projections";
@@ -163,26 +163,37 @@ function inferNavigationRoute(message: string, currentRoute: string): string | n
   return null;
 }
 
+function normalizeIntentText(message: string): string {
+  const compact = message.toLowerCase().replace(/\s+/g, " ").trim();
+  return compact
+    .replace(/\bpls\b/g, "please")
+    .replace(/\bprintout\b/g, "print out")
+    .replace(/\btayable\s+payable\b/g, "tax payable")
+    .replace(/\btayable\b/g, "payable")
+    .replace(/\bpayble\b/g, "payable")
+    .replace(/\bliablities\b/g, "liabilities");
+}
+
 function isExplicitActionIntent(message: string): boolean {
-  const lower = message.toLowerCase().trim();
+  const lower = normalizeIntentText(message);
   return (
-    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
+    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|print|print out|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
       lower
     ) ||
-    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile)\b/.test(
+    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|export|download|print|print out|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile)\b/.test(
       lower
     ) ||
-    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile)\b/.test(
+    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|export|download|print|print out|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile)\b/.test(
       lower
     )
   );
 }
 
 function isDataLookupIntent(message: string): boolean {
-  const lower = message.toLowerCase();
+  const lower = normalizeIntentText(message);
   const asksQuestion = /\?|(?:\bwhat(?:'s| is)?\b)|\b(show|give|list|how much|how many|summari[sz]e|analy[sz]e|check)\b/.test(lower);
   const userScoped = /\b(my|our|current|latest|today|this|last)\b/.test(lower) || /\bhow much did i\b/.test(lower);
-  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt)\b/.test(
+  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt|payable|liabilit)\b/.test(
     lower
   );
   return asksQuestion && userScoped && metricTopic;

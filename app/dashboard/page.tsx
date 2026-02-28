@@ -6,12 +6,11 @@ import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
 
 // Types
-type MetricCard = {
+type KpiMetric = {
   label: string;
   value: string;
-  change: string;
-  changeType: "positive" | "negative" | "neutral";
-  icon: React.ReactNode;
+  hint: string;
+  accent: string;
 };
 
 type ChartData = {
@@ -20,28 +19,7 @@ type ChartData = {
   color: string;
 };
 
-// Icons
 const icons = {
-  revenue: (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
-    </svg>
-  ),
-  expenses: (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" />
-    </svg>
-  ),
-  profit: (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  ),
-  transactions: (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-    </svg>
-  ),
   arrowRight: (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25" />
@@ -161,29 +139,12 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
   );
 }
 
-// Metric Card Component
-function MetricCardComponent({ metric }: { metric: MetricCard }) {
+function KpiCard({ metric }: { metric: KpiMetric }) {
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100">
-      <div className="flex items-start justify-between">
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-[#2264ff]">
-          {metric.icon}
-        </div>
-        <span
-          className={`text-xs font-semibold px-2 py-1 rounded-full ${metric.changeType === "positive"
-            ? "bg-emerald-100 text-emerald-600"
-            : metric.changeType === "negative"
-              ? "bg-red-100 text-red-600"
-              : "bg-gray-100 text-gray-600"
-            }`}
-        >
-          {metric.change}
-        </span>
-      </div>
-      <div className="mt-4">
-        <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-        <p className="text-sm text-gray-500 mt-1">{metric.label}</p>
-      </div>
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
+      <p className={`text-xs font-semibold uppercase tracking-wide ${metric.accent}`}>{metric.label}</p>
+      <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{metric.value}</p>
+      <p className="text-xs text-gray-500 mt-2">{metric.hint}</p>
     </div>
   );
 }
@@ -492,35 +453,31 @@ export default function DashboardPage() {
     return formatCompactNaira(amount);
   };
 
-  const metrics: MetricCard[] = useMemo(
+  const metrics: KpiMetric[] = useMemo(
     () => [
       {
         label: "Total Revenue",
         value: formatCurrency(calculatedData.totalRevenue),
-        change: transactions.length > 0 ? `${calculatedData.transactionCount} entries` : "No data",
-        changeType: calculatedData.totalRevenue > 0 ? "positive" : "neutral",
-        icon: icons.revenue,
+        hint: transactions.length > 0 ? `${calculatedData.transactionCount} analyzed entries` : "No data yet",
+        accent: "text-blue-600",
       },
       {
         label: "Total Expenses",
         value: formatCurrency(calculatedData.totalExpenses),
-        change: calculatedData.totalExpenses > 0 ? "Active" : "No data",
-        changeType: calculatedData.totalExpenses > 0 ? "negative" : "neutral",
-        icon: icons.expenses,
+        hint: calculatedData.totalExpenses > 0 ? "Current operating + cost profile" : "No expense profile yet",
+        accent: "text-rose-600",
       },
       {
         label: "Net Profit",
         value: formatCurrency(calculatedData.netProfit),
-        change: calculatedData.profitMargin > 0 ? `${calculatedData.profitMargin.toFixed(1)}% margin` : "—",
-        changeType: calculatedData.netProfit > 0 ? "positive" : calculatedData.netProfit < 0 ? "negative" : "neutral",
-        icon: icons.profit,
+        hint: calculatedData.profitMargin > 0 ? `${calculatedData.profitMargin.toFixed(1)}% margin` : "Margin not positive yet",
+        accent: calculatedData.netProfit >= 0 ? "text-emerald-600" : "text-rose-600",
       },
       {
-        label: "Transactions",
+        label: "Journal Activity",
         value: calculatedData.transactionCount.toLocaleString(),
-        change: calculatedData.avgTransaction > 0 ? `Avg ${formatCurrency(calculatedData.avgTransaction)}` : "—",
-        changeType: "neutral",
-        icon: icons.transactions,
+        hint: calculatedData.avgTransaction > 0 ? `Average ${formatCurrency(calculatedData.avgTransaction)} per entry` : "No average yet",
+        accent: "text-indigo-600",
       },
     ],
     [calculatedData, transactions.length]
@@ -532,33 +489,21 @@ export default function DashboardPage() {
 
   return (
     <div className={`space-y-6 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
-      {/* Header */}
-      <div className="rounded-2xl bg-white border border-gray-200 px-6 py-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Financial Dashboard</h1>
-                <p className="text-sm text-gray-500">Real-time insights from your accounting records</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/accounting"
-              className="inline-flex items-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Transactions
-            </Link>
-          </div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
+          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+            Open Accounting Workspace
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/accounting"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+          >
+            Add Transactions
+          </Link>
         </div>
       </div>
 
@@ -567,19 +512,19 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {metrics.map((metric, index) => (
-              <MetricCardComponent key={index} metric={metric} />
+              <KpiCard key={index} metric={metric} />
             ))}
           </div>
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Revenue Bar Chart */}
-            <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Monthly Revenue</h3>
+                  <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
                   <p className="text-sm text-gray-500">Revenue trend by month</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
@@ -591,9 +536,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Expense Pie Chart */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Expense Breakdown</h3>
+                <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
                 <p className="text-sm text-gray-500">Where your money goes</p>
               </div>
               <div className="flex flex-col items-center gap-4">
@@ -616,9 +561,9 @@ export default function DashboardPage() {
           {/* Second Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Income Streams */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Income Streams</h3>
+                <h3 className="text-base font-semibold text-gray-900">Income Streams</h3>
                 <p className="text-sm text-gray-500">Revenue by category</p>
               </div>
               {calculatedData.incomeStreams.length > 0 ? (
@@ -652,10 +597,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Transactions */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-100">
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Recent Transactions</h3>
+                  <h3 className="text-base font-semibold text-gray-900">Recent Transactions</h3>
                   <p className="text-sm text-gray-500">Latest financial activity</p>
                 </div>
                 <Link href="/accounting" className="text-xs font-semibold text-gray-600 hover:text-gray-900">
@@ -701,7 +646,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {[
               {
                 label: "Profit Margin",
@@ -724,10 +669,10 @@ export default function DashboardPage() {
                 sublabel: "Cost transactions"
               },
             ].map((stat, index) => (
-              <div key={index} className="bg-white rounded-xl p-5 border border-gray-100">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                <p className="text-xs text-gray-400 mt-1">{stat.sublabel}</p>
+              <div key={index} className="bg-white rounded-2xl border border-gray-100 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{stat.label}</p>
+                <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900">{stat.value}</p>
+                <p className="text-xs text-gray-500 mt-2">{stat.sublabel}</p>
               </div>
             ))}
           </div>

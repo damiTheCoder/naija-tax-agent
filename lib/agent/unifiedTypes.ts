@@ -7,6 +7,7 @@ export interface AgentConversationMessage {
 
 export type UnifiedAgentActionType =
   | "accounting.postTransaction"
+  | "report.downloadPdf"
   | "tax.recordTransaction"
   | "tax.runComputation"
   | "tax.generateSchedule"

@@ -255,24 +255,31 @@ export function calculateCashflowAnalytics(
     periodEnd: string
 ): CashflowAnalytics {
     const netCashflow = monthlyInflow - monthlyOutflow;
-    const burnRate = monthlyOutflow / 30; // Daily burn
+    const burnRate = monthlyOutflow / 30; // Daily operating burn (gross outflow pace)
+    const netBurnRate = Math.max(0, (monthlyOutflow - monthlyInflow) / 30); // Daily net burn (cash depletion pace)
 
     // Runway calculation
     let runwayDays = 0;
     let runwayMonths = 0;
 
-    if (netCashflow >= 0) {
-        // Positive cashflow = no burn, infinite runway
+    if (cashBalance <= 0) {
+        // Already out of cash, runway is exhausted even if net cashflow just turned positive.
+        runwayDays = 0;
+        runwayMonths = 0;
+    } else if (netBurnRate > 0) {
+        runwayDays = Math.floor(cashBalance / netBurnRate);
+        runwayMonths = Math.round((runwayDays / 30) * 10) / 10;
+    } else {
+        // Not depleting cash currently.
         runwayDays = 999;
         runwayMonths = 999;
-    } else if (burnRate > 0) {
-        runwayDays = Math.floor(cashBalance / burnRate);
-        runwayMonths = Math.round(runwayDays / 30 * 10) / 10;
     }
 
     // Health status
     let healthStatus: CashflowAnalytics['healthStatus'];
-    if (runwayMonths >= 12 || netCashflow >= 0) {
+    if (cashBalance <= 0) {
+        healthStatus = 'critical';
+    } else if (runwayMonths >= 12 || netCashflow >= 0) {
         healthStatus = 'strong';
     } else if (runwayMonths >= 6) {
         healthStatus = 'healthy';
@@ -290,8 +297,8 @@ export function calculateCashflowAnalytics(
         monthlyOutflow,
         netCashflow,
         burnRate: Math.round(burnRate),
-        runwayDays: Math.min(runwayDays, 999),
-        runwayMonths: Math.min(runwayMonths, 99),
+        runwayDays: Math.max(0, Math.min(runwayDays, 999)),
+        runwayMonths: Math.max(0, Math.min(runwayMonths, 99)),
         healthStatus,
         periodStart,
         periodEnd,

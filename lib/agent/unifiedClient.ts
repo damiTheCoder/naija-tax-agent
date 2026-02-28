@@ -2,7 +2,18 @@
 
 import { accountingEngine, parseTransactionFromChatWithAI } from "@/lib/accounting/transactionBridge";
 import type { RawTransaction, TransactionType } from "@/lib/accounting/types";
+import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
 import { detectTaxType, taxEngine, type TaxTransactionType } from "@/lib/tax/taxEngine";
+import {
+  generateBalanceSheetPDF,
+  generateCashFlowStatementPDF,
+  generateFinancialStatementsPDF,
+  generateIncomeStatementPDF,
+  generateTaxPayablesPDF,
+  generateTrialBalancePDF,
+  type FinancialStatementData,
+} from "@/lib/accountingPdfGenerator";
+import { generateTaxSchedule as generateAccountingTaxSchedule } from "@/lib/accounting/transactionTaxAnalyzer";
 import {
   run_tax_computation,
   generate_schedule as generateTaxSchedule,
@@ -36,6 +47,7 @@ const AGENT_LOOP_MAX_CYCLES = 3;
 const AGENT_MEMORY_MAX_ITEMS = 40;
 const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
   "accounting.postTransaction",
+  "report.downloadPdf",
   "tax.recordTransaction",
   "tax.runComputation",
   "tax.generateSchedule",
@@ -56,6 +68,14 @@ export type UnifiedCustomActionExecutor = (
 ) => Promise<UnifiedActionExecutionResult | null | undefined> | UnifiedActionExecutionResult | null | undefined;
 type UiStepAction = "click" | "type" | "select" | "check" | "focus";
 type UiRollbackHandler = () => void;
+type ReportPdfType =
+  | "trial_balance"
+  | "income_statement"
+  | "balance_sheet"
+  | "cashflow"
+  | "financial_statements"
+  | "financial_summary"
+  | "tax_payables";
 
 type ProjectionAssumptionMeta = {
   key: string;
@@ -289,6 +309,13 @@ function looksLikeProjectionSnapshotQuestion(message: string): boolean {
   );
 }
 
+function looksLikeFigureGroundingRequest(message: string): boolean {
+  const lower = normalizeIntentText(message);
+  return /\b(figure|figures|number|numbers|data|respect to|based on|actual values|real values|from the dashboard|from my dashboard|from my projections)\b/.test(
+    lower
+  );
+}
+
 function looksLikeProjectionAssumptionChange(message: string): boolean {
   const lower = message.toLowerCase();
   const verb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
@@ -400,34 +427,62 @@ function looksLikeProjectionQualityQuestion(message: string): boolean {
   );
 }
 
+function normalizeIntentText(message: string): string {
+  const compact = message.toLowerCase().replace(/\s+/g, " ").trim();
+  return compact
+    .replace(/\bpls\b/g, "please")
+    .replace(/\bpls\s+/g, "please ")
+    .replace(/\bprintout\b/g, "print out")
+    .replace(/\btayable\s+payable\b/g, "tax payable")
+    .replace(/\btayable\b/g, "payable")
+    .replace(/\bpayble\b/g, "payable")
+    .replace(/\bliablities\b/g, "liabilities")
+    .replace(/\btaxable\s+payable\b/g, "tax payable");
+}
+
+function isReportActionIntent(message: string, moduleId?: string): boolean {
+  const lower = normalizeIntentText(message);
+  const reportVerb = /\b(print|print out|download|export|generate|get|give me|pull)\b/.test(lower);
+  const reportObject =
+    /\b(report|statement|trial balance|balance sheet|income statement|profit and loss|p&l|pnl|cash flow|tax payable|tax payables|tax liability|tax liabilities|payable)\b/.test(
+      lower
+    );
+  const taxModulePayableAsk =
+    (moduleId || "").toLowerCase() === "tax" &&
+    /\b(payable|liabilit|vat|wht|cit|paye|education tax|tax)\b/.test(lower) &&
+    /\b(print|download|export|report|statement|show|give me)\b/.test(lower);
+  return (reportVerb && reportObject) || taxModulePayableAsk;
+}
+
 function isExplicitActionIntent(message: string): boolean {
-  const lower = message.toLowerCase().trim();
+  const lower = normalizeIntentText(message);
   return (
-    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
+    /^(please\s+)?(?:post|record|create|add|log|save|run|analy[sz]e|calculate|compute|generate|export|download|print|print out|send|transfer|pay|fund|top up|navigate|go to|open|click|tap|select|type|fill|update|change|set|reset|apply|reconcile)\b/.test(
       lower
     ) ||
+    /^(please\s+)?give me\b/.test(lower) ||
     /^(please\s+)?(?:put|increase|decrease)\b/.test(lower) ||
-    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
+    /\b(?:can you|could you|please)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|export|download|print|print out|send|transfer|pay|fund|navigate|go to|open|click|select|type|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
       lower
     ) ||
-    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
+    /\b(?:i want to|help me)\s+(?:post|record|create|run|analy[sz]e|calculate|generate|export|download|print|print out|send|transfer|pay|fund|navigate|open|update|set|reset|apply|reconcile|put|increase|decrease)\b/.test(
       lower
     )
   );
 }
 
 function isDataLookupIntent(message: string): boolean {
-  const lower = message.toLowerCase();
+  const lower = normalizeIntentText(message);
   const asksQuestion = /\?|(?:\bwhat(?:'s| is)?\b)|\b(show|give|list|how much|how many|summari[sz]e|analy[sz]e|check)\b/.test(lower);
   const userScoped = /\b(my|our|current|latest|today|this|last)\b/.test(lower) || /\bhow much did i\b/.test(lower);
-  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt)\b/.test(
+  const metricTopic = /\b(runway|burn|cash ?flow|cashflow|balance|revenue|profit|margin|expense|spend|transaction|tax|vat|wht|cgt|payable|liabilit)\b/.test(
     lower
   );
   return asksQuestion && userScoped && metricTopic;
 }
 
 function isExplainOnlyIntent(message: string): boolean {
-  const lower = message.toLowerCase();
+  const lower = normalizeIntentText(message);
   const explanationPrompt =
     /\b(what is|what's|what does|meaning of|mean by|define|definition|explain|how does|difference between|why does|why is)\b/.test(
       lower
@@ -595,7 +650,7 @@ function buildUiFallbackAction(message: string): UnifiedAgentAction | null {
 
 function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentResponse {
   const message = (request.message || "").trim();
-  const lower = message.toLowerCase();
+  const lower = normalizeIntentText(message);
   const moduleId = (request.module || "general").toLowerCase();
   const contextSnapshot = typeof request.contextSnapshot === "string" ? request.contextSnapshot : "";
   const isLoopMetaMessage = /^goal\s*:/i.test(message) && /latest observation\s*:/i.test(lower);
@@ -625,6 +680,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     );
   const taxIntent = /\b(vat|wht|cgt|tax|firs|stamp|withholding)\b/.test(lower);
   const cashflowIntent = /\b(cashflow|cash flow|runway|burn)\b/.test(lower);
+  const reportIntent = isReportActionIntent(message, moduleId);
   const complianceIntent = /\b(compute tax|run tax|tax computation|generate schedule|filing pack|reconcile|list issues|classification)\b/.test(lower);
   const projectionAdjustmentVerb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
   const projectionAssumptionIntent =
@@ -632,6 +688,18 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   const explicitActionIntent = isExplicitActionIntent(message);
   const dataLookupIntent = isDataLookupIntent(message);
   const explainOnlyIntent = isExplainOnlyIntent(message);
+  const navigationIntent =
+    /\b(page|link|url|where|go to|open|navigate|take me|which page|location)\b/.test(lower) ||
+    /\bupload (it|this|that)\b/.test(lower);
+  const recentConversation = (request.conversation || [])
+    .slice(-6)
+    .map((item) => item.content)
+    .join("\n");
+  const routeSuggestion = resolveWorkspaceRouteFromText(
+    `${message}\n${recentConversation}`,
+    request.route,
+    moduleId
+  );
 
   const projectionAction = buildProjectionFallbackAction(message, moduleId);
   if (projectionAction && !explainOnlyIntent) actions.push(projectionAction);
@@ -639,6 +707,21 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   if (uiIntent && explicitActionIntent && !walletIntent && !transactionIntent && !taxIntent && !cashflowIntent && !explainOnlyIntent) {
     const uiAction = buildUiFallbackAction(message);
     if (uiAction) actions.push(uiAction);
+  }
+
+  if (
+    routeSuggestion &&
+    navigationIntent &&
+    !walletIntent &&
+    !transactionIntent &&
+    !explainOnlyIntent
+  ) {
+    actions.push({
+      type: "navigate",
+      payload: { route: routeSuggestion.route },
+      confidence: 0.78,
+      reason: routeSuggestion.reason,
+    });
   }
 
   if (thanksIntent && !walletIntent && !transactionIntent && !taxIntent && !cashflowIntent) {
@@ -691,6 +774,23 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
         });
       }
     }
+  }
+
+  if (
+    reportIntent &&
+    !explainOnlyIntent &&
+    (explicitActionIntent || /\b(my|current|latest|download|export|pdf|give me|print|print out|show)\b/.test(lower))
+  ) {
+    actions.push({
+      type: "report.downloadPdf",
+      payload: {
+        reportType: normalizeReportPdfType("", message),
+        format: "pdf",
+        description: message,
+      },
+      confidence: 0.75,
+      reason: "Detected report generation/download request",
+    });
   }
 
   if (transactionIntent && amount && actions.length === 0 && !explainOnlyIntent) {
@@ -795,6 +895,10 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
       reply:
         actions[0]?.type === "ui.operate"
           ? "Understood. I’ll do that directly in the interface now."
+          : actions[0]?.type === "navigate"
+            ? `Understood. Opening ${toText(actions[0].payload?.route)} now.`
+          : actions[0]?.type === "report.downloadPdf"
+            ? "Understood. I’ll generate that report and attach a PDF download here."
           : actions[0]?.type === "projections.updateAssumption"
             ? "Understood. I’ll update the projection assumptions now."
             : actions[0]?.type === "projections.resetAssumptions"
@@ -929,6 +1033,215 @@ function toNumber(value: unknown): number {
 
 function toText(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizeReportPdfType(value: unknown, fallbackText = ""): ReportPdfType {
+  const candidate = normalizeIntentText(`${toText(value)} ${fallbackText}`);
+  if (/\btrial\s*balance\b/.test(candidate)) return "trial_balance";
+  if (/\b(balance\s*sheet|statement of financial position|sfp)\b/.test(candidate)) return "balance_sheet";
+  if (/\b(income\s*statement|profit\s*&?\s*loss|profit and loss|p&l|pnl)\b/.test(candidate)) return "income_statement";
+  if (/\b(cash\s*flow|cashflow)\b/.test(candidate)) return "cashflow";
+  if (/\bfinancial\s+statements?\b/.test(candidate)) return "financial_statements";
+  if (/\bfinancial\s+summary\b/.test(candidate)) return "financial_summary";
+  if (
+    /\b(tax payable|tax payables|tax liability|tax liabilities|vat payable|wht payable|cit payable|paye payable|education tax)\b/.test(
+      candidate
+    ) ||
+    /\bpayable payable\b/.test(candidate)
+  ) {
+    return "tax_payables";
+  }
+  return "financial_statements";
+}
+
+function resolveReportYear(yearHint: unknown, hintText: string, entryDates: string[]): number {
+  const currentYear = new Date().getFullYear();
+  const entryYears = Array.from(
+    new Set(
+      entryDates
+        .map((dateText) => new Date(`${dateText}T00:00:00`).getFullYear())
+        .filter((year) => Number.isFinite(year) && year >= 1900 && year <= 2100)
+    )
+  ).sort((a, b) => a - b);
+
+  const parsedHint = Number(yearHint);
+  if (Number.isFinite(parsedHint) && parsedHint >= 1900 && parsedHint <= 2100) {
+    return Math.round(parsedHint);
+  }
+
+  const yearMatches = normalizeIntentText(hintText).match(/\b(19|20)\d{2}\b/g);
+  if (yearMatches?.length) {
+    const latestMentioned = Number(yearMatches[yearMatches.length - 1]);
+    if (Number.isFinite(latestMentioned)) return latestMentioned;
+  }
+
+  if (entryYears.length) return entryYears[entryYears.length - 1];
+  return currentYear;
+}
+
+function buildYearlyFinancialStatement(entriesForYear: Array<{ lines: Array<{ accountCode: string; debit: number; credit: number }> }>): Omit<
+  FinancialStatementData,
+  "year" | "cashFlow" | "equityStatement"
+> {
+  let revenue = 0;
+  let costOfSales = 0;
+  let operatingExpenses = 0;
+  let assets = 0;
+  let liabilities = 0;
+  let equity = 0;
+
+  for (const entry of entriesForYear) {
+    for (const line of entry.lines) {
+      const code = line.accountCode || "";
+      if (code.startsWith("4")) {
+        revenue += line.credit || 0;
+      } else if (code.startsWith("50")) {
+        costOfSales += line.debit || 0;
+      } else if (code.startsWith("5") || code.startsWith("6")) {
+        operatingExpenses += line.debit || 0;
+      } else if (code.startsWith("1")) {
+        assets += (line.debit || 0) - (line.credit || 0);
+      } else if (code.startsWith("2")) {
+        liabilities += (line.credit || 0) - (line.debit || 0);
+      } else if (code.startsWith("3")) {
+        equity += (line.credit || 0) - (line.debit || 0);
+      }
+    }
+  }
+
+  const grossProfit = revenue - costOfSales;
+  const netIncome = grossProfit - operatingExpenses;
+  return {
+    revenue,
+    costOfSales,
+    grossProfit,
+    operatingExpenses,
+    netIncome,
+    assets,
+    liabilities,
+    equity,
+  };
+}
+
+async function buildReportPdfBlob(
+  reportType: ReportPdfType,
+  businessName: string,
+  hintText = "",
+  reportYearHint?: unknown
+): Promise<{ blob: Blob; fileName: string; label: string } | null> {
+  ensureEnginesLoaded();
+  const state = accountingEngine.getState();
+  const entries = state.journalEntries || [];
+  const entryDates = entries.map((entry) => entry.date);
+  const selectedYear = resolveReportYear(reportYearHint, hintText, entryDates);
+  const entriesForYear = entries.filter((entry) => {
+    const year = new Date(`${entry.date}T00:00:00`).getFullYear();
+    return year === selectedYear;
+  });
+
+  const statements = accountingEngine.generateStatements();
+  const trialBalance = accountingEngine.generateTrialBalance();
+  if (!entries.length) {
+    return null;
+  }
+
+  const statementData: FinancialStatementData = {
+    year: selectedYear,
+    ...buildYearlyFinancialStatement(entriesForYear),
+    cashFlow: {
+      year: selectedYear,
+      cashFromOperations: statements.cashFromOperations || 0,
+      cashFromInvesting: statements.cashFromInvesting || 0,
+      cashFromFinancing: statements.cashFromFinancing || 0,
+    },
+    equityStatement: {
+      year: selectedYear,
+      openingBalance: statements.equityStatement?.openingBalance || 0,
+      additions: statements.equityStatement?.additions || 0,
+      netIncome: statements.equityStatement?.netIncome || 0,
+      drawings: statements.equityStatement?.drawings || 0,
+      closingBalance: statements.equityStatement?.closingBalance || 0,
+    },
+  };
+
+  if (reportType === "trial_balance") {
+    if (!trialBalance.accounts.length) return null;
+    const asAtDate = new Date().toLocaleDateString("en-NG", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const blob = await generateTrialBalancePDF(trialBalance, asAtDate, businessName, { outputMode: "blob" });
+    if (!(blob instanceof Blob)) return null;
+    return {
+      blob,
+      fileName: `trial-balance-${asAtDate.replace(/\s/g, "-")}.pdf`,
+      label: "Trial Balance",
+    };
+  }
+
+  if (reportType === "income_statement") {
+    if (!entriesForYear.length) return null;
+    const blob = await generateIncomeStatementPDF(statementData, businessName, { outputMode: "blob" });
+    if (!(blob instanceof Blob)) return null;
+    return {
+      blob,
+      fileName: `income-statement-${selectedYear}.pdf`,
+      label: "Income Statement",
+    };
+  }
+
+  if (reportType === "balance_sheet") {
+    if (!entriesForYear.length) return null;
+    const blob = await generateBalanceSheetPDF(statementData, businessName, { outputMode: "blob" });
+    if (!(blob instanceof Blob)) return null;
+    return {
+      blob,
+      fileName: `balance-sheet-${selectedYear}.pdf`,
+      label: "Balance Sheet",
+    };
+  }
+
+  if (reportType === "cashflow") {
+    const blob = await generateCashFlowStatementPDF(
+      {
+        year: selectedYear,
+        cashFromOperations: statements.cashFromOperations || 0,
+        cashFromInvesting: statements.cashFromInvesting || 0,
+        cashFromFinancing: statements.cashFromFinancing || 0,
+      },
+      businessName,
+      { outputMode: "blob" }
+    );
+    if (!(blob instanceof Blob)) return null;
+    return {
+      blob,
+      fileName: `cash-flow-statement-${selectedYear}.pdf`,
+      label: "Cash Flow Statement",
+    };
+  }
+
+  if (reportType === "tax_payables") {
+    const taxSchedule = generateAccountingTaxSchedule(entries, {
+      isVatRegistered: true,
+    });
+    const blob = await generateTaxPayablesPDF(taxSchedule, businessName, { outputMode: "blob" });
+    if (!(blob instanceof Blob)) return null;
+    return {
+      blob,
+      fileName: `tax-payables-schedule-${taxSchedule.asAtDate}.pdf`,
+      label: "Tax Payables Schedule",
+    };
+  }
+
+  if (!entriesForYear.length) return null;
+  const blob = await generateFinancialStatementsPDF(statementData, businessName, { outputMode: "blob" });
+  if (!(blob instanceof Blob)) return null;
+  return {
+    blob,
+    fileName: `financial-statements-${selectedYear}.pdf`,
+    label: "Financial Statements",
+  };
 }
 
 function normalizeUiText(value: string): string {
@@ -1344,60 +1657,69 @@ async function runAccountingUiMirror(payload: AccountingUiMirrorPayload): Promis
   if (!window.location.pathname.startsWith("/accounting")) return "";
   const openButton = document.querySelector('[data-agent-target="open-post-journal-entry"]');
   if (!(openButton instanceof HTMLElement)) return "";
+  const addLineButton = document.querySelector('[data-agent-target="post-entry-add-line"]');
+  if (!(addLineButton instanceof HTMLElement)) return "";
 
-  const primaryDebit = payload.lines.find((line) => line.debit > 0);
-  const primaryCredit = payload.lines.find((line) => line.credit > 0);
-  if (!primaryDebit || !primaryCredit) return "";
+  const normalizedLines = payload.lines
+    .filter((line) => line.accountCode && (line.debit > 0 || line.credit > 0))
+    .map((line) => ({
+      accountCode: line.accountCode,
+      debit: Math.max(0, line.debit || 0),
+      credit: Math.max(0, line.credit || 0),
+    }));
+  if (normalizedLines.length === 0) return "";
+
+  const steps: UiStepPayload[] = [
+    {
+      action: "click",
+      target: { selector: '[data-agent-target="open-post-journal-entry"]' },
+      value: "",
+    },
+    {
+      action: "type",
+      target: { selector: '[data-agent-target="post-entry-date"]' },
+      value: payload.date,
+    },
+    {
+      action: "type",
+      target: { selector: '[data-agent-target="post-entry-narration"]' },
+      value: payload.narration,
+    },
+  ];
+
+  for (let index = 2; index < normalizedLines.length; index += 1) {
+    steps.push({
+      action: "click",
+      target: { selector: '[data-agent-target="post-entry-add-line"]' },
+      value: "",
+    });
+  }
+
+  normalizedLines.forEach((line, index) => {
+    const lineNumber = index + 1;
+    steps.push(
+      {
+        action: "select",
+        target: { selector: `[data-agent-target="post-entry-line-${lineNumber}-account"]` },
+        value: line.accountCode,
+      },
+      {
+        action: "type",
+        target: { selector: `[data-agent-target="post-entry-line-${lineNumber}-debit"]` },
+        value: line.debit > 0 ? String(line.debit) : "",
+      },
+      {
+        action: "type",
+        target: { selector: `[data-agent-target="post-entry-line-${lineNumber}-credit"]` },
+        value: line.credit > 0 ? String(line.credit) : "",
+      }
+    );
+  });
 
   const previewAction: UnifiedAgentAction = {
     type: "ui.operate",
     payload: {
-      steps: [
-        {
-          action: "click",
-          target: { selector: '[data-agent-target="open-post-journal-entry"]' },
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-date"]' },
-          value: payload.date,
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-narration"]' },
-          value: payload.narration,
-        },
-        {
-          action: "select",
-          target: { selector: '[data-agent-target="post-entry-line-1-account"]' },
-          value: primaryDebit.accountCode,
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-line-1-debit"]' },
-          value: String(primaryDebit.debit),
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-line-1-credit"]' },
-          value: "",
-        },
-        {
-          action: "select",
-          target: { selector: '[data-agent-target="post-entry-line-2-account"]' },
-          value: primaryCredit.accountCode,
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-line-2-debit"]' },
-          value: "",
-        },
-        {
-          action: "type",
-          target: { selector: '[data-agent-target="post-entry-line-2-credit"]' },
-          value: String(primaryCredit.credit),
-        },
-      ],
+      steps,
     },
   };
 
@@ -1409,18 +1731,7 @@ async function runAccountingUiMirror(payload: AccountingUiMirrorPayload): Promis
           entryId: payload.entryId,
           date: payload.date,
           narration: payload.narration,
-          lines: [
-            {
-              accountCode: primaryDebit.accountCode,
-              debit: primaryDebit.debit,
-              credit: 0,
-            },
-            {
-              accountCode: primaryCredit.accountCode,
-              debit: 0,
-              credit: primaryCredit.credit,
-            },
-          ],
+          lines: normalizedLines,
         },
       })
     );
@@ -1858,6 +2169,46 @@ async function executeTaxReconcile(action: UnifiedAgentAction): Promise<UnifiedA
   };
 }
 
+async function executeReportDownloadPdf(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  if (typeof window === "undefined") {
+    return {
+      type: action.type,
+      success: false,
+      message: "Report PDF generation is available only in the browser client.",
+    };
+  }
+
+  const payload = action.payload || {};
+  const requestedType = normalizeReportPdfType(payload.reportType, toText(payload.description));
+  const businessName = toText(payload.businessName, "CashOS Business");
+  const generated = await buildReportPdfBlob(requestedType, businessName, toText(payload.description), payload.year);
+
+  if (!generated) {
+    return {
+      type: action.type,
+      success: false,
+      message: "No report data found yet. Record and post transactions first, then try again.",
+    };
+  }
+
+  const blobUrl = URL.createObjectURL(generated.blob);
+  return {
+    type: action.type,
+    success: true,
+    message: `${generated.label} PDF ready for download.`,
+    data: {
+      download: {
+        kind: "download",
+        fileName: generated.fileName,
+        url: blobUrl,
+        mimeType: "application/pdf",
+      },
+      reportType: requestedType,
+      fileName: generated.fileName,
+    },
+  };
+}
+
 export async function executeUnifiedAgentActions(
   actions: UnifiedAgentAction[],
   options?: {
@@ -1901,6 +2252,8 @@ export async function executeUnifiedAgentActions(
     try {
       if (action.type === "accounting.postTransaction") {
         results.push(await executeAccountingPost(action));
+      } else if (action.type === "report.downloadPdf") {
+        results.push(await executeReportDownloadPdf(action));
       } else if (action.type === "tax.recordTransaction") {
         results.push(executeTaxPost(action));
       } else if (action.type === "tax.runComputation") {
@@ -2047,11 +2400,32 @@ export async function requestUnifiedAgentPlan(
     const data = (await response.json()) as UnifiedAgentResponse;
     const remoteActions = Array.isArray(data.actions) ? data.actions : [];
     const localActions = Array.isArray(localFallbackPlan.actions) ? localFallbackPlan.actions : [];
-    const shouldPromoteLocalActions = localActions.length > 0 && remoteActions.length === 0 && isExplicitActionIntent(request.message);
+    const hasLocalReportDownload = localActions.some((action) => action.type === "report.downloadPdf");
+    const remoteOnlyUiOrNavigation =
+      remoteActions.length > 0 &&
+      remoteActions.every((action) => action.type === "navigate" || action.type === "ui.operate");
+    const hasLocalNonUiExecution = localActions.some((action) => action.type !== "navigate" && action.type !== "ui.operate");
+    const shouldPromoteLocalActions =
+      localActions.length > 0 &&
+      hasLocalNonUiExecution &&
+      (remoteActions.length === 0 || remoteOnlyUiOrNavigation) &&
+      (isExplicitActionIntent(request.message) ||
+        hasLocalReportDownload ||
+        /\b(post|record|paid|pay|sold|received|buy|purchase|expense|rent|salary|generate|download|print|export|run|compute|calculate)\b/i.test(
+          request.message
+        ));
     const actions = shouldPromoteLocalActions ? localActions : remoteActions;
+    const promotedReply =
+      shouldPromoteLocalActions &&
+      typeof localFallbackPlan.reply === "string" &&
+      localFallbackPlan.reply.trim()
+        ? localFallbackPlan.reply.trim()
+        : undefined;
 
     return {
-      reply: typeof data.reply === "string" && data.reply.trim() ? data.reply.trim() : serviceErrorPlan.reply,
+      reply:
+        promotedReply ||
+        (typeof data.reply === "string" && data.reply.trim() ? data.reply.trim() : serviceErrorPlan.reply),
       actions,
       confidence:
         typeof data.confidence === "number" && Number.isFinite(data.confidence)
@@ -2169,6 +2543,7 @@ export async function runUnifiedAgentMessage(params: {
   route?: string;
   conversation?: AgentConversationMessage[];
   enableUiOperator?: boolean;
+  executionMode?: "interactive" | "background";
   contextSnapshot?: string;
   customActionExecutor?: UnifiedCustomActionExecutor;
   shouldStop?: () => boolean;
@@ -2187,6 +2562,7 @@ export async function runUnifiedAgentMessage(params: {
   const moduleId = normalizeModuleId(params.module);
   const objective = trimmedMessage;
   const snapshot = typeof params.contextSnapshot === "string" ? params.contextSnapshot : "";
+  const executionMode = params.executionMode === "background" ? "background" : "interactive";
   const shouldStop = () => Boolean(params.shouldStop?.());
   let executionStartNotified = false;
   const notifyExecutionStart = () => {
@@ -2199,7 +2575,11 @@ export async function runUnifiedAgentMessage(params: {
     }
   };
 
-  if (pendingUiApproval && isCancelMessage(trimmedMessage)) {
+  if (executionMode === "background" && pendingUiApproval) {
+    pendingUiApproval = null;
+  }
+
+  if (executionMode === "interactive" && pendingUiApproval && isCancelMessage(trimmedMessage)) {
     pendingUiApproval = null;
     return {
       finalReply: "Cancelled. I did not run the pending on-screen action.",
@@ -2211,7 +2591,7 @@ export async function runUnifiedAgentMessage(params: {
     };
   }
 
-  if (pendingUiApproval && isConfirmMessage(trimmedMessage)) {
+  if (executionMode === "interactive" && pendingUiApproval && isConfirmMessage(trimmedMessage)) {
     const approval = pendingUiApproval;
     pendingUiApproval = null;
     if (approval.actions.length > 0) notifyExecutionStart();
@@ -2240,7 +2620,7 @@ export async function runUnifiedAgentMessage(params: {
     };
   }
 
-  if (!pendingUiApproval && isConfirmMessage(trimmedMessage)) {
+  if (executionMode === "interactive" && !pendingUiApproval && isConfirmMessage(trimmedMessage)) {
     const pendingInstruction = extractPendingInstructionFromConversation(params.conversation, trimmedMessage);
     if (pendingInstruction) {
       const inferredPlan = buildLocalFallbackPlan({
@@ -2281,7 +2661,7 @@ export async function runUnifiedAgentMessage(params: {
   if (
     moduleId === "projections" &&
     snapshot.trim() &&
-    looksLikeProjectionSnapshotQuestion(trimmedMessage) &&
+    (looksLikeProjectionSnapshotQuestion(trimmedMessage) || looksLikeFigureGroundingRequest(trimmedMessage)) &&
     !looksLikeProjectionAssumptionChange(trimmedMessage)
   ) {
     const reply = buildProjectionSnapshotReply(snapshot);
@@ -2338,7 +2718,20 @@ export async function runUnifiedAgentMessage(params: {
       break;
     }
 
-    const signature = actionSignature(plan.actions);
+    const modeFilteredActions =
+      executionMode === "background"
+        ? plan.actions.filter((action) => action.type !== "ui.operate" && action.type !== "navigate")
+        : plan.actions;
+    const skippedForBackground = plan.actions.length - modeFilteredActions.length;
+    if (modeFilteredActions.length === 0) {
+      pendingUiApproval = null;
+      if (executionMode === "background" && skippedForBackground > 0) {
+        latestReply = `${latestReply}\n\nThis request needs on-screen steps. Switch to Agentic mode to run it live in the interface.`;
+      }
+      break;
+    }
+
+    const signature = actionSignature(modeFilteredActions);
     if (seenSignatures.has(signature)) {
       latestReply = `${latestReply}\n\nI reached the same step again, so I’m stopping here to avoid looping.`;
       pendingUiApproval = null;
@@ -2346,10 +2739,10 @@ export async function runUnifiedAgentMessage(params: {
     }
     seenSignatures.add(signature);
 
-    const uiActions = plan.actions.filter((action) => action.type === "ui.operate");
-    const nonUiActions = plan.actions.filter((action) => action.type !== "ui.operate");
+    const uiActions = modeFilteredActions.filter((action) => action.type === "ui.operate");
+    const nonUiActions = modeFilteredActions.filter((action) => action.type !== "ui.operate");
     const requiresUiApproval = params.autoApproveUiActions ? false : uiActions.some(uiActionNeedsConfirmation);
-    const actionsToExecute = requiresUiApproval ? nonUiActions : plan.actions;
+    const actionsToExecute = requiresUiApproval ? nonUiActions : modeFilteredActions;
 
     aggregateActions.push(...actionsToExecute);
 
