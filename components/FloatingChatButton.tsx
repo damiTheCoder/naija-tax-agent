@@ -24,8 +24,10 @@ import {
     CHAT_HISTORY_SELECTED_EVENT,
     createChatConversation,
     consumeSelectedChatHistory,
+    deleteChatConversation,
     getChatConversation,
     loadChatConversations,
+    renameChatConversation,
     saveChatConversationMessages,
     selectChatConversation,
 } from "@/lib/personalChatHistory";
@@ -651,6 +653,7 @@ export default function FloatingChatButton() {
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+    const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
@@ -731,6 +734,7 @@ export default function FloatingChatButton() {
     const handleStartNewChat = useCallback(() => {
         revokeBlobUrls();
         setActiveConversationId(null);
+        setOpenConversationMenuId(null);
         setMessages([createIntroMessage(currentModule, pathname)]);
         setInputValue("");
         setPlanSource("fallback");
@@ -741,6 +745,7 @@ export default function FloatingChatButton() {
     const handleSelectConversation = useCallback((conversationId: string) => {
         const conversation = getChatConversation(conversationId);
         if (!conversation) return;
+        setOpenConversationMenuId(null);
         if (conversation.route && conversation.route !== pathname) {
             selectChatConversation(conversation.id);
             router.push(conversation.route);
@@ -753,10 +758,58 @@ export default function FloatingChatButton() {
         setIsModalOpen(true);
     }, [openConversation, pathname, router]);
 
+    const handleToggleConversationMenu = useCallback((conversationId: string) => {
+        setOpenConversationMenuId((current) => (current === conversationId ? null : conversationId));
+    }, []);
+
+    const handleRenameConversation = useCallback((conversationId: string) => {
+        const conversation = getChatConversation(conversationId);
+        if (!conversation) return;
+        const renamed = window.prompt("Rename chat", conversation.title);
+        if (renamed === null) return;
+        const nextTitle = renamed.trim();
+        if (!nextTitle) return;
+
+        const updated = renameChatConversation({
+            conversationId,
+            title: nextTitle,
+        });
+        if (!updated) return;
+
+        setOpenConversationMenuId(null);
+        refreshConversationList();
+
+        if (activeConversationId === conversationId) {
+            const moduleConfig = getModuleFromPath(updated.route || pathname);
+            setCurrentModule(moduleConfig);
+            openConversation(updated, moduleConfig, updated.route || pathname);
+        }
+    }, [activeConversationId, openConversation, pathname, refreshConversationList]);
+
+    const handleDeleteConversation = useCallback((conversationId: string) => {
+        const conversation = getChatConversation(conversationId);
+        if (!conversation) return;
+        const confirmed = window.confirm(`Delete chat "${conversation.title}"?`);
+        if (!confirmed) return;
+
+        const deleted = deleteChatConversation(conversationId);
+        if (!deleted) return;
+
+        setOpenConversationMenuId(null);
+        refreshConversationList();
+
+        if (activeConversationId === conversationId) {
+            setActiveConversationId(null);
+            setMessages([createIntroMessage(currentModule, pathname)]);
+            setInputValue("");
+        }
+    }, [activeConversationId, currentModule, pathname, refreshConversationList]);
+
     // Detect module from pathname
     useEffect(() => {
         const activeModule = getModuleFromPath(pathname);
         setCurrentModule(activeModule);
+        setOpenConversationMenuId(null);
         revokeBlobUrls();
         const selected = consumeSelectedChatHistory({ pathname });
         const allConversations = loadChatConversations();
@@ -868,6 +921,21 @@ export default function FloatingChatButton() {
             window.removeEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refresh as EventListener);
         };
     }, [pathname, refreshConversationList]);
+
+    useEffect(() => {
+        if (!openConversationMenuId) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest("[data-conversation-menu='true']")) return;
+            setOpenConversationMenuId(null);
+        };
+
+        document.addEventListener("mousedown", handlePointerDown);
+        return () => {
+            document.removeEventListener("mousedown", handlePointerDown);
+        };
+    }, [openConversationMenuId]);
 
     // Listen for clarification requests
     useEffect(() => {
@@ -1657,16 +1725,51 @@ _Ask me anything about bank reconciliation!_`;
                                             New chat
                                         </button>
                                         {conversationList.map((conversation) => (
-                                            <button
+                                            <div
                                                 key={conversation.id}
-                                                onClick={() => handleSelectConversation(conversation.id)}
-                                                className={`shrink-0 rounded-full border px-3 py-1 text-xs ${activeConversationId === conversation.id
+                                                data-conversation-menu="true"
+                                                className={`relative shrink-0 flex max-w-[180px] items-center rounded-full border ${activeConversationId === conversation.id
                                                     ? "border-blue-400 bg-blue-50 text-blue-700"
                                                     : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                                                     }`}
                                             >
-                                                {conversation.title}
-                                            </button>
+                                                <button
+                                                    onClick={() => handleSelectConversation(conversation.id)}
+                                                    className="min-w-0 max-w-[140px] rounded-l-full px-3 py-1 text-xs"
+                                                >
+                                                    <span className="block truncate">{conversation.title}</span>
+                                                </button>
+                                                <button
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        handleToggleConversationMenu(conversation.id);
+                                                    }}
+                                                    className="shrink-0 rounded-r-full pr-2 text-gray-500 hover:text-gray-700"
+                                                    aria-label={`Chat options for ${conversation.title}`}
+                                                >
+                                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                        <circle cx="6" cy="12" r="1.8" />
+                                                        <circle cx="12" cy="12" r="1.8" />
+                                                        <circle cx="18" cy="12" r="1.8" />
+                                                    </svg>
+                                                </button>
+                                                {openConversationMenuId === conversation.id ? (
+                                                    <div className="absolute right-0 top-8 z-30 min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                        <button
+                                                            onClick={() => handleRenameConversation(conversation.id)}
+                                                            className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                                        >
+                                                            Rename chat
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteConversation(conversation.id)}
+                                                            className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -1686,17 +1789,54 @@ _Ask me anything about bank reconciliation!_`;
                                                 <p className="px-2 py-2 text-xs text-gray-500">No chat history yet.</p>
                                             ) : (
                                                 conversationList.map((conversation) => (
-                                                    <button
+                                                    <div
                                                         key={conversation.id}
-                                                        onClick={() => handleSelectConversation(conversation.id)}
-                                                        className={`mb-1 w-full rounded-lg px-2 py-2 text-left ${activeConversationId === conversation.id
+                                                        data-conversation-menu="true"
+                                                        className={`relative mb-1 w-full rounded-lg px-1 py-1 ${activeConversationId === conversation.id
                                                             ? "bg-blue-50 text-blue-700"
                                                             : "text-gray-700 hover:bg-gray-100"
                                                             }`}
                                                     >
-                                                        <p className="truncate text-xs font-semibold">{conversation.title}</p>
-                                                        <p className="truncate text-[11px] text-gray-500">{conversation.preview}</p>
-                                                    </button>
+                                                        <div className="flex min-w-0 items-start gap-1">
+                                                            <button
+                                                                onClick={() => handleSelectConversation(conversation.id)}
+                                                                className="min-w-0 flex-1 rounded-md px-1 py-1 text-left"
+                                                            >
+                                                                <p className="truncate text-xs font-semibold">{conversation.title}</p>
+                                                                <p className="truncate text-[11px] text-gray-500">{conversation.preview}</p>
+                                                            </button>
+                                                            <button
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    handleToggleConversationMenu(conversation.id);
+                                                                }}
+                                                                className="mt-0.5 shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                                                                aria-label={`Chat options for ${conversation.title}`}
+                                                            >
+                                                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                                    <circle cx="6" cy="12" r="1.8" />
+                                                                    <circle cx="12" cy="12" r="1.8" />
+                                                                    <circle cx="18" cy="12" r="1.8" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                        {openConversationMenuId === conversation.id ? (
+                                                            <div className="absolute right-1 top-9 z-30 min-w-[132px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                                <button
+                                                                    onClick={() => handleRenameConversation(conversation.id)}
+                                                                    className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                                                >
+                                                                    Rename chat
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteConversation(conversation.id)}
+                                                                    className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
                                                 ))
                                             )}
                                         </div>

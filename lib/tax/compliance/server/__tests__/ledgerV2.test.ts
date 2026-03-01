@@ -121,12 +121,12 @@ describe("tax v2 ledger-first engine", () => {
     });
 
     const ledgerCount = await prisma.taxLedgerEntry.count({ where: { entityId: ENTITY_ID } });
-    expect(ledgerCount).toBe(3);
+    expect(ledgerCount).toBe(4);
 
     const dashboard = await taxScheduleRepo.getDashboard(ENTITY_ID);
     expect(dashboard.vatPayable).toBe(34875);
-    expect(dashboard.vatReceivable).toBe(8700);
-    expect(dashboard.netVatPosition).toBe(26175);
+    expect(dashboard.vatReceivable).toBe(12900);
+    expect(dashboard.netVatPosition).toBe(21975);
     expect(dashboard.whtPayable).toBe(5600);
 
     const vatSchedule = await prisma.taxSchedule.findFirst({
@@ -138,7 +138,7 @@ describe("tax v2 ledger-first engine", () => {
       orderBy: { updatedAt: "desc" },
     });
 
-    expect(vatSchedule?.totalTax).toBe(26175);
+    expect(vatSchedule?.totalTax).toBe(21975);
     expect(vatSchedule?.carryForward).toBe(0);
     expect(whtSchedule?.totalTax).toBe(5600);
   });
@@ -314,5 +314,114 @@ describe("tax v2 ledger-first engine", () => {
     const dashboard = await taxScheduleRepo.getDashboard(ENTITY_ID);
     expect(dashboard.vatPayable).toBe(0);
     expect(dashboard.whtPayable).toBe(0);
+  });
+
+  test("full sync prunes accounting transactions that no longer exist locally", async () => {
+    const journal = makeJournal({
+      id: "sync-prune-001",
+      date: "2026-02-24",
+      narration: "Sale for full-sync prune test",
+      transactionType: "sale",
+      totalDebits: 107500,
+      totalCredits: 107500,
+      lines: [
+        { accountCode: "1020", accountName: "Bank", debit: 107500, credit: 0 },
+        { accountCode: "4000", accountName: "Sales", debit: 0, credit: 100000 },
+        { accountCode: "2200", accountName: "Output VAT Payable", debit: 0, credit: 7500 },
+      ],
+      metadata: { taxMode: "exclusive", taxCategory: "revenue" },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const prune = await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [],
+      source: "live_posting",
+      fullSync: true,
+    });
+
+    expect(prune.upsertedTransactions).toBe(0);
+    expect(prune.prunedTransactions).toBe(1);
+    const ledgerCount = await prisma.taxLedgerEntry.count({ where: { entityId: ENTITY_ID } });
+    expect(ledgerCount).toBe(0);
+  });
+
+  test("category rules still apply when legacy metadata booleans are false without manual override", async () => {
+    const journal = makeJournal({
+      id: "legacy-bool-001",
+      date: "2026-02-25",
+      narration: "Paid office rent",
+      transactionType: "expense",
+      totalDebits: 1080000,
+      totalCredits: 1080000,
+      lines: [
+        { accountCode: "5600", accountName: "Rent Expense", debit: 1080000, credit: 0 },
+        { accountCode: "1020", accountName: "Bank", debit: 0, credit: 1080000 },
+      ],
+      metadata: {
+        taxCategory: "expense",
+        vatApplicable: false,
+        whtApplicable: false,
+      },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const vatInput = await prisma.taxLedgerEntry.findUnique({
+      where: { id: `tle-${ENTITY_ID}-${journal.id}-VAT-input` },
+    });
+    const whtPayable = await prisma.taxLedgerEntry.findUnique({
+      where: { id: `tle-${ENTITY_ID}-${journal.id}-WHT-payable` },
+    });
+
+    expect(vatInput).not.toBeNull();
+    expect(whtPayable).not.toBeNull();
+    expect(vatInput?.taxAmount || 0).toBeLessThan(0);
+    expect(whtPayable?.taxAmount || 0).toBeGreaterThan(0);
+  });
+
+  test("manual false override keeps VAT/WHT disabled", async () => {
+    const journal = makeJournal({
+      id: "manual-disable-001",
+      date: "2026-02-26",
+      narration: "Rent with manual tax disable",
+      transactionType: "expense",
+      totalDebits: 56000,
+      totalCredits: 56000,
+      lines: [
+        { accountCode: "5600", accountName: "Rent Expense", debit: 56000, credit: 0 },
+        { accountCode: "1020", accountName: "Bank", debit: 0, credit: 56000 },
+      ],
+      metadata: {
+        taxCategory: "rent",
+        vatApplicable: false,
+        vatApplicableManual: true,
+        whtApplicable: false,
+        whtApplicableManual: true,
+      },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const taxRows = await prisma.taxLedgerEntry.findMany({
+      where: {
+        entityId: ENTITY_ID,
+        transactionId: `tx-${ENTITY_ID}-${journal.id}`,
+      },
+    });
+    expect(taxRows.length).toBe(0);
   });
 });

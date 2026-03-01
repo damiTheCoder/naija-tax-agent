@@ -751,12 +751,22 @@ class AccountingEngine {
       postedAt: new Date().toISOString(),
       metadata: {
         taxMode: rawTx.taxMode || "category_default",
-        vatApplicable: outputVAT > 0 || rawTx.vatApplicable === true,
+        vatApplicable:
+          typeof rawTx.vatApplicable === "boolean"
+            ? rawTx.vatApplicable
+            : outputVAT > 0
+            ? true
+            : undefined,
+        vatApplicableManual: typeof rawTx.vatApplicable === "boolean" ? true : undefined,
         vatRate: rawTx.vatRate,
         vatCategory: rawTx.vatCategory || (outputVAT > 0 ? "output" : inputVAT > 0 ? "input" : undefined),
         vatOutputAmount: outputVAT > 0 ? outputVAT : undefined,
         vatInputAmount: inputVAT > 0 ? inputVAT : undefined,
-        whtApplicable: rawTx.whtApplicable === true,
+        whtApplicable:
+          typeof rawTx.whtApplicable === "boolean"
+            ? rawTx.whtApplicable
+            : undefined,
+        whtApplicableManual: typeof rawTx.whtApplicable === "boolean" ? true : undefined,
         whtRate: rawTx.whtRate,
         taxCategory: rawTx.taxCategory || rawTx.category,
       },
@@ -3197,11 +3207,21 @@ class AccountingEngine {
       metadata: {
         taxMode: rawTx.taxMode || "category_default",
         vatApplicable:
-          typeof rawTx.vatApplicable === "boolean" ? rawTx.vatApplicable : vatAmount > 0,
+          typeof rawTx.vatApplicable === "boolean"
+            ? rawTx.vatApplicable
+            : vatAmount > 0
+            ? true
+            : undefined,
+        vatApplicableManual: typeof rawTx.vatApplicable === "boolean" ? true : undefined,
         vatRate: rawTx.vatRate,
         vatCategory: rawTx.vatCategory,
         whtApplicable:
-          typeof rawTx.whtApplicable === "boolean" ? rawTx.whtApplicable : whtAmount > 0,
+          typeof rawTx.whtApplicable === "boolean"
+            ? rawTx.whtApplicable
+            : whtAmount > 0
+            ? true
+            : undefined,
+        whtApplicableManual: typeof rawTx.whtApplicable === "boolean" ? true : undefined,
         whtRate: rawTx.whtRate,
         taxCategory: rawTx.taxCategory || rawTx.category || transactionType,
       },

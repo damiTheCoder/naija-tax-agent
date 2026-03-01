@@ -44,6 +44,7 @@ export interface SyncJournalsRequest {
   entityId: string;
   journals: JournalSyncInput[];
   source?: "live_posting" | "backfill";
+  fullSync?: boolean;
 }
 
 export interface TaxDashboardResponseV2 {

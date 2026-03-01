@@ -13,12 +13,18 @@ const DEFAULT_V2_SETTINGS = (entityId: string): TaxEngineSettingsV2 => ({
     inventory: { vatApplicable: true, vatCategory: "input", whtApplicable: false },
     revenue: { vatApplicable: true, vatCategory: "output", whtApplicable: false },
     rent: { vatApplicable: true, vatCategory: "input", whtApplicable: true, whtRate: 0.1, defaultVatMode: "exclusive" },
+    professional: { vatApplicable: true, vatCategory: "input", whtApplicable: true, whtRate: 0.1, defaultVatMode: "exclusive" },
+    utilities: { vatApplicable: true, vatCategory: "input", whtApplicable: false, defaultVatMode: "exclusive" },
+    expense: { vatApplicable: true, vatCategory: "input", whtApplicable: false, defaultVatMode: "exclusive" },
     salary: { vatApplicable: false, whtApplicable: false },
   },
   defaultVatModeByCategory: {
     inventory: "exclusive",
     revenue: "exclusive",
     rent: "exclusive",
+    professional: "exclusive",
+    utilities: "exclusive",
+    expense: "exclusive",
   },
   updatedAt: new Date().toISOString(),
 });
@@ -167,4 +173,3 @@ export const saveTaxEngineSettingsV2 = async (
 
   return merged;
 };
-

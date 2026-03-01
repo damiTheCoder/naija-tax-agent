@@ -166,8 +166,9 @@ function normalizeConversation(value: ChatConversation): ChatConversation {
     .sort((a, b) => a.timestamp - b.timestamp)
     .slice(-MAX_MESSAGES_PER_CONVERSATION);
 
-  const firstUser = normalizedMessages.find((msg) => msg.role === "user")?.content || value.title;
-  const title = toTitle(sanitizePrompt(firstUser || value.title));
+  const firstUser = normalizedMessages.find((msg) => msg.role === "user")?.content || "";
+  const explicitTitle = sanitizePrompt(value.title || "");
+  const title = toTitle(explicitTitle || sanitizePrompt(firstUser) || "Untitled chat");
   const lastMessage = normalizedMessages[normalizedMessages.length - 1]?.content || title;
   const preview = (lastMessage || title).slice(0, 120);
 
@@ -356,7 +357,15 @@ export function saveChatConversationMessages(params: {
     .slice(-MAX_MESSAGES_PER_CONVERSATION);
 
   const firstUser = normalizedMessages.find((msg) => msg.role === "user")?.content;
-  const derivedTitle = sanitizePrompt(params.title || firstUser || existing.title || "") || "New chat";
+  const explicitTitle = sanitizePrompt(params.title || "");
+  const shouldRefreshAutoTitle =
+    existing.messages.length === 0 ||
+    existing.title === "New chat" ||
+    existing.title === "Untitled chat";
+  const derivedTitle =
+    explicitTitle ||
+    (shouldRefreshAutoTitle ? sanitizePrompt(firstUser || existing.title || "") : sanitizePrompt(existing.title || "")) ||
+    "New chat";
   const latestContent = normalizedMessages[normalizedMessages.length - 1]?.content || existing.preview || derivedTitle;
 
   const updated: ChatConversation = normalizeConversation({
@@ -373,6 +382,46 @@ export function saveChatConversationMessages(params: {
   next.splice(index, 1);
   saveChatConversationsInternal([updated, ...next]);
   return updated;
+}
+
+export function renameChatConversation(params: {
+  conversationId: string;
+  title: string;
+}): ChatConversation | null {
+  if (typeof window === "undefined") return null;
+  const nextTitle = sanitizePrompt(params.title || "");
+  if (!nextTitle) return null;
+
+  const conversations = loadChatConversations();
+  const index = conversations.findIndex((item) => item.id === params.conversationId);
+  if (index < 0) return null;
+
+  const existing = conversations[index];
+  const updated = normalizeConversation({
+    ...existing,
+    title: toTitle(nextTitle),
+    preview: existing.preview || nextTitle,
+    updatedAt: Date.now(),
+  });
+
+  const next = [...conversations];
+  next.splice(index, 1);
+  saveChatConversationsInternal([updated, ...next]);
+  return updated;
+}
+
+export function deleteChatConversation(conversationId: string): boolean {
+  if (typeof window === "undefined") return false;
+  const conversations = loadChatConversations();
+  const next = conversations.filter((item) => item.id !== conversationId);
+  if (next.length === conversations.length) return false;
+
+  saveChatConversationsInternal(next);
+  const selected = getSelectedChatHistory();
+  if (selected?.conversationId === conversationId) {
+    clearSelectedChatHistory();
+  }
+  return true;
 }
 
 export function loadChatHistory(): ChatHistoryEntry[] {

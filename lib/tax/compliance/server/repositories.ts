@@ -52,6 +52,75 @@ const hasExpenseDebit = (lines: JournalSyncInput["lines"]) =>
       (line.debit || 0) > 0
   );
 
+const hasAnyAccountCode = (lines: JournalSyncInput["lines"], codes: string[]) => {
+  const set = new Set(codes);
+  return lines.some((line) => set.has((line.accountCode || "").trim()));
+};
+
+const genericCategories = new Set([
+  "general",
+  "other",
+  "expense",
+  "payment",
+  "receipt",
+  "purchase",
+  "sale",
+  "income",
+  "transaction",
+]);
+
+const inferCategoryFromJournal = (journal: JournalSyncInput): string => {
+  const narration = lower(journal.narration);
+  const transactionType = lower(journal.transactionType);
+
+  if (
+    hasAnyAccountCode(journal.lines, ["5600", "1310"]) ||
+    /\b(?:rent|lease)\b/.test(narration)
+  ) {
+    return "rent";
+  }
+
+  if (
+    hasAnyAccountCode(journal.lines, ["5500", "5510", "5520", "2110", "2210"]) ||
+    /\bsalary|salaries|wages|payroll|staff\b/.test(narration)
+  ) {
+    return "salary";
+  }
+
+  if (
+    hasAnyAccountCode(journal.lines, ["5900", "5910", "5920"]) ||
+    /\b(?:professional|audit|legal|consult(?:ant|ing))\b/.test(narration)
+  ) {
+    return "professional";
+  }
+
+  if (
+    hasAnyAccountCode(journal.lines, ["1200", "1210", "1220", "1230", "5010", "5820"]) ||
+    /\binventory|stock|office supplies|supplies|materials|purchase\b/.test(narration)
+  ) {
+    return "inventory";
+  }
+
+  if (
+    hasAnyAccountCode(journal.lines, ["5610", "5620", "6030"]) ||
+    /\b(?:utility|utilities|internet|telephone|power|electricity|water|bank charge)\b/.test(
+      narration
+    )
+  ) {
+    return "utilities";
+  }
+
+  if (hasRevenueCredit(journal.lines) || /\brevenue|sale|sales|income\b/.test(narration)) {
+    return "revenue";
+  }
+
+  if (hasExpenseDebit(journal.lines) || transactionType === "expense" || transactionType === "purchase") {
+    return "expense";
+  }
+
+  return "general";
+};
+
 export const computeVatFromMode = (
   grossOrBase: number,
   vatRate: number,
@@ -90,12 +159,15 @@ const aggregateTaxLines = (lines: JournalSyncInput["lines"]) => {
 
 const resolveCategory = (journal: JournalSyncInput, metadata: Record<string, unknown>) => {
   const fromMeta = lower(metadata.taxCategory || metadata.category);
-  if (fromMeta) return fromMeta;
+  const inferred = inferCategoryFromJournal(journal);
+  if (fromMeta) {
+    if (!genericCategories.has(fromMeta)) return fromMeta;
+    if (inferred && inferred !== "general") return inferred;
+    return fromMeta;
+  }
   const fromType = lower(journal.transactionType);
-  if (fromType) return fromType;
-  if (hasRevenueCredit(journal.lines)) return "revenue";
-  if (hasExpenseDebit(journal.lines)) return "expense";
-  return "general";
+  if (fromType && !genericCategories.has(fromType)) return fromType;
+  return inferred;
 };
 
 const resolveVatMode = (
@@ -269,6 +341,126 @@ const upsertSchedule = async (params: {
   });
 };
 
+const collectImpactedScheduleKeys = async (params: {
+  entityId: string;
+  transactionId: string;
+}): Promise<Set<string>> => {
+  const existingLedgerEntries = await prisma.taxLedgerEntry.findMany({
+    where: { entityId: params.entityId, transactionId: params.transactionId },
+    include: { period: true },
+  });
+  const impactedScheduleKeys = new Set<string>();
+  existingLedgerEntries.forEach((entry) => {
+    const taxType = entry.taxType as TaxType;
+    if ((taxType === "VAT" || taxType === "WHT") && entry.period?.period) {
+      impactedScheduleKeys.add(`${taxType}::${entry.period.period}`);
+    }
+  });
+  return impactedScheduleKeys;
+};
+
+const extractJournalIdFromTransaction = (
+  entityId: string,
+  transaction: { id: string; metadata: string | null }
+): string | null => {
+  const metadata = safeJsonParse<Record<string, unknown>>(transaction.metadata, {});
+  const fromMeta = metadata.journalId;
+  if (typeof fromMeta === "string" && fromMeta.trim()) return fromMeta.trim();
+
+  const canonicalPrefix = `tx-${entityId}-`;
+  if (transaction.id.startsWith(canonicalPrefix)) {
+    const suffix = transaction.id.slice(canonicalPrefix.length).trim();
+    return suffix || null;
+  }
+
+  return null;
+};
+
+const voidTaxForTransaction = async (params: {
+  entityId: string;
+  transactionId: string;
+  source: "live_posting" | "backfill";
+  journalId?: string;
+}) => {
+  const { entityId, transactionId, source } = params;
+  const existingTx = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+    select: { id: true, entityId: true, metadata: true },
+  });
+  if (!existingTx || existingTx.entityId !== entityId) {
+    return {
+      transactionId,
+      periodKeys: [] as string[],
+      skipped: true,
+    };
+  }
+
+  const journalId =
+    params.journalId || extractJournalIdFromTransaction(entityId, existingTx) || transactionId;
+  const impactedScheduleKeys = await collectImpactedScheduleKeys({ entityId, transactionId });
+
+  await prisma.taxLedgerEntry.deleteMany({
+    where: { entityId, transactionId },
+  });
+  await prisma.taxClassification.deleteMany({
+    where: {
+      entityId,
+      transactionId,
+      OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+    },
+  });
+
+  const now = new Date();
+  const existingMetadata = safeJsonParse<Record<string, unknown>>(existingTx.metadata, {});
+  await prisma.transaction.update({
+    where: { id: transactionId },
+    data: {
+      status: "voided",
+      metadata: safeJsonStringify({
+        ...existingMetadata,
+        source,
+        journalId,
+        voidedAt: now.toISOString(),
+      }),
+      updatedAt: now,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      entityId,
+      actor: "system",
+      action: "tax.v2.void_journal",
+      resourceType: "transaction",
+      resourceId: transactionId,
+      metadata: safeJsonStringify({
+        journalId,
+        source,
+      }),
+    },
+  });
+
+  return {
+    transactionId,
+    periodKeys: Array.from(impactedScheduleKeys),
+    skipped: false,
+  };
+};
+
+const voidTaxForJournal = async (params: {
+  entityId: string;
+  journalId: string;
+  source: "live_posting" | "backfill";
+}) => {
+  const txId = `tx-${params.entityId}-${params.journalId}`;
+  return voidTaxForTransaction({
+    entityId: params.entityId,
+    transactionId: txId,
+    source: params.source,
+    journalId: params.journalId,
+  });
+};
+
 const writeTaxForJournal = async (params: {
   entityId: string;
   ruleSetId: string;
@@ -295,20 +487,28 @@ const writeTaxForJournal = async (params: {
 
   const vatApplicableMeta = metadata.vatApplicable;
   const whtApplicableMeta = metadata.whtApplicable;
+  const vatApplicableManual = metadata.vatApplicableManual === true;
+  const whtApplicableManual = metadata.whtApplicableManual === true;
   const vatApplicableRule = settings.categoryTaxMatrix[category]?.vatApplicable;
   const whtApplicableRule = settings.categoryTaxMatrix[category]?.whtApplicable;
+  const hasExplicitVatPosting = amounts.vatInput > 0 || amounts.vatOutput > 0;
+  const hasExplicitWhtPosting = amounts.whtPayable > 0 || amounts.whtReceivable > 0;
   const vatApplicable =
-    typeof vatApplicableMeta === "boolean"
+    hasExplicitVatPosting
+      ? true
+      : vatApplicableManual && typeof vatApplicableMeta === "boolean"
       ? vatApplicableMeta
       : typeof vatApplicableRule === "boolean"
       ? vatApplicableRule
-      : amounts.vatInput > 0 || amounts.vatOutput > 0;
+      : vatApplicableMeta === true;
   const whtApplicable =
-    typeof whtApplicableMeta === "boolean"
+    hasExplicitWhtPosting
+      ? true
+      : whtApplicableManual && typeof whtApplicableMeta === "boolean"
       ? whtApplicableMeta
       : typeof whtApplicableRule === "boolean"
       ? whtApplicableRule
-      : amounts.whtPayable > 0 || amounts.whtReceivable > 0;
+      : whtApplicableMeta === true;
 
   const baseForComputation = hasRevenue ? revenueBase || grossAmount : expenseBase || grossAmount;
   const computedVat = computeVatFromMode(baseForComputation, vatRate, vatMode);
@@ -326,7 +526,6 @@ const writeTaxForJournal = async (params: {
       ? computedVat.vatAmount
       : 0;
 
-  const hasExplicitVatPosting = amounts.vatInput > 0 || amounts.vatOutput > 0;
   const baseFromEconomicLines = hasExpense ? expenseBase : revenueBase;
   const whtBase = round2(
     hasExplicitVatPosting
@@ -363,21 +562,34 @@ const writeTaxForJournal = async (params: {
 
   const txId = `tx-${entityId}-${journal.id}`;
   const now = new Date();
-  const impactedScheduleKeys = new Set<string>();
-  const existingLedgerEntries = await prisma.taxLedgerEntry.findMany({
+  const impactedScheduleKeys = await collectImpactedScheduleKeys({
+    entityId,
+    transactionId: txId,
+  });
+
+  // Clean up any stale non-canonical transactions that map to this same journal.
+  const possibleDuplicates = await prisma.transaction.findMany({
     where: {
       entityId,
-      transactionId: txId,
-      OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+      id: { not: txId },
+      OR: [{ source: "accounting" }, { source: "import" }],
     },
-    include: { period: true },
+    select: {
+      id: true,
+      metadata: true,
+    },
   });
-  existingLedgerEntries.forEach((entry) => {
-    const taxType = entry.taxType as TaxType;
-    if ((taxType === "VAT" || taxType === "WHT") && entry.period?.period) {
-      impactedScheduleKeys.add(`${taxType}::${entry.period.period}`);
-    }
-  });
+  for (const candidate of possibleDuplicates) {
+    const candidateJournalId = extractJournalIdFromTransaction(entityId, candidate);
+    if (candidateJournalId !== journal.id) continue;
+    const duplicateCleanup = await voidTaxForTransaction({
+      entityId,
+      transactionId: candidate.id,
+      source,
+      journalId: journal.id,
+    });
+    duplicateCleanup.periodKeys.forEach((key) => impactedScheduleKeys.add(key));
+  }
 
   await prisma.transaction.upsert({
     where: { id: txId },
@@ -787,78 +999,10 @@ const writeTaxForJournal = async (params: {
   };
 };
 
-const voidTaxForJournal = async (params: {
-  entityId: string;
-  journalId: string;
-  source: "live_posting" | "backfill";
-}) => {
-  const { entityId, journalId, source } = params;
-  const txId = `tx-${entityId}-${journalId}`;
-  const existingLedgerEntries = await prisma.taxLedgerEntry.findMany({
-    where: { entityId, transactionId: txId },
-    include: { period: true },
-  });
-  const impactedScheduleKeys = new Set<string>();
-  existingLedgerEntries.forEach((entry) => {
-    const taxType = entry.taxType as TaxType;
-    if ((taxType === "VAT" || taxType === "WHT") && entry.period?.period) {
-      impactedScheduleKeys.add(`${taxType}::${entry.period.period}`);
-    }
-  });
-
-  await prisma.taxLedgerEntry.deleteMany({
-    where: { entityId, transactionId: txId },
-  });
-  await prisma.taxClassification.deleteMany({
-    where: {
-      entityId,
-      transactionId: txId,
-      OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
-    },
-  });
-
-  const now = new Date();
-  const existingTx = await prisma.transaction.findUnique({ where: { id: txId } });
-  const existingMetadata = safeJsonParse<Record<string, unknown>>(
-    (existingTx?.metadata as string | null) || null,
-    {}
-  );
-  await prisma.transaction.updateMany({
-    where: { id: txId, entityId },
-    data: {
-      status: "voided",
-      metadata: safeJsonStringify({
-        ...existingMetadata,
-        source,
-        voidedAt: now.toISOString(),
-      }),
-      updatedAt: now,
-    },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      entityId,
-      actor: "system",
-      action: "tax.v2.void_journal",
-      resourceType: "transaction",
-      resourceId: txId,
-      metadata: safeJsonStringify({
-        journalId,
-        source,
-      }),
-    },
-  });
-
-  return {
-    transactionId: txId,
-    periodKeys: Array.from(impactedScheduleKeys),
-  };
-};
-
 export interface TaxTransactionRepo {
   upsertJournalTransactions(req: SyncJournalsRequest): Promise<{
     upsertedTransactions: number;
+    prunedTransactions: number;
     impactedPeriods: string[];
   }>;
 }
@@ -1066,33 +1210,67 @@ export const taxTransactionRepo: TaxTransactionRepo = {
     const entityId = req.entityId || "entity-default";
     const settings = await taxSettingsRepo.load(entityId);
     const { ruleSetId } = await ensureEntityAndRuleSet(entityId);
+    const source = req.source || "live_posting";
+    const journals = req.journals || [];
+    const incomingJournalIds = new Set(journals.map((journal) => journal.id));
     const impactedPeriods = new Set<string>();
     let upsertedTransactions = 0;
+    let prunedTransactions = 0;
 
-    for (const journal of req.journals || []) {
+    for (const journal of journals) {
       const status = lower(journal.status);
       const result =
         status === "voided"
           ? await voidTaxForJournal({
               entityId,
               journalId: journal.id,
-              source: req.source || "live_posting",
+              source,
             })
           : await writeTaxForJournal({
               entityId,
               ruleSetId,
               journal,
               settings,
-              source: req.source || "live_posting",
+              source,
             });
       upsertedTransactions += 1;
       result.periodKeys.forEach((key) => impactedPeriods.add(key));
+    }
+
+    if (req.fullSync) {
+      const existingAccountingTransactions = await prisma.transaction.findMany({
+        where: {
+          entityId,
+          status: { not: "voided" },
+          OR: [{ source: "accounting" }, { source: "import" }],
+        },
+        select: {
+          id: true,
+          metadata: true,
+        },
+      });
+
+      for (const transaction of existingAccountingTransactions) {
+        const journalId = extractJournalIdFromTransaction(entityId, transaction);
+        if (!journalId || incomingJournalIds.has(journalId)) continue;
+
+        const removal = await voidTaxForTransaction({
+          entityId,
+          transactionId: transaction.id,
+          source,
+          journalId,
+        });
+        if (removal.skipped) continue;
+        prunedTransactions += 1;
+        removal.periodKeys.forEach((key) => impactedPeriods.add(key));
+      }
     }
 
     await taxScheduleRepo.recomputeSchedules(entityId, Array.from(impactedPeriods), settings);
 
     return {
       upsertedTransactions,
+      prunedTransactions,
       impactedPeriods: Array.from(impactedPeriods).sort(),
     };
   },

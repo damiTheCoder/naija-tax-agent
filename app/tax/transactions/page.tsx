@@ -256,7 +256,9 @@ export default function TaxTransactionsPage() {
             metadata: {
               ...((entry.metadata || {}) as Record<string, unknown>),
               ...(typeof override.vatApplicable === "boolean" ? { vatApplicable: override.vatApplicable } : {}),
+              ...(typeof override.vatApplicable === "boolean" ? { vatApplicableManual: true } : {}),
               ...(typeof override.whtApplicable === "boolean" ? { whtApplicable: override.whtApplicable } : {}),
+              ...(typeof override.whtApplicable === "boolean" ? { whtApplicableManual: true } : {}),
               ...(override.taxMode ? { taxMode: override.taxMode } : {}),
               ...(override.taxCategory ? { taxCategory: override.taxCategory } : {}),
             },

@@ -3,8 +3,10 @@ import {
   clearSelectedChatHistory,
   consumeSelectedChatHistory,
   createChatConversation,
+  deleteChatConversation,
   getSelectedChatHistory,
   loadChatConversations,
+  renameChatConversation,
   saveChatConversationMessages,
   selectChatConversation,
   type ChatConversationMessage,
@@ -151,6 +153,37 @@ describe("personal chat history routing + restore", () => {
     // Matching route consumes and clears selection.
     const matched = consumeSelectedChatHistory({ pathname: "/tax/workspace" });
     expect(matched?.conversationId).toBe(conversation.id);
+    expect(getSelectedChatHistory()).toBeNull();
+  });
+
+  test("can rename and delete a conversation", () => {
+    const conversation = createChatConversation({
+      module: "accounting",
+      route: "/accounting",
+      title: "Original title",
+    });
+    saveChatConversationMessages({
+      conversationId: conversation.id,
+      module: "accounting",
+      route: "/accounting",
+      messages: makeMessages("rename"),
+    });
+
+    const renamed = renameChatConversation({
+      conversationId: conversation.id,
+      title: "Renamed chat title",
+    });
+    expect(renamed?.title).toContain("Renamed chat title");
+
+    const afterRename = loadChatConversations();
+    expect(afterRename.find((item) => item.id === conversation.id)?.title).toContain("Renamed chat title");
+
+    selectChatConversation(conversation.id);
+    expect(getSelectedChatHistory()?.conversationId).toBe(conversation.id);
+
+    const deleted = deleteChatConversation(conversation.id);
+    expect(deleted).toBe(true);
+    expect(loadChatConversations().find((item) => item.id === conversation.id)).toBeUndefined();
     expect(getSelectedChatHistory()).toBeNull();
   });
 });

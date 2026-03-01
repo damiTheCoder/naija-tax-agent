@@ -376,7 +376,6 @@ export default function TaxWorkspacePage() {
     const journals = dedupeJournalEntries(accountingEngine.getState().journalEntries).filter(
       (entry) => entry.status === "posted" || entry.status === "voided"
     );
-    if (journals.length === 0) return;
 
     const response = await fetch("/api/tax/sync-journals", {
       method: "POST",
@@ -384,6 +383,7 @@ export default function TaxWorkspacePage() {
       body: JSON.stringify({
         entityId: "entity-default",
         source: "live_posting",
+        fullSync: true,
         journals,
       }),
     });

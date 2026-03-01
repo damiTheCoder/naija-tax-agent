@@ -9,6 +9,7 @@ type SyncRequestBody = {
   journals?: JournalEntry[];
   journalEntries?: JournalEntry[];
   source?: "live_posting" | "backfill";
+  fullSync?: boolean;
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -21,11 +22,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? body.journalEntries
       : [];
 
-    if (journals.length === 0) {
+    const fullSync = body.fullSync === true;
+
+    if (journals.length === 0 && !fullSync) {
       return NextResponse.json(
         {
           success: false,
-          error: "No journals provided",
+          error: "No journals provided (set fullSync=true to reconcile with an empty journal set)",
         },
         { status: 400 }
       );
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })),
       source: body.source || "live_posting",
+      fullSync,
     });
 
     return NextResponse.json({
