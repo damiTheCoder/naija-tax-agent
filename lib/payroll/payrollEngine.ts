@@ -2,6 +2,7 @@
 import { accountingEngine } from "../accounting/transactionBridge";
 import { calculateMonthlyPayroll, PayrollResult } from "./calculator";
 import { generateJournalId } from "../accounting/doubleEntry";
+import type { EmployeeRecord } from "./types";
 
 export interface PayrollRun {
     id: string;
@@ -60,7 +61,7 @@ class PayrollEngine {
         return this.runs;
     }
 
-    createRun(month: string, year: number, employees: any[]): PayrollRun {
+    createRun(month: string, year: number, employees: EmployeeRecord[]): PayrollRun {
         const id = `run-${month.toLowerCase()}-${year}-${Date.now().toString().slice(-4)}`;
 
         const employeeResults: Record<string, PayrollResult> = {};
@@ -73,8 +74,8 @@ class PayrollEngine {
         employees.forEach(emp => {
             const result = calculateMonthlyPayroll({
                 basicSalary: emp.basicSalary,
-                housing: emp.housingAllowance || emp.housing || 0,
-                transport: emp.transportAllowance || emp.transport || 0,
+                housing: emp.housing || 0,
+                transport: emp.transport || 0,
                 otherAllowances: emp.otherAllowances || 0
             });
             employeeResults[emp.id] = result;

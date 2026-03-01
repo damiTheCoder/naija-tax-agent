@@ -3,6 +3,8 @@
  * Core TypeScript interfaces for tax calculation
  */
 
+import type { ReconciliationRow } from "./taxRules/rulebook";
+
 export type TaxpayerType = "freelancer" | "company";
 
 export interface UserProfile {
@@ -90,7 +92,7 @@ export interface TaxResult {
     statutoryReferences: StatutoryReference[];
     calculationTrace: CalculationTraceEntry[];
     taxRuleMetadata: TaxRuleMetadata;
-    reconciliationReport?: any[]; // Using any[] temporarily, will use ReconciliationRow from rulebook.ts
+    reconciliationReport?: ReconciliationRow[];
 }
 
 // API request/response types

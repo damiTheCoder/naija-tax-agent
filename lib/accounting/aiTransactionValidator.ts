@@ -441,7 +441,21 @@ Validate this interpretation and correct any errors. Respond with JSON only.`;
                 jsonStr = jsonStr.replace(/^```\n?/, '').replace(/\n?```$/, '');
             }
 
-            let parsed: Record<string, any>;
+            type ValidationCorrection = {
+                field?: string;
+                correctedTo?: unknown;
+            };
+
+            type ParsedValidationPayload = {
+                validated?: boolean;
+                corrected?: boolean;
+                confidence?: number;
+                reasoning?: string;
+                corrections?: ValidationCorrection[];
+                finalInterpretation?: Partial<SystemInterpretation>;
+            };
+
+            let parsed: ParsedValidationPayload;
             try {
                 parsed = JSON.parse(jsonStr);
             } catch {
@@ -468,7 +482,14 @@ Validate this interpretation and correct any errors. Respond with JSON only.`;
 
             // CRITICAL: Apply corrections from the corrections array
             // This ensures AI corrections are actually used even if finalInterpretation is incomplete
-            const corrections = parsed.corrections || [];
+            const corrections: AIValidationResult["corrections"] = (parsed.corrections || []).map(
+                (correction) => ({
+                    field: String(correction.field || ""),
+                    was: null,
+                    correctedTo: correction.correctedTo,
+                    reason: "AI correction",
+                })
+            );
             for (const correction of corrections) {
                 const field = correction.field?.toLowerCase() || '';
                 const correctedTo = correction.correctedTo;

@@ -439,6 +439,23 @@ const writeTaxForJournal = async (params: {
     },
   });
 
+  // Canonical rewrite: remove any prior VAT/WHT rows for this transaction
+  // (including legacy IDs), then recreate current authoritative lines below.
+  await prisma.taxLedgerEntry.deleteMany({
+    where: {
+      entityId,
+      transactionId: txId,
+      OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+    },
+  });
+  await prisma.taxClassification.deleteMany({
+    where: {
+      entityId,
+      transactionId: txId,
+      OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+    },
+  });
+
   if (vatOutputAmount > 0 || vatInputAmount > 0) {
     const vatPeriodConfig = computePeriodBounds(txDate, settings.filingCadence.vat);
     const vatPeriodId = await ensurePeriod(

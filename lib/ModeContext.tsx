@@ -14,21 +14,20 @@ interface ModeContextValue {
 const ModeContext = createContext<ModeContextValue | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ExperienceMode>("enterprise");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
+  const [mode, setMode] = useState<ExperienceMode>(() => {
+    if (typeof window === "undefined") return "enterprise";
     const stored = localStorage.getItem("quantum-ledger-mode") as ExperienceMode | null;
     if (stored === "user" || stored === "enterprise") {
-      setMode(stored);
+      return stored;
     }
-    setMounted(true);
-  }, []);
+    return "enterprise";
+  });
+  const mounted = true;
 
   useEffect(() => {
-    if (!mounted) return;
+    if (typeof window === "undefined") return;
     localStorage.setItem("quantum-ledger-mode", mode);
-  }, [mode, mounted]);
+  }, [mode]);
 
   const toggleMode = () => {
     setMode((prev) => (prev === "enterprise" ? "user" : "enterprise"));

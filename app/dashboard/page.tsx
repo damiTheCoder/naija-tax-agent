@@ -59,8 +59,6 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
     );
   }
 
-  let currentAngle = 0;
-
   const createArcPath = (startAngle: number, endAngle: number, radius: number) => {
     const start = {
       x: radius + radius * Math.cos((startAngle * Math.PI) / 180),
@@ -74,22 +72,37 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
     return `M ${radius} ${radius} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
   };
 
+  const segments = data.reduce(
+    (acc, item, index) => {
+      const angle = (item.value / total) * 360;
+      const startAngle = acc.currentAngle;
+      const endAngle = startAngle + angle;
+      return {
+        currentAngle: endAngle,
+        segments: [
+          ...acc.segments,
+          {
+            key: index,
+            path: createArcPath(startAngle - 90, endAngle - 90, size / 2),
+            color: item.color,
+          },
+        ],
+      };
+    },
+    { currentAngle: 0, segments: [] as Array<{ key: number; path: string; color: string }> }
+  ).segments;
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {data.map((item, index) => {
-          const angle = (item.value / total) * 360;
-          const path = createArcPath(currentAngle - 90, currentAngle + angle - 90, size / 2);
-          currentAngle += angle;
-          return (
-            <path
-              key={index}
-              d={path}
-              fill={item.color}
-              className="transition-all duration-300 hover:opacity-80"
-            />
-          );
-        })}
+        {segments.map((segment) => (
+          <path
+            key={segment.key}
+            d={segment.path}
+            fill={segment.color}
+            className="transition-all duration-300 hover:opacity-80"
+          />
+        ))}
         <circle cx={size / 2} cy={size / 2} r={size / 3.5} fill="white" />
       </svg>
     </div>
@@ -174,7 +187,7 @@ function EmptyState() {
 }
 
 export default function DashboardPage() {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded] = useState(true);
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [engineStatements, setEngineStatements] = useState<StatementDraft | null>(null);
   const [journalCount, setJournalCount] = useState(0);
@@ -283,62 +296,53 @@ export default function DashboardPage() {
 
   // Load transactions from localStorage and subscribe to accounting engine
   useEffect(() => {
-    setIsLoaded(true);
-    if (typeof window !== "undefined") {
-      // Load accounting engine (source of truth for journal entries)
+    if (typeof window === "undefined") return;
+
+    const hydrateFromEngine = () => {
       accountingEngine.load();
       const state = accountingEngine.getState();
       setEngineStatements(accountingEngine.generateStatements());
       setJournalCount(state.journalEntries.length);
 
-      // Always derive transactions from journal entries (source of truth)
       if (state.journalEntries.length > 0) {
         const derived = deriveTransactionsFromJournals(state.journalEntries);
         setTransactions(derived);
-      } else {
-        // Fallback to localStorage only if no journal entries exist
-        const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
-        if (savedTransactions) {
-          try {
-            const parsed = JSON.parse(savedTransactions);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setTransactions(parsed);
-            }
-          } catch {
-            // ignore malformed cache
-          }
-        }
+        return;
       }
 
-      // Subscribe to accounting engine updates
-      const unsubscribe = accountingEngine.subscribe((newState) => {
-        setEngineStatements(accountingEngine.generateStatements());
-        setJournalCount(newState.journalEntries.length);
-
-        // Always re-derive transactions when engine updates
-        const derived = deriveTransactionsFromJournals(newState.journalEntries);
-        setTransactions(derived);
-      });
-
-      // Also listen for accounting engine localStorage changes from other tabs
-      const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === "insight::accounting-engine" && e.newValue) {
-          // Reload the engine and re-derive transactions
-          accountingEngine.load();
-          const freshState = accountingEngine.getState();
-          setEngineStatements(accountingEngine.generateStatements());
-          setJournalCount(freshState.journalEntries.length);
-          const derived = deriveTransactionsFromJournals(freshState.journalEntries);
-          setTransactions(derived);
+      const savedTransactions = window.localStorage.getItem("insight::accounting-transactions");
+      if (!savedTransactions) return;
+      try {
+        const parsed = JSON.parse(savedTransactions) as unknown;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTransactions(parsed as RawTransaction[]);
         }
-      };
-      window.addEventListener("storage", handleStorageChange);
+      } catch {
+        // ignore malformed cache
+      }
+    };
 
-      return () => {
-        unsubscribe();
-        window.removeEventListener("storage", handleStorageChange);
-      };
-    }
+    const initFrame = window.requestAnimationFrame(hydrateFromEngine);
+
+    const unsubscribe = accountingEngine.subscribe((newState) => {
+      setEngineStatements(accountingEngine.generateStatements());
+      setJournalCount(newState.journalEntries.length);
+      const derived = deriveTransactionsFromJournals(newState.journalEntries);
+      setTransactions(derived);
+    });
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "insight::accounting-engine" && e.newValue) {
+        hydrateFromEngine();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.cancelAnimationFrame(initFrame);
+      unsubscribe();
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
   // Calculate metrics from transactions (prefer engine statements if available)

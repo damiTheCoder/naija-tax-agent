@@ -1,7 +1,8 @@
 import {
     loadRuleBook,
     evaluateFormula,
-    ReconciliationRow
+    ReconciliationRow,
+    Jurisdiction,
 } from "./rulebook";
 
 /**
@@ -42,7 +43,7 @@ export interface StampDutyResult {
  */
 export function calculateStampDuty(input: StampDutyInput): StampDutyResult {
     const year = (input.taxYear || 2024).toString();
-    const jurisdiction = (input.jurisdiction || "Federal") as any;
+    const jurisdiction = (input.jurisdiction || "Federal") as Jurisdiction;
     const rulebook = loadRuleBook(year, jurisdiction);
     const reconciliationReport: ReconciliationRow[] = [];
 

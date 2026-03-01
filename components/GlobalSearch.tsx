@@ -16,6 +16,22 @@ interface SearchResult {
     path: string;
 }
 
+type StoredJournalEntry = {
+    id?: string;
+    description?: string;
+    narration?: string;
+    date?: string;
+    entries?: Array<{ amount?: number }>;
+};
+
+type StoredInvoice = {
+    id?: string;
+    customerName?: string;
+    invoiceNumber?: string;
+    total?: number;
+    date?: string;
+};
+
 export default function GlobalSearch() {
     const { theme } = useTheme();
     const router = useRouter();
@@ -50,11 +66,11 @@ export default function GlobalSearch() {
     // Simulate search (in a real app, this would query your backend/localStorage)
     useEffect(() => {
         if (!query.trim()) {
-            setResults([]);
-            return;
+            const idleTimer = window.setTimeout(() => setIsSearching(false), 0);
+            return () => window.clearTimeout(idleTimer);
         }
 
-        setIsSearching(true);
+        const startTimer = window.setTimeout(() => setIsSearching(true), 0);
         const timer = setTimeout(() => {
             // Simulated search results
             const mockResults: SearchResult[] = [];
@@ -64,19 +80,23 @@ export default function GlobalSearch() {
             try {
                 const txData = localStorage.getItem("insight::journal_entries");
                 if (txData) {
-                    const entries = JSON.parse(txData);
-                    entries.forEach((entry: any) => {
+                    const parsed = JSON.parse(txData) as unknown;
+                    const entries = Array.isArray(parsed) ? (parsed as StoredJournalEntry[]) : [];
+                    entries.forEach((entry) => {
+                        const title = entry.description || entry.narration || "Transaction";
+                        const description = `${entry.date || "N/A"} • ${entry.entries?.length || 0} entries`;
+                        const amount = typeof entry.entries?.[0]?.amount === "number" ? entry.entries[0].amount : undefined;
                         if (
                             entry.description?.toLowerCase().includes(lowerQuery) ||
                             entry.narration?.toLowerCase().includes(lowerQuery)
                         ) {
                             mockResults.push({
-                                id: entry.id,
+                                id: entry.id || `tx-${Math.random().toString(36).slice(2, 8)}`,
                                 type: "transaction",
-                                title: entry.description || entry.narration || "Transaction",
-                                description: `${entry.date} • ${entry.entries?.length || 0} entries`,
+                                title,
+                                description,
                                 date: entry.date,
-                                amount: entry.entries?.[0]?.amount,
+                                amount,
                                 path: "/accounting",
                             });
                         }
@@ -88,14 +108,15 @@ export default function GlobalSearch() {
             try {
                 const invoiceData = localStorage.getItem("insight::invoices");
                 if (invoiceData) {
-                    const invoices = JSON.parse(invoiceData);
-                    invoices.forEach((inv: any) => {
+                    const parsed = JSON.parse(invoiceData) as unknown;
+                    const invoices = Array.isArray(parsed) ? (parsed as StoredInvoice[]) : [];
+                    invoices.forEach((inv) => {
                         if (
                             inv.customerName?.toLowerCase().includes(lowerQuery) ||
                             inv.invoiceNumber?.toLowerCase().includes(lowerQuery)
                         ) {
                             mockResults.push({
-                                id: inv.id,
+                                id: inv.id || `inv-${Math.random().toString(36).slice(2, 8)}`,
                                 type: "transaction",
                                 title: `Invoice ${inv.invoiceNumber}`,
                                 description: `${inv.customerName} • ₦${inv.total?.toLocaleString()}`,
@@ -144,15 +165,23 @@ export default function GlobalSearch() {
             }
 
             // Filter by category
+            const resultTypeByCategory: Record<Exclude<SearchCategory, "all">, SearchResult["type"]> = {
+                transactions: "transaction",
+                ledgers: "ledger",
+                statements: "statement",
+            };
             const filtered = category === "all"
                 ? mockResults
-                : mockResults.filter(r => r.type === category.slice(0, -1) as any);
+                : mockResults.filter((r) => r.type === resultTypeByCategory[category]);
 
             setResults(filtered.slice(0, 6));
             setIsSearching(false);
         }, 300);
 
-        return () => clearTimeout(timer);
+        return () => {
+            window.clearTimeout(startTimer);
+            clearTimeout(timer);
+        };
     }, [query, category]);
 
     const handleResultClick = (result: SearchResult) => {
@@ -160,6 +189,8 @@ export default function GlobalSearch() {
         setQuery("");
         router.push(result.path);
     };
+
+    const visibleResults = query.trim() ? results : [];
 
     const getTypeIcon = (type: string) => {
         switch (type) {
@@ -269,9 +300,9 @@ export default function GlobalSearch() {
                                 <div className="flex items-center justify-center py-8">
                                     <div className="w-5 h-5 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
                                 </div>
-                            ) : results.length > 0 ? (
+                            ) : visibleResults.length > 0 ? (
                                 <div className="py-2">
-                                    {results.map((result) => (
+                                    {visibleResults.map((result) => (
                                         <button
                                             key={result.id}
                                             onClick={() => handleResultClick(result)}
@@ -305,7 +336,7 @@ export default function GlobalSearch() {
                             ) : query ? (
                                 <div className="py-8 text-center">
                                     <p className="text-sm" style={{ color: isDark ? "#9ca3af" : "#6b7280" }}>
-                                        No results found for "{query}"
+                                        No results found for &quot;{query}&quot;
                                     </p>
                                 </div>
                             ) : (
@@ -329,7 +360,7 @@ export default function GlobalSearch() {
                             }}
                         >
                             <span>Press ESC to close</span>
-                            <span>{results.length} results</span>
+                            <span>{visibleResults.length} results</span>
                         </div>
                     </div>
                 </div>

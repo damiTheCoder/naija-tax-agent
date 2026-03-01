@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 // Removed automation imports
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
-import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import { JournalEntry, LedgerAccount } from "@/lib/accounting/doubleEntry";
 import { generateFinancialStatementsPDF, generateJournalsPDF, generateTrialBalancePDF, generateIncomeStatementPDF, generateBalanceSheetPDF, generateCashFlowStatementPDF, generateEquityStatementPDF, generateTaxPayablesPDF, CashFlowData, EquityStatementData, TaxPayablesData } from "@/lib/accountingPdfGenerator";
 import { generateTaxSchedule, TransactionTaxAnalysis, TaxPayablesSchedule } from "@/lib/accounting/transactionTaxAnalyzer";
@@ -301,12 +301,12 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Load accounting engine state
-    accountingEngine.load();
-    const state = accountingEngine.getState();
-    setJournalEntries(state.journalEntries);
-    setLedgerAccounts(state.ledgerAccounts);
-    setFinancialStatements(accountingEngine.generateStatements());
+    const applyAccountingState = () => {
+      const state = accountingEngine.getState();
+      setJournalEntries(state.journalEntries);
+      setLedgerAccounts(state.ledgerAccounts);
+      setFinancialStatements(accountingEngine.generateStatements());
+    };
 
     // Subscribe to updates
     const unsubscribe = accountingEngine.subscribe((newState) => {
@@ -316,23 +316,23 @@ export default function WorkspacePage() {
     });
 
     // Listen for custom accounting-update events (from chat transactions)
-    const handleAccountingUpdate = () => {
-      const state = accountingEngine.getState();
-      setJournalEntries(state.journalEntries);
-      setLedgerAccounts(state.ledgerAccounts);
-      setFinancialStatements(accountingEngine.generateStatements());
-    };
+    const handleAccountingUpdate = () => applyAccountingState();
     window.addEventListener("accounting-update", handleAccountingUpdate);
-    window.addEventListener("storage", (e) => {
+    const handleStorage = (e: StorageEvent) => {
       if (e.key === "insight::accounting-engine") {
         accountingEngine.load();
         handleAccountingUpdate();
       }
-    });
+    };
+    window.addEventListener("storage", handleStorage);
 
     // Also load raw transactions for display
-    const cachedTransactions = window.localStorage.getItem("insight::accounting-transactions");
-    if (cachedTransactions) {
+    const initialFrame = window.requestAnimationFrame(() => {
+      accountingEngine.load();
+      applyAccountingState();
+
+      const cachedTransactions = window.localStorage.getItem("insight::accounting-transactions");
+      if (!cachedTransactions) return;
       try {
         const parsed = JSON.parse(cachedTransactions);
         if (Array.isArray(parsed)) {
@@ -341,13 +341,15 @@ export default function WorkspacePage() {
       } catch {
         // ignore malformed cache
       }
-    }
+    });
 
     // Removed automation effects and handlers
 
     return () => {
+      window.cancelAnimationFrame(initialFrame);
       unsubscribe();
       window.removeEventListener("accounting-update", handleAccountingUpdate);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 

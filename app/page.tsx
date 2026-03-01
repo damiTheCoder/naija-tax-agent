@@ -141,7 +141,7 @@ export default function LandingPage() {
         <div className="hero-content-centered">
           <div className="hero-badge-modern">
             <span className="badge-dot"></span>
-            The AI-Powered Cash Operating System for SME's
+            The AI-Powered Cash Operating System for SMEs
           </div>
 
           <h1 className="hero-title-modern">

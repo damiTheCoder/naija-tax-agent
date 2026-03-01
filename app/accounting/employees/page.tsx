@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { calculateMonthlyPayroll, PayrollResult } from "@/lib/payroll/calculator";
+import { calculateMonthlyPayroll } from "@/lib/payroll/calculator";
 import type { EmployeeRecord } from "@/lib/payroll/types";
 
 const MOCK_EMPLOYEES: EmployeeRecord[] = [
@@ -43,19 +43,18 @@ const MOCK_EMPLOYEES: EmployeeRecord[] = [
 ];
 
 export default function EmployeesPage() {
-    const [employees, setEmployees] = useState<EmployeeRecord[]>(MOCK_EMPLOYEES);
-
-    // Persistence
-    useEffect(() => {
+    const [employees, setEmployees] = useState<EmployeeRecord[]>(() => {
+        if (typeof window === "undefined") return MOCK_EMPLOYEES;
         const saved = window.localStorage.getItem("insight::employees");
-        if (saved) {
-            try {
-                setEmployees(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to load employees", e);
-            }
+        if (!saved) return MOCK_EMPLOYEES;
+        try {
+            const parsed = JSON.parse(saved);
+            return Array.isArray(parsed) ? (parsed as EmployeeRecord[]) : MOCK_EMPLOYEES;
+        } catch (e) {
+            console.error("Failed to load employees", e);
+            return MOCK_EMPLOYEES;
         }
-    }, []);
+    });
 
     useEffect(() => {
         window.localStorage.setItem("insight::employees", JSON.stringify(employees));
@@ -440,7 +439,10 @@ export default function EmployeesPage() {
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Employment Type</label>
                                 <select
                                     value={newEmployee.employmentType}
-                                    onChange={e => setNewEmployee({ ...newEmployee, employmentType: e.target.value as any })}
+                                    onChange={e => setNewEmployee({
+                                        ...newEmployee,
+                                        employmentType: e.target.value as EmployeeRecord["employmentType"],
+                                    })}
                                     className="w-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-3.5 text-sm font-bold outline-none focus:border-blue-500 transition-colors"
                                 >
                                     <option value="FULL_TIME">Full Time</option>

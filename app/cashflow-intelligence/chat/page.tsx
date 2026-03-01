@@ -19,6 +19,7 @@ import {
     type CashflowAnalytics,
 } from "@/lib/cashflow/investmentCalculator";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
+import type { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { SendHorizontal, Plus, Trash2, Power, TrendingUp, ArrowRight } from "lucide-react";
 import { runUnifiedAgentMessage } from "@/lib/agent/unifiedClient";
 import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
@@ -36,6 +37,16 @@ type ChatMessage = {
 
 type CashMetricMode = "inflow" | "outflow" | "balance";
 
+function createIntroChatMessage(): ChatMessage {
+    return {
+        id: "intro",
+        role: "assistant",
+        content:
+            "Welcome to Cashflow Chat! 👋\n\nI can help you set up investment automations and track your returns. Try saying:\n\n• \"Invest 5% of my inflow in T-Bills\"\n• \"Save 10% automatically\"\n• \"What's my projected return?\"\n• \"Show my automations\"",
+        timestamp: Date.now(),
+    };
+}
+
 function formatNairaCompact(amount: number): string {
     const abs = Math.abs(amount);
     const sign = amount < 0 ? "-" : "";
@@ -49,6 +60,36 @@ function formatNairaCompact(amount: number): string {
     if (abs >= 1_000_000) return build(1_000_000, "M");
     if (abs >= 1_000) return build(1_000, "K");
     return `${sign}₦${abs.toLocaleString("en-NG", { maximumFractionDigits: 1 })}`;
+}
+
+function toMonthKey(value?: string): string {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+}
+
+function getCurrentMonthKey(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+}
+
+function formatMonthLabel(monthKey: string): string {
+    if (!monthKey) return "Selected month";
+    const match = monthKey.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return monthKey;
+    const parsed = new Date(`${match[1]}-${match[2]}-01T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return monthKey;
+    return parsed.toLocaleDateString("en-NG", { month: "short", year: "numeric" });
 }
 
 // =============================================================================
@@ -221,12 +262,15 @@ function ActiveRuleCard({
 
 export default function CashflowChatPage() {
     // State
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>(() => [createIntroChatMessage()]);
     const [composerInput, setComposerInput] = useState("");
     const [automationState, setAutomationState] = useState<AutomationState | null>(null);
     const [analytics, setAnalytics] = useState<CashflowAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
     const [cashMetricMode, setCashMetricMode] = useState<CashMetricMode>("inflow");
+    const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+    const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey);
+    const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
 
     // Quick automation sliders
     const [tbillsPercent, setTbillsPercent] = useState(0);
@@ -234,6 +278,7 @@ export default function CashflowChatPage() {
 
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const chatEndRef = useRef<HTMLDivElement | null>(null);
+    const monthPickerRef = useRef<HTMLDivElement | null>(null);
 
     // Load data
     const loadData = useCallback(() => {
@@ -245,6 +290,9 @@ export default function CashflowChatPage() {
 
         // Load analytics from accounting
         try {
+            accountingEngine.load();
+            const accountingState = accountingEngine.getState();
+            setJournalEntries(accountingState.journalEntries.filter((entry) => entry.status === "posted"));
             const statements = accountingEngine.generateStatements();
             const cashBalance = statements.assets || 0;
             const monthlyInflow = statements.revenue || 0;
@@ -287,19 +335,12 @@ export default function CashflowChatPage() {
         return () => unsubscribe();
     }, []);
 
-    // Initial message
     useEffect(() => {
-        if (messages.length === 0) {
-            setMessages([
-                {
-                    id: "intro",
-                    role: "assistant",
-                    content: "Welcome to Cashflow Chat! 👋\n\nI can help you set up investment automations and track your returns. Try saying:\n\n• \"Invest 5% of my inflow in T-Bills\"\n• \"Save 10% automatically\"\n• \"What's my projected return?\"\n• \"Show my automations\"",
-                    timestamp: Date.now(),
-                },
-            ]);
-        }
-    }, [messages.length]);
+        const unsubscribe = accountingEngine.subscribe((state) => {
+            setJournalEntries(state.journalEntries.filter((entry) => entry.status === "posted"));
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Auto-expand textarea
     useEffect(() => {
@@ -429,11 +470,32 @@ export default function CashflowChatPage() {
         outflow: "Outflow",
         balance: "Balance",
     };
+    const selectedMonthLabel = useMemo(() => formatMonthLabel(selectedMonth), [selectedMonth]);
+    const monthlyCashMetrics = useMemo(() => {
+        let inflow = 0;
+        let outflow = 0;
+
+        journalEntries.forEach((entry) => {
+            if (toMonthKey(entry.date || entry.createdAt) !== selectedMonth) return;
+            entry.lines.forEach((line) => {
+                const isCashAccount = line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName);
+                if (!isCashAccount) return;
+                inflow += line.debit || 0;
+                outflow += line.credit || 0;
+            });
+        });
+
+        return {
+            inflow,
+            outflow,
+            balance: inflow - outflow,
+        };
+    }, [journalEntries, selectedMonth]);
     const cashMetricValueMap = useMemo(() => ({
-        inflow: analytics?.monthlyInflow || 0,
-        outflow: analytics?.monthlyOutflow || 0,
-        balance: analytics?.netCashflow || 0,
-    }), [analytics]);
+        inflow: monthlyCashMetrics.inflow,
+        outflow: monthlyCashMetrics.outflow,
+        balance: monthlyCashMetrics.balance,
+    }), [monthlyCashMetrics]);
     const displayedCashMetric = cashMetricValueMap[cashMetricMode];
 
     const cycleCashMetricMode = useCallback(() => {
@@ -443,6 +505,30 @@ export default function CashflowChatPage() {
             return "inflow";
         });
     }, []);
+
+    useEffect(() => {
+        if (!isMonthPickerOpen) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!monthPickerRef.current) return;
+            if (!monthPickerRef.current.contains(event.target as Node)) {
+                setIsMonthPickerOpen(false);
+            }
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setIsMonthPickerOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handlePointerDown);
+        document.addEventListener("keydown", handleEscape);
+        return () => {
+            document.removeEventListener("mousedown", handlePointerDown);
+            document.removeEventListener("keydown", handleEscape);
+        };
+    }, [isMonthPickerOpen]);
 
     if (loading) {
         return (
@@ -461,9 +547,63 @@ export default function CashflowChatPage() {
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-xs font-medium text-gray-500 mb-0.5">{cashMetricLabelMap[cashMetricMode]}</p>
-                                <p className="text-2xl font-bold text-blue-500" style={{ color: "#2264ff" }} title={formatNaira(displayedCashMetric)}>
-                                    {formatNairaCompact(displayedCashMetric)}<span className="text-sm text-gray-400 font-normal ml-1">/mo</span>
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-2xl font-bold text-blue-500" style={{ color: "#2264ff" }} title={formatNaira(displayedCashMetric)}>
+                                        {formatNairaCompact(displayedCashMetric)}
+                                    </p>
+                                    <div className="relative" ref={monthPickerRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsMonthPickerOpen((open) => !open)}
+                                            className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2 py-1 text-sm font-normal text-gray-500 hover:bg-gray-50"
+                                            aria-haspopup="dialog"
+                                            aria-expanded={isMonthPickerOpen}
+                                            title={`Select month (currently ${selectedMonthLabel})`}
+                                        >
+                                            /mo
+                                            <svg
+                                                viewBox="0 0 20 20"
+                                                className={`h-3 w-3 transition-transform ${isMonthPickerOpen ? "rotate-180" : ""}`}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                aria-hidden="true"
+                                            >
+                                                <path d="m5 7 5 6 5-6" />
+                                            </svg>
+                                        </button>
+                                        {isMonthPickerOpen ? (
+                                            <div className="absolute left-0 z-20 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+                                                <p className="mb-2 text-xs font-medium text-gray-700">Select month</p>
+                                                <input
+                                                    type="month"
+                                                    value={selectedMonth}
+                                                    onChange={(event) => setSelectedMonth(event.target.value || getCurrentMonthKey())}
+                                                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#2264ff]/30"
+                                                />
+                                                <div className="mt-3 flex items-center justify-between">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedMonth(getCurrentMonthKey())}
+                                                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                                                    >
+                                                        This month
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsMonthPickerOpen(false)}
+                                                        className="text-xs text-gray-500 hover:text-gray-700"
+                                                    >
+                                                        Close
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-400">For {selectedMonthLabel}</p>
                             </div>
                             <button
                                 type="button"

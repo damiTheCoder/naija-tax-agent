@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { calculateMonthlyPayroll } from "@/lib/payroll/calculator";
 import { payrollEngine, PayrollRun } from "@/lib/payroll/payrollEngine";
 import type { EmployeeRecord } from "@/lib/payroll/types";
 import Link from "next/link";
@@ -14,14 +13,13 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) => CURRENT_YEAR - 2 + index);
 
 export default function PayrollDashboard() {
-    const [runs, setRuns] = useState<PayrollRun[]>([]);
+    const [runs, setRuns] = useState<PayrollRun[]>(() => payrollEngine.getRuns());
     const [showNewRunModal, setShowNewRunModal] = useState(false);
     const [showAuditModal, setShowAuditModal] = useState<PayrollRun | null>(null);
     const [newRunMonth, setNewRunMonth] = useState(MONTHS[new Date().getMonth()]);
     const [newRunYear, setNewRunYear] = useState(CURRENT_YEAR);
 
     useEffect(() => {
-        setRuns(payrollEngine.getRuns());
         const unsubscribe = payrollEngine.subscribe(setRuns);
         return unsubscribe;
     }, []);

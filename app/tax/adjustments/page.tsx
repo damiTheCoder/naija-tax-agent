@@ -102,7 +102,7 @@ const getTypePillClass = (type: TaxAdjustmentType) => {
 };
 
 export default function TaxAdjustmentsPage() {
-  const [records, setRecords] = useState<TaxAdjustmentRecord[]>([]);
+  const [records, setRecords] = useState<TaxAdjustmentRecord[]>(() => loadTaxAdjustments(ENTITY_ID));
 
   const [type, setType] = useState<TaxAdjustmentType>("deduction");
   const [category, setCategory] = useState<TaxAdjustmentCategory>("general_deduction");
@@ -119,7 +119,6 @@ export default function TaxAdjustmentsPage() {
   }, []);
 
   useEffect(() => {
-    refreshRecords();
     const onUpdated = () => refreshRecords();
     window.addEventListener("tax-adjustments:updated", onUpdated);
     return () => {
@@ -127,12 +126,16 @@ export default function TaxAdjustmentsPage() {
     };
   }, [refreshRecords]);
 
-  useEffect(() => {
-    const options = CATEGORY_OPTIONS_BY_TYPE[type];
+  const categoryOptions = CATEGORY_OPTIONS_BY_TYPE[type];
+  const activeCategory = categoryOptions.includes(category) ? category : categoryOptions[0];
+
+  const handleTypeChange = (nextType: TaxAdjustmentType) => {
+    const options = CATEGORY_OPTIONS_BY_TYPE[nextType];
+    setType(nextType);
     if (!options.includes(category)) {
       setCategory(options[0]);
     }
-  }, [category, type]);
+  };
 
   const totals = useMemo(() => {
     return {
@@ -162,11 +165,11 @@ export default function TaxAdjustmentsPage() {
       return;
     }
 
-    const resolvedDescription = description.trim() || CATEGORY_LABELS[category];
+    const resolvedDescription = description.trim() || CATEGORY_LABELS[activeCategory];
     createTaxAdjustment({
       entityId: ENTITY_ID,
       type,
-      category,
+      category: activeCategory,
       description: resolvedDescription,
       amount: parsedAmount,
       period,
@@ -267,7 +270,7 @@ export default function TaxAdjustmentsPage() {
             <label className="text-xs text-gray-500">Type</label>
             <select
               value={type}
-              onChange={(event) => setType(event.target.value as TaxAdjustmentType)}
+              onChange={(event) => handleTypeChange(event.target.value as TaxAdjustmentType)}
               className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
             >
               <option value="deduction">Deduction</option>
@@ -280,11 +283,11 @@ export default function TaxAdjustmentsPage() {
           <div>
             <label className="text-xs text-gray-500">Category</label>
             <select
-              value={category}
+              value={activeCategory}
               onChange={(event) => setCategory(event.target.value as TaxAdjustmentCategory)}
               className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
             >
-              {CATEGORY_OPTIONS_BY_TYPE[type].map((option) => (
+              {categoryOptions.map((option) => (
                 <option key={option} value={option}>
                   {CATEGORY_LABELS[option]}
                 </option>

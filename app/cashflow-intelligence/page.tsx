@@ -76,7 +76,9 @@ export default function CashIntelligencePage() {
     }, [buildAnalyticsFromState]);
 
     useEffect(() => {
-        syncFromEngine(true);
+        const frame = window.requestAnimationFrame(() => {
+            syncFromEngine(true);
+        });
         const unsubscribe = accountingEngine.subscribe(() => syncFromEngine());
 
         const onAccountingUpdate = () => {
@@ -88,6 +90,7 @@ export default function CashIntelligencePage() {
         }
 
         return () => {
+            window.cancelAnimationFrame(frame);
             unsubscribe();
             if (typeof window !== "undefined") {
                 window.removeEventListener("accounting-update", onAccountingUpdate);

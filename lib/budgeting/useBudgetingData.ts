@@ -33,22 +33,57 @@ type BudgetingSnapshot = {
   settings: BudgetingSettings;
 };
 
+const defaultBudgetingSnapshot: BudgetingSnapshot = {
+  budgets: [],
+  scenarios: [],
+  templates: [],
+  settings: {
+    currency: "NGN",
+    taxJurisdiction: "Nigeria",
+    fiscalYearStartMonth: 1,
+    defaultDepartments: [],
+    alertThresholdPercent: 85,
+  },
+};
+
+const loadSnapshot = (): BudgetingSnapshot => {
+  try {
+    const state = loadBudgetingState();
+    return {
+      budgets: state.budgets,
+      scenarios: state.scenarios,
+      templates: state.templates,
+      settings: state.settings,
+    };
+  } catch {
+    return defaultBudgetingSnapshot;
+  }
+};
+
+const loadAccountingProjection = (): {
+  journalEntries: JournalEntry[];
+  ledgerAccounts: Map<string, LedgerAccount>;
+} => {
+  if (typeof window === "undefined") {
+    return { journalEntries: [], ledgerAccounts: new Map() };
+  }
+  accountingEngine.load();
+  const state = accountingEngine.getState();
+  return {
+    journalEntries: state.journalEntries.filter((entry) => entry.status === "posted"),
+    ledgerAccounts: new Map(state.ledgerAccounts),
+  };
+};
+
 export function useBudgetingData() {
-  const [snapshot, setSnapshot] = useState<BudgetingSnapshot>({
-    budgets: [],
-    scenarios: [],
-    templates: [],
-    settings: {
-      currency: "NGN",
-      taxJurisdiction: "Nigeria",
-      fiscalYearStartMonth: 1,
-      defaultDepartments: [],
-      alertThresholdPercent: 85,
-    },
-  });
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [ledgerAccounts, setLedgerAccounts] = useState<Map<string, LedgerAccount>>(new Map());
-  const [isReady, setIsReady] = useState(false);
+  const [snapshot, setSnapshot] = useState<BudgetingSnapshot>(() => loadSnapshot());
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(
+    () => loadAccountingProjection().journalEntries
+  );
+  const [ledgerAccounts, setLedgerAccounts] = useState<Map<string, LedgerAccount>>(
+    () => loadAccountingProjection().ledgerAccounts
+  );
+  const [isReady] = useState(() => typeof window !== "undefined");
   const mountedRef = useRef(false);
 
   const refreshSnapshot = useCallback(() => {
@@ -74,9 +109,6 @@ export function useBudgetingData() {
 
   useEffect(() => {
     mountedRef.current = true;
-    refreshSnapshot();
-    refreshAccounting();
-    setIsReady(true);
 
     const unsubscribeBudgeting = subscribeBudgetingUpdates(() => {
       refreshSnapshot();

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Sheet, Cell, CellFormat, CellStyle } from '@/lib/supersheet/spreadsheet';
+import { Sheet, CellFormat, CellStyle } from '@/lib/supersheet/spreadsheet';
 
 interface SheetToolbarProps {
     sheet: Sheet;
@@ -14,6 +14,46 @@ interface SheetToolbarProps {
     onImport?: () => void;
     canUndo?: boolean;
     canRedo?: boolean;
+}
+
+interface ToolButtonProps {
+    onClick: () => void;
+    active?: boolean;
+    disabled?: boolean;
+    title: string;
+    children: React.ReactNode;
+}
+
+const noop = () => {};
+
+function ToolButton({
+    onClick,
+    active = false,
+    disabled = false,
+    title,
+    children,
+}: ToolButtonProps) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            className={`
+        w-8 h-8 flex items-center justify-center rounded transition-colors
+        ${active
+                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }
+        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+      `}
+        >
+            {children}
+        </button>
+    );
+}
+
+function Divider() {
+    return <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />;
 }
 
 export default function SheetToolbar({
@@ -88,51 +128,15 @@ export default function SheetToolbar({
         applyStyle({ [styleProp]: !currentValue });
     };
 
-    // Button component
-    const ToolButton = ({
-        onClick,
-        active = false,
-        disabled = false,
-        title,
-        children
-    }: {
-        onClick: () => void;
-        active?: boolean;
-        disabled?: boolean;
-        title: string;
-        children: React.ReactNode;
-    }) => (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            title={title}
-            className={`
-        w-8 h-8 flex items-center justify-center rounded transition-colors
-        ${active
-                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }
-        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-      `}
-        >
-            {children}
-        </button>
-    );
-
-    // Divider component
-    const Divider = () => (
-        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-    );
-
     return (
         <div className="flex items-center gap-1 px-3 py-2 bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-700 flex-wrap">
             {/* Undo/Redo */}
-            <ToolButton onClick={onUndo || (() => { })} disabled={!canUndo} title="Undo (Ctrl+Z)">
+            <ToolButton onClick={onUndo || noop} disabled={!canUndo} title="Undo (Ctrl+Z)">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                 </svg>
             </ToolButton>
-            <ToolButton onClick={onRedo || (() => { })} disabled={!canRedo} title="Redo (Ctrl+Y)">
+            <ToolButton onClick={onRedo || noop} disabled={!canRedo} title="Redo (Ctrl+Y)">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
                 </svg>
@@ -313,12 +317,12 @@ export default function SheetToolbar({
             <div className="flex-1" />
 
             {/* Import/Export */}
-            <ToolButton onClick={onImport || (() => { })} title="Import CSV">
+            <ToolButton onClick={onImport || noop} title="Import CSV">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
             </ToolButton>
-            <ToolButton onClick={onExport || (() => { })} title="Export CSV">
+            <ToolButton onClick={onExport || noop} title="Export CSV">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>

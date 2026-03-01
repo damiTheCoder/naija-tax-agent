@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { APP_LOGO_SRC, APP_LOGO_ALT } from "@/lib/constants";
 
@@ -61,21 +61,12 @@ interface OnboardingProps {
 }
 
 export function Onboarding({ onComplete, forceShow = false }: OnboardingProps) {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(() => {
+        if (typeof window === "undefined") return false;
+        if (forceShow) return true;
+        return !localStorage.getItem(ONBOARDING_KEY);
+    });
     const [currentStep, setCurrentStep] = useState(0);
-
-    useEffect(() => {
-        // Check if onboarding was already completed
-        if (forceShow) {
-            setIsOpen(true);
-            return;
-        }
-
-        const completed = localStorage.getItem(ONBOARDING_KEY);
-        if (!completed) {
-            setIsOpen(true);
-        }
-    }, [forceShow]);
 
     const handleNext = () => {
         if (currentStep < onboardingSteps.length - 1) {
@@ -167,13 +158,10 @@ export function Onboarding({ onComplete, forceShow = false }: OnboardingProps) {
  * Hook to check if onboarding is complete
  */
 export function useOnboardingComplete(): boolean {
-    const [isComplete, setIsComplete] = useState(true); // Default to true to avoid flash
-
-    useEffect(() => {
-        const completed = localStorage.getItem(ONBOARDING_KEY);
-        setIsComplete(!!completed);
-    }, []);
-
+    const [isComplete] = useState(() => {
+        if (typeof window === "undefined") return true;
+        return !!localStorage.getItem(ONBOARDING_KEY);
+    });
     return isComplete;
 }
 

@@ -5,7 +5,7 @@
  * Configuration UI for the dual rule-based + AI accounting system
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Settings,
   Brain,
@@ -25,21 +25,18 @@ interface AISettingsPanelProps {
 }
 
 export default function AISettingsPanel({ onSave, className = "" }: AISettingsPanelProps) {
-  const [config, setConfig] = useState<AccountingConfig>(DEFAULT_ACCOUNTING_CONFIG);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-
-  // Load config from localStorage
-  useEffect(() => {
+  const [config, setConfig] = useState<AccountingConfig>(() => {
+    if (typeof window === "undefined") return DEFAULT_ACCOUNTING_CONFIG;
     try {
       const saved = localStorage.getItem("insight::accounting-config");
-      if (saved) {
-        setConfig(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.warn("Failed to load config:", e);
+      if (!saved) return DEFAULT_ACCOUNTING_CONFIG;
+      return JSON.parse(saved) as AccountingConfig;
+    } catch {
+      return DEFAULT_ACCOUNTING_CONFIG;
     }
-  }, []);
+  });
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Save config
   const handleSave = () => {

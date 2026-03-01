@@ -7,7 +7,7 @@ import { mapJournalEntriesToCompliance } from "@/lib/tax/compliance/adapters";
 import { runTaxComputation, type TaxSchedule } from "@/lib/tax/compliance";
 import { loadComplianceStatuses, loadPayments, loadSchedules } from "@/lib/tax/compliance/store";
 import { recordPayment, setComplianceStatus } from "@/lib/tax/compliance/workflow";
-import { generateTaxRemittancePdf } from "@/lib/taxRemittancePdf";
+import { generateTaxRemittancePdf, type TaxRemittancePdfPayload } from "@/lib/taxRemittancePdf";
 import { withTaxAdjustments } from "@/lib/tax/adjustments";
 import { getTaxpayerProfile } from "@/lib/tax/settings";
 
@@ -115,6 +115,26 @@ const getTaxLabel = (taxType: string) => {
   if (upper === "PAYE") return "PAYE";
   if (upper === "WHT") return "WHT";
   return upper || "OTHER";
+};
+
+const mapTaxLabelToPdfTaxType = (taxLabel: string): TaxRemittancePdfPayload["taxType"] => {
+  if (taxLabel === "PAYE") return "PIT";
+  if (
+    taxLabel === "VAT" ||
+    taxLabel === "WHT" ||
+    taxLabel === "CIT" ||
+    taxLabel === "PIT" ||
+    taxLabel === "CGT" ||
+    taxLabel === "TET" ||
+    taxLabel === "POLICE_LEVY" ||
+    taxLabel === "NASENI" ||
+    taxLabel === "DEV_LEVY" ||
+    taxLabel === "OTHER"
+  ) {
+    return taxLabel;
+  }
+  if (taxLabel === "STAMP" || taxLabel === "STAMP_DUTY") return "STAMP_DUTY";
+  return "OTHER";
 };
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -341,7 +361,7 @@ export default function TaxPaymentsPage() {
     setError(null);
 
     try {
-      const taxTypeForPdf = getTaxLabel(payment.taxType) === "PAYE" ? "PIT" : (getTaxLabel(payment.taxType) as any);
+      const taxTypeForPdf = mapTaxLabelToPdfTaxType(getTaxLabel(payment.taxType));
       const taxpayerProfile = getTaxpayerProfile("entity-default");
       const ref =
         payment.reference ||

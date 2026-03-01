@@ -2,6 +2,15 @@
 
 import { Skeleton } from "@/components/ui/Skeleton";
 
+const INVESTMENT_BAR_HEIGHTS: Array<{ left: number; right: number }> = [
+    { left: 62, right: 47 },
+    { left: 55, right: 42 },
+    { left: 70, right: 53 },
+    { left: 60, right: 45 },
+    { left: 68, right: 51 },
+    { left: 58, right: 43 },
+];
+
 /**
  * Skeleton matching the /personal/dashboard Investment Portfolio page.
  * Header + badge → 4 rounded metric cards → 2 chart areas → horizontal platform cards.
@@ -58,15 +67,15 @@ export default function InvestmentDashboardSkeleton() {
                                 <Skeleton className="h-4 w-36" />
                             </div>
                             <div className="flex items-end gap-3 h-[200px] pt-4">
-                                {Array.from({ length: 6 }).map((_, i) => (
+                                {INVESTMENT_BAR_HEIGHTS.map((item, i) => (
                                     <div key={i} className="flex-1 flex gap-1 items-end h-full">
                                         <Skeleton
                                             className="flex-1 rounded-t-md"
-                                            style={{ height: `${30 + Math.random() * 50}%` }}
+                                            style={{ height: `${item.left}%` }}
                                         />
                                         <Skeleton
                                             className="flex-1 rounded-t-md"
-                                            style={{ height: `${20 + Math.random() * 40}%` }}
+                                            style={{ height: `${item.right}%` }}
                                         />
                                     </div>
                                 ))}

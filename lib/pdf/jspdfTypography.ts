@@ -6,6 +6,11 @@ const REGULAR_FONT_FILE = "GlacialIndifference-Regular.ttf";
 const BOLD_FONT_FILE = "GlacialIndifference-Bold.ttf";
 const FONT_NAME = "GlacialIndifference";
 
+type JsPdfWithFontRegistration = jsPDF & {
+  addFileToVFS: (fileName: string, fileContent: string) => void;
+  addFont: (postScriptName: string, id: string, fontStyle: string) => void;
+};
+
 let regularBase64: string | null = null;
 let boldBase64: string | null = null;
 let registrationAttempted = false;
@@ -44,7 +49,7 @@ async function ensureRegistered(doc: jsPDF): Promise<boolean> {
       boldBase64 = await loadFontBase64("/fonts/GlacialIndifference-Bold.ttf");
     }
 
-    const pdf = doc as any;
+    const pdf = doc as JsPdfWithFontRegistration;
     pdf.addFileToVFS(REGULAR_FONT_FILE, regularBase64);
     pdf.addFont(REGULAR_FONT_FILE, FONT_NAME, "normal");
     pdf.addFileToVFS(BOLD_FONT_FILE, boldBase64);
@@ -66,17 +71,16 @@ export async function configureJsPdfTypography(
   const activeFamily = hasGlacial ? FONT_NAME : fallbackFamily;
 
   const originalSetFont = doc.setFont.bind(doc);
-  (doc as any).setFont = ((fontName?: string, fontStyle?: string, fontWeight?: string | number) => {
+  doc.setFont = ((fontName?: string, fontStyle?: string, fontWeight?: string | number) => {
     const normalized = typeof fontName === "string" ? fontName.toLowerCase() : "";
     const mappedFamily =
       normalized === "times" || normalized === "helvetica" || normalized === "courier" || !fontName
         ? activeFamily
         : fontName;
-    return originalSetFont(mappedFamily, fontStyle as any, fontWeight as any);
+    return originalSetFont(mappedFamily, fontStyle, fontWeight);
   }) as typeof doc.setFont;
 
   doc.setLineHeightFactor(1.4);
   doc.setFont(activeFamily, "normal");
   return activeFamily;
 }
-

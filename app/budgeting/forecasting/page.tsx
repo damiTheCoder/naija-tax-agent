@@ -85,7 +85,7 @@ export default function ForecastingPage() {
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-gray-900">Insight</h2>
           <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">{insights}</p>
-          <p className="mt-4 text-xs text-gray-500">Example: "You will run out of cash in 8 months at current spending".</p>
+          <p className="mt-4 text-xs text-gray-500">Example: &quot;You will run out of cash in 8 months at current spending&quot;.</p>
         </div>
       </div>
 

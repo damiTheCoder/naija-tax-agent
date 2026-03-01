@@ -182,6 +182,87 @@ describe("tax v2 ledger-first engine", () => {
     expect(whtPayable?.taxAmount || 0).toBeCloseTo(100465.12, 2);
   });
 
+  test("resync rewrites VAT/WHT entries canonically and removes stale legacy rows", async () => {
+    const journal = makeJournal({
+      id: "canon-001",
+      date: "2026-02-22",
+      narration: "Canonical rewrite check",
+      transactionType: "sale",
+      totalDebits: 215000,
+      totalCredits: 215000,
+      lines: [
+        { accountCode: "1020", accountName: "Bank", debit: 215000, credit: 0 },
+        { accountCode: "4000", accountName: "Sales", debit: 0, credit: 200000 },
+        { accountCode: "2200", accountName: "Output VAT Payable", debit: 0, credit: 15000 },
+      ],
+      metadata: { taxMode: "exclusive", taxCategory: "revenue" },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const txId = `tx-${ENTITY_ID}-${journal.id}`;
+    const canonicalVat = await prisma.taxLedgerEntry.findUnique({
+      where: { id: `tle-${ENTITY_ID}-${journal.id}-VAT-output` },
+    });
+    expect(canonicalVat).not.toBeNull();
+
+    await prisma.taxLedgerEntry.create({
+      data: {
+        id: `legacy-${ENTITY_ID}-${journal.id}-WHT-old`,
+        entityId: ENTITY_ID,
+        transactionId: txId,
+        taxType: "WHT",
+        ruleSetId: canonicalVat!.ruleSetId,
+        periodId: canonicalVat!.periodId,
+        baseAmount: 200000,
+        taxAmount: 10000,
+        direction: "payable",
+        ledger: "output",
+        metadata: "{}",
+      },
+    });
+    await prisma.taxClassification.create({
+      data: {
+        id: `legacy-${ENTITY_ID}-${journal.id}-cls-WHT-old`,
+        entityId: ENTITY_ID,
+        transactionId: txId,
+        taxType: "WHT",
+        status: "auto",
+        confidence: 0.5,
+      },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const finalLedger = await prisma.taxLedgerEntry.findMany({
+      where: {
+        entityId: ENTITY_ID,
+        transactionId: txId,
+        OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+      },
+      orderBy: { id: "asc" },
+    });
+    const finalClassifications = await prisma.taxClassification.findMany({
+      where: {
+        entityId: ENTITY_ID,
+        transactionId: txId,
+        OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+      },
+      orderBy: { id: "asc" },
+    });
+
+    expect(finalLedger.map((item) => item.id)).toEqual([`tle-${ENTITY_ID}-${journal.id}-VAT-output`]);
+    expect(finalClassifications.map((item) => item.id)).toEqual([`cls-${ENTITY_ID}-${journal.id}-VAT-output`]);
+  });
+
   test("voided journal removes persisted VAT/WHT effects", async () => {
     const journalId = "sale-void-001";
     await taxTransactionRepo.upsertJournalTransactions({

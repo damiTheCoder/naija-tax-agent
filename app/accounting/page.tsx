@@ -111,35 +111,35 @@ function formatFullNaira(value: number): string {
   return `₦${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-function toDateKey(value?: string): string {
+function toMonthKey(value?: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "";
 
   const year = parsed.getFullYear();
   const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${year}-${month}`;
 }
 
-function getTodayDateKey(): string {
+function getCurrentMonthKey(): string {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${year}-${month}`;
 }
 
-function formatHeadlineDateLabel(dateKey: string): string {
-  if (!dateKey) return "Selected day";
-  const parsed = new Date(`${dateKey}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return dateKey;
-  return parsed.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+function formatHeadlineMonthLabel(monthKey: string): string {
+  if (!monthKey) return "Selected month";
+  const match = monthKey.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return monthKey;
+  const parsed = new Date(`${match[1]}-${match[2]}-01T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return monthKey;
+  return parsed.toLocaleDateString("en-NG", { month: "short", year: "numeric" });
 }
 
 type EntrySignatureLineInput = {
@@ -255,7 +255,7 @@ export default function AccountingPage() {
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
   const [cashHeadlineMode, setCashHeadlineMode] = useState<CashHeadlineMode>("inflow");
-  const [cashHeadlineDate, setCashHeadlineDate] = useState(getTodayDateKey);
+  const [cashHeadlineMonth, setCashHeadlineMonth] = useState(getCurrentMonthKey);
   const [isCashDatePickerOpen, setIsCashDatePickerOpen] = useState(false);
   const cashDatePickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -1330,7 +1330,7 @@ export default function AccountingPage() {
 
     accountingState?.journalEntries.forEach((entry) => {
       if (entry.status !== "posted") return;
-      if (toDateKey(entry.date) !== cashHeadlineDate) return;
+      if (toMonthKey(entry.date) !== cashHeadlineMonth) return;
       entry.lines.forEach((line) => {
         const isCashAccount = line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName);
         if (!isCashAccount) return;
@@ -1344,9 +1344,12 @@ export default function AccountingPage() {
       outflow,
       balance: inflow - outflow,
     };
-  }, [accountingState, cashHeadlineDate]);
+  }, [accountingState, cashHeadlineMonth]);
 
-  const cashHeadlineDateLabel = useMemo(() => formatHeadlineDateLabel(cashHeadlineDate), [cashHeadlineDate]);
+  const cashHeadlineMonthLabel = useMemo(
+    () => formatHeadlineMonthLabel(cashHeadlineMonth),
+    [cashHeadlineMonth]
+  );
 
   const cashHeadlineLabelMap: Record<CashHeadlineMode, string> = {
     inflow: "Inflow",
@@ -1415,29 +1418,29 @@ export default function AccountingPage() {
                           className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm font-normal ${theme === "dark" ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-500 hover:bg-gray-50"}`}
                           aria-haspopup="dialog"
                           aria-expanded={isCashDatePickerOpen}
-                          title={`Select day (currently ${cashHeadlineDateLabel})`}
+                          title={`Select month (currently ${cashHeadlineMonthLabel})`}
                         >
-                          /day
+                          /mo
                           <svg viewBox="0 0 20 20" className={`h-3 w-3 transition-transform ${isCashDatePickerOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="m5 7 5 6 5-6" />
                           </svg>
                         </button>
                         {isCashDatePickerOpen ? (
                           <div className={`absolute left-0 z-20 mt-2 w-60 rounded-xl border p-3 shadow-lg ${theme === "dark" ? "border-gray-700 bg-gray-900" : "border-gray-200 bg-white"}`}>
-                            <p className={`text-xs font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Select day</p>
+                            <p className={`text-xs font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Select month</p>
                             <input
-                              type="date"
-                              value={cashHeadlineDate}
-                              onChange={(event) => setCashHeadlineDate(event.target.value || getTodayDateKey())}
+                              type="month"
+                              value={cashHeadlineMonth}
+                              onChange={(event) => setCashHeadlineMonth(event.target.value || getCurrentMonthKey())}
                               className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#2264ff]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
                             />
                             <div className="mt-3 flex items-center justify-between">
                               <button
                                 type="button"
-                                onClick={() => setCashHeadlineDate(getTodayDateKey())}
+                                onClick={() => setCashHeadlineMonth(getCurrentMonthKey())}
                                 className={`text-xs font-medium ${theme === "dark" ? "text-blue-300 hover:text-blue-200" : "text-blue-600 hover:text-blue-700"}`}
                               >
-                                Today
+                                This month
                               </button>
                               <button
                                 type="button"
@@ -1452,7 +1455,7 @@ export default function AccountingPage() {
                       </div>
                     </div>
                     <p className={`mt-1 text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
-                      For {cashHeadlineDateLabel}
+                      For {cashHeadlineMonthLabel}
                     </p>
                   </div>
                   <button

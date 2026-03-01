@@ -2,6 +2,8 @@
 
 import { Skeleton } from "@/components/ui/Skeleton";
 
+const DASHBOARD_BAR_HEIGHTS = [58, 82, 66, 91, 74, 88];
+
 /**
  * Skeleton matching the /dashboard page.
  * Header row → 4 metric cards → 2-column chart area → table.
@@ -54,11 +56,11 @@ export default function DashboardSkeleton() {
                 <div className="rounded-2xl p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-4">
                     <Skeleton className="h-4 w-32" />
                     <div className="flex items-end gap-2 h-40">
-                        {Array.from({ length: 6 }).map((_, i) => (
+                        {DASHBOARD_BAR_HEIGHTS.map((height, i) => (
                             <Skeleton
                                 key={i}
                                 className="flex-1 rounded-t-md"
-                                style={{ height: `${40 + Math.random() * 60}%` }}
+                                style={{ height: `${height}%` }}
                             />
                         ))}
                     </div>

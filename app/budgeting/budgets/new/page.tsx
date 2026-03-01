@@ -40,11 +40,14 @@ export default function CreateEditBudgetPage() {
 
   useEffect(() => {
     if (!isReady) return;
-    if (editTarget) {
-      setForm(editTarget);
-      return;
-    }
-    setForm(createBlankBudget());
+    const frame = window.requestAnimationFrame(() => {
+      if (editTarget) {
+        setForm(editTarget);
+        return;
+      }
+      setForm(createBlankBudget());
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [editTarget, isReady]);
 
   const updateCategory = (id: string, patch: Partial<BudgetCategoryAllocation>) => {

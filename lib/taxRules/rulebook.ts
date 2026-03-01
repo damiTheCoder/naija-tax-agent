@@ -71,9 +71,9 @@ export interface EnhancedTaxResult {
  */
 export function loadRuleBook(year: string, jurisdiction: Jurisdiction = "Federal"): TaxRuleBook {
     // For now, we only have 2024 Federal. We registry them here.
-    const rulebookMap: Record<string, any> = {
-        "Federal_2024": ng_federal_2024,
-        "Lagos_2024": ng_federal_2024, // Fallback for demo
+    const rulebookMap: Record<string, TaxRuleBook> = {
+        "Federal_2024": ng_federal_2024 as TaxRuleBook,
+        "Lagos_2024": ng_federal_2024 as TaxRuleBook, // Fallback for demo
     };
 
     const key = `${jurisdiction}_${year}`;

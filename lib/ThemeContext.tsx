@@ -13,27 +13,33 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setThemeState] = useState<Theme>("light");
-    const [mounted, setMounted] = useState(false);
-    const [hasUserPreference, setHasUserPreference] = useState(false);
+const getInitialThemeState = (): { theme: Theme; hasUserPreference: boolean } => {
+    if (typeof window === "undefined") {
+        return { theme: "light", hasUserPreference: false };
+    }
 
-    // Load theme from localStorage or fall back to system preference
-    useEffect(() => {
-        const stored = localStorage.getItem("theme") as Theme | null;
-        if (stored === "dark" || stored === "light") {
-            setThemeState(stored);
-            setHasUserPreference(true);
-        } else {
-            const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-            setThemeState(systemPrefersDark ? "dark" : "light");
-        }
-        setMounted(true);
-    }, []);
+    const stored = localStorage.getItem("theme") as Theme | null;
+    if (stored === "dark" || stored === "light") {
+        return { theme: stored, hasUserPreference: true };
+    }
+
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return {
+        theme: systemPrefersDark ? "dark" : "light",
+        hasUserPreference: false,
+    };
+};
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+    const [theme, setThemeState] = useState<Theme>(() => getInitialThemeState().theme);
+    const [hasUserPreference, setHasUserPreference] = useState<boolean>(
+        () => getInitialThemeState().hasUserPreference
+    );
+    const mounted = true;
 
     // Watch for OS/browser theme changes when user hasn't picked a preference
     useEffect(() => {
-        if (!mounted || hasUserPreference) return;
+        if (hasUserPreference) return;
         const media = window.matchMedia("(prefers-color-scheme: dark)");
         const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
             setThemeState(event.matches ? "dark" : "light");
@@ -49,8 +55,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Apply theme class to document
     useEffect(() => {
-        if (!mounted) return;
-
         const root = document.documentElement;
         const body = document.body;
         if (theme === "dark") {
@@ -67,17 +71,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         document
             .querySelectorAll('meta[name="theme-color"]')
             .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff"));
-    }, [theme, mounted]);
+    }, [theme]);
 
     // Persist only explicit user preferences
     useEffect(() => {
-        if (!mounted) return;
         if (hasUserPreference) {
             localStorage.setItem("theme", theme);
         } else {
             localStorage.removeItem("theme");
         }
-    }, [theme, mounted, hasUserPreference]);
+    }, [theme, hasUserPreference]);
 
     const toggleTheme = () => {
         setHasUserPreference(true);

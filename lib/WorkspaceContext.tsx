@@ -44,26 +44,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             localStorage.setItem(STORAGE_KEYS.WORKSPACES, JSON.stringify(parsedWorkspaces));
         }
 
-        setWorkspaces(parsedWorkspaces);
+        const frameId = window.requestAnimationFrame(() => {
+            setWorkspaces(parsedWorkspaces);
 
-        // Set current workspace
-        if (storedCurrentId && parsedWorkspaces.find(w => w.id === storedCurrentId)) {
-            setCurrentWorkspaceId(storedCurrentId);
-        } else {
-            setCurrentWorkspaceId(parsedWorkspaces[0].id);
-            localStorage.setItem(STORAGE_KEYS.CURRENT_WORKSPACE_ID, parsedWorkspaces[0].id);
-        }
-
-        // Load profile
-        if (storedProfile) {
-            try {
-                setProfile(JSON.parse(storedProfile));
-            } catch (e) {
-                console.error("Failed to parse profile", e);
+            // Set current workspace
+            if (storedCurrentId && parsedWorkspaces.find(w => w.id === storedCurrentId)) {
+                setCurrentWorkspaceId(storedCurrentId);
+            } else {
+                setCurrentWorkspaceId(parsedWorkspaces[0].id);
+                localStorage.setItem(STORAGE_KEYS.CURRENT_WORKSPACE_ID, parsedWorkspaces[0].id);
             }
-        }
 
-        setIsLoaded(true);
+            // Load profile
+            if (storedProfile) {
+                try {
+                    setProfile(JSON.parse(storedProfile));
+                } catch (e) {
+                    console.error("Failed to parse profile", e);
+                }
+            }
+
+            setIsLoaded(true);
+        });
+
+        return () => window.cancelAnimationFrame(frameId);
     }, []);
 
     // Get current workspace

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import { useTheme } from "@/lib/ThemeContext";
+
+const PROFILE_PAGE_RENDERED_AT = Date.now();
 
 export default function ProfilePage() {
   const {
@@ -30,13 +32,6 @@ export default function ProfilePage() {
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
 
-  useEffect(() => {
-    setEditName(profile.name);
-    setEditEmail(profile.email);
-    setEditPhone(profile.phone || "");
-    setEditCompany(profile.company || "");
-  }, [profile.company, profile.email, profile.name, profile.phone]);
-
   const isDark = mounted ? theme === "dark" : false;
 
   const initials = useMemo(() => {
@@ -61,12 +56,19 @@ export default function ProfilePage() {
     const earliest = Math.min(
       ...workspaces.map((workspace) => {
         const date = new Date(workspace.createdAt);
-        return Number.isNaN(date.getTime()) ? Date.now() : date.getTime();
+        return Number.isNaN(date.getTime()) ? PROFILE_PAGE_RENDERED_AT : date.getTime();
       })
     );
-    const diff = Date.now() - earliest;
+    const diff = PROFILE_PAGE_RENDERED_AT - earliest;
     return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
   }, [workspaces]);
+
+  const resetEditFormFromProfile = () => {
+    setEditName(profile.name);
+    setEditEmail(profile.email);
+    setEditPhone(profile.phone || "");
+    setEditCompany(profile.company || "");
+  };
 
   const handleSaveProfile = () => {
     updateProfile({
@@ -201,10 +203,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => {
                     setIsEditing(false);
-                    setEditName(profile.name);
-                    setEditEmail(profile.email);
-                    setEditPhone(profile.phone || "");
-                    setEditCompany(profile.company || "");
+                    resetEditFormFromProfile();
                   }}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${isDark ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                 >
@@ -214,7 +213,10 @@ export default function ProfilePage() {
               <button
                 onClick={() => {
                   if (isEditing) handleSaveProfile();
-                  else setIsEditing(true);
+                  else {
+                    resetEditFormFromProfile();
+                    setIsEditing(true);
+                  }
                 }}
                 className="rounded-lg bg-[#2264ff] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1c52d4]"
               >

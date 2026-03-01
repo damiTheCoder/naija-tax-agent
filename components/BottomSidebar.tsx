@@ -45,8 +45,11 @@ export default function BottomSidebar({ variant = "floating" }: BottomSidebarPro
 
     // Close panel when navigating
     useEffect(() => {
-        setIsOpen(false);
-        setShowWorkspaceSwitcher(false);
+        const frame = window.requestAnimationFrame(() => {
+            setIsOpen(false);
+            setShowWorkspaceSwitcher(false);
+        });
+        return () => window.cancelAnimationFrame(frame);
     }, [pathname]);
 
     // Don't render until workspace is loaded

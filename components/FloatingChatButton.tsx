@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
-import { taxEngine, detectTaxType } from "@/lib/tax/taxEngine";
+import { taxEngine } from "@/lib/tax/taxEngine";
 import { walletEngine } from "@/lib/wallet/walletEngine";
 import { calculateCashPosition, calculateCashflowMetrics } from "@/lib/cashflow/cashflowEngine";
 import { loadBudgetingState } from "@/lib/budgeting/store";
@@ -27,6 +27,7 @@ import {
     getChatConversation,
     loadChatConversations,
     saveChatConversationMessages,
+    selectChatConversation,
 } from "@/lib/personalChatHistory";
 
 // ============================================================================
@@ -666,8 +667,8 @@ export default function FloatingChatButton() {
         blobUrlsRef.current = [];
     }, []);
 
-    const refreshConversationList = useCallback((moduleId: string) => {
-        setConversationList(loadChatConversations({ module: moduleId }));
+    const refreshConversationList = useCallback(() => {
+        setConversationList(loadChatConversations());
     }, []);
 
     const openConversation = useCallback((conversation: ChatConversation, module: ModuleConfig, route: string) => {
@@ -723,7 +724,7 @@ export default function FloatingChatButton() {
             });
         }
 
-        refreshConversationList(moduleId);
+        refreshConversationList();
         return saved?.id || conversationId || null;
     }, [activeConversationId, refreshConversationList]);
 
@@ -733,18 +734,24 @@ export default function FloatingChatButton() {
         setMessages([createIntroMessage(currentModule, pathname)]);
         setInputValue("");
         setPlanSource("fallback");
-        refreshConversationList(currentModule.id);
+        refreshConversationList();
         setIsModalOpen(true);
     }, [currentModule, pathname, refreshConversationList, revokeBlobUrls]);
 
     const handleSelectConversation = useCallback((conversationId: string) => {
         const conversation = getChatConversation(conversationId);
         if (!conversation) return;
-        const moduleConfig = getModuleFromPath(pathname);
+        if (conversation.route && conversation.route !== pathname) {
+            selectChatConversation(conversation.id);
+            router.push(conversation.route);
+            setIsModalOpen(true);
+            return;
+        }
+        const moduleConfig = getModuleFromPath(conversation.route || pathname);
         setCurrentModule(moduleConfig);
-        openConversation(conversation, moduleConfig, pathname);
+        openConversation(conversation, moduleConfig, conversation.route || pathname);
         setIsModalOpen(true);
-    }, [openConversation, pathname]);
+    }, [openConversation, pathname, router]);
 
     // Detect module from pathname
     useEffect(() => {
@@ -752,8 +759,8 @@ export default function FloatingChatButton() {
         setCurrentModule(activeModule);
         revokeBlobUrls();
         const selected = consumeSelectedChatHistory({ pathname });
-        const moduleConversations = loadChatConversations({ module: activeModule.id });
-        setConversationList(moduleConversations);
+        const allConversations = loadChatConversations();
+        setConversationList(allConversations);
 
         if (selected && selected.module !== "personal" && selected.conversationId) {
             const selectedConversation = getChatConversation(selected.conversationId);
@@ -790,7 +797,8 @@ export default function FloatingChatButton() {
             return;
         }
 
-        const latestConversation = moduleConversations[0];
+        const routeConversations = allConversations.filter((conversation) => conversation.route === pathname);
+        const latestConversation = routeConversations[0];
         if (latestConversation) {
             openConversation(latestConversation, activeModule, pathname);
             return;
@@ -808,7 +816,7 @@ export default function FloatingChatButton() {
 
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
-            refreshConversationList(activeModule.id);
+            refreshConversationList();
 
             if (selected.conversationId) {
                 const selectedConversation = getChatConversation(selected.conversationId);
@@ -850,8 +858,7 @@ export default function FloatingChatButton() {
 
     useEffect(() => {
         const refresh = () => {
-            const activeModule = getModuleFromPath(pathname);
-            refreshConversationList(activeModule.id);
+            refreshConversationList();
         };
         refresh();
         window.addEventListener("storage", refresh);
@@ -1026,20 +1033,7 @@ export default function FloatingChatButton() {
                 results.push("📚 **Accounting**: Could not post (check manually)");
             }
 
-            try {
-                const taxDetection = detectTaxType(parsedTx.description || message, parsedTx.amount, parsedTx.category);
-                const taxResult = taxEngine.processTransaction({
-                    date: new Date().toISOString().split("T")[0],
-                    description: parsedTx.description || message.slice(0, 100),
-                    amount: parsedTx.amount,
-                    category: parsedTx.category || "chat-entry",
-                    type: taxDetection.transactionType,
-                    isResident: true,
-                });
-                results.push(`💰 **Tax**: ${taxResult.transaction.type.toUpperCase()} recorded for ₦${parsedTx.amount.toLocaleString()}`);
-            } catch {
-                results.push("💰 **Tax**: Could not compute (check manually)");
-            }
+            results.push("💰 **Tax**: Synced from posted journal to ledger-first tax engine");
 
             if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "chat" } }));
@@ -1662,7 +1656,7 @@ _Ask me anything about bank reconciliation!_`;
                                         >
                                             New chat
                                         </button>
-                                        {conversationList.slice(0, 8).map((conversation) => (
+                                        {conversationList.map((conversation) => (
                                             <button
                                                 key={conversation.id}
                                                 onClick={() => handleSelectConversation(conversation.id)}

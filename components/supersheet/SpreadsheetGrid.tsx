@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Sheet,
     Cell,
-    CellStyle,
     DEFAULT_COLUMN_WIDTH,
     DEFAULT_ROW_HEIGHT,
     DEFAULT_COLUMNS,
@@ -31,9 +30,9 @@ export default function SpreadsheetGrid({
     selectedCell: externalSelectedCell,
 }: SpreadsheetGridProps) {
     const [selectedCell, setSelectedCell] = useState<string>(externalSelectedCell || 'A1');
+    const activeSelectedCell = externalSelectedCell || selectedCell;
     const [editingCell, setEditingCell] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
-    const [selectionStart, setSelectionStart] = useState<string | null>(null);
     const [selectedRange, setSelectedRange] = useState<string[]>([]);
     const gridRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -42,13 +41,6 @@ export default function SpreadsheetGrid({
     const [resizingCol, setResizingCol] = useState<number | null>(null);
     const [resizeStartX, setResizeStartX] = useState<number>(0);
     const [resizeStartWidth, setResizeStartWidth] = useState<number>(0);
-
-    // Sync external selected cell
-    useEffect(() => {
-        if (externalSelectedCell && externalSelectedCell !== selectedCell) {
-            setSelectedCell(externalSelectedCell);
-        }
-    }, [externalSelectedCell]);
 
     // Focus input when editing
     useEffect(() => {
@@ -70,9 +62,9 @@ export default function SpreadsheetGrid({
 
     // Handle cell click
     const handleCellClick = useCallback((ref: string, e: React.MouseEvent) => {
-        if (e.shiftKey && selectedCell) {
+        if (e.shiftKey && activeSelectedCell) {
             // Range selection
-            const start = parseCellRef(selectedCell);
+            const start = parseCellRef(activeSelectedCell);
             const end = parseCellRef(ref);
             if (start && end) {
                 const range: string[] = [];
@@ -93,7 +85,7 @@ export default function SpreadsheetGrid({
             setSelectedRange([]);
             onCellSelect?.(ref);
         }
-    }, [selectedCell, onCellSelect]);
+    }, [activeSelectedCell, onCellSelect]);
 
     // Handle cell double-click (start editing)
     const handleCellDoubleClick = useCallback((ref: string) => {
@@ -172,7 +164,7 @@ export default function SpreadsheetGrid({
             return;
         }
 
-        const parsed = parseCellRef(selectedCell);
+        const parsed = parseCellRef(activeSelectedCell);
         if (!parsed) return;
 
         let newCol = parsed.col;
@@ -197,7 +189,7 @@ export default function SpreadsheetGrid({
                 break;
             case 'Enter':
                 e.preventDefault();
-                handleCellDoubleClick(selectedCell);
+                handleCellDoubleClick(activeSelectedCell);
                 return;
             case 'Delete':
             case 'Backspace':
@@ -209,14 +201,14 @@ export default function SpreadsheetGrid({
                     onSheetChange({ ...sheet, cells: newCells });
                 } else {
                     const newCells = { ...sheet.cells };
-                    delete newCells[selectedCell];
+                    delete newCells[activeSelectedCell];
                     onSheetChange({ ...sheet, cells: newCells });
                 }
                 return;
             default:
                 // Start typing in cell
                 if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-                    setEditingCell(selectedCell);
+                    setEditingCell(activeSelectedCell);
                     setEditValue(e.key);
                     e.preventDefault();
                 }
@@ -227,7 +219,7 @@ export default function SpreadsheetGrid({
         setSelectedCell(newRef);
         setSelectedRange([]);
         onCellSelect?.(newRef);
-    }, [editingCell, selectedCell, selectedRange, sheet, onSheetChange, onCellSelect, commitEdit, handleCellDoubleClick]);
+    }, [activeSelectedCell, editingCell, selectedRange, sheet, onSheetChange, onCellSelect, commitEdit, handleCellDoubleClick]);
 
     // Handle column resize
     const handleResizeStart = useCallback((col: number, e: React.MouseEvent) => {
@@ -274,8 +266,8 @@ export default function SpreadsheetGrid({
         if (selectedRange.length > 0) {
             return selectedRange.includes(ref);
         }
-        return ref === selectedCell;
-    }, [selectedCell, selectedRange]);
+        return ref === activeSelectedCell;
+    }, [activeSelectedCell, selectedRange]);
 
     // Get cell display value
     const getCellDisplay = useCallback((ref: string): string => {
