@@ -119,6 +119,92 @@ class AccountingEngine {
     this.persist();
   }
 
+  private markTaxSyncStatus(journalId: string, status: "synced" | "pending_retry", message?: string) {
+    const target = this.state.journalEntries.find((entry) => entry.id === journalId);
+    if (!target) return;
+    target.metadata = {
+      ...(target.metadata || {}),
+      taxSyncStatus: status,
+      taxSyncUpdatedAt: new Date().toISOString(),
+      ...(message ? { taxSyncMessage: message } : {}),
+    };
+    this.persist();
+  }
+
+  private getTaxSyncStatus(entry: JournalEntry): "synced" | "pending_retry" | undefined {
+    const metadata = entry.metadata as Record<string, unknown> | undefined;
+    const status = metadata?.taxSyncStatus;
+    return status === "synced" || status === "pending_retry" ? status : undefined;
+  }
+
+  private async flushPendingTaxSync() {
+    if (typeof window === "undefined") return;
+
+    const pending = this.state.journalEntries.filter((entry) => {
+      if (entry.status !== "posted" && entry.status !== "voided") return false;
+      return this.getTaxSyncStatus(entry) !== "synced";
+    });
+    if (pending.length === 0) return;
+
+    try {
+      const response = await fetch("/api/tax/sync-journals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: "entity-default",
+          source: "live_posting",
+          journals: pending,
+        }),
+      });
+      if (!response.ok) {
+        pending.forEach((entry) => {
+          this.markTaxSyncStatus(entry.id, "pending_retry", `Tax sync failed (${response.status})`);
+        });
+        return;
+      }
+      pending.forEach((entry) => this.markTaxSyncStatus(entry.id, "synced"));
+    } catch (error) {
+      pending.forEach((entry) => {
+        this.markTaxSyncStatus(
+          entry.id,
+          "pending_retry",
+          error instanceof Error ? error.message : "Tax sync network error"
+        );
+      });
+    }
+  }
+
+  private async syncJournalToTaxLedger(journalEntry: JournalEntry) {
+    if (typeof window === "undefined") return;
+    if (journalEntry.status !== "posted" && journalEntry.status !== "voided") return;
+    try {
+      const response = await fetch("/api/tax/sync-journals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: "entity-default",
+          source: "live_posting",
+          journals: [journalEntry],
+        }),
+      });
+      if (!response.ok) {
+        this.markTaxSyncStatus(
+          journalEntry.id,
+          "pending_retry",
+          `Tax sync failed (${response.status})`
+        );
+        return;
+      }
+      this.markTaxSyncStatus(journalEntry.id, "synced");
+    } catch (error) {
+      this.markTaxSyncStatus(
+        journalEntry.id,
+        "pending_retry",
+        error instanceof Error ? error.message : "Tax sync network error"
+      );
+    }
+  }
+
   // Persist to localStorage
   private persist() {
     if (typeof window === "undefined") return;
@@ -167,6 +253,7 @@ class AccountingEngine {
         // Auto-rebuild ledger to fix any discrepancies
         console.log("[Load] Auto-rebuilding ledger to ensure trial balance is correct...");
         this.rebuildLedger();
+        void this.flushPendingTaxSync();
       } catch {
         // Ignore malformed cache
       }
@@ -352,6 +439,7 @@ class AccountingEngine {
     // Add to state
     this.state.journalEntries.push(journalEntry);
     this.notify();
+    void this.syncJournalToTaxLedger(journalEntry);
 
     return journalEntry;
   }
@@ -415,6 +503,7 @@ class AccountingEngine {
     // Replace in state
     this.state.journalEntries[entryIndex] = updatedEntry;
     this.notify();
+    void this.syncJournalToTaxLedger(updatedEntry);
 
     return updatedEntry;
   }
@@ -488,6 +577,7 @@ class AccountingEngine {
         : "Voided by user action",
     };
     this.notify();
+    void this.syncJournalToTaxLedger(this.state.journalEntries[entryIndex]);
   }
 
   /**
@@ -543,6 +633,7 @@ class AccountingEngine {
     // Step 4: Add to state
     this.state.journalEntries.push(journalEntry);
     this.notify();
+    void this.syncJournalToTaxLedger(journalEntry);
 
     // Step 5: Generate chat response
     const chatResponse = this.generateChatResponse(journalEntry, validatedInterpretation);
@@ -658,6 +749,17 @@ class AccountingEngine {
       reasoning: aiAccounts.reasoning,
       createdAt: new Date().toISOString(),
       postedAt: new Date().toISOString(),
+      metadata: {
+        taxMode: rawTx.taxMode || "category_default",
+        vatApplicable: outputVAT > 0 || rawTx.vatApplicable === true,
+        vatRate: rawTx.vatRate,
+        vatCategory: rawTx.vatCategory || (outputVAT > 0 ? "output" : inputVAT > 0 ? "input" : undefined),
+        vatOutputAmount: outputVAT > 0 ? outputVAT : undefined,
+        vatInputAmount: inputVAT > 0 ? inputVAT : undefined,
+        whtApplicable: rawTx.whtApplicable === true,
+        whtRate: rawTx.whtRate,
+        taxCategory: rawTx.taxCategory || rawTx.category,
+      },
     };
 
     // Post to ledger
@@ -666,6 +768,7 @@ class AccountingEngine {
     // Add to state
     this.state.journalEntries.push(journalEntry);
     this.notify();
+    void this.syncJournalToTaxLedger(journalEntry);
 
     // Generate chat response with AI accounts
     const formatCurrency = (n: number) => `₦${n.toLocaleString()}`;
@@ -862,7 +965,7 @@ class AccountingEngine {
 
     // Step 3: Create journal entry with analyzed accounts
     const journalId = generateJournalId();
-    let lines: JournalLine[] = [
+    const lines: JournalLine[] = [
       {
         accountCode: analysis.debitAccount.code,
         accountName: analysis.debitAccount.name,
@@ -975,6 +1078,10 @@ class AccountingEngine {
       transactionType: "other",
       anomalyFlag,
       createdAt: new Date().toISOString(),
+      metadata: {
+        taxMode: rawTx.taxMode || "category_default",
+        taxCategory: rawTx.taxCategory || rawTx.category || "general",
+      },
     };
 
     // Step 5: Validate the entry is balanced
@@ -991,6 +1098,7 @@ class AccountingEngine {
     // Step 7: Add to state
     this.state.journalEntries.push(journalEntry);
     this.notify();
+    void this.syncJournalToTaxLedger(journalEntry);
 
     // Step 8: Generate chat response
     let chatResponse = this.generateEnhancedChatResponse(journalEntry, analysis);
@@ -1867,39 +1975,72 @@ class AccountingEngine {
     const desc = rawTx.description.toLowerCase();
     let vatAmount = 0;
     let whtAmount = 0;
-    let hasTax = false;
     const assumptions: string[] = [];
     const VAT_RATE = 0.075; // Standard Nigerian VAT
+    const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+    const normalizeRate = (value: unknown, fallback: number) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+      return numeric > 1 ? numeric / 100 : numeric;
+    };
 
-    // VAT Detection
-    if (desc.includes('vat') || desc.includes('tax')) {
-      hasTax = true;
-      if (desc.includes('inclusive') || desc.includes('incl')) {
-        // Assume VAT is included in the total
-        vatAmount = totalAmount - (totalAmount / (1 + VAT_RATE));
-        assumptions.push(`VAT detected (inclusive) - extracted ${VAT_RATE * 100}%`);
+    const explicitVatAmount = Number(rawTx.vatAmount);
+    const explicitWhtAmount = Number(rawTx.whtAmount);
+    const hasVatHint = /\bvat\b|value\s*added\s*tax/i.test(desc);
+    const hasWhtHint = /\bwht\b|withholding(?:\s+tax)?\b/i.test(desc);
+
+    const vatApplicable =
+      typeof rawTx.vatApplicable === "boolean"
+        ? rawTx.vatApplicable
+        : hasVatHint || (Number.isFinite(explicitVatAmount) && explicitVatAmount > 0);
+    const whtApplicable =
+      typeof rawTx.whtApplicable === "boolean"
+        ? rawTx.whtApplicable
+        : hasWhtHint || (Number.isFinite(explicitWhtAmount) && explicitWhtAmount > 0);
+
+    const inferredMode = /\b(inclusive|incl|incl\.)\b/i.test(desc) ? "inclusive" : "exclusive";
+    const vatMode =
+      rawTx.taxMode === "inclusive" || rawTx.taxMode === "exclusive"
+        ? rawTx.taxMode
+        : inferredMode;
+    const vatRate = normalizeRate(rawTx.vatRate, VAT_RATE);
+
+    let baseAmount = totalAmount;
+
+    if (vatApplicable) {
+      if (Number.isFinite(explicitVatAmount) && explicitVatAmount > 0) {
+        vatAmount = explicitVatAmount;
+        baseAmount = vatMode === "inclusive" ? Math.max(0, totalAmount - vatAmount) : totalAmount;
+        assumptions.push(`VAT amount provided explicitly (${(vatRate * 100).toFixed(1)}%)`);
+      } else if (vatMode === "inclusive") {
+        baseAmount = totalAmount / (1 + vatRate);
+        vatAmount = totalAmount - baseAmount;
+        assumptions.push(`VAT detected (inclusive) - extracted ${(vatRate * 100).toFixed(1)}%`);
       } else {
-        // Assume VAT is to be added
-        vatAmount = totalAmount * VAT_RATE;
-        assumptions.push(`VAT detected (exclusive) - added ${VAT_RATE * 100}%`);
+        baseAmount = totalAmount;
+        vatAmount = baseAmount * vatRate;
+        assumptions.push(`VAT detected (exclusive) - added ${(vatRate * 100).toFixed(1)}%`);
       }
     }
 
-    // WHT Detection (mostly for services/contracts)
-    if (desc.includes('wht') || desc.includes('withholding')) {
-      hasTax = true;
-      const whtRate = desc.includes('director') || desc.includes('rent') ? 0.1 : 0.05;
-      whtAmount = totalAmount * whtRate;
-      assumptions.push(`WHT detected - computed at ${whtRate * 100}%`);
+    if (whtApplicable) {
+      const defaultWhtRate = desc.includes("director") || desc.includes("rent") ? 0.1 : 0.05;
+      const whtRate = normalizeRate(rawTx.whtRate, defaultWhtRate);
+      const whtBase = vatApplicable ? baseAmount : totalAmount;
+      if (Number.isFinite(explicitWhtAmount) && explicitWhtAmount > 0) {
+        whtAmount = explicitWhtAmount;
+        assumptions.push(`WHT amount provided explicitly (${(whtRate * 100).toFixed(1)}%)`);
+      } else {
+        whtAmount = whtBase * whtRate;
+        assumptions.push(`WHT detected - computed at ${(whtRate * 100).toFixed(1)}% on VAT-exclusive base`);
+      }
     }
 
-    const baseAmount = totalAmount - (desc.includes('inclusive') ? vatAmount : 0);
-
     return {
-      baseAmount,
-      vatAmount: Math.round(vatAmount),
-      whtAmount: Math.round(whtAmount),
-      hasTax,
+      baseAmount: round2(Math.max(0, baseAmount)),
+      vatAmount: round2(Math.max(0, vatAmount)),
+      whtAmount: round2(Math.max(0, whtAmount)),
+      hasTax: vatApplicable || whtApplicable,
       assumptions
     };
   }
@@ -2489,12 +2630,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          // lines.push({
-          //   accountCode: "2200",
-          //   accountName: "Output VAT Payable",
-          //   debit: 0,
-          //   credit: vatAmount,
-          // });
+          lines.push({
+            accountCode: "2200",
+            accountName: "Output VAT Payable",
+            debit: 0,
+            credit: vatAmount,
+          });
         }
 
         // Removed automatic COGS recording. Inventory adjustment must be manual.
@@ -2517,12 +2658,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          // lines.push({
-          //   accountCode: "2200",
-          //   accountName: "Output VAT Payable",
-          //   debit: vatAmount,
-          //   credit: 0,
-          // });
+          lines.push({
+            accountCode: "2200",
+            accountName: "Output VAT Payable",
+            debit: vatAmount,
+            credit: 0,
+          });
         }
 
         lines.push({
@@ -2558,12 +2699,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          // lines.push({
-          //   accountCode: "1400",
-          //   accountName: "Input VAT Receivable",
-          //   debit: 0,
-          //   credit: vatAmount,
-          // });
+          lines.push({
+            accountCode: "1400",
+            accountName: "Input VAT Receivable",
+            debit: 0,
+            credit: vatAmount,
+          });
         }
         break;
       }
@@ -2582,12 +2723,12 @@ class AccountingEngine {
         });
 
         if (vatAmount > 0) {
-          // lines.push({
-          //   accountCode: "1400",
-          //   accountName: "Input VAT Receivable",
-          //   debit: vatAmount,
-          //   credit: 0,
-          // });
+          lines.push({
+            accountCode: "1400",
+            accountName: "Input VAT Receivable",
+            debit: vatAmount,
+            credit: 0,
+          });
         }
 
         if (isCredit) {
@@ -2640,6 +2781,7 @@ class AccountingEngine {
 
         const isAccrued = interpretation.assumptions.some(a => a.toLowerCase().includes('accrual'));
 
+        const totalAmount = amount + vatAmount;
         lines.push({
           accountCode: expenseCode,
           accountName: expenseAccountName,
@@ -2647,17 +2789,32 @@ class AccountingEngine {
           credit: 0,
         });
 
-        if (whtAmount > 0) {
-          // handled previously
-        } else {
+        if (vatAmount > 0) {
           lines.push({
-            accountCode: isAccrued ? "2100" : cashAccount,
-            accountName: isAccrued ? "Accrued Expenses" : cashAccountName,
-            debit: 0,
-            credit: amount,
-            memo: isAccrued ? "Accrued expense" : undefined
+            accountCode: "1400",
+            accountName: "Input VAT Receivable",
+            debit: vatAmount,
+            credit: 0,
           });
         }
+
+        if (whtAmount > 0) {
+          lines.push({
+            accountCode: "2220",
+            accountName: "WHT Payable",
+            debit: 0,
+            credit: whtAmount,
+            memo: "Withholding tax deducted",
+          });
+        }
+
+        lines.push({
+          accountCode: isAccrued ? "2100" : cashAccount,
+          accountName: isAccrued ? "Accrued Expenses" : cashAccountName,
+          debit: 0,
+          credit: Math.max(0, totalAmount - whtAmount),
+          memo: isAccrued ? "Accrued expense" : undefined
+        });
         break;
       }
 
@@ -3037,6 +3194,17 @@ class AccountingEngine {
       createdAt: new Date().toISOString(),
       postedAt: new Date().toISOString(),
       status: "posted",
+      metadata: {
+        taxMode: rawTx.taxMode || "category_default",
+        vatApplicable:
+          typeof rawTx.vatApplicable === "boolean" ? rawTx.vatApplicable : vatAmount > 0,
+        vatRate: rawTx.vatRate,
+        vatCategory: rawTx.vatCategory,
+        whtApplicable:
+          typeof rawTx.whtApplicable === "boolean" ? rawTx.whtApplicable : whtAmount > 0,
+        whtRate: rawTx.whtRate,
+        taxCategory: rawTx.taxCategory || rawTx.category || transactionType,
+      },
     };
   }
 
@@ -3539,6 +3707,7 @@ class AccountingEngine {
       this.state.journalEntries.push(closingEntry);
       closingEntries.push(closingEntry);
       this.notify();
+      void this.syncJournalToTaxLedger(closingEntry);
     }
 
     return closingEntries;
@@ -3591,6 +3760,7 @@ class AccountingEngine {
     this.postToLedger(entry);
     this.state.journalEntries.push(entry);
     this.notify();
+    void this.syncJournalToTaxLedger(entry);
 
     return entry;
   }
@@ -3627,6 +3797,7 @@ class AccountingEngine {
       this.postToLedger(entry);
       this.state.journalEntries.push(entry);
       this.notify();
+      void this.syncJournalToTaxLedger(entry);
     }
 
     return entry;

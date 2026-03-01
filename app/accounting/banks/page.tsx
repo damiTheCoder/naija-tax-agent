@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 // =============================================================================
 // TYPES
@@ -37,6 +38,7 @@ export interface BankProvider {
   code: string;
   name: string;
   shortName: string;
+  logoPath: string;
   color: string;
   supported: boolean;
   connectionType: "open_banking" | "statement_upload" | "coming_soon";
@@ -48,16 +50,16 @@ export interface BankProvider {
 // =============================================================================
 
 const SUPPORTED_BANKS: BankProvider[] = [
-  { code: "zenith", name: "Zenith Bank Plc", shortName: "Zenith", color: "#E21A2D", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
-  { code: "gtbank", name: "Guaranty Trust Bank", shortName: "GTBank", color: "#F7941D", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
-  { code: "access", name: "Access Bank Plc", shortName: "Access", color: "#F36F21", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
-  { code: "firstbank", name: "First Bank of Nigeria", shortName: "FirstBank", color: "#003B71", supported: true, connectionType: "open_banking", features: ["Daily sync"] },
-  { code: "uba", name: "United Bank for Africa", shortName: "UBA", color: "#E31937", supported: true, connectionType: "open_banking", features: ["Daily sync"] },
-  { code: "stanbic", name: "Stanbic IBTC Bank", shortName: "Stanbic", color: "#0033A0", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
-  { code: "fcmb", name: "First City Monument Bank", shortName: "FCMB", color: "#5C2D91", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
-  { code: "fidelity", name: "Fidelity Bank Plc", shortName: "Fidelity", color: "#00A859", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
-  { code: "ecobank", name: "Ecobank Nigeria", shortName: "Ecobank", color: "#0066B3", supported: false, connectionType: "coming_soon", features: ["Coming Q1 2025"] },
-  { code: "sterling", name: "Sterling Bank Plc", shortName: "Sterling", color: "#CE1126", supported: false, connectionType: "coming_soon", features: ["Coming Q1 2025"] },
+  { code: "zenith", name: "Zenith Bank Plc", shortName: "Zenith", logoPath: "/bank-logos/zenith.svg", color: "#E21A2D", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
+  { code: "gtbank", name: "Guaranty Trust Bank", shortName: "GTBank", logoPath: "/bank-logos/gtbank.svg", color: "#F7941D", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
+  { code: "access", name: "Access Bank Plc", shortName: "Access", logoPath: "/bank-logos/access.svg", color: "#F36F21", supported: true, connectionType: "open_banking", features: ["Real-time sync", "Multi-account"] },
+  { code: "firstbank", name: "First Bank of Nigeria", shortName: "FirstBank", logoPath: "/bank-logos/firstbank.svg", color: "#003B71", supported: true, connectionType: "open_banking", features: ["Daily sync"] },
+  { code: "uba", name: "United Bank for Africa", shortName: "UBA", logoPath: "/bank-logos/uba.svg", color: "#E31937", supported: true, connectionType: "open_banking", features: ["Daily sync"] },
+  { code: "stanbic", name: "Stanbic IBTC Bank", shortName: "Stanbic", logoPath: "/bank-logos/stanbic.svg", color: "#0033A0", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
+  { code: "fcmb", name: "First City Monument Bank", shortName: "FCMB", logoPath: "/bank-logos/fcmb.svg", color: "#5C2D91", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
+  { code: "fidelity", name: "Fidelity Bank Plc", shortName: "Fidelity", logoPath: "/bank-logos/fidelity.svg", color: "#00A859", supported: true, connectionType: "statement_upload", features: ["Statement upload"] },
+  { code: "ecobank", name: "Ecobank Nigeria", shortName: "Ecobank", logoPath: "/bank-logos/ecobank.svg", color: "#0066B3", supported: false, connectionType: "coming_soon", features: ["Coming Q1 2025"] },
+  { code: "sterling", name: "Sterling Bank Plc", shortName: "Sterling", logoPath: "/bank-logos/sterling.svg", color: "#CE1126", supported: false, connectionType: "coming_soon", features: ["Coming Q1 2025"] },
 ];
 
 // =============================================================================
@@ -120,6 +122,21 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   ),
+  upload: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    </svg>
+  ),
+  download: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+  ),
+  file: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  ),
 };
 
 function KpiCard({ label, value, hint, accent }: { label: string; value: string; hint: string; accent: string }) {
@@ -128,6 +145,40 @@ function KpiCard({ label, value, hint, accent }: { label: string; value: string;
       <p className={`text-xs font-semibold uppercase tracking-wide ${accent}`}>{label}</p>
       <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{value}</p>
       <p className="text-xs text-gray-500 mt-2">{hint}</p>
+    </div>
+  );
+}
+
+function BankLogoBadge({
+  shortName,
+  logoPath,
+  alt,
+  containerClassName,
+  imageClassName,
+  imageSizes,
+}: {
+  shortName: string;
+  logoPath?: string;
+  alt: string;
+  containerClassName: string;
+  imageClassName: string;
+  imageSizes: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden border border-black bg-white ${containerClassName}`}>
+      <span className="text-gray-700 font-bold text-sm">{shortName.slice(0, 2)}</span>
+      {logoPath ? (
+        <Image
+          src={logoPath}
+          alt={alt}
+          fill
+          sizes={imageSizes}
+          className={`${imageClassName} bg-white`}
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -148,6 +199,7 @@ export default function BankConnectionsPage() {
     imported: number;
     income: number;
     expenses: number;
+    message?: string;
   } | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Array<{
     id: string;
@@ -158,13 +210,38 @@ export default function BankConnectionsPage() {
     narration?: string;
   }>>([]);
 
+  // Upload modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadBankCode, setUploadBankCode] = useState("");
+  const [uploadAccountNumber, setUploadAccountNumber] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Load data
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
         const saved = localStorage.getItem("insight::bank-connections");
-        if (saved) setConnections(JSON.parse(saved));
+        if (saved) {
+          const parsed: BankConnection[] = JSON.parse(saved);
+          // Deduplicate by id AND by bankCode (keep first occurrence of each)
+          const seenIds = new Set<string>();
+          const seenBanks = new Set<string>();
+          const unique = parsed.filter((c) => {
+            if (seenIds.has(c.id) || seenBanks.has(c.bankCode)) return false;
+            seenIds.add(c.id);
+            seenBanks.add(c.bankCode);
+            return true;
+          });
+          setConnections(unique);
+          // Persist cleaned list back immediately
+          if (unique.length !== parsed.length) {
+            localStorage.setItem("insight::bank-connections", JSON.stringify(unique));
+          }
+        }
 
         const res = await fetch("/api/bank-connections/transactions?connectionId=demo&limit=5");
         if (res.ok) {
@@ -182,9 +259,7 @@ export default function BankConnectionsPage() {
 
   // Save connections
   useEffect(() => {
-    if (connections.length > 0) {
-      localStorage.setItem("insight::bank-connections", JSON.stringify(connections));
-    }
+    localStorage.setItem("insight::bank-connections", JSON.stringify(connections));
   }, [connections]);
 
   // Stats
@@ -196,14 +271,26 @@ export default function BankConnectionsPage() {
       acc + c.accounts.filter(a => a.currency === "NGN").reduce((s, a) => s + (a.balance || 0), 0), 0),
   }), [connections]);
 
-  // Connect bank
+  // Connect bank — for statement_upload banks, open upload modal instead
   const handleConnectBank = async (bank: BankProvider) => {
     if (!bank.supported) return;
+
+    // Statement-upload banks: open upload modal directly
+    if (bank.connectionType === "statement_upload") {
+      setShowConnectModal(false);
+      setUploadBankCode(bank.code);
+      setShowUploadModal(true);
+      return;
+    }
+
+    // Already connected? Skip
+    if (connections.some(c => c.bankCode === bank.code)) return;
 
     setSelectedBank(bank);
     setConnectStep("connecting");
 
     try {
+      // Call connect API to get a connection ID
       const res = await fetch("/api/bank-connections/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,88 +298,194 @@ export default function BankConnectionsPage() {
       });
 
       const data = await res.json();
-      await new Promise(r => setTimeout(r, 2000));
+      if (!data.success) throw new Error(data.message || "Connection failed");
 
+      const connectionId = data.connectionId || `conn_${bank.code}_${Date.now()}`;
+
+      // Create the connection
       const newConnection: BankConnection = {
-        id: data.connectionId || `conn_${bank.code}_${Date.now()}`,
+        id: connectionId,
         bankCode: bank.code,
         bankName: bank.name,
         status: "connected",
         accounts: [{
           id: `acc_${Date.now()}`,
-          accountNumber: "****" + Math.floor(1000 + Math.random() * 9000),
+          accountNumber: "Pending sync...",
           accountName: "Business Account",
           accountType: "corporate",
           currency: "NGN",
-          balance: Math.floor(1000000 + Math.random() * 9000000),
-          lastSynced: new Date().toISOString(),
+          balance: 0,
+          lastSynced: undefined,
           isDefault: true,
         }],
         connectedAt: new Date().toISOString(),
-        lastSyncAt: new Date().toISOString(),
+        lastSyncAt: undefined,
         syncFrequency: "hourly",
-        transactionCount: Math.floor(100 + Math.random() * 500),
+        transactionCount: 0,
       };
 
-      setConnections(prev => [...prev, newConnection]);
+      setConnections(prev => {
+        // Guard against duplicates (race condition / double-click)
+        if (prev.some(c => c.id === newConnection.id || c.bankCode === bank.code)) return prev;
+        return [...prev, newConnection];
+      });
       setConnectStep("success");
 
-      setTimeout(() => {
+      // Auto-trigger initial sync after connection
+      setTimeout(async () => {
         setShowConnectModal(false);
         setConnectStep("select");
         setSelectedBank(null);
-
-        // Trigger clarification request for demonstration
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("accounting-clarification-request", {
-            detail: {
-              transaction: {
-                amount: 45000,
-                date: new Date().toISOString().split('T')[0],
-                description: "POS TRANSFER TO UNKNOWN VENDOR",
-                bankName: bank.name
-              }
-            }
-          }));
-        }
-      }, 2000);
+        // Trigger first sync
+        await handleSync(connectionId);
+      }, 1500);
     } catch (error) {
       console.error(error);
       setConnectStep("select");
     }
   };
 
-  // Sync and import
-  const handleSync = async (connectionId: string) => {
+  // Sync via real pipeline — POST /api/bank-connections/[id]/sync
+  const handleSync = useCallback(async (connectionId: string) => {
     setSyncingId(connectionId);
     try {
-      const res = await fetch("/api/bank-connections/transactions?connectionId=" + connectionId + "&limit=20");
+      const res = await fetch(`/api/bank-connections/${connectionId}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
       const data = await res.json();
 
-      if (data.success && data.transactions?.length > 0) {
-        const { importBankTransactions } = await import("@/lib/accounting/bankImporter");
-        const result = importBankTransactions(data.transactions);
+      if (data.success && data.data?.pipeline) {
+        const pipeline = data.data.pipeline;
+        const summary = pipeline.summary || {};
 
         setImportResult({
           show: true,
-          imported: result.imported,
-          income: result.summary.income,
-          expenses: result.summary.expenses,
+          imported: pipeline.processed || 0,
+          income: summary.totalCredits || 0,
+          expenses: summary.totalDebits || 0,
+          message: `${pipeline.processed} transactions processed across Accounting, Tax & Cashflow`,
         });
 
         setConnections(prev => prev.map(c =>
           c.id === connectionId
-            ? { ...c, lastSyncAt: new Date().toISOString(), transactionCount: c.transactionCount + result.imported }
+            ? {
+              ...c,
+              lastSyncAt: new Date().toISOString(),
+              transactionCount: c.transactionCount + (pipeline.processed || 0),
+              accounts: c.accounts.map(a => ({ ...a, lastSynced: new Date().toISOString() })),
+            }
             : c
         ));
 
-        setRecentTransactions(data.transactions.slice(0, 5));
-        setTimeout(() => setImportResult(null), 5000);
+        // Populate recent transactions from pipeline results
+        if (pipeline.details?.length > 0) {
+          const recent = pipeline.details.slice(0, 5).map((d: Record<string, string | number | string[]>, i: number) => ({
+            id: String(d.bankTxId || `synced-${i}`),
+            date: new Date().toISOString(),
+            description: String(d.category || "Transaction"),
+            amount: 0,
+            type: "debit" as const,
+            narration: String(d.nature || ""),
+          }));
+          setRecentTransactions(recent);
+        }
+
+        setTimeout(() => setImportResult(null), 6000);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Sync failed:", e);
     } finally {
       setSyncingId(null);
+    }
+  }, []);
+
+  // Upload CSV statement
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadBankCode) return;
+
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("bankCode", uploadBankCode);
+      if (uploadAccountNumber) formData.append("accountNumber", uploadAccountNumber);
+      formData.append("dateFormat", "DD/MM/YYYY");
+
+      const res = await fetch("/api/bank-connections/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setUploadError(data.error || "Upload failed");
+        return;
+      }
+
+      const result = data.data;
+
+      // Add or update connection
+      const existingConn = connections.find(c => c.bankCode === uploadBankCode);
+      if (existingConn) {
+        setConnections(prev => prev.map(c =>
+          c.bankCode === uploadBankCode
+            ? {
+              ...c,
+              lastSyncAt: new Date().toISOString(),
+              transactionCount: c.transactionCount + result.transactionsImported,
+              accounts: c.accounts.map(a => ({ ...a, lastSynced: new Date().toISOString() })),
+            }
+            : c
+        ));
+      } else {
+        const bank = SUPPORTED_BANKS.find(b => b.code === uploadBankCode);
+        const newConn: BankConnection = {
+          id: result.connectionId || `conn_${uploadBankCode}_${Date.now()}`,
+          bankCode: uploadBankCode,
+          bankName: bank?.name || uploadBankCode,
+          status: "connected",
+          accounts: [{
+            id: `acc_upload_${Date.now()}`,
+            accountNumber: uploadAccountNumber || "Statement upload",
+            accountName: "Uploaded Account",
+            accountType: "corporate",
+            currency: "NGN",
+            balance: 0,
+            lastSynced: new Date().toISOString(),
+            isDefault: true,
+          }],
+          connectedAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+          syncFrequency: "manual",
+          transactionCount: result.transactionsImported,
+        };
+        setConnections(prev => [...prev, newConn]);
+      }
+
+      setImportResult({
+        show: true,
+        imported: result.transactionsImported,
+        income: result.pipeline?.summary?.totalCredits || 0,
+        expenses: result.pipeline?.summary?.totalDebits || 0,
+        message: `${result.transactionsImported} transactions from ${uploadFile.name} processed across all modules`,
+      });
+
+      // Close modal and reset
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setUploadBankCode("");
+      setUploadAccountNumber("");
+      setTimeout(() => setImportResult(null), 6000);
+
+    } catch (e) {
+      console.error("Upload failed:", e);
+      setUploadError("Something went wrong. Please try again.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -326,10 +519,31 @@ export default function BankConnectionsPage() {
             Open Accounting Workspace
           </Link>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+          >
+            {icons.upload}
+            Upload Statement
+          </button>
+          {connections.length > 0 && (
+            <button
+              onClick={async () => {
+                for (const c of connections.filter(c => c.status === "connected")) {
+                  await handleSync(c.id);
+                }
+              }}
+              disabled={!!syncingId}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {icons.refresh}
+              Sync All
+            </button>
+          )}
           <button
             onClick={() => setShowConnectModal(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-[#2264ff] text-white hover:bg-[#1a50cc]"
           >
             {icons.plus}
             Connect Bank
@@ -354,17 +568,18 @@ export default function BankConnectionsPage() {
                   key={bank.code}
                   onClick={() => !isDisabled && handleConnectBank(bank)}
                   disabled={isDisabled}
-                  className={`relative flex-shrink-0 flex flex-col items-center gap-2 p-3 group transition-all ${
-                    isDisabled ? "opacity-80" : "hover:bg-gray-50"
-                  }`}
+                  className={`relative flex-shrink-0 flex flex-col items-center gap-2 p-3 group transition-all ${isDisabled ? "opacity-80" : "hover:bg-gray-50"
+                    }`}
                 >
                   <div className="relative">
-                    <div
-                      className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:scale-110 transition-transform"
-                      style={{ backgroundColor: bank.color }}
-                    >
-                      {bank.shortName.slice(0, 2)}
-                    </div>
+                    <BankLogoBadge
+                      shortName={bank.shortName}
+                      logoPath={bank.logoPath}
+                      alt={`${bank.name} logo`}
+                      containerClassName="w-16 h-16 rounded-full group-hover:scale-110 transition-transform"
+                      imageClassName="absolute inset-0 w-full h-full object-contain p-2"
+                      imageSizes="64px"
+                    />
                     {isConnected ? (
                       <div className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -411,13 +626,22 @@ export default function BankConnectionsPage() {
             <p className="text-gray-500 mb-6 max-w-sm mx-auto">
               Connect your business accounts to automatically import transactions and create journal entries.
             </p>
-            <button
-              onClick={() => setShowConnectModal(true)}
-              className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
-            >
-              {icons.plus}
-              Connect Your First Bank
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => setShowConnectModal(true)}
+                className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
+              >
+                {icons.plus}
+                Connect Bank
+              </button>
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-colors"
+              >
+                {icons.upload}
+                Upload Statement
+              </button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -429,12 +653,14 @@ export default function BankConnectionsPage() {
                 <div key={connection.id} className="p-5 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-                        style={{ backgroundColor: bank?.color || "#666" }}
-                      >
-                        {bank?.shortName.slice(0, 2) || "BK"}
-                      </div>
+                      <BankLogoBadge
+                        shortName={bank?.shortName || "BK"}
+                        logoPath={bank?.logoPath}
+                        alt={`${connection.bankName} logo`}
+                        containerClassName="w-12 h-12 rounded-xl"
+                        imageClassName="absolute inset-0 w-full h-full object-contain p-1.5"
+                        imageSizes="48px"
+                      />
                       <div>
                         <h3 className="font-semibold text-gray-900">{connection.bankName}</h3>
                         <div className="flex items-center gap-3 mt-1">
@@ -452,16 +678,26 @@ export default function BankConnectionsPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleSync(connection.id)}
                         disabled={isSyncing}
                         className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
-                        title="Sync & Import"
+                        title="Sync transactions via pipeline"
                       >
                         <span className={isSyncing ? "animate-spin inline-block" : ""}>
                           {icons.refresh}
                         </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUploadBankCode(connection.bankCode);
+                          setShowUploadModal(true);
+                        }}
+                        className="p-2.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="Upload statement CSV"
+                      >
+                        {icons.upload}
                       </button>
                       <button
                         onClick={() => handleDisconnect(connection.id)}
@@ -571,34 +807,49 @@ export default function BankConnectionsPage() {
             <div className="p-6">
               {connectStep === "select" && (
                 <div className="grid grid-cols-2 gap-3">
-                  {SUPPORTED_BANKS.filter(b => b.supported).map((bank) => (
-                    <button
-                      key={bank.code}
-                      onClick={() => handleConnectBank(bank)}
-                      className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
-                    >
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-                        style={{ backgroundColor: bank.color }}
+                  {SUPPORTED_BANKS.filter(b => b.supported).map((bank) => {
+                    const alreadyConnected = connections.some(c => c.bankCode === bank.code);
+                    return (
+                      <button
+                        key={bank.code}
+                        onClick={() => !alreadyConnected && handleConnectBank(bank)}
+                        disabled={alreadyConnected}
+                        className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${alreadyConnected
+                            ? "border-blue-200 bg-blue-50/50 opacity-70 cursor-default"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
                       >
-                        {bank.shortName.slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{bank.shortName}</p>
-                        <p className="text-xs text-gray-400">{bank.connectionType.replace("_", " ")}</p>
-                      </div>
-                    </button>
-                  ))}
+                        <BankLogoBadge
+                          shortName={bank.shortName}
+                          logoPath={bank.logoPath}
+                          alt={`${bank.name} logo`}
+                          containerClassName="w-10 h-10 rounded-lg"
+                          imageClassName="absolute inset-0 w-full h-full object-contain p-1"
+                          imageSizes="40px"
+                        />
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{bank.shortName}</p>
+                          <p className="text-xs text-gray-400">
+                            {alreadyConnected ? "Already connected" : bank.connectionType.replace("_", " ")}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
               {connectStep === "connecting" && selectedBank && (
                 <div className="text-center py-8">
-                  <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-6 animate-pulse"
-                    style={{ backgroundColor: selectedBank.color }}
-                  >
-                    {selectedBank.shortName.slice(0, 2)}
+                  <div className="mx-auto mb-6 w-fit animate-pulse">
+                    <BankLogoBadge
+                      shortName={selectedBank.shortName}
+                      logoPath={selectedBank.logoPath}
+                      alt={`${selectedBank.name} logo`}
+                      containerClassName="w-16 h-16 rounded-2xl"
+                      imageClassName="absolute inset-0 w-full h-full object-contain p-2"
+                      imageSizes="64px"
+                    />
                   </div>
                   <p className="text-gray-900 font-medium mb-2">Connecting to {selectedBank.name}...</p>
                   <p className="text-sm text-gray-500">Establishing secure connection</p>
@@ -635,11 +886,13 @@ export default function BankConnectionsPage() {
                 </svg>
               </div>
               <div>
-                <h4 className="font-semibold text-white mb-1">Imported to Accounting</h4>
-                <p className="text-sm text-gray-400 mb-2">{importResult.imported} journal entries created</p>
+                <h4 className="font-semibold text-white mb-1">Pipeline Complete</h4>
+                <p className="text-sm text-gray-400 mb-2">
+                  {importResult.message || `${importResult.imported} journal entries created`}
+                </p>
                 <div className="flex items-center gap-4 text-sm">
-                  <span className="text-blue-400">+₦{importResult.income.toLocaleString()}</span>
-                  <span className="text-red-400">-₦{importResult.expenses.toLocaleString()}</span>
+                  {importResult.income > 0 && <span className="text-blue-400">+₦{importResult.income.toLocaleString()}</span>}
+                  {importResult.expenses > 0 && <span className="text-red-400">-₦{importResult.expenses.toLocaleString()}</span>}
                 </div>
               </div>
               <button onClick={() => setImportResult(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
@@ -647,6 +900,149 @@ export default function BankConnectionsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Statement Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Upload Bank Statement</h2>
+              <button
+                onClick={() => { setShowUploadModal(false); setUploadFile(null); setUploadError(""); }}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
+              >
+                {icons.close}
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Bank Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Bank</label>
+                <select
+                  value={uploadBankCode}
+                  onChange={(e) => setUploadBankCode(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-[#2264ff] outline-none bg-white"
+                >
+                  <option value="">Select a bank...</option>
+                  {SUPPORTED_BANKS.filter(b => b.supported).map((bank) => (
+                    <option key={bank.code} value={bank.code}>{bank.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Account Number (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Account Number <span className="text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 0123456789"
+                  value={uploadAccountNumber}
+                  onChange={(e) => setUploadAccountNumber(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-[#2264ff] outline-none"
+                />
+              </div>
+
+              {/* File Drop Zone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Statement File</label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) setUploadFile(file);
+                  }}
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${uploadFile ? "border-blue-300 bg-blue-50/50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.tsv,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setUploadFile(file);
+                    }}
+                  />
+                  {uploadFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                        {icons.file}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900 text-sm">{uploadFile.name}</p>
+                        <p className="text-xs text-gray-500">{(uploadFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
+                        className="p-1 rounded hover:bg-gray-200 text-gray-400"
+                      >
+                        {icons.close}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
+                        {icons.upload}
+                      </div>
+                      <p className="text-sm text-gray-600 font-medium">Drop your CSV file here, or click to browse</p>
+                      <p className="text-xs text-gray-400 mt-1">Supports CSV, TSV files up to 10MB</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Error */}
+              {uploadError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                  <p className="text-sm text-red-700">{uploadError}</p>
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <p className="text-xs text-gray-500">
+                  Your CSV should have columns like: <span className="font-medium">Date, Description, Debit, Credit, Balance</span>.
+                  Transactions will be automatically classified and posted to Accounting, Tax, and Cashflow modules.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => { setShowUploadModal(false); setUploadFile(null); setUploadError(""); }}
+                  className="px-4 py-2.5 text-sm font-medium text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpload}
+                  disabled={!uploadFile || !uploadBankCode || isUploading}
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {icons.upload}
+                      Upload & Process
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

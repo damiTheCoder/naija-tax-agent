@@ -224,6 +224,7 @@ export interface JournalEntry {
   anomalyFlag?: string;
   reconciliationStatus?: "unreconciled" | "reconciled";
   matchedBankTransactionId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export type TransactionType =
@@ -262,8 +263,11 @@ export interface TransactionInput {
   isCredit?: boolean; // True for credit sale/purchase
   vatApplicable?: boolean;
   vatRate?: number;
+  taxMode?: "inclusive" | "exclusive" | "category_default";
+  vatCategory?: "input" | "output" | "exempt" | "zero";
   whtApplicable?: boolean;
   whtRate?: number;
+  taxCategory?: string;
   inventoryEnabled?: boolean;
   costOfGoods?: number;
   category?: string;

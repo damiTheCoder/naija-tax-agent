@@ -18,8 +18,13 @@ export interface RawTransaction {
   classificationConfidence?: number;
   whtApplicable?: boolean;
   whtAmount?: number;
+  whtRate?: number;
   vatApplicable?: boolean;
   vatAmount?: number;
+  vatRate?: number;
+  taxMode?: "inclusive" | "exclusive" | "category_default";
+  vatCategory?: "input" | "output" | "exempt" | "zero";
+  taxCategory?: string;
   verified?: boolean;
   verifiedBy?: string;
   verifiedAt?: string;

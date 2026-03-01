@@ -88,6 +88,7 @@ test("All ledger entries reference rule_set_id", () => {
 
 test("Manual overrides create audit log entries", () => {
   applyManualClassification(entityId, {
+    entityId,
     transactionId: "manual-1",
     taxType: "VAT",
     category: "output",

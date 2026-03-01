@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { processTransactions } from "@/lib/banking/transactionPipeline";
+import type { InboundBankTransaction } from "@/lib/banking/types";
 
 /**
  * Bank Connection API - Transactions Endpoint
@@ -195,31 +197,93 @@ export async function GET(request: NextRequest) {
     }
 }
 
-// POST - Import transactions to accounting system
+// POST - Import transactions to accounting system via the cross-module pipeline
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { connectionId, transactionIds } = body;
+        const { connectionId, transactionIds, transactions: rawTransactions } = body;
 
-        if (!connectionId || !transactionIds?.length) {
+        if (!connectionId) {
             return NextResponse.json(
-                { success: false, message: "connectionId and transactionIds are required" },
+                { success: false, message: "connectionId is required" },
                 { status: 400 }
             );
         }
 
-        /**
-         * PRODUCTION: 
-         * 1. Fetch full transaction details
-         * 2. Transform to accounting journal entries
-         * 3. Post to accounting engine
-         * 4. Mark as imported in database
-         */
+        // Build InboundBankTransactions from either provided data or mock lookup
+        let toProcess: InboundBankTransaction[] = [];
+
+        if (rawTransactions && Array.isArray(rawTransactions)) {
+            // Client sent full transaction objects
+            toProcess = rawTransactions.map((tx: Transaction) => ({
+                id: tx.id,
+                connectionId,
+                accountId: "acc_001",
+                date: tx.date,
+                description: tx.description,
+                narration: tx.narration || undefined,
+                amount: Math.abs(tx.amount),
+                balance: tx.balance || undefined,
+                direction: (tx.type === "credit" ? "credit" : "debit") as "credit" | "debit",
+                currency: tx.currency || "NGN",
+                reference: tx.reference || undefined,
+            }));
+        } else if (transactionIds && Array.isArray(transactionIds)) {
+            // Client sent IDs — look up from mock data
+            const selected = MOCK_TRANSACTIONS.filter((t) =>
+                transactionIds.includes(t.id)
+            );
+            toProcess = selected.map((tx) => ({
+                id: tx.id,
+                connectionId,
+                accountId: "acc_001",
+                date: tx.date,
+                description: tx.description,
+                narration: tx.narration || undefined,
+                amount: Math.abs(tx.amount),
+                balance: tx.balance || undefined,
+                direction: (tx.type === "credit" ? "credit" : "debit") as "credit" | "debit",
+                currency: tx.currency || "NGN",
+                reference: tx.reference || undefined,
+            }));
+        }
+
+        if (toProcess.length === 0) {
+            return NextResponse.json(
+                { success: false, message: "No valid transactions to import" },
+                { status: 400 }
+            );
+        }
+
+        // Run through the full cross-module pipeline
+        const pipelineResult = processTransactions(toProcess, {
+            entityId: connectionId,
+            autoPost: true,
+            runTaxClassification: true,
+            updateBudgets: true,
+            updateCashflow: true,
+            bankAccountCode: "1000",
+        });
 
         return NextResponse.json({
             success: true,
-            imported: transactionIds.length,
-            message: `Imported ${transactionIds.length} transactions to accounting`,
+            imported: pipelineResult.processed,
+            failed: pipelineResult.failed,
+            duplicatesSkipped: pipelineResult.duplicatesSkipped,
+            message: `Processed ${pipelineResult.processed} of ${pipelineResult.total} transactions across all modules`,
+            pipeline: {
+                summary: pipelineResult.summary,
+                details: pipelineResult.results.map((r) => ({
+                    bankTxId: r.bankTransactionId,
+                    journalId: r.accounting.journalId,
+                    category: r.classification.categoryLabel,
+                    nature: r.classification.nature,
+                    confidence: Math.round(r.classification.confidence * 100),
+                    taxClassified: r.tax.classified,
+                    budgetCategory: r.budgeting.categoryMatch,
+                    warnings: r.warnings,
+                })),
+            },
         });
     } catch (error) {
         console.error("Failed to import transactions:", error);

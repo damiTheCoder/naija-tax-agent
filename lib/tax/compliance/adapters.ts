@@ -132,6 +132,9 @@ export function mapJournalEntriesToCompliance(
           whtReceivableAmount: lineContext.whtReceivableAmount,
           payeAmount: lineContext.payeAmount,
           assumptions: entry.assumptions,
+          ...(entry.metadata && typeof entry.metadata === "object"
+            ? (entry.metadata as Record<string, unknown>)
+            : {}),
         },
       };
     });

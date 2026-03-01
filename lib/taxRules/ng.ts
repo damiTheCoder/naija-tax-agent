@@ -95,13 +95,16 @@ export function calculateTaxForNigeria(profile: UserProfile, inputs: TaxInputs):
     const grossRevenue = incomeAggregation.totalRevenue;
     const allowableExpenses = incomeAggregation.totalExpenses;
 
+    if (incomeAggregation.source === "entries" && incomeAggregation.entryCount > 0) {
+        notes.push(`Computed taxable base from detailed income entries (${incomeAggregation.entryCount} entries).`);
+    }
+
     // Record base income steps
     recordStep(state, { step_id: "GROSS_REVENUE", label: "Total Gross Revenue", value: grossRevenue });
     recordStep(state, { step_id: "ALLOWABLE_EXPENSES", label: "Allowable Business Expenses", value: allowableExpenses });
 
     let taxableIncome: number;
     let totalTaxDue: number;
-    let taxBeforeCredits: number;
 
     if (profile.taxpayerType === "freelancer") {
         // PERSONAL INCOME TAX (PIT)
@@ -254,7 +257,7 @@ export function calculateTaxForNigeria(profile: UserProfile, inputs: TaxInputs):
         notes.push("Tax calculated under Companies Income Tax Act (CITA)");
     }
 
-    taxBeforeCredits = totalTaxDue;
+    const taxBeforeCredits = totalTaxDue;
 
     // Withholding Tax Credits
     const withholdingCredits = Math.max(0, inputs.withholdingTaxCredits || 0);
@@ -275,7 +278,12 @@ export function calculateTaxForNigeria(profile: UserProfile, inputs: TaxInputs):
     if (profile.isVATRegistered) {
         const vatRate = evaluateFormula(rulebook.rules.VAT_RATE.formula, state.context);
         const outputVAT = grossRevenue * vatRate;
-        const inputVAT = inputs.inputVATPaid || 0;
+        const derivedInputVAT = Math.max(0, (inputs.vatTaxablePurchases || 0) * vatRate);
+        const explicitInputVAT = Number(inputs.inputVATPaid);
+        const inputVAT =
+            Number.isFinite(explicitInputVAT) && explicitInputVAT > 0
+                ? explicitInputVAT
+                : derivedInputVAT;
         vat = {
             vatRate,
             outputVAT,

@@ -2722,8 +2722,14 @@ export async function runUnifiedAgentMessage(params: {
       executionMode === "background"
         ? plan.actions.filter((action) => action.type !== "ui.operate" && action.type !== "navigate")
         : plan.actions;
+    const hasAccountingPost = modeFilteredActions.some(
+      (action) => action.type === "accounting.postTransaction"
+    );
+    const normalizedActions = hasAccountingPost
+      ? modeFilteredActions.filter((action) => action.type !== "tax.recordTransaction")
+      : modeFilteredActions;
     const skippedForBackground = plan.actions.length - modeFilteredActions.length;
-    if (modeFilteredActions.length === 0) {
+    if (normalizedActions.length === 0) {
       pendingUiApproval = null;
       if (executionMode === "background" && skippedForBackground > 0) {
         latestReply = `${latestReply}\n\nThis request needs on-screen steps. Switch to Agentic mode to run it live in the interface.`;
@@ -2731,7 +2737,7 @@ export async function runUnifiedAgentMessage(params: {
       break;
     }
 
-    const signature = actionSignature(modeFilteredActions);
+    const signature = actionSignature(normalizedActions);
     if (seenSignatures.has(signature)) {
       latestReply = `${latestReply}\n\nI reached the same step again, so I’m stopping here to avoid looping.`;
       pendingUiApproval = null;
@@ -2739,10 +2745,10 @@ export async function runUnifiedAgentMessage(params: {
     }
     seenSignatures.add(signature);
 
-    const uiActions = modeFilteredActions.filter((action) => action.type === "ui.operate");
-    const nonUiActions = modeFilteredActions.filter((action) => action.type !== "ui.operate");
+    const uiActions = normalizedActions.filter((action) => action.type === "ui.operate");
+    const nonUiActions = normalizedActions.filter((action) => action.type !== "ui.operate");
     const requiresUiApproval = params.autoApproveUiActions ? false : uiActions.some(uiActionNeedsConfirmation);
-    const actionsToExecute = requiresUiApproval ? nonUiActions : modeFilteredActions;
+    const actionsToExecute = requiresUiApproval ? nonUiActions : normalizedActions;
 
     aggregateActions.push(...actionsToExecute);
 
@@ -2792,7 +2798,21 @@ export async function runUnifiedAgentMessage(params: {
     }
   }
 
-  const finalReply = buildFinalReplyFromExecution(latestReply || "Done.", aggregateExecution);
+  const hasEffectfulSuccess = aggregateExecution.some(
+    (result) => result.success && EFFECTFUL_ACTION_TYPES.has(result.type)
+  );
+  const requestedExecution =
+    isExplicitActionIntent(trimmedMessage) ||
+    isReportActionIntent(trimmedMessage, moduleId);
+
+  let finalReply = buildFinalReplyFromExecution(latestReply || "Done.", aggregateExecution);
+  if (requestedExecution && !hasEffectfulSuccess) {
+    const noChangePrefix = "No changes were applied in your data.";
+    if (!finalReply.toLowerCase().includes("no changes were applied")) {
+      finalReply = `${noChangePrefix}\n\n${finalReply}`;
+    }
+  }
+
   return {
     finalReply,
     baseReply: latestReply || "Done.",

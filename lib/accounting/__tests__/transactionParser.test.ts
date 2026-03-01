@@ -5,6 +5,7 @@
  */
 
 import { parseTransactionFromChat } from '../transactionBridge';
+import { describe, it, expect } from "vitest";
 
 // Test case structure
 interface TestCase {
@@ -388,44 +389,50 @@ function runTests(): { passed: number; failed: number; accuracy: number; failure
     return { passed, failed, accuracy, failures };
 }
 
-// ============================================================================
-// MAIN EXECUTION
-// ============================================================================
+function printSummary() {
+    const results = runTests();
+    console.log("=".repeat(80));
+    console.log("TRANSACTION PARSER ACCURACY TEST");
+    console.log("=".repeat(80));
+    console.log(`Total test cases: ${testCases.length}`);
+    console.log("");
+    console.log(`RESULTS:`);
+    console.log(`  Passed: ${results.passed}`);
+    console.log(`  Failed: ${results.failed}`);
+    console.log(`  Accuracy: ${results.accuracy.toFixed(2)}%`);
+    console.log("");
 
-console.log("=".repeat(80));
-console.log("TRANSACTION PARSER ACCURACY TEST");
-console.log("=".repeat(80));
-console.log(`Total test cases: ${testCases.length}`);
-console.log("");
-
-const results = runTests();
-
-console.log(`RESULTS:`);
-console.log(`  Passed: ${results.passed}`);
-console.log(`  Failed: ${results.failed}`);
-console.log(`  Accuracy: ${results.accuracy.toFixed(2)}%`);
-console.log("");
-
-if (results.failures.length > 0) {
-    console.log("FAILURES:");
-    console.log("-".repeat(80));
-    for (const f of results.failures.slice(0, 50)) { // Show first 50 failures
-        console.log(`[${f.id}] "${f.input}"`);
-        console.log(`   Expected: ${f.expected}`);
-        console.log(`   Got:      ${f.got}`);
-        console.log(`   Desc:     ${f.description}`);
-        console.log("");
+    if (results.failures.length > 0) {
+        console.log("FAILURES:");
+        console.log("-".repeat(80));
+        for (const f of results.failures.slice(0, 50)) {
+            console.log(`[${f.id}] "${f.input}"`);
+            console.log(`   Expected: ${f.expected}`);
+            console.log(`   Got:      ${f.got}`);
+            console.log(`   Desc:     ${f.description}`);
+            console.log("");
+        }
+        if (results.failures.length > 50) {
+            console.log(`... and ${results.failures.length - 50} more failures`);
+        }
     }
 
-    if (results.failures.length > 50) {
-        console.log(`... and ${results.failures.length - 50} more failures`);
-    }
+    console.log("=".repeat(80));
+    console.log(`TARGET: 90% accuracy | CURRENT: ${results.accuracy.toFixed(2)}%`);
+    console.log(results.accuracy >= 90 ? "TARGET MET" : "BELOW TARGET - IMPROVEMENTS NEEDED");
+    console.log("=".repeat(80));
 }
 
-console.log("=".repeat(80));
-console.log(`TARGET: 90% accuracy | CURRENT: ${results.accuracy.toFixed(2)}%`);
-console.log(results.accuracy >= 90 ? "✅ TARGET MET!" : "❌ BELOW TARGET - IMPROVEMENTS NEEDED");
-console.log("=".repeat(80));
+describe("transaction parser accuracy", () => {
+    it("meets minimum accuracy threshold", () => {
+        const results = runTests();
+        expect(results.accuracy).toBeGreaterThanOrEqual(90);
+    });
+});
+
+if (!process.env.VITEST) {
+    printSummary();
+}
 
 // Export for use in other tests
 export { testCases, runTests };

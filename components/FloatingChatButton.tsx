@@ -18,9 +18,15 @@ import {
 } from "@/lib/agent/unifiedClient";
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import {
-    addChatHistoryEntry,
+    ChatConversation,
+    ChatConversationMessage,
+    PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
     CHAT_HISTORY_SELECTED_EVENT,
+    createChatConversation,
     consumeSelectedChatHistory,
+    getChatConversation,
+    loadChatConversations,
+    saveChatConversationMessages,
 } from "@/lib/personalChatHistory";
 
 // ============================================================================
@@ -163,6 +169,28 @@ type ChatAttachmentDownload = {
     url: string;
     mimeType?: string;
 };
+
+function toConversationMessages(messages: ChatMessage[]): ChatConversationMessage[] {
+    return messages
+        .filter((message) => message.id !== "intro")
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message) => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            timestamp: message.timestamp,
+        }))
+        .filter((message) => message.content.trim().length > 0);
+}
+
+function fromConversationMessages(messages: ChatConversationMessage[]): ChatMessage[] {
+    return messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp,
+    }));
+}
 
 type ModuleConfig = {
     id: string;
@@ -620,6 +648,8 @@ export default function FloatingChatButton() {
     const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
     const [agentChatMode, setAgentChatMode] = useState<AgentChatMode>("response-only");
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
+    const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
@@ -636,15 +666,106 @@ export default function FloatingChatButton() {
         blobUrlsRef.current = [];
     }, []);
 
+    const refreshConversationList = useCallback((moduleId: string) => {
+        setConversationList(loadChatConversations({ module: moduleId }));
+    }, []);
+
+    const openConversation = useCallback((conversation: ChatConversation, module: ModuleConfig, route: string) => {
+        const introMessage = createIntroMessage(module, route);
+        const restored = fromConversationMessages(conversation.messages);
+        setMessages(restored.length > 0 ? [introMessage, ...restored] : [introMessage]);
+        setActiveConversationId(conversation.id);
+        setInputValue("");
+    }, []);
+
+    const persistConversation = useCallback((
+        nextMessages: ChatMessage[],
+        moduleId: string,
+        route: string,
+        preferredConversationId?: string | null
+    ): string | null => {
+        const conversationMessages = toConversationMessages(nextMessages);
+        if (conversationMessages.length === 0) return preferredConversationId || activeConversationId || null;
+
+        let conversationId = preferredConversationId || activeConversationId;
+        if (!conversationId) {
+            const firstUserMessage = conversationMessages.find((item) => item.role === "user")?.content || "New chat";
+            const created = createChatConversation({
+                module: moduleId,
+                route,
+                title: firstUserMessage,
+            });
+            conversationId = created.id;
+            setActiveConversationId(created.id);
+        }
+
+        let saved = saveChatConversationMessages({
+            conversationId,
+            module: moduleId,
+            route,
+            messages: conversationMessages,
+        });
+
+        if (!saved) {
+            const firstUserMessage = conversationMessages.find((item) => item.role === "user")?.content || "New chat";
+            const created = createChatConversation({
+                module: moduleId,
+                route,
+                title: firstUserMessage,
+            });
+            conversationId = created.id;
+            setActiveConversationId(created.id);
+            saved = saveChatConversationMessages({
+                conversationId,
+                module: moduleId,
+                route,
+                messages: conversationMessages,
+            });
+        }
+
+        refreshConversationList(moduleId);
+        return saved?.id || conversationId || null;
+    }, [activeConversationId, refreshConversationList]);
+
+    const handleStartNewChat = useCallback(() => {
+        revokeBlobUrls();
+        setActiveConversationId(null);
+        setMessages([createIntroMessage(currentModule, pathname)]);
+        setInputValue("");
+        setPlanSource("fallback");
+        refreshConversationList(currentModule.id);
+        setIsModalOpen(true);
+    }, [currentModule, pathname, refreshConversationList, revokeBlobUrls]);
+
+    const handleSelectConversation = useCallback((conversationId: string) => {
+        const conversation = getChatConversation(conversationId);
+        if (!conversation) return;
+        const moduleConfig = getModuleFromPath(pathname);
+        setCurrentModule(moduleConfig);
+        openConversation(conversation, moduleConfig, pathname);
+        setIsModalOpen(true);
+    }, [openConversation, pathname]);
+
     // Detect module from pathname
     useEffect(() => {
         const activeModule = getModuleFromPath(pathname);
         setCurrentModule(activeModule);
-        const introMessage = createIntroMessage(activeModule, pathname);
-        const selected = consumeSelectedChatHistory({ pathname });
         revokeBlobUrls();
+        const selected = consumeSelectedChatHistory({ pathname });
+        const moduleConversations = loadChatConversations({ module: activeModule.id });
+        setConversationList(moduleConversations);
+
+        if (selected && selected.module !== "personal" && selected.conversationId) {
+            const selectedConversation = getChatConversation(selected.conversationId);
+            if (selectedConversation) {
+                openConversation(selectedConversation, activeModule, pathname);
+                setIsModalOpen(true);
+                return;
+            }
+        }
 
         if (selected && selected.module !== "personal") {
+            const introMessage = createIntroMessage(activeModule, pathname);
             const restoredMessages: ChatMessage[] = [introMessage];
             const baseTs = selected.timestamp || Date.now();
             restoredMessages.push({
@@ -664,13 +785,21 @@ export default function FloatingChatButton() {
 
             setMessages(restoredMessages);
             setInputValue(selected.response ? "" : selected.prompt);
+            setActiveConversationId(null);
             setIsModalOpen(true);
             return;
         }
 
-        // Reset messages with module-specific greeting when module changes
-        setMessages([introMessage]);
-    }, [pathname, revokeBlobUrls]);
+        const latestConversation = moduleConversations[0];
+        if (latestConversation) {
+            openConversation(latestConversation, activeModule, pathname);
+            return;
+        }
+
+        setActiveConversationId(null);
+        setMessages([createIntroMessage(activeModule, pathname)]);
+        setInputValue("");
+    }, [pathname, openConversation, revokeBlobUrls]);
 
     useEffect(() => {
         const handleHistorySelection = () => {
@@ -679,18 +808,26 @@ export default function FloatingChatButton() {
 
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
+            refreshConversationList(activeModule.id);
+
+            if (selected.conversationId) {
+                const selectedConversation = getChatConversation(selected.conversationId);
+                if (selectedConversation) {
+                    openConversation(selectedConversation, activeModule, pathname);
+                    setIsModalOpen(true);
+                    return;
+                }
+            }
+
             const introMessage = createIntroMessage(activeModule, pathname);
             const baseTs = selected.timestamp || Date.now();
-            const restoredMessages: ChatMessage[] = [
-                introMessage,
-                {
-                    id: `hist-u-${selected.id}`,
-                    role: "user",
-                    content: selected.prompt,
-                    timestamp: baseTs,
-                },
-            ];
-
+            const restoredMessages: ChatMessage[] = [introMessage];
+            restoredMessages.push({
+                id: `hist-u-${selected.id}`,
+                role: "user",
+                content: selected.prompt,
+                timestamp: baseTs,
+            });
             if (selected.response) {
                 restoredMessages.push({
                     id: `hist-a-${selected.id}`,
@@ -699,7 +836,7 @@ export default function FloatingChatButton() {
                     timestamp: baseTs + 1,
                 });
             }
-
+            setActiveConversationId(null);
             setMessages(restoredMessages);
             setInputValue(selected.response ? "" : selected.prompt);
             setIsModalOpen(true);
@@ -709,7 +846,21 @@ export default function FloatingChatButton() {
         return () => {
             window.removeEventListener(CHAT_HISTORY_SELECTED_EVENT, handleHistorySelection as EventListener);
         };
-    }, [pathname]);
+    }, [openConversation, pathname, refreshConversationList]);
+
+    useEffect(() => {
+        const refresh = () => {
+            const activeModule = getModuleFromPath(pathname);
+            refreshConversationList(activeModule.id);
+        };
+        refresh();
+        window.addEventListener("storage", refresh);
+        window.addEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refresh as EventListener);
+        return () => {
+            window.removeEventListener("storage", refresh);
+            window.removeEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refresh as EventListener);
+        };
+    }, [pathname, refreshConversationList]);
 
     // Listen for clarification requests
     useEffect(() => {
@@ -809,21 +960,23 @@ export default function FloatingChatButton() {
         }
     }, [isModalOpen, clarificationData]);
 
+    const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload): ChatMessage => ({
+        id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role,
+        content,
+        timestamp: Date.now(),
+        attachment,
+    }), []);
+
     const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload) => {
         if (attachment?.url && attachment.url.startsWith("blob:")) {
             blobUrlsRef.current.push(attachment.url);
         }
         setMessages(prev => [
             ...prev,
-            {
-                id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                role,
-                content,
-                timestamp: Date.now(),
-                attachment,
-            },
+            buildChatMessage(role, content, attachment),
         ]);
-    }, []);
+    }, [buildChatMessage]);
 
     // Handle accounting module
     const handleAccountingMessage = useCallback(async (message: string) => {
@@ -1240,17 +1393,40 @@ _Ask me anything about bank reconciliation!_`;
         const trimmed = inputValue.trim();
         if (!trimmed || isLoading || isAgentPerforming) return;
 
-        appendMessage("user", trimmed);
+        let activeRoute = pathname;
+        let activeModuleId = currentModule.id;
+        let workingConversationId: string | null = activeConversationId;
+
+        const userMessage = buildChatMessage("user", trimmed);
+        let workingMessages: ChatMessage[] = [...messages, userMessage];
+        setMessages(workingMessages);
         setInputValue("");
         setIsLoading(true);
         stopAgentRef.current = false;
 
+        const savedAfterUser = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+        if (savedAfterUser) {
+            workingConversationId = savedAfterUser;
+        }
+
+        const appendAssistantAndPersist = (content: string, attachment?: ChatAttachmentDownload) => {
+            if (attachment?.url && attachment.url.startsWith("blob:")) {
+                blobUrlsRef.current.push(attachment.url);
+            }
+            const assistantMessage = buildChatMessage("assistant", content, attachment);
+            workingMessages = [...workingMessages, assistantMessage];
+            setMessages(workingMessages);
+            const savedConversationId = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+            if (savedConversationId) {
+                workingConversationId = savedConversationId;
+            }
+        };
+
         try {
-            let activeRoute = pathname;
-            let activeModuleId = currentModule.id;
-            const conversation = [...messages, { role: "user" as const, content: trimmed }]
+            const conversation = toConversationMessages(workingMessages)
                 .slice(-12)
                 .map((msg) => ({ role: msg.role, content: msg.content }));
+
             if (agentChatMode === "response-only") {
                 const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
                 const result = await runUnifiedAgentMessage({
@@ -1266,24 +1442,17 @@ _Ask me anything about bank reconciliation!_`;
                 });
                 const normalizedPlanSource: AgentPlanSource = result.planSource;
                 setPlanSource(normalizedPlanSource);
-                const response = result.finalReply;
-                addChatHistoryEntry({
-                    module: activeModuleId,
-                    route: pathname,
-                    prompt: trimmed,
-                    response,
-                });
-                appendMessage("assistant", response);
+                appendAssistantAndPersist(result.finalReply);
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
                 downloadAttachments.forEach((attachment) => {
-                    appendMessage("assistant", `Report ready: ${attachment.fileName}`, attachment);
+                    appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
                 });
                 const executedAnyAction = result.execution.some((step) => step.success);
                 if (executedAnyAction) {
-                    appendMessage("assistant", "Completed in background.");
+                    appendAssistantAndPersist("Completed in background.");
                 }
             } else {
                 setIsAgentPerforming(true);
@@ -1293,6 +1462,7 @@ _Ask me anything about bank reconciliation!_`;
                     hasClosedForExecution = true;
                     setIsModalOpen(false);
                 };
+
                 const preferredRoute = resolvePreferredAgentRoute(trimmed, pathname);
                 if (preferredRoute && preferredRoute !== pathname) {
                     closeModalForExecution();
@@ -1301,8 +1471,13 @@ _Ask me anything about bank reconciliation!_`;
                     router.push(preferredRoute);
                     await new Promise((resolve) => setTimeout(resolve, 850));
                 }
-                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
 
+                const savedAfterRouteChange = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+                if (savedAfterRouteChange) {
+                    workingConversationId = savedAfterRouteChange;
+                }
+
+                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
                 const result = await runUnifiedAgentMessage({
                     message: trimmed,
                     module: activeModuleId,
@@ -1317,43 +1492,51 @@ _Ask me anything about bank reconciliation!_`;
                     onExecutionStart: closeModalForExecution,
                 });
 
-                const response = result.finalReply;
                 setPlanSource(result.planSource);
                 if (result.navigateTo && result.navigateTo !== activeRoute) {
                     router.push(result.navigateTo);
                 }
 
-                addChatHistoryEntry({
-                    module: activeModuleId,
-                    route: pathname,
-                    prompt: trimmed,
-                    response,
-                });
                 setIsModalOpen(true);
                 await new Promise((resolve) => setTimeout(resolve, 120));
-                appendMessage("assistant", response);
+                appendAssistantAndPersist(result.finalReply);
+
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
                 downloadAttachments.forEach((attachment) => {
-                    appendMessage("assistant", `Report ready: ${attachment.fileName}`, attachment);
+                    appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
                 });
+
                 const executedAnyAction = result.execution.some((step) => step.success);
-                if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(response)) {
-                    appendMessage("assistant", "Request complete.");
+                if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(result.finalReply)) {
+                    appendAssistantAndPersist("Request complete.");
                 }
             }
         } catch {
             setPlanSource("fallback");
             setIsModalOpen(true);
-            appendMessage("assistant", "Sorry, I couldn't process that. Please try again.");
+            appendAssistantAndPersist("Sorry, I couldn't process that. Please try again.");
         } finally {
             setIsAgentPerforming(false);
             setIsLoading(false);
             stopAgentRef.current = false;
         }
-    }, [inputValue, isLoading, isAgentPerforming, currentModule.id, pathname, appendMessage, messages, executeProjectionAction, router, agentChatMode]);
+    }, [
+        activeConversationId,
+        agentChatMode,
+        buildChatMessage,
+        currentModule.id,
+        executeProjectionAction,
+        inputValue,
+        isAgentPerforming,
+        isLoading,
+        messages,
+        pathname,
+        persistConversation,
+        router,
+    ]);
 
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1471,98 +1654,158 @@ _Ask me anything about bank reconciliation!_`;
                                 <div className="px-4 sm:px-5 pb-2 text-[11px] text-gray-500 dark:text-gray-400">
                                     {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
                                 </div>
-
-                                {/* Messages */}
-                                <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4">
-                                    {messages.map((msg) => (
-                                        <div
-                                            key={msg.id}
-                                            className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                                <div className="px-4 sm:px-5 pb-3 lg:hidden">
+                                    <div className="flex items-center gap-2 overflow-x-auto">
+                                        <button
+                                            onClick={handleStartNewChat}
+                                            className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                                         >
-                                            {msg.role === "user" ? (
-                                                <div className="inline-block max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-blue-500 text-white">
-                                                    {msg.content}
-                                                </div>
-                                            ) : (
-                                                <div className="inline-block max-w-[90%]">
-                                                    <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
-                                                        {msg.content}
-                                                    </div>
-                                                    {msg.attachment?.kind === "download" && (
-                                                        <a
-                                                            href={msg.attachment.url}
-                                                            download={msg.attachment.fileName}
-                                                            className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                                        >
-                                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                                <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
-                                                                <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
-                                                            </svg>
-                                                            Download PDF
-                                                        </a>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {isLoading && (
-                                        <div className="mb-4">
-                                            <div className="flex gap-1">
-                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={chatEndRef} />
+                                            New chat
+                                        </button>
+                                        {conversationList.slice(0, 8).map((conversation) => (
+                                            <button
+                                                key={conversation.id}
+                                                onClick={() => handleSelectConversation(conversation.id)}
+                                                className={`shrink-0 rounded-full border px-3 py-1 text-xs ${activeConversationId === conversation.id
+                                                    ? "border-blue-400 bg-blue-50 text-blue-700"
+                                                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                                                    }`}
+                                            >
+                                                {conversation.title}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                {/* Input */}
-                                <div className="px-3 sm:px-4 py-4">
-                                    <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
-                                        <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                            </svg>
-                                        </button>
-
-                                        <textarea
-                                            ref={textareaRef}
-                                            rows={1}
-                                            placeholder={currentModule.placeholder}
-                                            className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[40px]"
-                                            value={inputValue}
-                                            onChange={(e) => setInputValue(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                        />
-
-                                        <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                            </svg>
-                                        </button>
-
-                                        <button
-                                            onClick={isAgentPerforming ? handleStopAgent : handleSend}
-                                            disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
-                                            className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all ${isAgentPerforming
-                                                ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
-                                                : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
-                                                }`}
-                                            title={isAgentPerforming ? "Stop agent" : "Send"}
-                                        >
-                                            {isAgentPerforming ? (
-                                                <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
-                                            ) : inputValue.trim() ? (
-                                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                                                </svg>
+                                <div className="flex min-h-0 flex-1">
+                                    <aside className="hidden w-56 flex-col border-r border-gray-200 bg-white/70 lg:flex">
+                                        <div className="border-b border-gray-200 p-3">
+                                            <button
+                                                onClick={handleStartNewChat}
+                                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                            >
+                                                + New chat
+                                            </button>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto p-2">
+                                            {conversationList.length === 0 ? (
+                                                <p className="px-2 py-2 text-xs text-gray-500">No chat history yet.</p>
                                             ) : (
-                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                                </svg>
+                                                conversationList.map((conversation) => (
+                                                    <button
+                                                        key={conversation.id}
+                                                        onClick={() => handleSelectConversation(conversation.id)}
+                                                        className={`mb-1 w-full rounded-lg px-2 py-2 text-left ${activeConversationId === conversation.id
+                                                            ? "bg-blue-50 text-blue-700"
+                                                            : "text-gray-700 hover:bg-gray-100"
+                                                            }`}
+                                                    >
+                                                        <p className="truncate text-xs font-semibold">{conversation.title}</p>
+                                                        <p className="truncate text-[11px] text-gray-500">{conversation.preview}</p>
+                                                    </button>
+                                                ))
                                             )}
-                                        </button>
+                                        </div>
+                                    </aside>
+
+                                    <div className="flex min-h-0 flex-1 flex-col">
+                                        {/* Messages */}
+                                        <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4">
+                                            {messages.map((msg) => (
+                                                <div
+                                                    key={msg.id}
+                                                    className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                                                >
+                                                    {msg.role === "user" ? (
+                                                        <div className="inline-block max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-blue-500 text-white">
+                                                            {msg.content}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="inline-block max-w-[90%]">
+                                                            <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
+                                                                {msg.content}
+                                                            </div>
+                                                            {msg.attachment?.kind === "download" && (
+                                                                <a
+                                                                    href={msg.attachment.url}
+                                                                    download={msg.attachment.fileName}
+                                                                    className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                                                >
+                                                                    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                                        <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
+                                                                        <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+                                                                    </svg>
+                                                                    Download PDF
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {isLoading && (
+                                                <div className="mb-4">
+                                                    <div className="flex gap-1">
+                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div ref={chatEndRef} />
+                                        </div>
+
+                                        {/* Input */}
+                                        <div className="px-3 sm:px-4 py-4">
+                                            <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
+                                                <button
+                                                    onClick={handleStartNewChat}
+                                                    title="New chat"
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                                    </svg>
+                                                </button>
+
+                                                <textarea
+                                                    ref={textareaRef}
+                                                    rows={1}
+                                                    placeholder={currentModule.placeholder}
+                                                    className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[40px]"
+                                                    value={inputValue}
+                                                    onChange={(e) => setInputValue(e.target.value)}
+                                                    onKeyDown={handleKeyDown}
+                                                />
+
+                                                <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                                    </svg>
+                                                </button>
+
+                                                <button
+                                                    onClick={isAgentPerforming ? handleStopAgent : handleSend}
+                                                    disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
+                                                    className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all ${isAgentPerforming
+                                                        ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                                                        : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
+                                                        }`}
+                                                    title={isAgentPerforming ? "Stop agent" : "Send"}
+                                                >
+                                                    {isAgentPerforming ? (
+                                                        <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
+                                                    ) : inputValue.trim() ? (
+                                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

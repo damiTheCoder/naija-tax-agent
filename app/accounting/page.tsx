@@ -111,6 +111,37 @@ function formatFullNaira(value: number): string {
   return `₦${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
+function toDateKey(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateKey(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatHeadlineDateLabel(dateKey: string): string {
+  if (!dateKey) return "Selected day";
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateKey;
+  return parsed.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+}
+
 type EntrySignatureLineInput = {
   accountCode?: string;
   debit?: number | string;
@@ -224,6 +255,9 @@ export default function AccountingPage() {
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
   const [cashHeadlineMode, setCashHeadlineMode] = useState<CashHeadlineMode>("inflow");
+  const [cashHeadlineDate, setCashHeadlineDate] = useState(getTodayDateKey);
+  const [isCashDatePickerOpen, setIsCashDatePickerOpen] = useState(false);
+  const cashDatePickerRef = useRef<HTMLDivElement | null>(null);
 
   const cloneAccountingState = useCallback((next: AccountingState): AccountingState => ({
     ...next,
@@ -597,9 +631,50 @@ export default function AccountingPage() {
         conversation,
       });
       appendMessage("assistant", result.finalReply);
-      pushAutomationActivity("Agent execution", `Handled request in accounting module.`);
+      const successfulActions = result.execution.filter((item) => item.success);
+      const failedActions = result.execution.filter((item) => !item.success);
+      const hasEffectfulAccountingChange = successfulActions.some(
+        (item) =>
+          item.type === "accounting.postTransaction" ||
+          item.type === "tax.recordTransaction" ||
+          item.type === "tax.runComputation" ||
+          item.type === "tax.generateSchedule" ||
+          item.type === "tax.applyClassificationRules"
+      );
+
+      if (hasEffectfulAccountingChange) {
+        accountingEngine.load();
+        syncAccountingState(accountingEngine.getState());
+      }
+
       const engineStatements = accountingEngine.generateStatements();
       setGeneratedStatements(engineStatements);
+
+      if (successfulActions.length > 0) {
+        pushAutomationActivity(
+          "Agent execution",
+          `${successfulActions.length} action(s) applied${failedActions.length > 0 ? `, ${failedActions.length} failed` : ""}.`
+        );
+      } else {
+        pushAutomationActivity(
+          "Agent execution",
+          failedActions.length > 0
+            ? `No data changes applied (${failedActions.length} action failure${failedActions.length > 1 ? "s" : ""}).`
+            : "No data changes applied."
+        );
+      }
+
+      if (failedActions.length > 0) {
+        const failurePreview = failedActions
+          .slice(0, 2)
+          .map((item) => `${item.type}: ${item.message}`)
+          .join("\n");
+        appendMessage(
+          "assistant",
+          `Execution report:\n${failurePreview}`
+        );
+      }
+
       if (result.navigateTo && result.navigateTo !== "/accounting") {
         router.push(result.navigateTo);
       }
@@ -1254,6 +1329,8 @@ export default function AccountingPage() {
     let outflow = 0;
 
     accountingState?.journalEntries.forEach((entry) => {
+      if (entry.status !== "posted") return;
+      if (toDateKey(entry.date) !== cashHeadlineDate) return;
       entry.lines.forEach((line) => {
         const isCashAccount = line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName);
         if (!isCashAccount) return;
@@ -1267,7 +1344,9 @@ export default function AccountingPage() {
       outflow,
       balance: inflow - outflow,
     };
-  }, [accountingState]);
+  }, [accountingState, cashHeadlineDate]);
+
+  const cashHeadlineDateLabel = useMemo(() => formatHeadlineDateLabel(cashHeadlineDate), [cashHeadlineDate]);
 
   const cashHeadlineLabelMap: Record<CashHeadlineMode, string> = {
     inflow: "Inflow",
@@ -1285,6 +1364,31 @@ export default function AccountingPage() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!isCashDatePickerOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!cashDatePickerRef.current) return;
+      if (!cashDatePickerRef.current.contains(event.target as Node)) {
+        setIsCashDatePickerOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsCashDatePickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isCashDatePickerOpen]);
+
   return (
     <>
 
@@ -1300,9 +1404,55 @@ export default function AccountingPage() {
                     <p className={`text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                       {cashHeadlineLabelMap[cashHeadlineMode]}
                     </p>
-                    <p className="text-2xl font-bold" style={{ color: "#2264ff" }} title={formatFullNaira(cashHeadlineValue)}>
-                      ₦{formatCompactNaira(cashHeadlineValue)}
-                      <span className={`text-sm font-normal ml-1 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>/mo</span>
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-bold" style={{ color: "#2264ff" }} title={formatFullNaira(cashHeadlineValue)}>
+                        ₦{formatCompactNaira(cashHeadlineValue)}
+                      </p>
+                      <div className="relative" ref={cashDatePickerRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsCashDatePickerOpen((open) => !open)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm font-normal ${theme === "dark" ? "border-gray-600 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-500 hover:bg-gray-50"}`}
+                          aria-haspopup="dialog"
+                          aria-expanded={isCashDatePickerOpen}
+                          title={`Select day (currently ${cashHeadlineDateLabel})`}
+                        >
+                          /day
+                          <svg viewBox="0 0 20 20" className={`h-3 w-3 transition-transform ${isCashDatePickerOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="m5 7 5 6 5-6" />
+                          </svg>
+                        </button>
+                        {isCashDatePickerOpen ? (
+                          <div className={`absolute left-0 z-20 mt-2 w-60 rounded-xl border p-3 shadow-lg ${theme === "dark" ? "border-gray-700 bg-gray-900" : "border-gray-200 bg-white"}`}>
+                            <p className={`text-xs font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Select day</p>
+                            <input
+                              type="date"
+                              value={cashHeadlineDate}
+                              onChange={(event) => setCashHeadlineDate(event.target.value || getTodayDateKey())}
+                              className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#2264ff]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
+                            />
+                            <div className="mt-3 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => setCashHeadlineDate(getTodayDateKey())}
+                                className={`text-xs font-medium ${theme === "dark" ? "text-blue-300 hover:text-blue-200" : "text-blue-600 hover:text-blue-700"}`}
+                              >
+                                Today
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsCashDatePickerOpen(false)}
+                                className={`text-xs ${theme === "dark" ? "text-gray-400 hover:text-gray-300" : "text-gray-500 hover:text-gray-700"}`}
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className={`mt-1 text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                      For {cashHeadlineDateLabel}
                     </p>
                   </div>
                   <button

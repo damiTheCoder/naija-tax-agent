@@ -24,7 +24,7 @@ import {
   setComplianceStatus,
   recordPayment,
 } from "@/lib/tax/compliance/workflow";
-import { generateTaxRemittancePdf } from "@/lib/taxRemittancePdf";
+import { generateTaxRemittancePdf, type TaxRemittancePdfPayload } from "@/lib/taxRemittancePdf";
 import { getTaxpayerProfile } from "@/lib/tax/settings";
 
 type WorkspaceDocument = {
@@ -79,6 +79,58 @@ type TaxTypeImpact = {
   payable: number;
   credit: number;
   net: number;
+};
+
+type TaxDashboardV2 = {
+  entityId: string;
+  period?: string;
+  vatPayable: number;
+  vatReceivable: number;
+  netVatPosition: number;
+  whtPayable: number;
+  nextFilingDate: string | null;
+};
+
+type TaxLedgerRowV2 = {
+  id: string;
+  taxType: "VAT" | "WHT" | "CIT" | "CGT" | "STAMP";
+  ledger: string;
+  direction: string;
+  baseAmount: number;
+  taxAmount: number;
+  period: string | null;
+  transactionId: string | null;
+  transactionDate: string | null;
+  transactionDescription: string | null;
+  accountCode?: string;
+  runningBalance: number;
+  createdAt: string;
+};
+
+type TimelineLedgerRow = {
+  id: string;
+  transactionId?: string | null;
+  taxType: string;
+  ledger: string;
+  baseAmount: number;
+  taxAmount: number;
+  description: string;
+  date: string;
+};
+
+type TimelineTransactionGroup = {
+  id: string;
+  transactionId?: string | null;
+  description: string;
+  date: string;
+  baseAmount: number;
+  netTaxAmount: number;
+  lines: Array<{
+    id: string;
+    taxType: string;
+    ledger: string;
+    taxAmount: number;
+  }>;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-NG", {
@@ -146,6 +198,32 @@ const PAYE_RATE_ESTIMATE = 0.15;
 const EDUCATION_TAX_RATE = 0.03;
 const FILED_STAGES = new Set<ComplianceStatusStage | string>(["filed", "paid", "reconciled"]);
 
+const mapScheduleTaxTypeToRemittanceType = (
+  taxType: string
+): TaxRemittancePdfPayload["taxType"] => {
+  switch (taxType) {
+    case "VAT":
+    case "WHT":
+    case "CIT":
+    case "PIT":
+    case "CGT":
+    case "TET":
+    case "POLICE_LEVY":
+    case "NASENI":
+    case "DEV_LEVY":
+    case "OTHER":
+      return taxType;
+    case "STAMP":
+      return "STAMP_DUTY";
+    case "PAYE":
+      return "PIT";
+    case "EDT":
+      return "DEV_LEVY";
+    default:
+      return "OTHER";
+  }
+};
+
 const taxBreakdownLabels: Array<{ key: DashboardTaxType; label: string; accent: string }> = [
   { key: "CIT", label: "Company Income Tax (CIT)", accent: "text-slate-700" },
   { key: "VAT", label: "Value Added Tax (VAT)", accent: "text-indigo-700" },
@@ -172,8 +250,11 @@ export default function TaxWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isBackfilling, setIsBackfilling] = useState(false);
   const [remittanceHistory, setRemittanceHistory] = useState<RemittanceAuditRecord[]>([]);
   const [isLoadingRemittanceHistory, setIsLoadingRemittanceHistory] = useState(false);
+  const [taxDashboardV2, setTaxDashboardV2] = useState<TaxDashboardV2 | null>(null);
+  const [taxLedgerRowsV2, setTaxLedgerRowsV2] = useState<TaxLedgerRowV2[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(false);
 
@@ -252,14 +333,116 @@ export default function TaxWorkspacePage() {
     }
   }, [refreshAudit]);
 
+  const refreshTaxDashboardV2 = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tax/dashboard?entityId=entity-default", {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as {
+        success?: boolean;
+        dashboard?: TaxDashboardV2;
+      };
+      if (payload.success && payload.dashboard) {
+        setTaxDashboardV2(payload.dashboard);
+      }
+    } catch (dashboardError) {
+      console.error("Tax dashboard v2 load failed", dashboardError);
+    }
+  }, []);
+
+  const refreshTaxLedgerV2 = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "/api/tax/ledger?entityId=entity-default&taxType=ALL&page=1&pageSize=1000",
+        { cache: "no-store" }
+      );
+      if (!response.ok) return;
+      const payload = (await response.json()) as {
+        success?: boolean;
+        rows?: TaxLedgerRowV2[];
+      };
+      if (!payload.success || !Array.isArray(payload.rows)) return;
+      const deduped = Array.from(
+        new Map(payload.rows.map((row) => [row.id, row] as const)).values()
+      );
+      setTaxLedgerRowsV2(deduped);
+    } catch (ledgerError) {
+      console.error("Tax ledger v2 load failed", ledgerError);
+    }
+  }, []);
+
+  const syncTaxLedgerFromAccounting = useCallback(async () => {
+    const journals = dedupeJournalEntries(accountingEngine.getState().journalEntries).filter(
+      (entry) => entry.status === "posted" || entry.status === "voided"
+    );
+    if (journals.length === 0) return;
+
+    const response = await fetch("/api/tax/sync-journals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityId: "entity-default",
+        source: "live_posting",
+        journals,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Tax sync failed (${response.status})`);
+    }
+  }, []);
+
+  const refreshTaxV2 = useCallback(async () => {
+    try {
+      await syncTaxLedgerFromAccounting();
+    } catch (syncError) {
+      console.error("Tax sync from accounting failed", syncError);
+    }
+    await Promise.all([refreshTaxDashboardV2(), refreshTaxLedgerV2()]);
+  }, [refreshTaxDashboardV2, refreshTaxLedgerV2, syncTaxLedgerFromAccounting]);
+
+  const runBackfillToV2 = useCallback(async () => {
+    setIsBackfilling(true);
+    try {
+      const entries = dedupeJournalEntries(accountingEngine.getState().journalEntries).filter(
+        (entry) => entry.status === "posted" || entry.status === "voided"
+      );
+      if (entries.length === 0) {
+        setStatusMessage("No posted/voided journals available for backfill.");
+        return;
+      }
+      const response = await fetch("/api/tax/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: "entity-default",
+          journals: entries,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Backfill failed (${response.status})`);
+      }
+      setStatusMessage(`Backfill completed for ${entries.length} journal states (posted + voided).`);
+      await refreshTaxDashboardV2();
+      await refreshTaxLedgerV2();
+    } catch (backfillError) {
+      console.error("Tax backfill failed", backfillError);
+      setError("Tax v2 backfill failed. Please retry.");
+    } finally {
+      setIsBackfilling(false);
+    }
+  }, [refreshTaxDashboardV2, refreshTaxLedgerV2]);
+
   useEffect(() => {
     accountingEngine.load();
     runComputation();
+    void refreshTaxV2();
     const unsubscribe = accountingEngine.subscribe(() => {
       runComputation();
+      void refreshTaxV2();
     });
     return () => unsubscribe();
-  }, [runComputation]);
+  }, [runComputation, refreshTaxV2]);
 
   const loadRemittanceHistory = useCallback(async (signal?: AbortSignal) => {
     if (!isMountedRef.current) return;
@@ -343,7 +526,7 @@ export default function TaxWorkspacePage() {
     const paymentReference = await generateTaxRemittancePdf({
       taxpayerName: taxpayerProfile.taxpayerName,
       businessName: taxpayerProfile.businessName,
-      taxType: schedule.taxType as any,
+      taxType: mapScheduleTaxTypeToRemittanceType(schedule.taxType),
       period: schedule.period,
       dueDate: schedule.dueDate,
       taxAmount: schedule.totalTax,
@@ -438,24 +621,111 @@ export default function TaxWorkspacePage() {
   }, [transactions]);
 
   const filteredLedgerEntries = useMemo(() => {
-    const ledgerEntries = computation?.ledgerEntries || [];
-    return ledgerEntries
+    const fromBoundary = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+    const toBoundary = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+
+    const inScope = (dateValue?: string | null) => {
+      if (!dateValue) return false;
+      const date = new Date(dateValue);
+      if (Number.isNaN(date.getTime())) return false;
+      if (date.getFullYear() !== selectedYear) return false;
+      if (fromBoundary && date < fromBoundary) return false;
+      if (toBoundary && date > toBoundary) return false;
+      return true;
+    };
+
+    if (taxLedgerRowsV2.length > 0) {
+      return taxLedgerRowsV2
+        .filter((row) => inScope(row.transactionDate || row.createdAt))
+        .sort(
+          (a, b) =>
+            new Date(b.transactionDate || b.createdAt).getTime() -
+            new Date(a.transactionDate || a.createdAt).getTime()
+        )
+        .map((row) => ({
+          id: row.id,
+          transactionId: row.transactionId,
+          taxType: row.taxType,
+          ledger: row.ledger,
+          baseAmount: row.baseAmount,
+          taxAmount: row.taxAmount,
+          description: row.transactionDescription || "Ledger adjustment",
+          date: row.transactionDate || row.createdAt,
+        })) satisfies TimelineLedgerRow[];
+    }
+
+    const legacyLedgerEntries = computation?.ledgerEntries || [];
+    return legacyLedgerEntries
       .filter((entry) => {
         if (!entry.transactionId) return false;
         const tx = transactionMap.get(entry.transactionId);
         if (!tx || !tx.date) return false;
-        const txDate = new Date(tx.date);
-        if (txDate.getFullYear() !== selectedYear) return false;
-        if (dateFrom && txDate < new Date(dateFrom)) return false;
-        if (dateTo && txDate > new Date(dateTo)) return false;
-        return true;
+        return inScope(tx.date);
       })
       .sort((a, b) => {
         const dateA = transactionMap.get(a.transactionId || "")?.date || "";
         const dateB = transactionMap.get(b.transactionId || "")?.date || "";
         return new Date(dateB).getTime() - new Date(dateA).getTime();
+      })
+      .map((entry) => {
+        const tx = entry.transactionId ? transactionMap.get(entry.transactionId) : undefined;
+        return {
+          id: entry.id,
+          transactionId: entry.transactionId,
+          taxType: entry.taxType,
+          ledger: entry.ledger,
+          baseAmount: entry.baseAmount,
+          taxAmount: entry.taxAmount,
+          description: tx?.description || "Ledger adjustment",
+          date: tx?.date || entry.createdAt,
+        };
+      }) satisfies TimelineLedgerRow[];
+  }, [taxLedgerRowsV2, computation?.ledgerEntries, transactionMap, selectedYear, dateFrom, dateTo]);
+
+  const timelineGroups = useMemo<TimelineTransactionGroup[]>(() => {
+    const groups = new Map<string, TimelineTransactionGroup>();
+
+    filteredLedgerEntries.forEach((entry) => {
+      const key = entry.transactionId || `${entry.description}::${entry.date}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.netTaxAmount += entry.taxAmount;
+        existing.baseAmount = Math.max(existing.baseAmount, entry.baseAmount);
+        existing.lines.push({
+          id: entry.id,
+          taxType: entry.taxType,
+          ledger: entry.ledger,
+          taxAmount: entry.taxAmount,
+        });
+        return;
+      }
+
+      groups.set(key, {
+        id: key,
+        transactionId: entry.transactionId,
+        description: entry.description,
+        date: entry.date,
+        baseAmount: entry.baseAmount,
+        netTaxAmount: entry.taxAmount,
+        lines: [
+          {
+            id: entry.id,
+            taxType: entry.taxType,
+            ledger: entry.ledger,
+            taxAmount: entry.taxAmount,
+          },
+        ],
       });
-  }, [computation?.ledgerEntries, transactionMap, selectedYear, dateFrom, dateTo]);
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        netTaxAmount: Math.round(group.netTaxAmount * 100) / 100,
+        lines: group.lines.sort((a, b) => Math.abs(b.taxAmount) - Math.abs(a.taxAmount)),
+      }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filteredLedgerEntries]);
 
   const workspaceInsights = useMemo(() => {
     const fromBoundary = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
@@ -873,6 +1143,14 @@ export default function TaxWorkspacePage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void runBackfillToV2()}
+            disabled={isBackfilling}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {isBackfilling ? "Backfilling..." : "Backfill VAT/WHT v2"}
+          </button>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-xs">
             <span className={`w-2 h-2 rounded-full ${isRefreshingRules ? "bg-amber-500 animate-pulse" : "bg-blue-500"}`}></span>
             <span className="text-gray-600">Engine Online</span>
@@ -881,35 +1159,44 @@ export default function TaxWorkspacePage() {
       </div>
 
       {/* Stats Summary Deck */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#2264ff]">Total Tax Payable</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(workspaceInsights.totalTaxPayable)}>
-            {formatCurrency(workspaceInsights.totalTaxPayable)}
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#2264ff]">VAT Payable</p>
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatPayable ?? taxSummary.netVAT)}>
+            {formatCurrency(taxDashboardV2?.vatPayable ?? taxSummary.netVAT)}
           </p>
-          <p className="text-[11px] text-gray-500 mt-1">Real-time from accounting + tax schedules</p>
+          <p className="text-[11px] text-gray-500 mt-1">Output VAT liability</p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Compliance Score</p>
-          <p className="mt-2 text-xl font-bold text-gray-900">{workspaceInsights.complianceScore}%</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">VAT Receivable</p>
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatReceivable ?? taxSummary.inputVAT)}>
+            {formatCurrency(taxDashboardV2?.vatReceivable ?? taxSummary.inputVAT)}
+          </p>
+          <p className="text-[11px] text-gray-500 mt-1">Input VAT credit</p>
+        </div>
+        <div className="p-4 rounded-xl border bg-white border-gray-200/60">
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Net VAT Position</p>
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.netVatPosition ?? taxSummary.netVAT)}>
+            {formatCurrency(taxDashboardV2?.netVatPosition ?? taxSummary.netVAT)}
+          </p>
           <p className="text-[11px] text-gray-500 mt-1">
-            {workspaceInsights.statusIndicators.Filed} filed • {workspaceInsights.statusIndicators.Overdue} overdue
+            {((taxDashboardV2?.netVatPosition ?? taxSummary.netVAT) < 0) ? "Credit / refund" : "Payable"}
           </p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Upcoming Deadlines</p>
-          <p className="mt-2 text-xl font-bold text-gray-900">{workspaceInsights.upcomingDeadlines.length}</p>
-          <p className="text-[11px] text-gray-500 mt-1">
-            Next due {workspaceInsights.upcomingDeadlines[0] ? formatDate(workspaceInsights.upcomingDeadlines[0].dueDate) : "n/a"}
+          <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">WHT Payable</p>
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.whtPayable ?? taxSummary.totalWHT)}>
+            {formatCurrency(taxDashboardV2?.whtPayable ?? taxSummary.totalWHT)}
           </p>
+          <p className="text-[11px] text-gray-500 mt-1">Withholding owed to authority</p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
-          <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Overdue Taxes</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(workspaceInsights.overdueAmount)}>
-            {formatCurrency(workspaceInsights.overdueAmount)}
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Next Filing Date</p>
+          <p className="mt-2 text-xl font-bold text-gray-900">
+            {taxDashboardV2?.nextFilingDate ? formatDate(taxDashboardV2.nextFilingDate) : "n/a"}
           </p>
           <p className="text-[11px] text-gray-500 mt-1">
-            {workspaceInsights.overdueDeadlines.length} obligation(s) past due
+            {taxDashboardV2 ? "From ledger schedules" : "Fetching..."}
           </p>
         </div>
       </div>
@@ -1151,18 +1438,19 @@ export default function TaxWorkspacePage() {
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-900">Tax Computation Timeline</h2>
-                <p className="text-xs text-gray-500 mt-0.5">{filteredLedgerEntries.length} ledger entries for {selectedYear}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {timelineGroups.length} transaction{timelineGroups.length === 1 ? "" : "s"} • {filteredLedgerEntries.length} tax line{filteredLedgerEntries.length === 1 ? "" : "s"} for {selectedYear}
+                </p>
               </div>
             </div>
-            {filteredLedgerEntries.length === 0 ? (
+            {timelineGroups.length === 0 ? (
               <div className="px-6 py-12 text-center text-gray-400">
                 <p>No tax ledger activity found for this period</p>
                 <button onClick={() => setActiveTab("documents")} className="text-xs mt-2 text-[#2264ff] hover:underline">Upload documents to start</button>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {filteredLedgerEntries.map((entry) => {
-                  const tx = entry.transactionId ? transactionMap.get(entry.transactionId) : undefined;
+                {timelineGroups.map((entry) => {
                   return (
                     <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                       <div className="flex items-start justify-between mb-2">
@@ -1171,24 +1459,23 @@ export default function TaxWorkspacePage() {
                             <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                               {(entry.transactionId || entry.id).slice(-6)}
                             </span>
-                            <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                              {entry.taxType}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
-                              {entry.ledger}
-                            </span>
+                            {entry.lines.map((line) => (
+                              <span key={line.id} className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                                {line.taxType} {line.ledger}
+                              </span>
+                            ))}
                           </div>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{tx?.description || "Ledger adjustment"}</p>
+                          <p className="text-sm font-medium text-gray-900 mt-1">{entry.description || "Ledger adjustment"}</p>
                         </div>
-                        <span className="text-xs text-gray-400">{formatDate(tx?.date)}</span>
+                        <span className="text-xs text-gray-400">{formatDate(entry.date)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
                         <span className="text-xs text-gray-500">
                           Base Amount: <span className="text-gray-900 font-medium" title={formatCurrencyFull(entry.baseAmount)}>{formatCurrency(entry.baseAmount)}</span>
                         </span>
                         <div className="text-right">
-                          <span className="text-xs text-gray-500 block">Tax Impact</span>
-                          <span className="text-sm font-mono font-bold text-gray-900" title={formatCurrencyFull(entry.taxAmount)}>{formatCurrency(entry.taxAmount)}</span>
+                          <span className="text-xs text-gray-500 block">Net Tax Ledger Amount</span>
+                          <span className="text-sm font-mono font-bold text-gray-900" title={formatCurrencyFull(entry.netTaxAmount)}>{formatCurrency(entry.netTaxAmount)}</span>
                         </div>
                       </div>
                     </div>

@@ -25,6 +25,7 @@ import { buildIssues } from "./issues";
 import { applyTaxSettingsToRuleSet } from "@/lib/tax/settings";
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const DEFAULT_VAT_RATE = 0.075;
 
 const parsePeriod = (
   periodInput: string | undefined,
@@ -281,7 +282,32 @@ const computeWhtLedger = (
       const rate = rates[cls.category] ?? 0.05;
       const manualPayable = readNumber(tx.metadata?.whtPayableAmount);
       const manualReceivable = readNumber(tx.metadata?.whtReceivableAmount);
-      const computedTaxAmount = tx.amount * rate;
+      const manualVatOutput = readNumber(tx.metadata?.vatOutputAmount);
+      const manualVatInput = readNumber(tx.metadata?.vatInputAmount);
+      const accountCodes = Array.isArray(tx.metadata?.accountCodes)
+        ? (tx.metadata?.accountCodes as unknown[]).filter((code): code is string => typeof code === "string")
+        : [];
+      const hasExplicitVatLine =
+        accountCodes.includes("1400") ||
+        accountCodes.includes("2200") ||
+        manualVatOutput > 0 ||
+        manualVatInput > 0;
+      const hasVatClassification = classifications.some(
+        (item) => item.taxType === "VAT" && item.transactionId === tx.id
+      );
+      const taxMode = typeof tx.metadata?.taxMode === "string" ? tx.metadata.taxMode.toLowerCase() : "";
+      const vatInclusive = taxMode === "inclusive" || (tx.metadata?.vatInclusive !== false && taxMode !== "exclusive");
+      const vatRateMeta = readNumber(tx.metadata?.vatRate);
+      const vatRate = vatRateMeta > 0 ? vatRateMeta : DEFAULT_VAT_RATE;
+
+      // WHT base must be pre-VAT where VAT applies; explicit VAT lines already indicate net base.
+      const whtBaseAmount =
+        hasExplicitVatLine || !hasVatClassification
+          ? tx.amount
+          : vatInclusive
+          ? tx.amount / (1 + vatRate)
+          : tx.amount;
+      const computedTaxAmount = whtBaseAmount * rate;
       const hasManualPayable = manualPayable > 0;
       const hasManualReceivable = !hasManualPayable && manualReceivable > 0;
       const taxAmount = hasManualPayable ? manualPayable : hasManualReceivable ? -manualReceivable : computedTaxAmount;
@@ -294,7 +320,7 @@ const computeWhtLedger = (
         ruleId: cls.ruleId,
         category: cls.category,
         period,
-        baseAmount: tx.amount,
+        baseAmount: whtBaseAmount,
         taxAmount,
         direction: hasManualReceivable ? "credit" : "payable",
         ledger: hasManualReceivable ? "input" : "output",

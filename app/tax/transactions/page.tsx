@@ -19,6 +19,8 @@ type TxOverride = {
   taxType?: "AUTO" | ExtendedTaxType;
   vatApplicable?: boolean;
   whtApplicable?: boolean;
+  taxMode?: "inclusive" | "exclusive" | "category_default";
+  taxCategory?: string;
   status?: RowStatus;
 };
 
@@ -30,6 +32,8 @@ type TaxTransactionRow = {
   description: string;
   amount: number;
   category: string;
+  taxMode: "inclusive" | "exclusive" | "category_default";
+  taxCategory: string;
   taxType: ExtendedTaxType;
   vatApplicable: boolean;
   whtApplicable: boolean;
@@ -114,6 +118,7 @@ export default function TaxTransactionsPage() {
   const [overrides, setOverrides] = useState<Record<string, TxOverride>>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncingOverrides, setIsSyncingOverrides] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [dateFrom, setDateFrom] = useState("");
@@ -195,6 +200,17 @@ export default function TaxTransactionsPage() {
         override?.taxType && override.taxType !== "AUTO"
           ? override.taxType
           : autoPrimaryTaxType;
+      const metadata = (tx.metadata || {}) as Record<string, unknown>;
+      const taxMode =
+        override?.taxMode ||
+        (metadata.taxMode === "inclusive" || metadata.taxMode === "exclusive"
+          ? metadata.taxMode
+          : "category_default");
+      const taxCategory =
+        override?.taxCategory ||
+        (typeof metadata.taxCategory === "string" && metadata.taxCategory.trim()
+          ? metadata.taxCategory
+          : tx.type || "general");
       const status: RowStatus =
         override?.status || (autoTaxTypes.length > 0 ? "auto" : "unclassified");
 
@@ -204,6 +220,8 @@ export default function TaxTransactionsPage() {
         description: tx.description || "Transaction",
         amount: tx.amount,
         category: tx.type || "general",
+        taxMode,
+        taxCategory,
         taxType,
         vatApplicable:
           typeof override?.vatApplicable === "boolean"
@@ -218,6 +236,55 @@ export default function TaxTransactionsPage() {
       };
     });
   }, [transactions, classificationMap, overrides]);
+
+  const syncTransactionOverrides = useCallback(
+    async (transactionIds: string[], patches?: Record<string, TxOverride>) => {
+      if (transactionIds.length === 0) return;
+      const journalEntries = accountingEngine.getState().journalEntries;
+      const selected = journalEntries.filter((entry) => transactionIds.includes(entry.id));
+      if (selected.length === 0) return;
+
+      setIsSyncingOverrides(true);
+      try {
+        const journals = selected.map((entry) => {
+          const override = {
+            ...(overrides[entry.id] || {}),
+            ...(patches?.[entry.id] || {}),
+          };
+          return {
+            ...entry,
+            metadata: {
+              ...((entry.metadata || {}) as Record<string, unknown>),
+              ...(typeof override.vatApplicable === "boolean" ? { vatApplicable: override.vatApplicable } : {}),
+              ...(typeof override.whtApplicable === "boolean" ? { whtApplicable: override.whtApplicable } : {}),
+              ...(override.taxMode ? { taxMode: override.taxMode } : {}),
+              ...(override.taxCategory ? { taxCategory: override.taxCategory } : {}),
+            },
+          };
+        });
+
+        const response = await fetch("/api/tax/sync-journals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityId: "entity-default",
+            source: "live_posting",
+            journals,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`Sync failed (${response.status})`);
+        }
+        setStatusMessage(`Synced ${journals.length} override(s) to tax engine.`);
+      } catch (syncError) {
+        console.error("Failed to sync tax overrides", syncError);
+        setStatusMessage("Could not sync overrides to tax engine right now.");
+      } finally {
+        setIsSyncingOverrides(false);
+      }
+    },
+    [overrides]
+  );
 
   const categoryOptions = useMemo(() => {
     const categories = new Set<string>();
@@ -306,12 +373,14 @@ export default function TaxTransactionsPage() {
       return next;
     });
 
+    const selectedToSync = [...selectedIds];
     setSelectedIds([]);
     setBulkTaxType("keep");
     setBulkStatus("keep");
     setBulkVatApplicable("keep");
     setBulkWhtApplicable("keep");
     setStatusMessage("Bulk edit applied to selected transactions.");
+    void syncTransactionOverrides(selectedToSync);
   };
 
   const setRowOverride = (id: string, patch: Partial<TxOverride>) => {
@@ -505,6 +574,14 @@ export default function TaxTransactionsPage() {
           >
             Apply to selected
           </button>
+          <button
+            type="button"
+            onClick={() => void syncTransactionOverrides(selectedIds)}
+            disabled={selectedCount === 0 || isSyncingOverrides}
+            className="h-10 px-4 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 disabled:opacity-50"
+          >
+            {isSyncingOverrides ? "Syncing..." : "Sync overrides"}
+          </button>
         </div>
       </div>
 
@@ -525,6 +602,8 @@ export default function TaxTransactionsPage() {
                 <th className="px-3 py-3">Description</th>
                 <th className="px-3 py-3">Amount</th>
                 <th className="px-3 py-3">Tax type</th>
+                <th className="px-3 py-3">VAT mode</th>
+                <th className="px-3 py-3">Tax category</th>
                 <th className="px-3 py-3">VAT applicable</th>
                 <th className="px-3 py-3">Withholding tax applicable</th>
                 <th className="px-3 py-3">Status</th>
@@ -554,10 +633,12 @@ export default function TaxTransactionsPage() {
                       value={overrides[row.id]?.taxType || "AUTO"}
                       onChange={(event) => {
                         const value = event.target.value as "AUTO" | ExtendedTaxType;
-                        setRowOverride(row.id, {
+                        const patch = {
                           taxType: value,
                           status: value === "AUTO" ? undefined : "manual",
-                        });
+                        } as TxOverride;
+                        setRowOverride(row.id, patch);
+                        void syncTransactionOverrides([row.id], { [row.id]: patch });
                       }}
                       className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
                     >
@@ -567,6 +648,37 @@ export default function TaxTransactionsPage() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-3 py-3">
+                    <select
+                      value={row.taxMode}
+                      onChange={(event) => {
+                        const mode = event.target.value as "inclusive" | "exclusive" | "category_default";
+                        setRowOverride(row.id, { taxMode: mode, status: "manual" });
+                        void syncTransactionOverrides([row.id], { [row.id]: { taxMode: mode, status: "manual" } });
+                      }}
+                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
+                    >
+                      <option value="category_default">Category Default</option>
+                      <option value="exclusive">Exclusive</option>
+                      <option value="inclusive">Inclusive</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="text"
+                      value={row.taxCategory}
+                      onChange={(event) => {
+                        const nextCategory = event.target.value;
+                        setRowOverride(row.id, { taxCategory: nextCategory, status: "manual" });
+                      }}
+                      onBlur={(event) =>
+                        void syncTransactionOverrides([row.id], {
+                          [row.id]: { taxCategory: event.target.value, status: "manual" },
+                        })
+                      }
+                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
+                    />
                   </td>
                   <td className="px-3 py-3">
                     <select
@@ -581,8 +693,12 @@ export default function TaxTransactionsPage() {
                         const value = event.target.value;
                         if (value === "auto") {
                           setRowOverride(row.id, { vatApplicable: undefined });
+                          void syncTransactionOverrides([row.id], { [row.id]: { vatApplicable: undefined } });
                         } else {
                           setRowOverride(row.id, { vatApplicable: value === "yes", status: "manual" });
+                          void syncTransactionOverrides([row.id], {
+                            [row.id]: { vatApplicable: value === "yes", status: "manual" },
+                          });
                         }
                       }}
                       className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
@@ -605,8 +721,12 @@ export default function TaxTransactionsPage() {
                         const value = event.target.value;
                         if (value === "auto") {
                           setRowOverride(row.id, { whtApplicable: undefined });
+                          void syncTransactionOverrides([row.id], { [row.id]: { whtApplicable: undefined } });
                         } else {
                           setRowOverride(row.id, { whtApplicable: value === "yes", status: "manual" });
+                          void syncTransactionOverrides([row.id], {
+                            [row.id]: { whtApplicable: value === "yes", status: "manual" },
+                          });
                         }
                       }}
                       className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
@@ -619,7 +739,11 @@ export default function TaxTransactionsPage() {
                   <td className="px-3 py-3">
                     <select
                       value={row.status}
-                      onChange={(event) => setRowOverride(row.id, { status: event.target.value as RowStatus })}
+                      onChange={(event) => {
+                        const nextStatus = event.target.value as RowStatus;
+                        setRowOverride(row.id, { status: nextStatus });
+                        void syncTransactionOverrides([row.id], { [row.id]: { status: nextStatus } });
+                      }}
                       className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs"
                     >
                       {STATUS_OPTIONS.map((status) => (

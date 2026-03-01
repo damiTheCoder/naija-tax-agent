@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/lib/ThemeContext";
 import { useConnectedApps } from "@/lib/ConnectedAppsContext";
@@ -9,9 +9,12 @@ import { formatPlanSourceLabel, runUnifiedAgentMessage, type AgentPlanSource } f
 import { BarChart2, Wallet, RefreshCw, Layers, Send, TrendingUp, MessageSquarePlus, Square } from "lucide-react";
 import { playGoogleButtonClickSound } from "@/lib/sounds";
 import {
-    addChatHistoryEntry,
+    ChatConversationMessage,
     CHAT_HISTORY_SELECTED_EVENT,
     consumeSelectedChatHistory,
+    createChatConversation,
+    getChatConversation,
+    saveChatConversationMessages,
 } from "@/lib/personalChatHistory";
 
 type ChatMessage = {
@@ -20,6 +23,17 @@ type ChatMessage = {
     content: string;
     timestamp: number;
 };
+
+function toConversationMessages(messages: ChatMessage[]): ChatConversationMessage[] {
+    return messages
+        .filter((item) => item.content.trim().length > 0)
+        .map((item) => ({
+            id: item.id,
+            role: item.role,
+            content: item.content,
+            timestamp: item.timestamp,
+        }));
+}
 
 const SUGGESTION_CARDS = [
     {
@@ -63,11 +77,58 @@ export default function PersonalChatPage() {
     const [isTyping, setIsTyping] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const [agentPlanSource, setAgentPlanSource] = useState<AgentPlanSource>("fallback");
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
     const activeRequestIdRef = useRef<number | null>(null);
     const cancelledRequestIdsRef = useRef<Set<number>>(new Set());
+
+    const persistConversation = useCallback((
+        nextMessages: ChatMessage[],
+        preferredConversationId?: string | null
+    ): string | null => {
+        const normalized = toConversationMessages(nextMessages);
+        if (!normalized.length) return preferredConversationId || activeConversationId || null;
+
+        let conversationId = preferredConversationId || activeConversationId;
+        if (!conversationId) {
+            const title = normalized.find((item) => item.role === "user")?.content || "New chat";
+            const conversation = createChatConversation({
+                module: "personal",
+                route: "/personal",
+                title,
+            });
+            conversationId = conversation.id;
+            setActiveConversationId(conversation.id);
+        }
+
+        let saved = saveChatConversationMessages({
+            conversationId,
+            module: "personal",
+            route: "/personal",
+            messages: normalized,
+        });
+
+        if (!saved) {
+            const title = normalized.find((item) => item.role === "user")?.content || "New chat";
+            const conversation = createChatConversation({
+                module: "personal",
+                route: "/personal",
+                title,
+            });
+            conversationId = conversation.id;
+            setActiveConversationId(conversation.id);
+            saved = saveChatConversationMessages({
+                conversationId,
+                module: "personal",
+                route: "/personal",
+                messages: normalized,
+            });
+        }
+
+        return saved?.id || conversationId || null;
+    }, [activeConversationId]);
 
     const hasMessages = messages.length > 0;
     const chatAreaBottomPaddingClass = isExpanded
@@ -120,27 +181,44 @@ export default function PersonalChatPage() {
 
             setIsExpanded(true);
 
-            if (selected.response) {
-                const baseTs = selected.timestamp || Date.now();
-                setMessages([
-                    {
-                        id: `hist-u-${selected.id}`,
-                        role: "user",
-                        content: selected.prompt,
-                        timestamp: baseTs,
-                    },
-                    {
-                        id: `hist-a-${selected.id}`,
-                        role: "assistant",
-                        content: selected.response,
-                        timestamp: baseTs + 1,
-                    },
-                ]);
-                setInput("");
-            } else {
-                setInput(selected.prompt);
+            if (selected.conversationId) {
+                const conversation = getChatConversation(selected.conversationId);
+                if (conversation) {
+                    setActiveConversationId(conversation.id);
+                    setMessages(
+                        conversation.messages.map((item) => ({
+                            id: item.id,
+                            role: item.role,
+                            content: item.content,
+                            timestamp: item.timestamp,
+                        }))
+                    );
+                    setInput("");
+                    setTimeout(() => textareaRef.current?.focus(), 50);
+                    return;
+                }
             }
 
+            const baseTs = selected.timestamp || Date.now();
+            const restored: ChatMessage[] = [
+                {
+                    id: `hist-u-${selected.id}`,
+                    role: "user",
+                    content: selected.prompt,
+                    timestamp: baseTs,
+                },
+            ];
+            if (selected.response) {
+                restored.push({
+                    id: `hist-a-${selected.id}`,
+                    role: "assistant",
+                    content: selected.response,
+                    timestamp: baseTs + 1,
+                });
+            }
+            setActiveConversationId(null);
+            setMessages(restored);
+            setInput(selected.response ? "" : selected.prompt);
             setTimeout(() => textareaRef.current?.focus(), 50);
         };
 
@@ -164,6 +242,7 @@ export default function PersonalChatPage() {
         stopAiResponse();
         setMessages([]);
         setInput("");
+        setActiveConversationId(null);
         setIsExpanded(true);
     };
 
@@ -172,13 +251,9 @@ export default function PersonalChatPage() {
         const msg = (text ?? input).trim();
         if (!msg) return;
 
-        addChatHistoryEntry({
-            module: "personal",
-            route: "/personal",
-            prompt: msg,
-        });
         const requestId = Date.now();
         activeRequestIdRef.current = requestId;
+        let workingConversationId: string | null = activeConversationId;
 
         const userMsg: ChatMessage = {
             id: `u-${requestId}`,
@@ -186,7 +261,12 @@ export default function PersonalChatPage() {
             content: msg,
             timestamp: requestId,
         };
-        setMessages((prev) => [...prev, userMsg]);
+        const nextMessages = [...messages, userMsg];
+        setMessages(nextMessages);
+        const savedAfterUser = persistConversation(nextMessages, workingConversationId);
+        if (savedAfterUser) {
+            workingConversationId = savedAfterUser;
+        }
         if (!text) setInput("");
         setIsTyping(true);
         setIsExpanded(true);
@@ -194,7 +274,7 @@ export default function PersonalChatPage() {
         try {
             let responseText: string;
             try {
-                const conversation = [...messages, { role: "user" as const, content: msg }]
+                const conversation = toConversationMessages(nextMessages)
                     .slice(-12)
                     .map((item) => ({ role: item.role, content: item.content }));
                 const result = await runUnifiedAgentMessage({
@@ -224,13 +304,12 @@ export default function PersonalChatPage() {
                 content: responseText,
                 timestamp: Date.now(),
             };
-            setMessages((prev) => [...prev, assistantMsg]);
-            addChatHistoryEntry({
-                module: "personal",
-                route: "/personal",
-                prompt: msg,
-                response: responseText,
-            });
+            const withAssistant = [...nextMessages, assistantMsg];
+            setMessages(withAssistant);
+            const savedAfterAssistant = persistConversation(withAssistant, workingConversationId);
+            if (savedAfterAssistant) {
+                workingConversationId = savedAfterAssistant;
+            }
         } catch (error) {
             if (cancelledRequestIdsRef.current.has(requestId) || activeRequestIdRef.current !== requestId) {
                 return;
@@ -242,7 +321,12 @@ export default function PersonalChatPage() {
                 content: "Sorry, I encountered an error connecting to Google AI. Please try again.",
                 timestamp: Date.now(),
             };
-            setMessages((prev) => [...prev, errorMsg]);
+            const withError = [...nextMessages, errorMsg];
+            setMessages(withError);
+            const savedAfterError = persistConversation(withError, workingConversationId);
+            if (savedAfterError) {
+                workingConversationId = savedAfterError;
+            }
             setAgentPlanSource("fallback");
         } finally {
             cancelledRequestIdsRef.current.delete(requestId);

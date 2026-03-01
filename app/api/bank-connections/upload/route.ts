@@ -2,28 +2,24 @@
  * =============================================================================
  * BANK STATEMENT UPLOAD API
  * =============================================================================
- * 
- * POST /api/bank-connections/upload - Upload bank statement PDF/CSV
- * 
- * This endpoint handles manual statement uploads for banks that don't 
- * support Open Banking. Backend developer should implement:
- * 
- * 1. File validation (type, size, format)
- * 2. PDF parsing (using pdf-parse, pdfjs, or similar)
- * 3. CSV parsing (using papaparse or similar)
- * 4. Transaction extraction and normalization
- * 5. Duplicate detection
- * 6. AI classification (optional)
- * 
+ *
+ * POST /api/bank-connections/upload - Upload bank statement CSV
+ *
+ * Parses CSV bank statements, extracts transactions, and runs them through
+ * the full cross-module pipeline:
+ *   CSV → Parse → Classify → Accounting → Tax → Budgeting → Cashflow
+ *
  * Supported formats:
- * - PDF bank statements (with optional password)
- * - CSV exports from bank portals
- * - Excel files (xlsx)
- * 
+ * - CSV exports from Nigerian bank portals
+ * - Tab-separated files
+ *
+ * PDF and Excel support can be added by installing pdf-parse / xlsx packages.
  * =============================================================================
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { parseCSVStatement } from "@/lib/banking/transactionPipeline";
+import { processTransactions } from "@/lib/banking/transactionPipeline";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +28,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File | null;
     const bankCode = formData.get("bankCode") as string | null;
     const accountNumber = formData.get("accountNumber") as string | null;
-    const password = formData.get("password") as string | null; // For encrypted PDFs
+    const dateFormat = formData.get("dateFormat") as string | null;
 
     // Validate required fields
     if (!file) {
@@ -51,17 +47,20 @@ export async function POST(request: NextRequest) {
 
     // Validate file type
     const allowedTypes = [
-      "application/pdf",
       "text/csv",
       "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/plain",
+      "text/tab-separated-values",
     ];
 
-    if (!allowedTypes.includes(file.type)) {
+    // Be lenient with MIME types (browsers are inconsistent)
+    const fileName = file.name.toLowerCase();
+    const isCSV = fileName.endsWith(".csv") || fileName.endsWith(".tsv") || fileName.endsWith(".txt");
+    if (!allowedTypes.includes(file.type) && !isCSV) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: "Invalid file type. Allowed: PDF, CSV, XLS, XLSX" 
+        {
+          success: false,
+          error: "Invalid file type. Currently supported: CSV, TSV. PDF/XLSX coming soon.",
         },
         { status: 400 }
       );
@@ -76,79 +75,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Get user from session
-    // const user = await getAuthenticatedUser(request);
+    // Read file content
+    const csvText = await file.text();
+    if (!csvText.trim()) {
+      return NextResponse.json(
+        { success: false, error: "File is empty" },
+        { status: 400 }
+      );
+    }
 
-    // TODO: Process file based on type
-    // 
-    // For PDF:
-    // const pdfParse = require('pdf-parse');
-    // const buffer = Buffer.from(await file.arrayBuffer());
-    // const pdfData = await pdfParse(buffer, { password });
-    // const transactions = parseBankStatement(pdfData.text, bankCode);
-    //
-    // For CSV:
-    // const Papa = require('papaparse');
-    // const text = await file.text();
-    // const { data } = Papa.parse(text, { header: true });
-    // const transactions = normalizeCSVTransactions(data, bankCode);
+    // Generate connection & account IDs
+    const connectionId = `conn_${bankCode}_upload_${Date.now()}`;
+    const accountId = accountNumber
+      ? `acc_${accountNumber}`
+      : `acc_${bankCode}_${Date.now()}`;
 
-    // TODO: Create or find existing connection for this bank
-    // let connection = await db.bankConnections.findFirst({
-    //   where: { userId: user.id, bankCode }
-    // });
-    // if (!connection) {
-    //   connection = await db.bankConnections.create({
-    //     data: {
-    //       userId: user.id,
-    //       bankCode,
-    //       bankName: getBankName(bankCode),
-    //       status: 'connected',
-    //       accounts: accountNumber ? [{ accountNumber, ... }] : [],
-    //       syncFrequency: 'manual',
-    //     }
-    //   });
-    // }
+    // Parse CSV into InboundBankTransactions
+    const parsedFormat = (dateFormat as "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD") || "DD/MM/YYYY";
+    const transactions = parseCSVStatement(csvText, connectionId, accountId, {
+      currency: "NGN",
+      dateFormat: parsedFormat,
+    });
 
-    // TODO: Import transactions (with duplicate detection)
-    // const existingRefs = await db.bankTransactions.findMany({
-    //   where: { connectionId: connection.id },
-    //   select: { reference: true, date: true, amount: true }
-    // });
-    // 
-    // let imported = 0, skipped = 0;
-    // for (const tx of transactions) {
-    //   const isDuplicate = existingRefs.some(e => 
-    //     e.reference === tx.reference || 
-    //     (e.date === tx.date && e.amount === tx.amount)
-    //   );
-    //   if (isDuplicate) {
-    //     skipped++;
-    //     continue;
-    //   }
-    //   await db.bankTransactions.create({ data: { ...tx, connectionId: connection.id } });
-    //   imported++;
-    // }
+    if (transactions.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "No transactions could be extracted from the file. " +
+            "Please ensure it has columns like: Date, Description, Debit, Credit, Balance",
+        },
+        { status: 422 }
+      );
+    }
 
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Run through the full cross-module pipeline
+    const pipelineResult = processTransactions(transactions, {
+      entityId: connectionId,
+      autoPost: true,
+      runTaxClassification: true,
+      updateBudgets: true,
+      updateCashflow: true,
+      bankAccountCode: "1000",
+    });
 
-    // Mock response
-    const mockResult = {
-      connectionId: `conn_${bankCode}_${Date.now()}`,
-      transactionsFound: 45,
-      transactionsImported: 42,
-      duplicatesSkipped: 3,
-      dateRange: {
-        start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        end: new Date().toISOString().split("T")[0],
-      },
-      errors: [],
-    };
+    // Compute date range
+    const dates = transactions.map((t) => new Date(t.date).getTime()).filter((d) => !isNaN(d));
+    const startDate = dates.length
+      ? new Date(Math.min(...dates)).toISOString().split("T")[0]
+      : "";
+    const endDate = dates.length
+      ? new Date(Math.max(...dates)).toISOString().split("T")[0]
+      : "";
 
     return NextResponse.json({
       success: true,
-      data: mockResult,
+      data: {
+        connectionId,
+        fileName: file.name,
+        transactionsFound: transactions.length,
+        transactionsImported: pipelineResult.processed,
+        duplicatesSkipped: pipelineResult.duplicatesSkipped,
+        failed: pipelineResult.failed,
+        dateRange: { start: startDate, end: endDate },
+        pipeline: {
+          summary: pipelineResult.summary,
+          details: pipelineResult.results.map((r) => ({
+            bankTxId: r.bankTransactionId,
+            journalId: r.accounting.journalId,
+            category: r.classification.categoryLabel,
+            nature: r.classification.nature,
+            confidence: Math.round(r.classification.confidence * 100),
+            taxClassified: r.tax.classified,
+            budgetCategory: r.budgeting.categoryMatch,
+            warnings: r.warnings,
+          })),
+        },
+      },
     });
   } catch (error) {
     console.error("Failed to upload statement:", error);
@@ -158,51 +161,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// =============================================================================
-// BANK STATEMENT PARSING (to be implemented)
-// =============================================================================
-
-/**
- * Parse bank statement text based on bank format
- * Each bank has different statement layouts
- */
-// function parseBankStatement(text: string, bankCode: string) {
-//   switch (bankCode) {
-//     case 'zenith':
-//       return parseZenithStatement(text);
-//     case 'gtbank':
-//       return parseGTBankStatement(text);
-//     case 'access':
-//       return parseAccessStatement(text);
-//     default:
-//       return parseGenericStatement(text);
-//   }
-// }
-
-/**
- * Example: Parse Zenith Bank statement format
- */
-// function parseZenithStatement(text: string) {
-//   const lines = text.split('\n');
-//   const transactions = [];
-//   
-//   // Zenith format: DATE | REF | DESCRIPTION | DEBIT | CREDIT | BALANCE
-//   const dateRegex = /^\d{2}\/\d{2}\/\d{4}/;
-//   
-//   for (const line of lines) {
-//     if (!dateRegex.test(line)) continue;
-//     
-//     const parts = line.split(/\s{2,}/);
-//     transactions.push({
-//       date: parseDate(parts[0]),
-//       reference: parts[1],
-//       description: parts[2],
-//       amount: parseAmount(parts[3], parts[4]),
-//       balance: parseAmount(parts[5]),
-//       type: parts[4] ? 'credit' : 'debit',
-//     });
-//   }
-//   
-//   return transactions;
-// }

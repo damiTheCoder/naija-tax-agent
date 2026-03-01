@@ -1042,18 +1042,9 @@ function ModelSwitcher({ activeId }: { activeId: FinancialModelId }) {
 }
 
 export default function ModelDetailClient({ modelId }: { modelId: string }) {
-  if (!(modelId in FINANCIAL_MODELS_BY_ID) || !(modelId in MODEL_TEMPLATES)) {
-    return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-        <p className="text-lg font-semibold text-gray-900">Model not found</p>
-        <Link href="/accounting/projections/modelling" className="mt-4 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
-          Back to Model Hub
-        </Link>
-      </div>
-    );
-  }
-
-  const typedModelId = modelId as FinancialModelId;
+  const fallbackModelId: FinancialModelId = "three-statement";
+  const isKnownModel = modelId in FINANCIAL_MODELS_BY_ID && modelId in MODEL_TEMPLATES;
+  const typedModelId = (isKnownModel ? modelId : fallbackModelId) as FinancialModelId;
   const modelMeta = FINANCIAL_MODELS_BY_ID[typedModelId];
   const template = MODEL_TEMPLATES[typedModelId];
 
@@ -1093,6 +1084,17 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
       // no-op
     }
   }, [computation, inputs, modelMeta.name, modelMeta.purpose, template.inputs]);
+
+  if (!isKnownModel) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
+        <p className="text-lg font-semibold text-gray-900">Model not found</p>
+        <Link href="/accounting/projections/modelling" className="mt-4 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+          Back to Model Hub
+        </Link>
+      </div>
+    );
+  }
 
   const handleDownloadPdf = async () => {
     if (isDownloadingPdf) return;

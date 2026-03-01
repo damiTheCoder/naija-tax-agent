@@ -356,6 +356,7 @@ model Entity {
   taxPayments         TaxPayment[]
   taxReconciliations  TaxReconciliation[]
   auditLogs           AuditLog[]
+  taxEngineSetting    TaxEngineSetting?
 }
 
 model Transaction {
@@ -767,4 +768,19 @@ model AuditLog {
   entity Entity @relation(fields: [entityId], references: [id])
 
   @@index([entityId, action])
+}
+
+model TaxEngineSetting {
+  id                       String   @id @default(cuid())
+  entityId                 String   @unique
+  filingCadenceVat         String   @default("monthly") // monthly | quarterly
+  filingCadenceWht         String   @default("monthly") // monthly | quarterly
+  filingDueDay             Int      @default(21)
+  defaultVatModeByCategory String?
+  categoryTaxMatrix        String?
+  metadata                 String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 }

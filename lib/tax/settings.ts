@@ -1,6 +1,16 @@
 import type { TaxRuleSet } from "@/lib/tax/compliance";
 
 export type TaxJurisdiction = "Nigeria" | "Ghana" | "Kenya" | "South Africa" | "Custom";
+export type FilingCadence = "monthly" | "quarterly";
+export type VatMode = "inclusive" | "exclusive";
+
+export interface TaxCategoryRule {
+  vatApplicable?: boolean;
+  vatCategory?: "input" | "output" | "exempt" | "zero";
+  whtApplicable?: boolean;
+  whtRate?: number;
+  defaultVatMode?: VatMode;
+}
 
 export interface TaxEnvironmentSettings {
   entityId: string;
@@ -31,6 +41,13 @@ export interface TaxEnvironmentSettings {
   fiscalYear: {
     startMonth: number;
   };
+  filingCadence: {
+    vat: FilingCadence;
+    wht: FilingCadence;
+  };
+  filingDueDay: number;
+  categoryTaxMatrix: Record<string, TaxCategoryRule>;
+  defaultVatModeByCategory: Record<string, VatMode>;
   updatedAt: string;
 }
 
@@ -81,6 +98,22 @@ export const getDefaultTaxSettings = (entityId = "entity-default"): TaxEnvironme
   fiscalYear: {
     startMonth: 1,
   },
+  filingCadence: {
+    vat: "monthly",
+    wht: "monthly",
+  },
+  filingDueDay: 21,
+  categoryTaxMatrix: {
+    inventory: { vatApplicable: true, vatCategory: "input", whtApplicable: false, defaultVatMode: "exclusive" },
+    revenue: { vatApplicable: true, vatCategory: "output", whtApplicable: false, defaultVatMode: "exclusive" },
+    rent: { vatApplicable: true, vatCategory: "input", whtApplicable: true, whtRate: 0.1, defaultVatMode: "exclusive" },
+    salary: { vatApplicable: false, whtApplicable: false },
+  },
+  defaultVatModeByCategory: {
+    inventory: "exclusive",
+    revenue: "exclusive",
+    rent: "exclusive",
+  },
   updatedAt: new Date().toISOString(),
 });
 
@@ -104,6 +137,52 @@ const writeSettingsMap = (map: Record<string, TaxEnvironmentSettings>) => {
 
 const normalizeSettings = (entityId: string, input: Partial<TaxEnvironmentSettings>): TaxEnvironmentSettings => {
   const defaults = getDefaultTaxSettings(entityId);
+  const normalizeCadence = (value: unknown, fallback: FilingCadence): FilingCadence =>
+    value === "quarterly" || value === "monthly" ? value : fallback;
+  const normalizeVatMode = (value: unknown, fallback: VatMode): VatMode =>
+    value === "inclusive" || value === "exclusive" ? value : fallback;
+  const normalizeCategoryMatrix = (
+    value: unknown
+  ): Record<string, TaxCategoryRule> => {
+    if (!value || typeof value !== "object") return {};
+    const matrix = value as Record<string, TaxCategoryRule>;
+    const normalized: Record<string, TaxCategoryRule> = {};
+    Object.entries(matrix).forEach(([key, rule]) => {
+      const category = key.trim().toLowerCase();
+      if (!category || !rule || typeof rule !== "object") return;
+      normalized[category] = {
+        vatApplicable: typeof rule.vatApplicable === "boolean" ? rule.vatApplicable : undefined,
+        vatCategory:
+          rule.vatCategory === "input" ||
+          rule.vatCategory === "output" ||
+          rule.vatCategory === "exempt" ||
+          rule.vatCategory === "zero"
+            ? rule.vatCategory
+            : undefined,
+        whtApplicable: typeof rule.whtApplicable === "boolean" ? rule.whtApplicable : undefined,
+        whtRate: typeof rule.whtRate === "number" && Number.isFinite(rule.whtRate) ? rule.whtRate : undefined,
+        defaultVatMode:
+          rule.defaultVatMode === "inclusive" || rule.defaultVatMode === "exclusive"
+            ? rule.defaultVatMode
+            : undefined,
+      };
+    });
+    return normalized;
+  };
+  const normalizeVatModes = (
+    value: unknown
+  ): Record<string, VatMode> => {
+    if (!value || typeof value !== "object") return {};
+    const raw = value as Record<string, unknown>;
+    const normalized: Record<string, VatMode> = {};
+    Object.entries(raw).forEach(([key, mode]) => {
+      const category = key.trim().toLowerCase();
+      if (!category) return;
+      normalized[category] = normalizeVatMode(mode, defaults.defaultVatModeByCategory[category] || "exclusive");
+    });
+    return normalized;
+  };
+
   return {
     entityId,
     jurisdiction:
@@ -143,6 +222,19 @@ const normalizeSettings = (entityId: string, input: Partial<TaxEnvironmentSettin
     fiscalYear: {
       startMonth: readStartMonth(input.fiscalYear?.startMonth ?? defaults.fiscalYear.startMonth),
     },
+    filingCadence: {
+      vat: normalizeCadence(input.filingCadence?.vat, defaults.filingCadence.vat),
+      wht: normalizeCadence(input.filingCadence?.wht, defaults.filingCadence.wht),
+    },
+    filingDueDay: Math.min(28, Math.max(1, Math.round(Number(input.filingDueDay ?? defaults.filingDueDay) || 21))),
+    categoryTaxMatrix: {
+      ...defaults.categoryTaxMatrix,
+      ...normalizeCategoryMatrix(input.categoryTaxMatrix),
+    },
+    defaultVatModeByCategory: {
+      ...defaults.defaultVatModeByCategory,
+      ...normalizeVatModes(input.defaultVatModeByCategory),
+    },
     updatedAt:
       typeof input.updatedAt === "string" && input.updatedAt ? input.updatedAt : new Date().toISOString(),
   };
@@ -162,6 +254,50 @@ export const saveTaxSettings = (settings: TaxEnvironmentSettings) => {
   writeSettingsMap(map);
   window.dispatchEvent(new Event("tax-settings:updated"));
   return map[normalized.entityId];
+};
+
+export const loadTaxSettingsFromApi = async (entityId = "entity-default"): Promise<TaxEnvironmentSettings> => {
+  try {
+    const response = await fetch(`/api/tax/settings?entityId=${encodeURIComponent(entityId)}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) return loadTaxSettings(entityId);
+    const payload = (await response.json()) as { success?: boolean; settings?: Partial<TaxEnvironmentSettings> };
+    if (!payload.success || !payload.settings) return loadTaxSettings(entityId);
+    const normalized = normalizeSettings(entityId, payload.settings);
+    saveTaxSettings(normalized);
+    return normalized;
+  } catch {
+    return loadTaxSettings(entityId);
+  }
+};
+
+export const saveTaxSettingsToApi = async (
+  settings: TaxEnvironmentSettings
+): Promise<TaxEnvironmentSettings> => {
+  try {
+    const response = await fetch("/api/tax/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityId: settings.entityId,
+        settings,
+      }),
+    });
+    if (!response.ok) {
+      return saveTaxSettings(settings);
+    }
+    const payload = (await response.json()) as { success?: boolean; settings?: Partial<TaxEnvironmentSettings> };
+    if (!payload.success || !payload.settings) {
+      return saveTaxSettings(settings);
+    }
+    const normalized = normalizeSettings(settings.entityId, payload.settings);
+    saveTaxSettings(normalized);
+    return normalized;
+  } catch {
+    return saveTaxSettings(settings);
+  }
 };
 
 export const resetTaxSettings = (entityId = "entity-default") => {
