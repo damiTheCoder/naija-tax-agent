@@ -44,20 +44,26 @@ export interface TaxComputationPdfPayload {
   };
 }
 
-const formatCurrency = (value: number) =>
-  `NGN ${Math.round(value || 0).toLocaleString("en-NG", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })}`;
+const DARK_GREY: [number, number, number] = [50, 55, 60];
+const BODY_TEXT: [number, number, number] = [40, 40, 40];
+const MUTED_TEXT: [number, number, number] = [130, 130, 130];
+const TABLE_BORDER: [number, number, number] = [180, 180, 180];
+const WHITE: [number, number, number] = [255, 255, 255];
 
-const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString("en-NG", {
+const formatCurrency = (value: number) =>
+  `NGN ${Number.isFinite(value) ? value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
+
+const formatDateTime = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("en-NG", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+};
 
 const safeFilePart = (value: string) =>
   value
@@ -65,224 +71,319 @@ const safeFilePart = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+type TwoColRow = {
+  label: string;
+  amount: string;
+};
+
+function drawHeader(
+  doc: jsPDF,
+  payload: TaxComputationPdfPayload,
+  margin: number,
+  contentWidth: number
+): number {
+  let y = 20;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(0, 0, 0);
+  doc.text("TAX COMPUTATION OUTPUT", margin, y);
+  y += 6.5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text("Statutory tax computation derived from ledger-backed schedules", margin, y);
+  y += 5.5;
+
+  doc.setDrawColor(...TABLE_BORDER);
+  doc.setLineWidth(0.35);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 4;
+
+  const boxY = y;
+  const boxHeight = 16;
+  const leftWidth = contentWidth * 0.55;
+  doc.setLineWidth(0.3);
+  doc.rect(margin, boxY, contentWidth, boxHeight);
+  doc.line(margin + leftWidth, boxY, margin + leftWidth, boxY + boxHeight);
+  doc.line(margin, boxY + boxHeight / 2, margin + contentWidth, boxY + boxHeight / 2);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...BODY_TEXT);
+  doc.text(`Period: ${payload.period || "current"}`, margin + 2, boxY + 5.2);
+  doc.text(`Generated: ${formatDateTime(payload.generatedAt)}`, margin + 2, boxY + 13.2);
+  doc.text(`Report ID: ${safeFilePart(payload.period || "current").toUpperCase()}`, margin + leftWidth + 2, boxY + 5.2);
+  doc.text(`Engine: Tax Ledger v2`, margin + leftWidth + 2, boxY + 13.2);
+
+  return boxY + boxHeight + 7;
+}
+
+function drawSectionTitle(doc: jsPDF, title: string, margin: number, y: number): number {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(title, margin, y);
+  y += 3.5;
+  doc.setDrawColor(...TABLE_BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y);
+  return y + 4.2;
+}
+
+function drawTwoColumnTable(params: {
+  doc: jsPDF;
+  margin: number;
+  contentWidth: number;
+  y: number;
+  rows: TwoColRow[];
+  totalRow?: TwoColRow;
+}) {
+  const { doc, margin, contentWidth, rows, totalRow } = params;
+  let { y } = params;
+
+  const labelWidth = contentWidth * 0.68;
+  const headerHeight = 8;
+  const rowHeight = 7.8;
+  const totalHeight = totalRow ? 8.8 : 0;
+  const tableHeight = headerHeight + rows.length * rowHeight + totalHeight;
+
+  doc.setDrawColor(...TABLE_BORDER);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, y, contentWidth, tableHeight);
+  doc.line(margin + labelWidth, y, margin + labelWidth, y + tableHeight);
+
+  doc.setFillColor(...DARK_GREY);
+  doc.rect(margin, y, contentWidth, headerHeight, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...WHITE);
+  doc.text("Description", margin + 2, y + 5.3);
+  doc.text("Amount", margin + labelWidth + 2, y + 5.3);
+  y += headerHeight;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...BODY_TEXT);
+  for (const row of rows) {
+    doc.line(margin, y + rowHeight, margin + contentWidth, y + rowHeight);
+    doc.text(row.label, margin + 2, y + 5.1);
+    doc.text(row.amount, margin + labelWidth + 2, y + 5.1);
+    y += rowHeight;
+  }
+
+  if (totalRow) {
+    doc.setFillColor(...DARK_GREY);
+    doc.rect(margin, y, contentWidth, totalHeight, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...WHITE);
+    doc.text(totalRow.label, margin + 2, y + 5.9);
+    doc.text(totalRow.amount, margin + labelWidth + 2, y + 5.9);
+    y += totalHeight;
+  }
+
+  return y + 8;
+}
+
+function drawPayeBreakdown(params: {
+  doc: jsPDF;
+  margin: number;
+  contentWidth: number;
+  y: number;
+  rows: TaxComputationPdfPayload["paye"]["rows"];
+}) {
+  const { doc, margin, contentWidth, rows } = params;
+  let { y } = params;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const headerHeight = 8;
+  const rowHeight = 7.2;
+  const p1 = margin;
+  const p2 = margin + contentWidth * 0.3;
+  const p3 = margin + contentWidth * 0.58;
+  const p4 = margin + contentWidth * 0.82;
+
+  const safeRows =
+    rows.length > 0
+      ? rows
+      : [{ period: "N/A", payrollBase: 0, payeForDisplay: 0, status: "Estimated" as const }];
+
+  const drawHeaderRow = () => {
+    doc.setDrawColor(...TABLE_BORDER);
+    doc.setLineWidth(0.3);
+    doc.setFillColor(...DARK_GREY);
+    doc.rect(margin, y, contentWidth, headerHeight, "F");
+    doc.rect(margin, y, contentWidth, headerHeight, "S");
+    doc.line(p2, y, p2, y + headerHeight);
+    doc.line(p3, y, p3, y + headerHeight);
+    doc.line(p4, y, p4, y + headerHeight);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.3);
+    doc.setTextColor(...WHITE);
+    doc.text("Period", p1 + 2, y + 5.3);
+    doc.text("Payroll Base", p2 + 2, y + 5.3);
+    doc.text("PAYE", p3 + 2, y + 5.3);
+    doc.text("Status", p4 + 2, y + 5.3);
+    y += headerHeight;
+  };
+
+  drawHeaderRow();
+
+  for (const row of safeRows) {
+    if (y + rowHeight > pageHeight - 20) {
+      doc.addPage();
+      y = 18;
+      y = drawSectionTitle(doc, "PAYE Monthly Breakdown", margin, y);
+      drawHeaderRow();
+    }
+
+    doc.setDrawColor(...TABLE_BORDER);
+    doc.setLineWidth(0.25);
+    doc.rect(margin, y, contentWidth, rowHeight);
+    doc.line(p2, y, p2, y + rowHeight);
+    doc.line(p3, y, p3, y + rowHeight);
+    doc.line(p4, y, p4, y + rowHeight);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.2);
+    doc.setTextColor(...BODY_TEXT);
+    doc.text(row.period, p1 + 2, y + 4.8);
+    doc.text(formatCurrency(row.payrollBase), p2 + 2, y + 4.8);
+    doc.text(formatCurrency(row.payeForDisplay), p3 + 2, y + 4.8);
+    doc.text(row.status, p4 + 2, y + 4.8);
+    y += rowHeight;
+  }
+
+  return y + 7;
+}
+
+function drawFooter(doc: jsPDF, margin: number, contentWidth: number) {
+  const footerY = doc.internal.pageSize.getHeight() - 12;
+  doc.setDrawColor(...TABLE_BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerY - 3.5, margin + contentWidth, footerY - 3.5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text(
+    `Generated by Quantum Ledger Tax Module • ${new Date().toLocaleDateString("en-NG", { dateStyle: "long" })}`,
+    margin,
+    footerY
+  );
+}
+
 export async function generateTaxComputationPdf(payload: TaxComputationPdfPayload): Promise<void> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
+  await configureJsPdfTypography(doc, "helvetica");
 
-  const activeFont = await configureJsPdfTypography(doc, "helvetica");
-
-  const setBodyFont = () => doc.setFont(activeFont, "normal");
-  const setBoldFont = () => doc.setFont(activeFont, "bold");
-
-  const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 16;
-  const contentWidth = pageWidth - margin * 2;
-  const lineHeight = 6;
+  const margin = 15;
+  const contentWidth = doc.internal.pageSize.getWidth() - margin * 2;
+  let y = drawHeader(doc, payload, margin, contentWidth);
 
-  const colors = {
-    title: [17, 24, 39] as const,
-    body: [55, 65, 81] as const,
-    muted: [107, 114, 128] as const,
-    rule: [209, 213, 219] as const,
-    rowRule: [229, 231, 235] as const,
-    headerFill: [249, 250, 251] as const,
-  };
-
-  let y = 18;
-
-  const ensureSpace = (required = 20) => {
-    if (y + required > pageHeight - 16) {
+  const ensureSpace = (required = 36) => {
+    if (y + required > pageHeight - 18) {
       doc.addPage();
       y = 18;
     }
   };
 
-  const drawRule = (yPos: number, color: readonly [number, number, number] = colors.rule) => {
-    doc.setDrawColor(...color);
-    doc.setLineWidth(0.35);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
-  };
+  ensureSpace(70);
+  y = drawSectionTitle(doc, "A. Income Tax Computation", margin, y);
+  y = drawTwoColumnTable({
+    doc,
+    margin,
+    contentWidth,
+    y,
+    rows: [
+      { label: "Revenue", amount: formatCurrency(payload.incomeTax.revenue) },
+      { label: "Less: Cost of Goods Sold", amount: formatCurrency(payload.incomeTax.cogs) },
+      { label: "Gross Profit", amount: formatCurrency(payload.incomeTax.grossProfit) },
+      { label: "Less: Operating Expenses", amount: formatCurrency(payload.incomeTax.operatingExpenses) },
+      {
+        label: "Taxable Profit Before Adjustments",
+        amount: formatCurrency(payload.incomeTax.taxableProfitBeforeAdjustments),
+      },
+      { label: "Add-backs", amount: formatCurrency(payload.incomeTax.addBacks) },
+      { label: "Deductions", amount: formatCurrency(payload.incomeTax.deductions) },
+      {
+        label: "Adjusted Taxable Profit",
+        amount: formatCurrency(payload.incomeTax.adjustedTaxableProfit),
+      },
+      {
+        label: `Tax @ ${(payload.incomeTax.taxRate * 100).toFixed(1)}%`,
+        amount: formatCurrency(payload.incomeTax.computedIncomeTax),
+      },
+      { label: "Minimum Tax Check", amount: formatCurrency(payload.incomeTax.minimumTax) },
+    ],
+    totalRow: { label: "Income Tax Payable", amount: formatCurrency(payload.incomeTax.taxPayable) },
+  });
 
-  const addSectionTitle = (title: string) => {
-    ensureSpace(12);
+  ensureSpace(56);
+  y = drawSectionTitle(doc, "B. VAT Computation", margin, y);
+  y = drawTwoColumnTable({
+    doc,
+    margin,
+    contentWidth,
+    y,
+    rows: [
+      { label: "Output VAT", amount: formatCurrency(payload.vat.outputVat) },
+      { label: "Input VAT", amount: formatCurrency(payload.vat.inputVat) },
+      { label: "VAT Credit", amount: formatCurrency(payload.vat.vatCredit) },
+    ],
+    totalRow: { label: "VAT Payable", amount: formatCurrency(payload.vat.vatPayable) },
+  });
 
-    setBoldFont();
-    doc.setFontSize(12);
-    doc.setTextColor(...colors.title);
-    doc.text(title, margin, y);
-    y += 4;
+  ensureSpace(60);
+  y = drawSectionTitle(doc, "C. Withholding Tax (WHT)", margin, y);
+  y = drawTwoColumnTable({
+    doc,
+    margin,
+    contentWidth,
+    y,
+    rows: [
+      { label: "Total WHT Deducted", amount: formatCurrency(payload.wht.totalDeducted) },
+      { label: "Total WHT Suffered", amount: formatCurrency(payload.wht.totalSuffered) },
+      { label: "WHT Payable", amount: formatCurrency(payload.wht.payable) },
+      { label: "WHT Receivable", amount: formatCurrency(payload.wht.receivable) },
+    ],
+    totalRow: { label: "Net WHT Position", amount: formatCurrency(payload.wht.netPosition) },
+  });
 
-    drawRule(y);
-    y += 4;
-  };
+  ensureSpace(62);
+  y = drawSectionTitle(doc, "D. Payroll Tax (PAYE)", margin, y);
+  y = drawTwoColumnTable({
+    doc,
+    margin,
+    contentWidth,
+    y,
+    rows: [
+      { label: "Payroll Base", amount: formatCurrency(payload.paye.totalPayrollBase) },
+      { label: "PAYE Recorded", amount: formatCurrency(payload.paye.totalPayeRecorded) },
+    ],
+    totalRow: { label: "Employee Tax Total", amount: formatCurrency(payload.paye.totalPayeForDisplay) },
+  });
 
-  const addStatementRow = (label: string, value: string, emphasis = false) => {
-    ensureSpace(12);
-    const rowTop = y;
+  ensureSpace(30);
+  y = drawSectionTitle(doc, "PAYE Monthly Breakdown", margin, y);
+  y = drawPayeBreakdown({
+    doc,
+    margin,
+    contentWidth,
+    y,
+    rows: payload.paye.rows,
+  });
 
-    setBodyFont();
-    doc.setFontSize(10);
-    doc.setTextColor(...colors.body);
-    const labelLines = doc.splitTextToSize(label, contentWidth * 0.54);
-    doc.text(labelLines, margin, rowTop + 4.6);
-
-    if (emphasis) {
-      setBoldFont();
-      doc.setTextColor(...colors.title);
-    } else {
-      setBoldFont();
-      doc.setTextColor(...colors.body);
-    }
-
-    const valueLines = doc.splitTextToSize(value, contentWidth * 0.4);
-    doc.text(valueLines, pageWidth - margin, rowTop + 4.6, { align: "right" });
-
-    const rowHeight = Math.max(labelLines.length, valueLines.length) * lineHeight;
-    const rowBottom = rowTop + rowHeight + 2;
-    drawRule(rowBottom, colors.rowRule);
-    y = rowBottom + 2.2;
-  };
-
-  const drawPayeTable = (
-    rows: Array<{
-      period: string;
-      payrollBase: number;
-      payeForDisplay: number;
-      status: "Recorded" | "Estimated";
-    }>
-  ) => {
-    const tableRows = rows.length
-      ? rows
-      : [{ period: "N/A", payrollBase: 0, payeForDisplay: 0, status: "Estimated" as const }];
-
-    const tableLeft = margin;
-    const tableRight = pageWidth - margin;
-    const tableWidth = tableRight - tableLeft;
-    const headerHeight = 8;
-    const rowHeight = 7;
-
-    const colPeriod = tableLeft + 2;
-    const colPayroll = tableLeft + 72;
-    const colPaye = tableLeft + 126;
-    const colStatusRight = tableRight - 2;
-
-    const drawHeader = () => {
-      ensureSpace(headerHeight + 2);
-
-      doc.setFillColor(...colors.headerFill);
-      doc.setDrawColor(...colors.rule);
-      doc.rect(tableLeft, y, tableWidth, headerHeight, "F");
-
-      drawRule(y);
-      drawRule(y + headerHeight);
-
-      setBoldFont();
-      doc.setFontSize(9.5);
-      doc.setTextColor(...colors.body);
-      doc.text("Period", colPeriod, y + 5.2);
-      doc.text("Payroll Base", colPayroll, y + 5.2);
-      doc.text("PAYE", colPaye, y + 5.2);
-      doc.text("Status", colStatusRight, y + 5.2, { align: "right" });
-
-      y += headerHeight;
-    };
-
-    drawHeader();
-
-    for (const row of tableRows) {
-      if (y + rowHeight > pageHeight - 16) {
-        doc.addPage();
-        y = 18;
-        drawHeader();
-      }
-
-      doc.setDrawColor(...colors.rule);
-      drawRule(y + rowHeight, colors.rowRule);
-
-      setBodyFont();
-      doc.setFontSize(9.4);
-      doc.setTextColor(...colors.title);
-      doc.text(row.period, colPeriod, y + 4.8);
-      doc.text(formatCurrency(row.payrollBase), colPayroll, y + 4.8);
-      doc.text(formatCurrency(row.payeForDisplay), colPaye, y + 4.8);
-      doc.text(row.status, colStatusRight, y + 4.8, { align: "right" });
-
-      y += rowHeight;
-    }
-  };
-
-  setBoldFont();
-  doc.setFontSize(18);
-  doc.setTextColor(...colors.title);
-  doc.text("Tax Computation Output", margin, y);
-  y += 8;
-
-  setBodyFont();
-  doc.setFontSize(10);
-  doc.setTextColor(...colors.muted);
-  doc.text(`Period: ${payload.period || "current"}`, margin, y);
-  y += 5;
-  doc.text(`Generated: ${formatDateTime(payload.generatedAt)}`, margin, y);
-  y += 4.5;
-  drawRule(y);
-  y += 5;
-
-  addSectionTitle("A. Income Tax Computation");
-  addStatementRow("Revenue", formatCurrency(payload.incomeTax.revenue));
-  addStatementRow("Less: Cost of goods sold", formatCurrency(payload.incomeTax.cogs));
-  addStatementRow("Gross profit", formatCurrency(payload.incomeTax.grossProfit), true);
-  addStatementRow("Less: Expenses", formatCurrency(payload.incomeTax.operatingExpenses));
-  addStatementRow("Taxable profit", formatCurrency(payload.incomeTax.taxableProfitBeforeAdjustments), true);
-  addStatementRow("Add-backs", formatCurrency(payload.incomeTax.addBacks));
-  addStatementRow("Deductions", formatCurrency(payload.incomeTax.deductions));
-  addStatementRow("Adjusted taxable profit", formatCurrency(payload.incomeTax.adjustedTaxableProfit), true);
-  addStatementRow(
-    `Tax @ ${(payload.incomeTax.taxRate * 100).toFixed(1)}%`,
-    formatCurrency(payload.incomeTax.computedIncomeTax)
-  );
-  addStatementRow("Minimum tax check", formatCurrency(payload.incomeTax.minimumTax));
-  addStatementRow("Tax payable", formatCurrency(payload.incomeTax.taxPayable), true);
-
-  addSectionTitle("B. VAT Computation");
-  addStatementRow("Output VAT", formatCurrency(payload.vat.outputVat));
-  addStatementRow("Input VAT", formatCurrency(payload.vat.inputVat));
-  addStatementRow("VAT payable", formatCurrency(payload.vat.vatPayable), true);
-  if (payload.vat.vatCredit > 0) {
-    addStatementRow("VAT credit", formatCurrency(payload.vat.vatCredit));
+  // Keep footer visible on last page.
+  if (y > pageHeight - 20) {
+    doc.addPage();
   }
-
-  addSectionTitle("C. Withholding Tax (WHT)");
-  addStatementRow("Total WHT deducted", formatCurrency(payload.wht.totalDeducted));
-  addStatementRow("Total WHT suffered", formatCurrency(payload.wht.totalSuffered));
-  addStatementRow("Net WHT position", formatCurrency(payload.wht.netPosition), true);
-  addStatementRow("WHT payable", formatCurrency(payload.wht.payable));
-  addStatementRow("WHT receivable", formatCurrency(payload.wht.receivable));
-
-  addSectionTitle("D. Payroll Tax (PAYE)");
-  addStatementRow("Payroll base", formatCurrency(payload.paye.totalPayrollBase));
-  addStatementRow("PAYE recorded", formatCurrency(payload.paye.totalPayeRecorded));
-  addStatementRow("Employee tax total", formatCurrency(payload.paye.totalPayeForDisplay), true);
-
-  ensureSpace(14);
-  setBoldFont();
-  doc.setFontSize(10);
-  doc.setTextColor(...colors.body);
-  doc.text("PAYE monthly breakdown", margin, y);
-  y += 5;
-  drawPayeTable(payload.paye.rows);
-
-  ensureSpace(10);
-  y += 4;
-  drawRule(y);
-  y += 5;
-  setBodyFont();
-  doc.setFontSize(9);
-  doc.setTextColor(...colors.muted);
-  doc.text("Generated by Quantum Ledger Tax Module", margin, y);
+  drawFooter(doc, margin, contentWidth);
 
   const dateCode = payload.generatedAt.slice(0, 10);
   const fileName = `tax-computation-${safeFilePart(payload.period || "current")}-${dateCode}.pdf`;

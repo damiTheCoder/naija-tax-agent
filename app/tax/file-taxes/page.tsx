@@ -322,15 +322,114 @@ export default function FileTaxesPage() {
   const generatePayePdf = useCallback(async (row: FilingReturnRow): Promise<{ blob: Blob; fileName: string }> => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     await configureJsPdfTypography(doc, "helvetica");
+    const margin = 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const contentWidth = pageWidth - margin * 2;
+    const dark: [number, number, number] = [50, 55, 60];
+    const border: [number, number, number] = [190, 190, 190];
+    const muted: [number, number, number] = [130, 130, 130];
+    const formatMoney = (amount: number) =>
+      `NGN ${Number.isFinite(amount) ? amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}`;
 
-    doc.setFontSize(18);
-    doc.text("PAYE Return Filing Document", 20, 22);
-    doc.setFontSize(11.5);
-    doc.text(`Tax Type: PAYE`, 20, 36);
-    doc.text(`Period: ${row.period}`, 20, 44);
-    doc.text(`Status: ${row.status}`, 20, 52);
-    doc.text(`Tax Amount: NGN ${Math.round(row.taxAmount).toLocaleString("en-NG")}`, 20, 60);
-    doc.text(`Generated: ${new Date().toLocaleString("en-NG")}`, 20, 68);
+    let y = 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(0, 0, 0);
+    doc.text("PAYE RETURN FILING DOCUMENT", margin, y);
+    y += 7;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...muted);
+    doc.text("Entity: entity-default", margin, y);
+    y += 6;
+
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.35);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 4;
+
+    const infoY = y;
+    const infoHeight = 24;
+    const half = contentWidth / 2;
+    const rowHeight = infoHeight / 3;
+    doc.setLineWidth(0.3);
+    doc.rect(margin, infoY, contentWidth, infoHeight);
+    doc.line(margin + half, infoY, margin + half, infoY + infoHeight);
+    doc.line(margin, infoY + rowHeight, margin + contentWidth, infoY + rowHeight);
+    doc.line(margin, infoY + rowHeight * 2, margin + contentWidth, infoY + rowHeight * 2);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(40, 40, 40);
+    doc.text("Tax Type: PAYE", margin + 2, infoY + 5.5);
+    doc.text(`Period: ${row.period}`, margin + half + 2, infoY + 5.5);
+    doc.text(`Status: ${row.status.toUpperCase()}`, margin + 2, infoY + rowHeight + 5.5);
+    doc.text("Due Date: Statutory monthly filing", margin + half + 2, infoY + rowHeight + 5.5);
+    doc.text(`Generated: ${new Date().toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}`, margin + 2, infoY + rowHeight * 2 + 5.5);
+    doc.text(`Return ID: ${row.id.slice(-10)}`, margin + half + 2, infoY + rowHeight * 2 + 5.5);
+    y = infoY + infoHeight + 8;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text("RETURN SUMMARY", margin, y);
+    y += 5;
+
+    const labelWidth = contentWidth * 0.62;
+    const tableHeaderHeight = 8;
+    const bodyRowHeight = 8;
+    const totalRowHeight = 9;
+    const bodyRows: Array<[string, string]> = [
+      ["Tax Regime", "PAYE"],
+      ["Filing Period", row.period],
+    ];
+    const tableHeight = tableHeaderHeight + bodyRows.length * bodyRowHeight + totalRowHeight;
+
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.3);
+    doc.rect(margin, y, contentWidth, tableHeight);
+    doc.line(margin + labelWidth, y, margin + labelWidth, y + tableHeight);
+
+    doc.setFillColor(...dark);
+    doc.rect(margin, y, contentWidth, tableHeaderHeight, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Description", margin + 2, y + 5.5);
+    doc.text("Value", margin + labelWidth + 2, y + 5.5);
+
+    let rowY = y + tableHeaderHeight;
+    doc.setTextColor(35, 35, 35);
+    doc.setFont("helvetica", "normal");
+    bodyRows.forEach(([label, value]) => {
+      doc.line(margin, rowY + bodyRowHeight, margin + contentWidth, rowY + bodyRowHeight);
+      doc.text(label, margin + 2, rowY + 5.5);
+      doc.text(value, margin + labelWidth + 2, rowY + 5.5);
+      rowY += bodyRowHeight;
+    });
+
+    doc.setFillColor(...dark);
+    doc.rect(margin, rowY, contentWidth, totalRowHeight, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Total PAYE Payable", margin + 2, rowY + 6);
+    doc.text(formatMoney(Math.max(0, row.taxAmount)), margin + labelWidth + 2, rowY + 6);
+
+    const footerY = pageHeight - 12;
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY - 3.5, margin + contentWidth, footerY - 3.5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...muted);
+    doc.text(
+      `Generated by Quantum Ledger • ${new Date().toLocaleDateString("en-NG", { dateStyle: "long" })}`,
+      margin,
+      footerY
+    );
 
     const fileName = `tax-PAYE-${row.period}.pdf`;
     return { blob: doc.output("blob"), fileName };

@@ -1163,15 +1163,16 @@ export default function WorkspacePage() {
                 return (
                   <>
                     {/* Header & Controls */}
-                    <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
-                      <div>
-                        <h2 className="font-semibold text-gray-900">Tax Payables Schedule - {selectedYear}</h2>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-gray-500">
+                    <div className="bg-gray-50 px-4 py-4 sm:px-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <h2 className="text-lg font-semibold leading-tight text-gray-900 sm:text-xl">
+                            Tax Payables Schedule - {selectedYear}
+                          </h2>
+                          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">
                             Based on 2026 Nigerian Tax Laws (Nigeria Tax Reform Acts)
-                          </span>
+                          </p>
                         </div>
-                      </div>
                       {/* Main Download Button - Consistent with Financial Statements */}
                       <button
                         onClick={async () => {
@@ -1183,7 +1184,7 @@ export default function WorkspacePage() {
                             alert("Failed to generate PDF. Please try again or check console for details.");
                           }
                         }}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] transition-colors shadow-sm"
+                          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2264ff] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1a50cc] sm:w-auto"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1191,26 +1192,35 @@ export default function WorkspacePage() {
                         Download Schedule
                       </button>
                     </div>
+                    </div>
 
                     {/* Period Summary Section - Accounting Basis */}
-                    <div className="mx-6 mt-6 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
-                      <h4 className="text-xs uppercase tracking-wider text-blue-700 mb-3 font-semibold">Financial Period Summary (Accounting Basis)</h4>
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
-                          <span className="text-xs text-blue-500 block">Total Revenue</span>
-                          <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.totalRevenue)}</span>
+                    <div className="mx-4 mt-4 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 sm:mx-6 sm:mt-6 sm:p-5">
+                      <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-700 sm:text-xs">
+                        Financial Period Summary (Accounting Basis)
+                      </h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="min-w-0 rounded-lg border border-blue-100 bg-white/80 p-3">
+                          <span className="block text-xs font-medium text-blue-600">Total Revenue</span>
+                          <span className="mt-1 block break-words font-mono text-base font-semibold text-gray-900 sm:text-lg">
+                            {formatCurrency(taxSchedule.periodSummary.totalRevenue)}
+                          </span>
                         </div>
-                        <div>
-                          <span className="text-xs text-blue-500 block">Total Expenses</span>
-                          <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.totalExpenses)}</span>
+                        <div className="min-w-0 rounded-lg border border-blue-100 bg-white/80 p-3">
+                          <span className="block text-xs font-medium text-blue-600">Total Expenses</span>
+                          <span className="mt-1 block break-words font-mono text-base font-semibold text-gray-900 sm:text-lg">
+                            {formatCurrency(taxSchedule.periodSummary.totalExpenses)}
+                          </span>
                         </div>
-                        <div>
-                          <span className="text-xs text-blue-500 block">Payroll Costs</span>
-                          <span className="text-sm font-mono font-medium text-gray-900">{formatCurrency(taxSchedule.periodSummary.payrollExpense)}</span>
+                        <div className="min-w-0 rounded-lg border border-blue-100 bg-white/80 p-3">
+                          <span className="block text-xs font-medium text-blue-600">Payroll Costs</span>
+                          <span className="mt-1 block break-words font-mono text-base font-semibold text-gray-900 sm:text-lg">
+                            {formatCurrency(taxSchedule.periodSummary.payrollExpense)}
+                          </span>
                         </div>
-                        <div>
-                          <span className="text-xs text-blue-500 block">Net Profit (Before Tax)</span>
-                          <span className={`text-sm font-mono font-bold ${taxSchedule.periodSummary.netProfitBeforeTax >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                        <div className="min-w-0 rounded-lg border border-blue-100 bg-white/80 p-3">
+                          <span className="block text-xs font-medium text-blue-600">Net Profit (Before Tax)</span>
+                          <span className={`mt-1 block break-words font-mono text-base font-bold sm:text-lg ${taxSchedule.periodSummary.netProfitBeforeTax >= 0 ? "text-gray-900" : "text-red-600"}`}>
                             {formatCurrency(taxSchedule.periodSummary.netProfitBeforeTax)}
                           </span>
                         </div>
