@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,13 +18,6 @@ import { useMode } from "@/lib/ModeContext";
 import { NavIconBadge } from "./NavIconBadge";
 import { SIDEBAR_LOGO_SRC, APP_LOGO_ALT } from "@/lib/constants";
 import Image from "next/image";
-import {
-    PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
-    ChatHistoryEntry,
-    formatHistoryTime,
-    loadChatHistory,
-    selectChatHistoryEntry,
-} from "@/lib/personalChatHistory";
 
 import { useTheme } from "@/lib/ThemeContext";
 
@@ -40,24 +33,9 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const { mode } = useMode();
     const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
     const [expandedModule, setExpandedModule] = useState<AppMode | null>(null);
-    const [chatHistory, setChatHistory] = useState<ChatHistoryEntry[]>([]);
 
     const isDark = theme === "dark";
 
-    useEffect(() => {
-        const refreshHistory = () => {
-            setChatHistory(loadChatHistory());
-        };
-
-        refreshHistory();
-        window.addEventListener("storage", refreshHistory);
-        window.addEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
-
-        return () => {
-            window.removeEventListener("storage", refreshHistory);
-            window.removeEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
-        };
-    }, []);
 
     const toggleModule = (mode: AppMode) => {
         setExpandedModule(expandedModule === mode ? null : mode);
@@ -69,13 +47,13 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             ? "wallet"
             : pathname.startsWith("/budgeting")
                 ? "budgeting"
-            : pathname.startsWith("/cashflow-intelligence")
-                ? "intelligence"
-                : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
-                    ? "accounting"
-                    : pathname.startsWith("/marketplace")
-                        ? "marketplace"
-                        : "tax";
+                : pathname.startsWith("/cashflow-intelligence")
+                    ? "intelligence"
+                    : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
+                        ? "accounting"
+                        : pathname.startsWith("/marketplace")
+                            ? "marketplace"
+                            : "tax";
 
     const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
         ? [
@@ -191,45 +169,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                         );
                     })}
 
-                    <div className="px-5 pt-4 pb-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: isDark ? "#9ca3af" : "#6b7280" }}>
-                            Chat History
-                        </p>
-                        <div className="mt-2 space-y-1 max-h-44 overflow-y-auto pr-1">
-                            {chatHistory.length === 0 ? (
-                                <p className="text-xs px-2 py-1" style={{ color: isDark ? "#6b7280" : "#9ca3af" }}>
-                                    No chats yet
-                                </p>
-                            ) : (
-                                chatHistory.map((item) => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => {
-                                            selectChatHistoryEntry(item);
-                                            const sameRoute = pathname === item.route;
-                                            if (!sameRoute) {
-                                                navigateTo(item.route);
-                                            }
-                                            onClose();
-                                        }}
-                                        className="w-full flex items-start gap-2 px-2 py-2 rounded-lg text-left transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
-                                    >
-                                        <span className="mt-0.5">
-                                            <NavIconBadge icon="message-square" className="w-4 h-4" />
-                                        </span>
-                                        <span className="min-w-0">
-                                            <span className="block truncate text-sm" style={{ color: isDark ? "#e5e7eb" : "#1f2937" }}>
-                                                {item.title}
-                                            </span>
-                                            <span className="block truncate text-[11px]" style={{ color: isDark ? "#6b7280" : "#9ca3af" }}>
-                                                {item.module} · {formatHistoryTime(item.timestamp)}
-                                            </span>
-                                        </span>
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    </div>
+
                 </div>
 
                 {/* Footer Area (Settings/Profile placeholder) */}

@@ -11,8 +11,9 @@ import {
   AuditedStatementPacket,
   TransactionType,
 } from "@/lib/accounting/types";
-import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory } from "@/lib/accounting/statementEngine";
-import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
+// Lazy-loaded: statementEngine and taxBridge are only needed during file upload/statement generation
+// import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory } from "@/lib/accounting/statementEngine";
+// import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
 import { AutomationStatus, BANK_PROVIDERS, deriveWorkspaceFiles, mockAutomationClient } from "@/lib/accounting/automationAgent";
 import { accountingEngine, parseTransactionFromChat, AccountingState, CustomAccount } from "@/lib/accounting/transactionBridge";
 import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";
@@ -37,7 +38,89 @@ type ChatMessage = {
   timestamp: number;
 };
 
-type CashHeadlineMode = "inflow" | "outflow" | "balance";
+type CashHeadlineSection =
+  | "cashBook"
+  | "incomeStatement"
+  | "balanceSheet"
+  | "cashFlowStatement"
+  | "trialBalance";
+
+type CashHeadlineMetric =
+  | "inflow"
+  | "outflow"
+  | "balance"
+  | "revenue"
+  | "costOfSales"
+  | "netProfit"
+  | "totalAssets"
+  | "totalLiabilities"
+  | "operatingCashflow"
+  | "investingCashflow"
+  | "financingCashflow"
+  | "trialDebit"
+  | "trialCredit"
+  | "trialNetBalance";
+
+type CashHeadlineSectionConfig = {
+  key: CashHeadlineSection;
+  label: string;
+  metrics: Array<{ key: CashHeadlineMetric; label: string }>;
+};
+
+const CASH_HEADLINE_SECTION_CONFIGS: CashHeadlineSectionConfig[] = [
+  {
+    key: "cashBook",
+    label: "Cash Book",
+    metrics: [
+      { key: "inflow", label: "Inflow" },
+      { key: "outflow", label: "Outflow" },
+      { key: "balance", label: "Balance" },
+    ],
+  },
+  {
+    key: "incomeStatement",
+    label: "Income Statement",
+    metrics: [
+      { key: "revenue", label: "Revenue" },
+      { key: "costOfSales", label: "Cost of Sales" },
+      { key: "netProfit", label: "Net Profit" },
+    ],
+  },
+  {
+    key: "balanceSheet",
+    label: "Balance Sheet",
+    metrics: [
+      { key: "totalAssets", label: "Total Assets" },
+      { key: "totalLiabilities", label: "Total Liabilities" },
+    ],
+  },
+  {
+    key: "cashFlowStatement",
+    label: "Cash Flow Statement",
+    metrics: [
+      { key: "operatingCashflow", label: "Operating CF" },
+      { key: "investingCashflow", label: "Investing CF" },
+      { key: "financingCashflow", label: "Financing CF" },
+    ],
+  },
+  {
+    key: "trialBalance",
+    label: "Trial Balance",
+    metrics: [
+      { key: "trialDebit", label: "Total Debits" },
+      { key: "trialCredit", label: "Total Credits" },
+      { key: "trialNetBalance", label: "Net Balance" },
+    ],
+  },
+];
+
+const INITIAL_CASH_HEADLINE_METRIC_INDEX: Record<CashHeadlineSection, number> = {
+  cashBook: 0,
+  incomeStatement: 0,
+  balanceSheet: 0,
+  cashFlowStatement: 0,
+  trialBalance: 0,
+};
 
 type AutomationLogEntry = {
   title: string;
@@ -254,7 +337,9 @@ export default function AccountingPage() {
   type EditEntryLine = { id: string; accountCode: string; accountName: string; debit: string; credit: string };
   const [editEntryLines, setEditEntryLines] = useState<EditEntryLine[]>([]);
   const [editEntryError, setEditEntryError] = useState("");
-  const [cashHeadlineMode, setCashHeadlineMode] = useState<CashHeadlineMode>("inflow");
+  const [cashHeadlineSection, setCashHeadlineSection] = useState<CashHeadlineSection>("cashBook");
+  const [cashHeadlineMetricIndexBySection, setCashHeadlineMetricIndexBySection] =
+    useState<Record<CashHeadlineSection, number>>(INITIAL_CASH_HEADLINE_METRIC_INDEX);
   const [cashHeadlineMonth, setCashHeadlineMonth] = useState(getCurrentMonthKey);
   const [isCashDatePickerOpen, setIsCashDatePickerOpen] = useState(false);
   const cashDatePickerRef = useRef<HTMLDivElement | null>(null);
@@ -1327,22 +1412,87 @@ export default function AccountingPage() {
   const cashHeadlineTotals = useMemo(() => {
     let inflow = 0;
     let outflow = 0;
+    let revenue = 0;
+    let costOfSales = 0;
+    let operatingExpenses = 0;
+    let totalAssets = 0;
+    let totalLiabilities = 0;
+    let operatingCashflow = 0;
+    let investingCashflow = 0;
+    let financingCashflow = 0;
+    let trialDebit = 0;
+    let trialCredit = 0;
+
+    const isCashAccount = (accountCode: string, accountName: string) =>
+      accountCode.startsWith("10") || /cash|bank/i.test(accountName);
 
     accountingState?.journalEntries.forEach((entry) => {
       if (entry.status !== "posted") return;
       if (toMonthKey(entry.date) !== cashHeadlineMonth) return;
+
+      const hasInvestingCounterpart = entry.lines.some(
+        (line) => !isCashAccount(line.accountCode, line.accountName) && line.accountCode.startsWith("1")
+      );
+      const hasFinancingCounterpart = entry.lines.some(
+        (line) =>
+          !isCashAccount(line.accountCode, line.accountName) &&
+          (line.accountCode.startsWith("2") || line.accountCode.startsWith("3"))
+      );
+
       entry.lines.forEach((line) => {
-        const isCashAccount = line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName);
-        if (!isCashAccount) return;
-        inflow += line.debit || 0;
-        outflow += line.credit || 0;
+        const debit = line.debit || 0;
+        const credit = line.credit || 0;
+        const accountCode = line.accountCode || "";
+        const accountPrefix = accountCode.charAt(0);
+
+        trialDebit += debit;
+        trialCredit += credit;
+
+        if (accountPrefix === "4") {
+          revenue += credit - debit;
+        } else if (accountCode.startsWith("50")) {
+          costOfSales += debit - credit;
+        } else if (accountPrefix === "5" || accountPrefix === "6" || accountPrefix === "7") {
+          operatingExpenses += debit - credit;
+        } else if (accountPrefix === "1") {
+          totalAssets += debit - credit;
+        } else if (accountPrefix === "2") {
+          totalLiabilities += credit - debit;
+        }
+
+        if (!isCashAccount(accountCode, line.accountName)) return;
+
+        inflow += debit;
+        outflow += credit;
+
+        const netCashMovement = debit - credit;
+        if (hasInvestingCounterpart) {
+          investingCashflow += netCashMovement;
+        } else if (hasFinancingCounterpart) {
+          financingCashflow += netCashMovement;
+        } else {
+          operatingCashflow += netCashMovement;
+        }
       });
     });
+
+    const netProfit = revenue - costOfSales - operatingExpenses;
 
     return {
       inflow,
       outflow,
       balance: inflow - outflow,
+      revenue,
+      costOfSales,
+      netProfit,
+      totalAssets,
+      totalLiabilities,
+      operatingCashflow,
+      investingCashflow,
+      financingCashflow,
+      trialDebit,
+      trialCredit,
+      trialNetBalance: trialDebit - trialCredit,
     };
   }, [accountingState, cashHeadlineMonth]);
 
@@ -1351,21 +1501,46 @@ export default function AccountingPage() {
     [cashHeadlineMonth]
   );
 
-  const cashHeadlineLabelMap: Record<CashHeadlineMode, string> = {
-    inflow: "Inflow",
-    outflow: "Outflow",
-    balance: "Balance",
+  const activeCashHeadlineSection = useMemo(
+    () => CASH_HEADLINE_SECTION_CONFIGS.find((config) => config.key === cashHeadlineSection) || CASH_HEADLINE_SECTION_CONFIGS[0],
+    [cashHeadlineSection]
+  );
+
+  const activeCashHeadlineMetric = useMemo(() => {
+    const activeIndex = cashHeadlineMetricIndexBySection[cashHeadlineSection] ?? 0;
+    return activeCashHeadlineSection.metrics[activeIndex] || activeCashHeadlineSection.metrics[0];
+  }, [activeCashHeadlineSection, cashHeadlineMetricIndexBySection, cashHeadlineSection]);
+
+  const cashHeadlineValueMap: Record<CashHeadlineMetric, number> = {
+    inflow: cashHeadlineTotals.inflow,
+    outflow: cashHeadlineTotals.outflow,
+    balance: cashHeadlineTotals.balance,
+    revenue: cashHeadlineTotals.revenue,
+    costOfSales: cashHeadlineTotals.costOfSales,
+    netProfit: cashHeadlineTotals.netProfit,
+    totalAssets: cashHeadlineTotals.totalAssets,
+    totalLiabilities: cashHeadlineTotals.totalLiabilities,
+    operatingCashflow: cashHeadlineTotals.operatingCashflow,
+    investingCashflow: cashHeadlineTotals.investingCashflow,
+    financingCashflow: cashHeadlineTotals.financingCashflow,
+    trialDebit: cashHeadlineTotals.trialDebit,
+    trialCredit: cashHeadlineTotals.trialCredit,
+    trialNetBalance: cashHeadlineTotals.trialNetBalance,
   };
 
-  const cashHeadlineValue = cashHeadlineTotals[cashHeadlineMode];
+  const cashHeadlineValue = cashHeadlineValueMap[activeCashHeadlineMetric.key];
 
-  const cycleCashHeadlineMode = useCallback(() => {
-    setCashHeadlineMode((previous) => {
-      if (previous === "inflow") return "outflow";
-      if (previous === "outflow") return "balance";
-      return "inflow";
+  const cycleCashHeadlineMetric = useCallback(() => {
+    setCashHeadlineMetricIndexBySection((previous) => {
+      const activeConfig = CASH_HEADLINE_SECTION_CONFIGS.find((config) => config.key === cashHeadlineSection);
+      if (!activeConfig) return previous;
+      const currentIndex = previous[cashHeadlineSection] ?? 0;
+      return {
+        ...previous,
+        [cashHeadlineSection]: (currentIndex + 1) % activeConfig.metrics.length,
+      };
     });
-  }, []);
+  }, [cashHeadlineSection]);
 
   useEffect(() => {
     if (!isCashDatePickerOpen) return;
@@ -1405,7 +1580,7 @@ export default function AccountingPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className={`text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {cashHeadlineLabelMap[cashHeadlineMode]}
+                      {activeCashHeadlineMetric.label}
                     </p>
                     <div className="flex items-center gap-2">
                       <p className="text-2xl font-bold" style={{ color: "#2264ff" }} title={formatFullNaira(cashHeadlineValue)}>
@@ -1428,6 +1603,29 @@ export default function AccountingPage() {
                         {isCashDatePickerOpen ? (
                           <div className={`absolute left-0 z-20 mt-2 w-60 rounded-xl border p-3 shadow-lg ${theme === "dark" ? "border-gray-700 bg-gray-900" : "border-gray-200 bg-white"}`}>
                             <p className={`text-xs font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>Select month</p>
+                            <div className="-mx-0.5 mb-2 overflow-x-auto hide-scrollbar">
+                              <div className="flex min-w-max gap-1.5 px-0.5">
+                                {CASH_HEADLINE_SECTION_CONFIGS.map((section) => {
+                                  const isActive = section.key === cashHeadlineSection;
+                                  return (
+                                    <button
+                                      key={section.key}
+                                      type="button"
+                                      onClick={() => setCashHeadlineSection(section.key)}
+                                      className={`rounded-full border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
+                                        isActive
+                                          ? "border-[#2264ff] bg-[#2264ff] text-white"
+                                          : theme === "dark"
+                                            ? "border-gray-700 text-gray-300 hover:bg-gray-800"
+                                            : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                                      }`}
+                                    >
+                                      {section.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                             <input
                               type="month"
                               value={cashHeadlineMonth}
@@ -1460,10 +1658,10 @@ export default function AccountingPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={cycleCashHeadlineMode}
+                    onClick={cycleCashHeadlineMetric}
                     className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-sm transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40"
-                    aria-label="Toggle cash metric"
-                    title="Switch between Inflow, Outflow and Balance"
+                    aria-label={`Toggle ${activeCashHeadlineSection.label} metric`}
+                    title={`Switch ${activeCashHeadlineSection.label} metrics`}
                   >
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M5 12h14" />
@@ -1708,13 +1906,12 @@ export default function AccountingPage() {
                                 <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{journalLabel}</td>
                                 <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">₦{total.toLocaleString()}</td>
                                 <td className="px-2 py-3">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                    entry.status === "voided"
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${entry.status === "voided"
                                       ? "bg-rose-100 text-rose-700"
                                       : entry.status === "draft"
                                         ? "bg-amber-100 text-amber-700"
                                         : "bg-emerald-100 text-emerald-700"
-                                  }`}>
+                                    }`}>
                                     {entry.status === "voided" ? "Voided" : entry.status === "draft" ? "Draft" : "Posted"}
                                   </span>
                                 </td>

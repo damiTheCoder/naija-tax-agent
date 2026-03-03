@@ -16,6 +16,7 @@ import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import PageSkeleton from "@/components/PageSkeleton";
+import MobileBottomNav from "@/components/MobileBottomNav";
 
 const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
   ssr: false,
@@ -215,9 +216,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="pointer-events-auto">
             <ModuleButtonBar />
           </div>
-          {/* Mode Toggle - Right Side */}
-          <div className="pointer-events-auto">
+          {/* Mode Toggle + Profile - Right Side */}
+          <div className="pointer-events-auto flex items-center gap-2">
             <DesktopModeToggle />
+            <Link
+              href="/profile"
+              className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+              style={{
+                background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+              }}
+              aria-label="Profile"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="#2264ff"
+                strokeWidth={1.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+            </Link>
           </div>
         </header>
 
@@ -298,9 +317,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* Fixed Bottom Navigation - Visible on ALL screens as requested */}
-
-
+      {/* Mobile Bottom Navigation */}
+      {!isPersonalRoute && (
+        <MobileBottomNav />
+      )}
 
       {/* Floating Chat Button for transaction input */}
       {!isPersonalRoute && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,14 +8,6 @@ import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, BUDGETING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, PERSONAL_NAV_ITEMS, AppMode } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
-import BottomSidebar from "./BottomSidebar";
-import {
-  PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
-  ChatHistoryEntry,
-  formatHistoryTime,
-  loadChatHistory,
-  selectChatHistoryEntry,
-} from "@/lib/personalChatHistory";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -27,7 +19,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { navigateTo } = useNavigation();
 
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
-  const [chatHistory, setChatHistory] = useState<ChatHistoryEntry[]>([]);
 
   // Determine initial mode based on current path
   const getInitialMode = (): AppMode => {
@@ -44,18 +35,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const mode = getInitialMode();
 
-  useEffect(() => {
-    const refreshHistory = () => {
-      setChatHistory(loadChatHistory());
-    };
-    refreshHistory();
-    window.addEventListener("storage", refreshHistory);
-    window.addEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
-    return () => {
-      window.removeEventListener("storage", refreshHistory);
-      window.removeEventListener(PERSONAL_CHAT_HISTORY_UPDATED_EVENT, refreshHistory);
-    };
-  }, []);
 
   const navItems = mode === "personal"
     ? PERSONAL_NAV_ITEMS
@@ -65,15 +44,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         ? INTELLIGENCE_NAV_ITEMS
         : mode === "budgeting"
           ? BUDGETING_NAV_ITEMS
-        : mode === "wallet"
-          ? WALLET_NAV_ITEMS
-          : mode === "supersheet"
-            ? SUPERSHEET_NAV_ITEMS
-            : mode === "marketplace"
-              ? MARKETPLACE_NAV_ITEMS
-              : mode === "payroll"
-                ? PAYROLL_NAV_ITEMS
-                : ACCOUNTING_NAV_ITEMS;
+          : mode === "wallet"
+            ? WALLET_NAV_ITEMS
+            : mode === "supersheet"
+              ? SUPERSHEET_NAV_ITEMS
+              : mode === "marketplace"
+                ? MARKETPLACE_NAV_ITEMS
+                : mode === "payroll"
+                  ? PAYROLL_NAV_ITEMS
+                  : ACCOUNTING_NAV_ITEMS;
 
   return (
     <>
@@ -149,47 +128,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             );
           })}
         </nav>
-
-        {/* Chat History Section */}
-        <div className="sidebar-nav-scrollbar px-2 pr-1 mt-4 space-y-1 overflow-y-auto max-h-44 pt-4 pb-4">
-          <p className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 opacity-80">
-            Chat History
-          </p>
-          {chatHistory.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-white/45">No chats yet</p>
-          ) : (
-            chatHistory.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  selectChatHistoryEntry(item);
-                  const sameRoute = pathname === item.route;
-                  if (!sameRoute) {
-                    navigateTo(item.route);
-                  }
-                }}
-                className={`
-                  relative flex items-start gap-3 px-2 py-1.5 rounded-md text-[13px] transition-all duration-200 w-full text-left group my-0.5
-                  text-white/70 hover:text-white hover:bg-white/5
-                `}
-              >
-                <span className="w-5 h-5 flex items-center justify-center opacity-70 group-hover:opacity-100 mt-0.5">
-                  <NavIconBadge icon="message-square" className="w-4 h-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="truncate block">{item.title}</span>
-                  <span className="truncate block text-[11px] text-white/45">
-                    {item.module} · {formatHistoryTime(item.timestamp)}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-
-        <div className="px-2 pb-4 pt-3">
-          <BottomSidebar variant="sidebar" />
-        </div>
       </aside>
 
       {/* Mobile Slide Panel - Right side, dark theme */}

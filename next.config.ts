@@ -8,7 +8,14 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   serverExternalPackages: ["pdfkit"],
   experimental: {
-    optimizePackageImports: ["lucide-react", "recharts"],
+    optimizePackageImports: [
+      "lucide-react",
+      "recharts",
+      "@tanstack/react-table",
+      "jspdf",
+      "zod",
+      "react-hook-form",
+    ],
   },
 
   images: {
