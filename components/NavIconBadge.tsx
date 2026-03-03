@@ -7,8 +7,9 @@ export function NavIconBadge({ icon, className = "w-4 h-4" }: { icon: NavIcon; c
     case "home":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={className}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5 12 4l9 6.5" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 10v9h5v-5h4v5h5v-9" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 10.5 8.25-6.75 8.25 6.75" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 9.75v9a1.5 1.5 0 0 0 1.5 1.5h10.5a1.5 1.5 0 0 0 1.5-1.5v-9" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 20.25v-5.25A.75.75 0 0 1 10.75 14.25h2.5a.75.75 0 0 1 .75.75v5.25" />
         </svg>
       );
     case "shield":
@@ -123,4 +124,3 @@ export function NavIconBadge({ icon, className = "w-4 h-4" }: { icon: NavIcon; c
       return null;
   }
 }
-

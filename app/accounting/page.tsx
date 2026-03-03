@@ -11,9 +11,8 @@ import {
   AuditedStatementPacket,
   TransactionType,
 } from "@/lib/accounting/types";
-// Lazy-loaded: statementEngine and taxBridge are only needed during file upload/statement generation
-// import { buildTransactionsFromFiles, generateStatementDraft, normaliseCategory } from "@/lib/accounting/statementEngine";
-// import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
+import { buildTransactionsFromFiles, generateStatementDraft } from "@/lib/accounting/statementEngine";
+import { statementToTaxDraft } from "@/lib/accounting/taxBridge";
 import { AutomationStatus, BANK_PROVIDERS, deriveWorkspaceFiles, mockAutomationClient } from "@/lib/accounting/automationAgent";
 import { accountingEngine, parseTransactionFromChat, AccountingState, CustomAccount } from "@/lib/accounting/transactionBridge";
 import { CHART_OF_ACCOUNTS } from "@/lib/accounting/standards";

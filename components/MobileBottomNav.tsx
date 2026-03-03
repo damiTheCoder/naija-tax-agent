@@ -14,7 +14,7 @@ const NAV_ITEMS: Array<{ label: string; href: string; icon: NavIcon }> = [
     },
     {
         label: "Reports",
-        href: "/accounting/reports",
+        href: "/accounting/workspace",
         icon: "report",
     },
     {
