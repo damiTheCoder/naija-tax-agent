@@ -664,7 +664,6 @@ export default function FloatingChatButton() {
     const pathname = usePathname();
     const router = useRouter();
     const [currentModule, setCurrentModule] = useState<ModuleConfig>(moduleConfigs.default);
-    const [isExpanded, setIsExpanded] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
@@ -1068,14 +1067,6 @@ export default function FloatingChatButton() {
             revokeBlobUrls();
         };
     }, [revokeBlobUrls]);
-
-    // Animate the "Chat" text
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setIsExpanded(prev => !prev);
-        }, 5000);
-        return () => clearInterval(interval);
-    }, []);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -1704,7 +1695,7 @@ _Ask me anything about bank reconciliation!_`;
                     playGoogleButtonClickSound();
                     setIsModalOpen(true);
                 }}
-                className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 lg:left-[calc(50%_+_7.5rem)] -translate-x-1/2 z-40 flex items-center justify-center bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${isExpanded ? "gap-2" : "gap-0"}`}
+                className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 -translate-x-[calc(100%+0.25rem)] lg:left-[calc(50%_+_7.5rem)] lg:-translate-x-1/2 z-40 flex items-center justify-center gap-2 bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-2.5 py-1.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                 aria-label="Open chat"
             >
                 {/* Red badge for clarification */}
@@ -1718,11 +1709,7 @@ _Ask me anything about bank reconciliation!_`;
                     alt="Google"
                     className="w-8 h-8 flex-shrink-0 rounded-full"
                 />
-                <span
-                    className={`font-semibold text-sm overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? "max-w-16 opacity-100" : "max-w-0 opacity-0"}`}
-                >
-                    Chat
-                </span>
+                <span className="font-semibold text-sm">Chat</span>
             </button>
 
             {/* Chat Modal */}

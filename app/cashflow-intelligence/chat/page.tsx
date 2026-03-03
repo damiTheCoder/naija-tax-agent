@@ -102,7 +102,7 @@ function EmbeddedFinanceCard({ product }: { product: EmbeddedFinanceProduct }) {
             href={product.externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group"
+            className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group"
         >
             <div
                 className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden"
@@ -623,8 +623,8 @@ export default function CashflowChatPage() {
                             <h3 className="text-sm font-semibold text-gray-900">Embedded Finance</h3>
                             <p className="text-xs text-gray-500">Explore investment products</p>
                         </div>
-                        <div className="overflow-x-auto hide-scrollbar">
-                            <div className="flex gap-1 px-2 py-2 min-w-max">
+                        <div className="-mx-3 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
+                            <div className="flex min-w-max gap-1 py-2 pr-3">
                                 {EMBEDDED_FINANCE_PRODUCTS.map((product) => (
                                     <EmbeddedFinanceCard key={product.id} product={product} />
                                 ))}

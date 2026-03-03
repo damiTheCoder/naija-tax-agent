@@ -1675,10 +1675,10 @@ export default function AccountingPage() {
                     <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Embedded Finance</h3>
                     <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Explore investment products</p>
                   </div>
-                  <div className="overflow-x-auto hide-scrollbar">
-                    <div className="flex gap-1 px-2 py-2 min-w-max">
+                  <div className="-mx-2 overflow-x-auto hide-scrollbar snap-x snap-mandatory md:mx-0">
+                    <div className="flex min-w-max gap-1 py-2 pr-2 md:px-2">
                       {/* Piggyvest */}
-                      <a href="https://piggyvest.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://piggyvest.com" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="relative">
                           <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                             <img src="/Piggyvest.png" alt="Piggyvest" className="w-16 h-16 object-cover rounded-full" />
@@ -1698,7 +1698,7 @@ export default function AccountingPage() {
                       </a>
 
                       {/* Cowrywise */}
-                      <a href="https://cowrywise.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://cowrywise.com" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                           <img src="/Cowrywise.png" alt="Cowrywise" className="w-16 h-16 object-cover rounded-full" />
                         </div>
@@ -1710,7 +1710,7 @@ export default function AccountingPage() {
                       </a>
 
                       {/* Risevest */}
-                      <a href="https://risevest.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://risevest.com" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                           <img src="/Rise.png" alt="Risevest" className="w-16 h-16 object-cover rounded-full" />
                         </div>
@@ -1722,7 +1722,7 @@ export default function AccountingPage() {
                       </a>
 
                       {/* Bamboo */}
-                      <a href="https://investbamboo.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://investbamboo.com" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                           <img src="/Bamboo.png" alt="Bamboo" className="w-16 h-16 object-cover rounded-full" />
                         </div>
@@ -1733,7 +1733,7 @@ export default function AccountingPage() {
                       </a>
 
                       {/* Kuda */}
-                      <a href="https://kuda.com" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://kuda.com" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                           <img src="/Kuda.png" alt="Kuda" className="w-16 h-16 object-cover rounded-full" />
                         </div>
@@ -1745,7 +1745,7 @@ export default function AccountingPage() {
                       </a>
 
                       {/* FairMoney */}
-                      <a href="https://fairmoney.io" target="_blank" rel="noopener noreferrer" className="flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
+                      <a href="https://fairmoney.io" target="_blank" rel="noopener noreferrer" className="snap-start flex-shrink-0 flex flex-col items-center gap-2 p-3 group">
                         <div className="w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform overflow-hidden">
                           <img src="/fairmoney.png" alt="FairMoney" className="w-16 h-16 object-cover rounded-full" />
                         </div>

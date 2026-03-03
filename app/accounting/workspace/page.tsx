@@ -13,6 +13,15 @@ import { generateTaxSchedule, TransactionTaxAnalysis, TaxPayablesSchedule } from
 type ActiveTab = "journal" | "ledger" | "trial-balance" | "statements" | "tax-payables" | "cashbook";
 type JournalClass = "all" | "cash" | "purchase" | "sales" | "expense" | "other";
 
+function formatAsAtDate(value: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-NG", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Lagos",
+  }).format(value);
+}
+
 function classifyJournalEntry(entry: JournalEntry): Exclude<JournalClass, "all"> {
   const txType = entry.transactionType;
   if (txType === "sale" || txType === "sale-return") return "sales";
@@ -104,6 +113,7 @@ export default function WorkspacePage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [journalClass, setJournalClass] = useState<JournalClass>("all");
+  const asAtDateLabel = formatAsAtDate();
 
   // Get available years from journal entries
   const availableYears = useMemo(() => {
@@ -514,7 +524,7 @@ export default function WorkspacePage() {
                   <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
                   {yearStatement && (
                     <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                      ₦{Math.abs(yearStatement.netIncome).toLocaleString()}
+                      ₦{Math.abs(yearStatement.netIncome).toLocaleString("en-NG")}
                     </p>
                   )}
                 </button>
@@ -775,7 +785,7 @@ export default function WorkspacePage() {
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-900">Trial Balance</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">As at <span suppressHydrationWarning>{asAtDateLabel || "—"}</span></p>
                 </div>
                 <div className="flex items-center gap-3">
                   {trialBalance.accounts.length > 0 && (
@@ -783,7 +793,7 @@ export default function WorkspacePage() {
                       onClick={() => {
                         void generateTrialBalancePDF(
                           trialBalance,
-                          new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }),
+                          asAtDateLabel || formatAsAtDate(),
                           "CashOS Business"
                         );
                       }}
@@ -1476,7 +1486,7 @@ export default function WorkspacePage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h3 className="font-semibold text-gray-900">Cash Position Summary</h3>
-                          <p className="text-xs text-gray-500">As at {new Date().toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" })}</p>
+                          <p className="text-xs text-gray-500">As at <span suppressHydrationWarning>{asAtDateLabel || "—"}</span></p>
                         </div>
                       </div>
                       <div className="space-y-2 max-w-md">
