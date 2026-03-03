@@ -15,7 +15,6 @@ import { useTheme } from "@/lib/ThemeContext";
 import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
-import UserModeExperience from "@/components/UserModeExperience";
 import PageSkeleton from "@/components/PageSkeleton";
 
 const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
@@ -23,6 +22,8 @@ const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton
   loading: () => null,
 });
 
+const ACCOUNTING_MIGRATION_MARKER_KEY = "ql::accounting::migration-v1";
+const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,6 +44,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       "/accounting/depreciation",
       "/accounting/projections",
       "/accounting/projections/modelling",
+      "/accounting/vendors",
+      "/accounting/bills",
+      "/accounting/approvals",
+      "/accounting/periods",
+      "/accounting/recurring",
+      "/accounting/fx",
+      "/accounting/dimensions",
+      "/accounting/action-logs",
       "/budgeting/dashboard",
       "/budgeting/budgets",
       "/budgeting/forecasting",
@@ -65,6 +74,77 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       router.prefetch(route);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!pathname.startsWith("/accounting") && !pathname.startsWith("/tax")) return;
+    if (window.localStorage.getItem(ACCOUNTING_MIGRATION_MARKER_KEY)) return;
+
+    let active = true;
+
+    const runMigration = async () => {
+      try {
+        const raw = window.localStorage.getItem(ACCOUNTING_ENGINE_STORAGE_KEY);
+        if (!raw) {
+          window.localStorage.setItem(ACCOUNTING_MIGRATION_MARKER_KEY, "no-local-data");
+          return;
+        }
+
+        const parsed = JSON.parse(raw) as { journalEntries?: unknown[]; vendors?: unknown[]; bills?: unknown[] };
+        const journals = Array.isArray(parsed.journalEntries) ? parsed.journalEntries : [];
+        const vendors = Array.isArray(parsed.vendors) ? parsed.vendors : [];
+        const bills = Array.isArray(parsed.bills) ? parsed.bills : [];
+
+        if (journals.length === 0 && vendors.length === 0 && bills.length === 0) {
+          window.localStorage.setItem(ACCOUNTING_MIGRATION_MARKER_KEY, "empty-local-snapshot");
+          return;
+        }
+
+        const clientId = `browser:${window.location.hostname}`;
+        const migrateResponse = await fetch("/api/accounting/migrate-local", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityId: "entity-default",
+            actorRole: "owner",
+            clientId,
+            snapshot: {
+              journals,
+              vendors,
+              bills,
+            },
+          }),
+        });
+
+        const migrateData = (await migrateResponse.json().catch(() => ({}))) as { success?: boolean };
+        if (!migrateResponse.ok || migrateData.success !== true) return;
+
+        if (journals.length > 0) {
+          await fetch("/api/tax/backfill", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              entityId: "entity-default",
+              journals,
+              mode: "apply",
+            }),
+          }).catch(() => undefined);
+        }
+
+        if (active) {
+          window.localStorage.setItem(ACCOUNTING_MIGRATION_MARKER_KEY, new Date().toISOString());
+        }
+      } catch {
+        // Leave marker unset so migration can retry later.
+      }
+    };
+
+    void runMigration();
+
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
 
   // Global Keyboard Shortcut: Cmd+Shift+R to Reset System
   useEffect(() => {
@@ -231,62 +311,4 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     </div>
   );
-}
-
-function getPageTitle(pathname: string): string {
-  if (pathname.includes("/accounting/projections")) return "Financial Projections";
-  if (pathname.includes("/budgeting/dashboard")) return "Budget Dashboard";
-  if (pathname.includes("/budgeting/budgets/new")) return "Create Budget";
-  if (pathname.includes("/budgeting/budgets")) return "Budgets";
-  if (pathname.includes("/budgeting/categories")) return "Category Budgets";
-  if (pathname.includes("/budgeting/departments")) return "Department Budgets";
-  if (pathname.includes("/budgeting/forecasting")) return "Budget Forecasting";
-  if (pathname.includes("/budgeting/scenarios")) return "Scenario Planning";
-  if (pathname.includes("/budgeting/variance")) return "Variance Analysis";
-  if (pathname.includes("/budgeting/budget-vs-actual")) return "Budget vs Actual";
-  if (pathname.includes("/budgeting/templates")) return "Budget Templates";
-  if (pathname.includes("/budgeting/ai-assistant")) return "AI Budget Assistant";
-  if (pathname.includes("/accounting/workspace")) return "Accounting Records";
-  if (pathname.includes("/accounting/assets")) return "Fixed Assets";
-  if (pathname.includes("/accounting/depreciation")) return "Depreciation";
-  if (pathname.includes("/accounting")) return "Accounting Studio";
-  if (pathname.includes("/dashboard")) return "Dashboard";
-  if (pathname.includes("/tax/computation")) return "Tax Computation";
-  if (pathname.includes("/tax/adjustments")) return "Tax Adjustments";
-  if (pathname.includes("/tax/settings")) return "Tax Settings";
-  if (pathname.includes("/tax/calendar")) return "Tax Calendar";
-  if (pathname.includes("/tax/file-taxes")) return "File Taxes";
-  if (pathname.includes("/tax/payments")) return "Tax Payments";
-  if (pathname.includes("/tax/returns")) return "Tax Returns";
-  if (pathname.includes("/tax/transactions")) return "Tax Transactions";
-  return "Quantum Ledger";
-}
-
-function getPageDescription(pathname: string): string {
-  if (pathname.includes("/accounting/projections")) return "Forward-looking forecasts from your accounting records";
-  if (pathname.includes("/budgeting/dashboard")) return "Plan, track, and control budget performance across your business";
-  if (pathname.includes("/budgeting/budgets/new")) return "Create or edit a budget with categories, departments, and controls";
-  if (pathname.includes("/budgeting/budgets")) return "Manage all budget plans, utilization, and status";
-  if (pathname.includes("/budgeting/categories")) return "Control and monitor budget allocation by spending category";
-  if (pathname.includes("/budgeting/departments")) return "Track budget utilization by department";
-  if (pathname.includes("/budgeting/forecasting")) return "Forecast cash runway and budget outcomes";
-  if (pathname.includes("/budgeting/scenarios")) return "Simulate scenario impact on budget and runway";
-  if (pathname.includes("/budgeting/variance")) return "Analyze budget variance against actual performance";
-  if (pathname.includes("/budgeting/budget-vs-actual")) return "Visual comparisons of planned versus actual spending";
-  if (pathname.includes("/budgeting/templates")) return "Reusable templates for common budgeting models";
-  if (pathname.includes("/budgeting/ai-assistant")) return "AI support for optimization, risk alerts, and budget decisions";
-  if (pathname.includes("/accounting/workspace")) return "Real-time journals, ledgers, and statements";
-  if (pathname.includes("/accounting/assets")) return "Track fixed assets, accumulated depreciation, and net book values";
-  if (pathname.includes("/accounting/depreciation")) return "Automatic depreciation schedule with monthly journal guidance";
-  if (pathname.includes("/accounting")) return "Generate financial statements before tax";
-  if (pathname.includes("/dashboard")) return "Business metrics and analytics overview";
-  if (pathname.includes("/tax/computation")) return "Transparent CIT, VAT, WHT, and PAYE computations from your accounting data";
-  if (pathname.includes("/tax/adjustments")) return "Accountant-level deductions, allowances, tax credits, and manual tax adjustments";
-  if (pathname.includes("/tax/settings")) return "Configure tax jurisdiction, tax rates, company profile, and fiscal year settings";
-  if (pathname.includes("/tax/calendar")) return "Compliance tracking calendar for filing, payments, and reminders";
-  if (pathname.includes("/tax/file-taxes")) return "Generate return documents, download PDFs, upload filings, and track submission history";
-  if (pathname.includes("/tax/payments")) return "Track payment history, outstanding taxes, paid taxes, receipts, and proof uploads";
-  if (pathname.includes("/tax/returns")) return "Filing center with period, status, tax amount, and filing dates";
-  if (pathname.includes("/tax/transactions")) return "Source-of-truth taxable transactions with classification and overrides";
-  return "Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities";
 }

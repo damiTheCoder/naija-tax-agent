@@ -45,6 +45,25 @@ export interface SyncJournalsRequest {
   journals: JournalSyncInput[];
   source?: "live_posting" | "backfill";
   fullSync?: boolean;
+  mode?: "apply" | "report";
+}
+
+export interface SyncJournalsResult {
+  syncRunId: string;
+  upsertedTransactions: number;
+  prunedTransactions: number;
+  duplicatesPruned: number;
+  staleRowsRemoved: number;
+  impactedPeriods: string[];
+  reportOnly: boolean;
+  report?: {
+    journalsReceived: number;
+    wouldUpsertTransactions: number;
+    wouldPruneTransactions: number;
+    wouldPruneDuplicates: number;
+    wouldRemoveStaleRows: number;
+    impactedPeriods: string[];
+  };
 }
 
 export interface TaxDashboardResponseV2 {

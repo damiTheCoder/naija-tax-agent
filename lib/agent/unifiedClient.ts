@@ -1,7 +1,7 @@
 "use client";
 
-import { accountingEngine, parseTransactionFromChatWithAI } from "@/lib/accounting/transactionBridge";
-import type { RawTransaction, TransactionType } from "@/lib/accounting/types";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
+import type { TransactionType } from "@/lib/accounting/types";
 import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
 import { detectTaxType, taxEngine, type TaxTransactionType } from "@/lib/tax/taxEngine";
 import {
@@ -39,7 +39,6 @@ import type {
 
 let enginesLoaded = false;
 const PLAN_TIMEOUT_MS = 30000;
-const ACCOUNTING_PARSE_TIMEOUT_MS = 7000;
 const UI_SNAPSHOT_MAX_ITEMS = 14;
 const UI_STEP_DELAY_MS = 260;
 const UI_SCROLL_SETTLE_DELAY_MS = 180;
@@ -47,6 +46,13 @@ const AGENT_LOOP_MAX_CYCLES = 3;
 const AGENT_MEMORY_MAX_ITEMS = 40;
 const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
   "accounting.postTransaction",
+  "accounting.createBill",
+  "accounting.submitBill",
+  "accounting.approveBill",
+  "accounting.payBill",
+  "accounting.lockPeriod",
+  "accounting.unlockPeriod",
+  "accounting.createRecurringTemplate",
   "report.downloadPdf",
   "tax.recordTransaction",
   "tax.runComputation",
@@ -256,6 +262,20 @@ function detectRecipient(text: string): string | null {
   return null;
 }
 
+function extractBillId(text: string): string | null {
+  const labeled = text.match(/\bbill(?:\s+id)?\s*[:#-]?\s*([a-zA-Z0-9-]{6,64})\b/i);
+  if (labeled?.[1]) return labeled[1];
+  const uuidLike = text.match(/\b([a-zA-Z0-9]{8,}-[a-zA-Z0-9-]{4,})\b/);
+  if (uuidLike?.[1]) return uuidLike[1];
+  return null;
+}
+
+function extractAccountingPeriod(text: string): string | null {
+  const monthly = text.match(/\b(20\d{2}-(0[1-9]|1[0-2]))\b/);
+  if (monthly?.[1]) return monthly[1];
+  return null;
+}
+
 function extractSignedNumber(text: string): number | null {
   const match = text.match(/-?\d[\d,]*(?:\.\d+)?/);
   if (!match) return null;
@@ -319,8 +339,10 @@ function looksLikeFigureGroundingRequest(message: string): boolean {
 function looksLikeProjectionAssumptionChange(message: string): boolean {
   const lower = message.toLowerCase();
   const verb = /(set|update|change|adjust|input|apply|reset|clear)/.test(lower);
-  const target = /(assumption|growth|cogs|baseline|collection|disbursement|marketing|opex|expense)/.test(lower);
-  return verb && target;
+  const target = /(assumption|growth|cogs|baseline|collection|disbursement|marketing|opex|expense|model|input|rate|months?|arpu|churn|cac|ltv|price|revenue|cost|capex|tax)/.test(
+    lower
+  );
+  return verb && target && (extractSignedNumber(message) !== null || /\breset\b/.test(lower));
 }
 
 function buildProjectionSnapshotReply(contextSnapshot: string): string {
@@ -525,9 +547,40 @@ function findProjectionAssumption(message: string): ProjectionAssumptionMeta | n
   return null;
 }
 
-function buildProjectionFallbackAction(message: string, moduleId: string): UnifiedAgentAction | null {
+function inferProjectionUnit(message: string): "percent" | "currency" | "decimal" {
+  const lower = message.toLowerCase();
+  if (/%|percent|pct/.test(lower)) return "percent";
+  if (/₦|ngn|naira/.test(message) || /\b(currency|cash|amount)\b/.test(lower)) return "currency";
+  return "decimal";
+}
+
+function extractProjectionInputTarget(message: string): string | null {
+  const setMatch = message.match(
+    /\b(?:set|update|change|adjust|input|apply|put)\s+(?:the\s+)?(.+?)\s+(?:to)\s*-?\d[\d,]*(?:\.\d+)?/i
+  );
+  const fallbackMatch = message.match(
+    /\b(?:set|update|change|adjust|input|apply|put)\s+(?:the\s+)?(.+?)\s+(?:to)\s+(?:₦|ngn|naira)?\s*-?\d[\d,]*(?:\.\d+)?/i
+  );
+  const rawTarget = setMatch?.[1] || fallbackMatch?.[1] || "";
+  if (!rawTarget) return null;
+
+  const cleaned = rawTarget
+    .replace(/["'`]/g, "")
+    .replace(/\b(assumption|assumptions|model|models|input|inputs|value|values)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || null;
+}
+
+function buildProjectionFallbackAction(
+  message: string,
+  moduleId: string,
+  contextSnapshot = ""
+): UnifiedAgentAction | null {
   if (moduleId !== "projections") return null;
   const lower = message.toLowerCase();
+  const isModelContext = /Financial Modelling:/i.test(contextSnapshot);
 
   if (/(reset|clear).*(assumption|inputs|projection)/.test(lower) || /reset to auto/.test(lower)) {
     return {
@@ -541,8 +594,6 @@ function buildProjectionFallbackAction(message: string, moduleId: string): Unifi
   const updateIntent = /(set|update|change|adjust|input|apply|put|increase|decrease).*(assumption|growth|ratio|baseline|cogs|marketing|collection|disbursement|across all|all assumptions?)/.test(
     lower
   );
-  if (!updateIntent) return null;
-
   const value = extractSignedNumber(message);
   if (value === null) return null;
 
@@ -567,25 +618,48 @@ function buildProjectionFallbackAction(message: string, moduleId: string): Unifi
   }
 
   const assumption = findProjectionAssumption(message);
-  if (!assumption) return null;
-  const explicitPercent = /%|percent/.test(lower);
+  if (assumption && updateIntent) {
+    const explicitPercent = /%|percent/.test(lower);
 
-  return {
-    type: "projections.updateAssumption",
-    payload: {
-      updates: [
-        {
-          key: assumption.key,
-          value,
-          unit: explicitPercent || assumption.kind === "percent" ? "percent" : assumption.kind === "currency" ? "currency" : "decimal",
-          min: assumption.min,
-          max: assumption.max,
-        },
-      ],
-    },
-    confidence: 0.68,
-    reason: "Detected projection assumption update instruction",
-  };
+    return {
+      type: "projections.updateAssumption",
+      payload: {
+        updates: [
+          {
+            key: assumption.key,
+            value,
+            unit: explicitPercent || assumption.kind === "percent" ? "percent" : assumption.kind === "currency" ? "currency" : "decimal",
+            min: assumption.min,
+            max: assumption.max,
+          },
+        ],
+      },
+      confidence: 0.68,
+      reason: "Detected projection assumption update instruction",
+    };
+  }
+
+  // Model-detail fallback: allow direct updates to model input fields, e.g. "set tax rate to 22"
+  if (isModelContext) {
+    const inputTarget = extractProjectionInputTarget(message);
+    if (!inputTarget) return null;
+    return {
+      type: "projections.updateAssumption",
+      payload: {
+        updates: [
+          {
+            key: inputTarget,
+            value,
+            unit: inferProjectionUnit(message),
+          },
+        ],
+      },
+      confidence: 0.66,
+      reason: "Detected financial model input update instruction",
+    };
+  }
+
+  return null;
 }
 
 function buildUiFallbackAction(message: string): UnifiedAgentAction | null {
@@ -701,7 +775,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     moduleId
   );
 
-  const projectionAction = buildProjectionFallbackAction(message, moduleId);
+  const projectionAction = buildProjectionFallbackAction(message, moduleId, contextSnapshot);
   if (projectionAction && !explainOnlyIntent) actions.push(projectionAction);
 
   if (uiIntent && explicitActionIntent && !walletIntent && !transactionIntent && !taxIntent && !cashflowIntent && !explainOnlyIntent) {
@@ -805,6 +879,123 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     });
   }
 
+  const billId = extractBillId(message);
+  const period = extractAccountingPeriod(message);
+  const createBillIntent =
+    /\b(create|add|record|draft|raise)\b/.test(lower) && /\bbill\b/.test(lower) && !!amount;
+  if (createBillIntent && !explainOnlyIntent) {
+    const vendorMatch = message.match(/\b(?:to|from|vendor)\s+([a-zA-Z][a-zA-Z0-9 .,&'-]{2,50})/i);
+    actions.push({
+      type: "accounting.createBill",
+      payload: {
+        vendorName: vendorMatch?.[1]?.trim() || "Unspecified Vendor",
+        date: getTodayDate(),
+        lines: [
+          {
+            description: message,
+            quantity: 1,
+            unitPrice: amount,
+          },
+        ],
+        currency: "NGN",
+      },
+      confidence: 0.7,
+      reason: "Detected bill draft instruction",
+    });
+  }
+
+  if (billId && /\bsubmit\b/.test(lower) && /\bbill\b/.test(lower) && !explainOnlyIntent) {
+    actions.push({
+      type: "accounting.submitBill",
+      payload: {
+        billId,
+      },
+      confidence: 0.7,
+      reason: "Detected bill submit instruction",
+    });
+  }
+
+  if (billId && /\bapprove\b/.test(lower) && /\bbill\b/.test(lower) && !explainOnlyIntent) {
+    actions.push({
+      type: "accounting.approveBill",
+      payload: {
+        billId,
+      },
+      confidence: 0.7,
+      reason: "Detected bill approval instruction",
+    });
+  }
+
+  if (billId && /\b(pay|settle)\b/.test(lower) && /\bbill\b/.test(lower) && !explainOnlyIntent) {
+    actions.push({
+      type: "accounting.payBill",
+      payload: {
+        billId,
+        ...(amount ? { amount } : {}),
+      },
+      confidence: 0.72,
+      reason: "Detected bill payment instruction",
+    });
+  }
+
+  if (period && /\block\b/.test(lower) && /\b(period|month|books?)\b/.test(lower) && !explainOnlyIntent) {
+    actions.push({
+      type: "accounting.lockPeriod",
+      payload: {
+        period,
+      },
+      confidence: 0.68,
+      reason: "Detected accounting period lock instruction",
+    });
+  }
+
+  if (period && /\bunlock\b/.test(lower) && /\b(period|month|books?)\b/.test(lower) && !explainOnlyIntent) {
+    actions.push({
+      type: "accounting.unlockPeriod",
+      payload: {
+        period,
+      },
+      confidence: 0.68,
+      reason: "Detected accounting period unlock instruction",
+    });
+  }
+
+  if (/\b(recurring|repeat every|monthly template|quarterly template)\b/.test(lower) && /\b(bill|journal)\b/.test(lower) && !explainOnlyIntent) {
+    const resourceType = /\bbill\b/.test(lower) ? "bill" : "journal";
+    const frequency = /\bquarter\b/.test(lower) ? "quarterly" : "monthly";
+    actions.push({
+      type: "accounting.createRecurringTemplate",
+      payload: {
+        name: `AI ${resourceType} template`,
+        resourceType,
+        frequency,
+        startDate: getTodayDate(),
+        payload:
+          resourceType === "bill"
+            ? {
+                bill: {
+                  vendorName: "Recurring Vendor",
+                  lines: [
+                    {
+                      description: message,
+                      quantity: 1,
+                      unitPrice: amount || 0,
+                    },
+                  ],
+                },
+              }
+            : {
+                journal: {
+                  narration: message,
+                  lines: [],
+                },
+              },
+      },
+      confidence: 0.64,
+      reason: "Detected recurring template instruction",
+    });
+  }
+
   if ((taxIntent || moduleId === "tax") && amount && !complianceIntent && !explainOnlyIntent) {
     actions.push({
       type: "tax.recordTransaction",
@@ -900,7 +1091,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
           : actions[0]?.type === "report.downloadPdf"
             ? "Understood. I’ll generate that report and attach a PDF download here."
           : actions[0]?.type === "projections.updateAssumption"
-            ? "Understood. I’ll update the projection assumptions now."
+            ? "Understood. I’ll update the projection inputs now."
             : actions[0]?.type === "projections.resetAssumptions"
               ? "Understood. I’ll reset projection assumptions back to auto."
               : "Understood. I’m executing that now.",
@@ -982,35 +1173,11 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   };
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutHandle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-  }
-}
-
 function normalizeAccountingType(value?: string): TransactionType {
   const normalized = (value || "").toLowerCase();
   if (normalized === "income" || normalized === "expense" || normalized === "asset" || normalized === "liability" || normalized === "equity") {
     return normalized;
   }
-  return "other";
-}
-
-function mapParsedTypeToAccountingType(value?: string): TransactionType {
-  const normalized = (value || "").toLowerCase();
-  if (normalized === "sale" || normalized === "receipt") return "income";
-  if (normalized === "purchase" || normalized === "expense" || normalized === "payment") return "expense";
-  if (normalized === "transfer" || normalized === "asset") return "asset";
-  if (normalized === "loan") return "liability";
-  if (normalized === "equity") return "equity";
   return "other";
 }
 
@@ -1607,13 +1774,6 @@ async function executeUiOperate(
   };
 }
 
-function shouldTryAdvancedAccountingParse(description: string, transactionType: TransactionType): boolean {
-  const complexPattern =
-    /\b(vat|wht|debit|credit|accrual|deferred|allocate|split|reclass|adjustment|amort|depreciation)\b/i;
-  const isLongRequest = description.split(/\s+/).length >= 12;
-  return transactionType === "other" || complexPattern.test(description) || isLongRequest;
-}
-
 type AccountingUiMirrorLine = {
   accountCode: string;
   debit: number;
@@ -1764,66 +1924,85 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
   const date = toText(payload.date, getTodayDate());
   const category = toText(payload.category, "other");
   const forcedType = normalizeAccountingType(toText(payload.transactionType));
-  const rawTx: RawTransaction = {
-    id: `agent-tx-${Date.now()}`,
-    date,
-    description,
-    category,
-    amount,
-    type: forcedType,
-  };
-
-  if (shouldTryAdvancedAccountingParse(description, forcedType)) {
-    try {
-      const parsed = await withTimeout(
-        parseTransactionFromChatWithAI(`${description} ₦${amount.toLocaleString("en-NG")}`),
-        ACCOUNTING_PARSE_TIMEOUT_MS,
-        "Accounting parse timeout"
-      );
-      if (parsed?.debitAccount?.code && parsed?.creditAccount?.code) {
-        rawTx.type = mapParsedTypeToAccountingType(parsed.parsedType);
-        rawTx.category = parsed.category || category;
-        rawTx.amount = parsed.amount || amount;
-
-        const response = accountingEngine.processTransactionWithAIAccounts(rawTx, {
-          debitCode: parsed.debitAccount.code,
-          debitName: parsed.debitAccount.name || "Debit",
-          creditCode: parsed.creditAccount.code,
-          creditName: parsed.creditAccount.name || "Credit",
-          confidence: parsed.aiConfidence || parsed.confidence || 0.7,
-          reasoning: parsed.aiReasoning || action.reason || "AI-assisted posting",
-          parsedType: parsed.parsedType,
-          taxImplications: {
-            outputVAT: parsed.taxImplications?.outputVAT || 0,
-            inputVAT: parsed.taxImplications?.inputVAT || 0,
-          },
-        });
-
-        window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "unified-agent" } }));
-        window.dispatchEvent(new StorageEvent("storage", { key: "insight::accounting-engine" }));
-        const mirrorPayload = toAccountingUiMirrorPayload(description);
-        const mirrorNote = mirrorPayload ? await runAccountingUiMirror(mirrorPayload) : "";
-        return {
-          type: "accounting.postTransaction",
-          success: true,
-          message: mirrorNote ? `${response.chatResponse}\n${mirrorNote}` : response.chatResponse,
-        };
-      }
-    } catch (error) {
-      console.warn("[Unified Agent] AI accounting parse fallback:", error);
-    }
-  }
 
   try {
-    const result = accountingEngine.processTransactionEnhanced(rawTx);
+    const response = await fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityId: toText(payload.entityId, "entity-default"),
+        description,
+        amount,
+        date,
+        category,
+        type: forcedType,
+        sourceCurrency: toText(payload.sourceCurrency, "NGN"),
+        baseCurrency: toText(payload.baseCurrency, "NGN"),
+        exchangeRate: Number.isFinite(toNumber(payload.exchangeRate)) ? toNumber(payload.exchangeRate) : undefined,
+        trackingClassId: toText(payload.trackingClassId, ""),
+        trackingLocationId: toText(payload.trackingLocationId, ""),
+        taxMode: toText(payload.taxMode, ""),
+        vatApplicable: typeof payload.vatApplicable === "boolean" ? payload.vatApplicable : undefined,
+        vatRate: Number.isFinite(toNumber(payload.vatRate)) ? toNumber(payload.vatRate) : undefined,
+        whtApplicable: typeof payload.whtApplicable === "boolean" ? payload.whtApplicable : undefined,
+        whtRate: Number.isFinite(toNumber(payload.whtRate)) ? toNumber(payload.whtRate) : undefined,
+        taxCategory: toText(payload.taxCategory, ""),
+        vatCategory: toText(payload.vatCategory, ""),
+        reference: toText(payload.reference, ""),
+      }),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+      response?: string;
+      source?: string;
+      journalEntry?: { id?: string };
+      prismaSync?: { enabled?: boolean; success?: boolean; error?: string };
+      receipt?: { actionId?: string; deepLink?: string };
+    };
+
+    if (!response.ok || data.success !== true) {
+      return {
+        type: "accounting.postTransaction",
+        success: false,
+        message: `Unable to post accounting entry: ${data.error || `HTTP ${response.status}`}`,
+        data,
+      };
+    }
+
+    const persistedToServer =
+      data.source === "prisma" ||
+      (data.prismaSync?.enabled === true && data.prismaSync.success === true);
+    if (!persistedToServer) {
+      return {
+        type: "accounting.postTransaction",
+        success: false,
+        message:
+          "Transaction was not confirmed in server storage. Please retry when server sync is available.",
+        data: {
+          ...data,
+          guidance:
+            "Open /accounting/action-logs or /api/accounting/health, verify Prisma sync, then retry.",
+        },
+      };
+    }
+
     window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "unified-agent" } }));
     window.dispatchEvent(new StorageEvent("storage", { key: "insight::accounting-engine" }));
     const mirrorPayload = toAccountingUiMirrorPayload(description);
     const mirrorNote = mirrorPayload ? await runAccountingUiMirror(mirrorPayload) : "";
+    const journalId = data.journalEntry?.id;
+    const syncWarning =
+      data.prismaSync?.enabled && data.prismaSync.success === false
+        ? `\nWarning: Prisma sync pending (${data.prismaSync.error || "unknown error"}).`
+        : "";
+    const baseMessage = data.response || `Transaction posted${journalId ? ` (journal ${journalId})` : ""}.`;
     return {
       type: "accounting.postTransaction",
       success: true,
-      message: mirrorNote ? `${result.chatResponse}\n${mirrorNote}` : result.chatResponse,
+      message: `${baseMessage}${formatReceiptTail(data.receipt)}${syncWarning}${mirrorNote ? `\n${mirrorNote}` : ""}`,
+      data,
     };
   } catch (error) {
     return {
@@ -1832,6 +2011,421 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
       message: `Unable to post accounting entry: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
+}
+
+type AccountingActionApiSuccess = {
+  success: true;
+  receipt?: {
+    actionId?: string;
+    deepLink?: string;
+    resourceId?: string;
+    journalId?: string;
+  };
+  bill?: {
+    id?: string;
+    billNo?: string;
+  };
+  payment?: {
+    id?: string;
+    amount?: number;
+  };
+  state?: {
+    period?: string;
+    locked?: boolean;
+  };
+  template?: {
+    id?: string;
+    name?: string;
+  };
+};
+
+type AccountingActionApiFailure = {
+  success?: false;
+  error?: string;
+};
+
+async function postAccountingAction<TSuccess extends AccountingActionApiSuccess>(
+  path: string,
+  payload: Record<string, unknown>
+): Promise<{ ok: true; data: TSuccess } | { ok: false; error: string; data?: AccountingActionApiFailure }> {
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const success = data.success === true;
+    if (!response.ok || !success) {
+      const errorMessage = typeof data.error === "string" ? data.error : `Request failed with status ${response.status}`;
+      return {
+        ok: false,
+        error: errorMessage,
+        data: data as AccountingActionApiFailure,
+      };
+    }
+    return { ok: true, data: data as TSuccess };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Network request failed",
+    };
+  }
+}
+
+function formatReceiptTail(receipt?: { actionId?: string; deepLink?: string }): string {
+  if (!receipt?.actionId) return "";
+  if (receipt.deepLink) return ` Receipt: ${receipt.actionId} (${receipt.deepLink}).`;
+  return ` Receipt: ${receipt.actionId}.`;
+}
+
+async function executeAccountingCreateBill(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const description = toText(payload.description, "Bill line");
+  const amount = Math.abs(toNumber(payload.amount));
+  const lines = Array.isArray(payload.lines)
+    ? payload.lines
+        .map((line) => {
+          const row = (line || {}) as Record<string, unknown>;
+          return {
+            description: toText(row.description, description),
+            quantity: Math.max(1, toNumber(row.quantity) || 1),
+            unitPrice: Math.max(0, toNumber(row.unitPrice)),
+            taxRate: Number.isFinite(toNumber(row.taxRate)) ? toNumber(row.taxRate) : undefined,
+            taxAmount: Number.isFinite(toNumber(row.taxAmount)) ? toNumber(row.taxAmount) : undefined,
+            total: Number.isFinite(toNumber(row.total)) ? toNumber(row.total) : undefined,
+            trackingClassId: toText(row.trackingClassId, ""),
+            trackingLocationId: toText(row.trackingLocationId, ""),
+          };
+        })
+        .filter((line) => line.unitPrice > 0)
+    : [];
+
+  if (lines.length === 0 && amount > 0) {
+    lines.push({
+      description,
+      quantity: 1,
+      unitPrice: amount,
+      taxRate: undefined,
+      taxAmount: undefined,
+      total: undefined,
+      trackingClassId: "",
+      trackingLocationId: "",
+    });
+  }
+
+  if (lines.length === 0) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot create bill: provide bill lines or a positive amount.",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    bill: { id?: string; billNo?: string };
+    receipt?: { actionId?: string; deepLink?: string };
+  }>("/api/accounting/bills", {
+    entityId: toText(payload.entityId, "entity-default"),
+    vendorId: toText(payload.vendorId, ""),
+    vendorName: toText(payload.vendorName, ""),
+    billNo: toText(payload.billNo, ""),
+    date: toText(payload.date, getTodayDate()),
+    dueDate: toText(payload.dueDate, ""),
+    currency: toText(payload.currency, "NGN"),
+    lines,
+    notes: toText(payload.notes, ""),
+    trackingClassId: toText(payload.trackingClassId, ""),
+    trackingLocationId: toText(payload.trackingLocationId, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Bill creation failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  const billRef = result.data.bill.billNo || result.data.bill.id || "bill";
+  return {
+    type: action.type,
+    success: true,
+    message: `Bill ${billRef} drafted successfully.${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingSubmitBill(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const billId = toText(payload.billId);
+  if (!billId) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot submit bill: billId is required.",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    receipt?: { actionId?: string; deepLink?: string };
+    approvalRequest?: { id?: string; requiredRole?: string };
+  }>(`/api/accounting/bills/${encodeURIComponent(billId)}/submit`, {
+    entityId: toText(payload.entityId, "entity-default"),
+    actor: toText(payload.actor, ""),
+    actorRole: toText(payload.actorRole, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Bill submit failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  const roleHint = result.data.approvalRequest?.requiredRole
+    ? ` Required approver role: ${result.data.approvalRequest.requiredRole}.`
+    : "";
+  return {
+    type: action.type,
+    success: true,
+    message: `Bill submitted for approval.${roleHint}${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingApproveBill(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const billId = toText(payload.billId);
+  if (!billId) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot approve bill: billId is required.",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    journal?: { id?: string };
+    receipt?: { actionId?: string; deepLink?: string; journalId?: string };
+  }>(`/api/accounting/bills/${encodeURIComponent(billId)}/approve`, {
+    entityId: toText(payload.entityId, "entity-default"),
+    actor: toText(payload.actor, ""),
+    actorRole: toText(payload.actorRole, "owner"),
+    decisionNote: toText(payload.decisionNote, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Bill approval failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  const journalId = result.data.journal?.id || result.data.receipt?.journalId;
+  return {
+    type: action.type,
+    success: true,
+    message: `Bill approved and posted${journalId ? ` (journal ${journalId})` : ""}.${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingPayBill(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const billId = toText(payload.billId);
+  if (!billId) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot pay bill: billId is required.",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    payment?: { id?: string; amount?: number };
+    journal?: { id?: string };
+    receipt?: { actionId?: string; deepLink?: string };
+  }>(`/api/accounting/bills/${encodeURIComponent(billId)}/pay`, {
+    entityId: toText(payload.entityId, "entity-default"),
+    amount: Number.isFinite(toNumber(payload.amount)) ? Math.abs(toNumber(payload.amount)) : undefined,
+    date: toText(payload.date, ""),
+    method: toText(payload.method, ""),
+    reference: toText(payload.reference, ""),
+    actor: toText(payload.actor, ""),
+    actorRole: toText(payload.actorRole, "owner"),
+    bankAccountCode: toText(payload.bankAccountCode, ""),
+    bankAccountName: toText(payload.bankAccountName, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Bill payment failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  const paymentId = result.data.payment?.id;
+  const journalId = result.data.journal?.id;
+  return {
+    type: action.type,
+    success: true,
+    message: `Bill payment posted${paymentId ? ` (payment ${paymentId})` : ""}${journalId ? `, journal ${journalId}` : ""}.${formatReceiptTail(
+      result.data.receipt
+    )}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingLockPeriod(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const period = toText(payload.period);
+  if (!period) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot lock period: period is required (YYYY-MM).",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    state?: { period?: string; locked?: boolean };
+    receipt?: { actionId?: string; deepLink?: string };
+  }>(`/api/accounting/period-locks/${encodeURIComponent(period)}/lock`, {
+    entityId: toText(payload.entityId, "entity-default"),
+    actor: toText(payload.actor, ""),
+    actorRole: toText(payload.actorRole, "owner"),
+    reason: toText(payload.reason, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Period lock failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  return {
+    type: action.type,
+    success: true,
+    message: `Period ${period} locked.${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingUnlockPeriod(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const period = toText(payload.period);
+  if (!period) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot unlock period: period is required (YYYY-MM).",
+    };
+  }
+
+  const result = await postAccountingAction<{
+    success: true;
+    state?: { period?: string; locked?: boolean };
+    receipt?: { actionId?: string; deepLink?: string };
+  }>(`/api/accounting/period-locks/${encodeURIComponent(period)}/unlock`, {
+    entityId: toText(payload.entityId, "entity-default"),
+    actor: toText(payload.actor, ""),
+    actorRole: toText(payload.actorRole, "owner"),
+    reason: toText(payload.reason, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Period unlock failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  return {
+    type: action.type,
+    success: true,
+    message: `Period ${period} unlocked.${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
+}
+
+async function executeAccountingCreateRecurringTemplate(
+  action: UnifiedAgentAction
+): Promise<UnifiedActionExecutionResult> {
+  const payload = action.payload || {};
+  const name = toText(payload.name);
+  if (!name) {
+    return {
+      type: action.type,
+      success: false,
+      message: "Cannot create recurring template: name is required.",
+    };
+  }
+  const resourceType = toText(payload.resourceType, "journal");
+  const frequency = toText(payload.frequency, "monthly");
+  const startDate = toText(payload.startDate, getTodayDate());
+  const templatePayload =
+    payload.payload && typeof payload.payload === "object"
+      ? (payload.payload as Record<string, unknown>)
+      : {};
+
+  const result = await postAccountingAction<{
+    success: true;
+    template?: { id?: string; name?: string };
+    receipt?: { actionId?: string; deepLink?: string };
+  }>("/api/accounting/recurring-templates", {
+    entityId: toText(payload.entityId, "entity-default"),
+    actorRole: toText(payload.actorRole, "owner"),
+    name,
+    resourceType: resourceType === "bill" ? "bill" : "journal",
+    frequency: frequency === "quarterly" ? "quarterly" : "monthly",
+    startDate,
+    endDate: toText(payload.endDate, ""),
+    nextRunAt: toText(payload.nextRunAt, ""),
+    payload: templatePayload,
+    createdBy: toText(payload.createdBy, ""),
+  });
+
+  if (!result.ok) {
+    return {
+      type: action.type,
+      success: false,
+      message: `Recurring template creation failed: ${result.error}`,
+      data: result.data,
+    };
+  }
+
+  const templateId = result.data.template?.id;
+  return {
+    type: action.type,
+    success: true,
+    message: `Recurring template created${templateId ? ` (${templateId})` : ""}.${formatReceiptTail(result.data.receipt)}`,
+    data: result.data,
+    navigateTo: result.data.receipt?.deepLink,
+  };
 }
 
 function normalizeTaxType(value: unknown, description: string, amount: number, category?: string): TaxTransactionType {
@@ -2252,6 +2846,20 @@ export async function executeUnifiedAgentActions(
     try {
       if (action.type === "accounting.postTransaction") {
         results.push(await executeAccountingPost(action));
+      } else if (action.type === "accounting.createBill") {
+        results.push(await executeAccountingCreateBill(action));
+      } else if (action.type === "accounting.submitBill") {
+        results.push(await executeAccountingSubmitBill(action));
+      } else if (action.type === "accounting.approveBill") {
+        results.push(await executeAccountingApproveBill(action));
+      } else if (action.type === "accounting.payBill") {
+        results.push(await executeAccountingPayBill(action));
+      } else if (action.type === "accounting.lockPeriod") {
+        results.push(await executeAccountingLockPeriod(action));
+      } else if (action.type === "accounting.unlockPeriod") {
+        results.push(await executeAccountingUnlockPeriod(action));
+      } else if (action.type === "accounting.createRecurringTemplate") {
+        results.push(await executeAccountingCreateRecurringTemplate(action));
       } else if (action.type === "report.downloadPdf") {
         results.push(await executeReportDownloadPdf(action));
       } else if (action.type === "tax.recordTransaction") {

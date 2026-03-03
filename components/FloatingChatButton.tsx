@@ -23,12 +23,16 @@ import {
     PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
     CHAT_HISTORY_SELECTED_EVENT,
     createChatConversation,
+    createChatConversationAsync,
     consumeSelectedChatHistory,
-    deleteChatConversation,
+    deleteChatConversationAsync,
     getChatConversation,
-    loadChatConversations,
+    getChatConversationAsync,
+    loadChatConversationsAsync,
     renameChatConversation,
+    renameChatConversationAsync,
     saveChatConversationMessages,
+    saveChatConversationMessagesAsync,
     selectChatConversation,
 } from "@/lib/personalChatHistory";
 
@@ -74,6 +78,13 @@ const PROJECTIONS_CONTEXT_STORAGE_KEY = "ql::projections-context";
 const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
 const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
 const AGENT_CHAT_MODE_STORAGE_KEY = "ql::agent-chat-mode";
+const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
+
+type ChatModalOpenDetail = {
+    module?: string;
+    prompt?: string;
+    newChat?: boolean;
+};
 
 function readProjectionsContextSnapshot(): string {
     if (typeof window === "undefined") return "";
@@ -229,6 +240,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         examples: [
             '"How do I calculate revenue growth rate?"',
             '"Set revenue growth assumption to 12%"',
+            '"Set tax rate to 22 in this model"',
             '"Reset assumptions to auto"'
         ],
         color: "blue"
@@ -380,6 +392,16 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     }
 
     return moduleConfigs.default;
+}
+
+function getModuleFromId(moduleId?: string): ModuleConfig | null {
+    if (!moduleId) return null;
+    const normalized = moduleId.toLowerCase().trim();
+    if (!normalized) return null;
+    return (
+        Object.values(moduleConfigs).find((config) => config.id.toLowerCase() === normalized) ||
+        null
+    );
 }
 
 type PageAssistantProfile = {
@@ -670,8 +692,9 @@ export default function FloatingChatButton() {
         blobUrlsRef.current = [];
     }, []);
 
-    const refreshConversationList = useCallback(() => {
-        setConversationList(loadChatConversations());
+    const refreshConversationList = useCallback(async () => {
+        const conversations = await loadChatConversationsAsync();
+        setConversationList(conversations);
     }, []);
 
     const openConversation = useCallback((conversation: ChatConversation, module: ModuleConfig, route: string) => {
@@ -682,28 +705,37 @@ export default function FloatingChatButton() {
         setInputValue("");
     }, []);
 
-    const persistConversation = useCallback((
+    const persistConversation = useCallback(async (
         nextMessages: ChatMessage[],
         moduleId: string,
         route: string,
         preferredConversationId?: string | null
-    ): string | null => {
+    ): Promise<string | null> => {
         const conversationMessages = toConversationMessages(nextMessages);
         if (conversationMessages.length === 0) return preferredConversationId || activeConversationId || null;
 
         let conversationId = preferredConversationId || activeConversationId;
         if (!conversationId) {
             const firstUserMessage = conversationMessages.find((item) => item.role === "user")?.content || "New chat";
-            const created = createChatConversation({
+            const created = (await createChatConversationAsync({
                 module: moduleId,
                 route,
                 title: firstUserMessage,
-            });
+            })) || createChatConversation({
+                    module: moduleId,
+                    route,
+                    title: firstUserMessage,
+                });
             conversationId = created.id;
             setActiveConversationId(created.id);
         }
 
-        let saved = saveChatConversationMessages({
+        let saved = (await saveChatConversationMessagesAsync({
+            conversationId,
+            module: moduleId,
+            route,
+            messages: conversationMessages,
+        })) || saveChatConversationMessages({
             conversationId,
             module: moduleId,
             route,
@@ -712,14 +744,23 @@ export default function FloatingChatButton() {
 
         if (!saved) {
             const firstUserMessage = conversationMessages.find((item) => item.role === "user")?.content || "New chat";
-            const created = createChatConversation({
+            const created = (await createChatConversationAsync({
                 module: moduleId,
                 route,
                 title: firstUserMessage,
-            });
+            })) || createChatConversation({
+                    module: moduleId,
+                    route,
+                    title: firstUserMessage,
+                });
             conversationId = created.id;
             setActiveConversationId(created.id);
-            saved = saveChatConversationMessages({
+            saved = (await saveChatConversationMessagesAsync({
+                conversationId,
+                module: moduleId,
+                route,
+                messages: conversationMessages,
+            })) || saveChatConversationMessages({
                 conversationId,
                 module: moduleId,
                 route,
@@ -727,7 +768,7 @@ export default function FloatingChatButton() {
             });
         }
 
-        refreshConversationList();
+        await refreshConversationList();
         return saved?.id || conversationId || null;
     }, [activeConversationId, refreshConversationList]);
 
@@ -738,12 +779,12 @@ export default function FloatingChatButton() {
         setMessages([createIntroMessage(currentModule, pathname)]);
         setInputValue("");
         setPlanSource("fallback");
-        refreshConversationList();
+        void refreshConversationList();
         setIsModalOpen(true);
     }, [currentModule, pathname, refreshConversationList, revokeBlobUrls]);
 
-    const handleSelectConversation = useCallback((conversationId: string) => {
-        const conversation = getChatConversation(conversationId);
+    const handleSelectConversation = useCallback(async (conversationId: string) => {
+        const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
         if (!conversation) return;
         setOpenConversationMenuId(null);
         if (conversation.route && conversation.route !== pathname) {
@@ -762,22 +803,25 @@ export default function FloatingChatButton() {
         setOpenConversationMenuId((current) => (current === conversationId ? null : conversationId));
     }, []);
 
-    const handleRenameConversation = useCallback((conversationId: string) => {
-        const conversation = getChatConversation(conversationId);
+    const handleRenameConversation = useCallback(async (conversationId: string) => {
+        const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
         if (!conversation) return;
         const renamed = window.prompt("Rename chat", conversation.title);
         if (renamed === null) return;
         const nextTitle = renamed.trim();
         if (!nextTitle) return;
 
-        const updated = renameChatConversation({
+        const updated = (await renameChatConversationAsync({
+            conversationId,
+            title: nextTitle,
+        })) || renameChatConversation({
             conversationId,
             title: nextTitle,
         });
         if (!updated) return;
 
         setOpenConversationMenuId(null);
-        refreshConversationList();
+        await refreshConversationList();
 
         if (activeConversationId === conversationId) {
             const moduleConfig = getModuleFromPath(updated.route || pathname);
@@ -786,17 +830,17 @@ export default function FloatingChatButton() {
         }
     }, [activeConversationId, openConversation, pathname, refreshConversationList]);
 
-    const handleDeleteConversation = useCallback((conversationId: string) => {
-        const conversation = getChatConversation(conversationId);
+    const handleDeleteConversation = useCallback(async (conversationId: string) => {
+        const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
         if (!conversation) return;
         const confirmed = window.confirm(`Delete chat "${conversation.title}"?`);
         if (!confirmed) return;
 
-        const deleted = deleteChatConversation(conversationId);
+        const deleted = await deleteChatConversationAsync(conversationId);
         if (!deleted) return;
 
         setOpenConversationMenuId(null);
-        refreshConversationList();
+        await refreshConversationList();
 
         if (activeConversationId === conversationId) {
             setActiveConversationId(null);
@@ -807,60 +851,103 @@ export default function FloatingChatButton() {
 
     // Detect module from pathname
     useEffect(() => {
-        const activeModule = getModuleFromPath(pathname);
-        setCurrentModule(activeModule);
-        setOpenConversationMenuId(null);
-        revokeBlobUrls();
-        const selected = consumeSelectedChatHistory({ pathname });
-        const allConversations = loadChatConversations();
-        setConversationList(allConversations);
+        let active = true;
+        const run = async () => {
+            const activeModule = getModuleFromPath(pathname);
+            setCurrentModule(activeModule);
+            setOpenConversationMenuId(null);
+            revokeBlobUrls();
+            const selected = consumeSelectedChatHistory({ pathname });
+            const allConversations = await loadChatConversationsAsync();
+            if (!active) return;
+            setConversationList(allConversations);
 
-        if (selected && selected.module !== "personal" && selected.conversationId) {
-            const selectedConversation = getChatConversation(selected.conversationId);
-            if (selectedConversation) {
-                openConversation(selectedConversation, activeModule, pathname);
+            if (selected && selected.module !== "personal" && selected.conversationId) {
+                const selectedConversation =
+                    (await getChatConversationAsync(selected.conversationId)) ||
+                    getChatConversation(selected.conversationId);
+                if (selectedConversation) {
+                    openConversation(selectedConversation, activeModule, pathname);
+                    setIsModalOpen(true);
+                    return;
+                }
+            }
+
+            if (selected && selected.module !== "personal") {
+                const introMessage = createIntroMessage(activeModule, pathname);
+                const restoredMessages: ChatMessage[] = [introMessage];
+                const baseTs = selected.timestamp || Date.now();
+                restoredMessages.push({
+                    id: `hist-u-${selected.id}`,
+                    role: "user",
+                    content: selected.prompt,
+                    timestamp: baseTs,
+                });
+                if (selected.response) {
+                    restoredMessages.push({
+                        id: `hist-a-${selected.id}`,
+                        role: "assistant",
+                        content: selected.response,
+                        timestamp: baseTs + 1,
+                    });
+                }
+
+                setMessages(restoredMessages);
+                setInputValue(selected.response ? "" : selected.prompt);
+                setActiveConversationId(null);
                 setIsModalOpen(true);
                 return;
             }
-        }
 
-        if (selected && selected.module !== "personal") {
-            const introMessage = createIntroMessage(activeModule, pathname);
-            const restoredMessages: ChatMessage[] = [introMessage];
-            const baseTs = selected.timestamp || Date.now();
-            restoredMessages.push({
-                id: `hist-u-${selected.id}`,
-                role: "user",
-                content: selected.prompt,
-                timestamp: baseTs,
-            });
-            if (selected.response) {
-                restoredMessages.push({
-                    id: `hist-a-${selected.id}`,
-                    role: "assistant",
-                    content: selected.response,
-                    timestamp: baseTs + 1,
-                });
+            const routeConversations = allConversations.filter((conversation) => conversation.route === pathname);
+            const latestConversation = routeConversations[0];
+            if (latestConversation) {
+                openConversation(latestConversation, activeModule, pathname);
+                return;
             }
 
-            setMessages(restoredMessages);
-            setInputValue(selected.response ? "" : selected.prompt);
             setActiveConversationId(null);
-            setIsModalOpen(true);
-            return;
-        }
+            setMessages([createIntroMessage(activeModule, pathname)]);
+            setInputValue("");
+        };
 
-        const routeConversations = allConversations.filter((conversation) => conversation.route === pathname);
-        const latestConversation = routeConversations[0];
-        if (latestConversation) {
-            openConversation(latestConversation, activeModule, pathname);
-            return;
-        }
-
-        setActiveConversationId(null);
-        setMessages([createIntroMessage(activeModule, pathname)]);
-        setInputValue("");
+        void run();
+        return () => {
+            active = false;
+        };
     }, [pathname, openConversation, revokeBlobUrls]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const handleExternalChatOpen = (event: Event) => {
+            const customEvent = event as CustomEvent<ChatModalOpenDetail>;
+            const detail = customEvent.detail || {};
+            const requestedModule = getModuleFromId(detail.module);
+            const resolvedModule = requestedModule || getModuleFromPath(pathname);
+            const shouldStartNewChat = detail.newChat === true;
+
+            setCurrentModule(resolvedModule);
+            setOpenConversationMenuId(null);
+
+            if (shouldStartNewChat) {
+                setActiveConversationId(null);
+                setMessages([createIntroMessage(resolvedModule, pathname)]);
+                setPlanSource("fallback");
+            }
+
+            if (typeof detail.prompt === "string") {
+                setInputValue(detail.prompt);
+            }
+
+            setIsModalOpen(true);
+        };
+
+        window.addEventListener(CHAT_MODAL_OPEN_EVENT, handleExternalChatOpen as EventListener);
+        return () => {
+            window.removeEventListener(CHAT_MODAL_OPEN_EVENT, handleExternalChatOpen as EventListener);
+        };
+    }, [pathname]);
 
     useEffect(() => {
         const handleHistorySelection = () => {
@@ -869,7 +956,7 @@ export default function FloatingChatButton() {
 
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
-            refreshConversationList();
+            void refreshConversationList();
 
             if (selected.conversationId) {
                 const selectedConversation = getChatConversation(selected.conversationId);
@@ -911,7 +998,7 @@ export default function FloatingChatButton() {
 
     useEffect(() => {
         const refresh = () => {
-            refreshConversationList();
+            void refreshConversationList();
         };
         refresh();
         window.addEventListener("storage", refresh);
@@ -1397,8 +1484,8 @@ _Ask me anything about bank reconciliation!_`;
             return "Open the projections dashboard first so I can read live metrics and assumptions.";
         }
 
-        if (lower.includes("assumption") || lower.includes("growth") || lower.includes("cogs") || lower.includes("baseline")) {
-            return "I can update assumptions directly here. Try: set revenue growth assumption to 12%, or reset assumptions to auto.";
+        if (lower.includes("assumption") || lower.includes("growth") || lower.includes("cogs") || lower.includes("baseline") || lower.includes("input") || lower.includes("model")) {
+            return "I can update projections and model inputs directly here. Try: set revenue growth assumption to 12%, set tax rate to 22, or reset assumptions to auto.";
         }
 
         const topLines = context.split("\n").slice(0, 5).join("\n");
@@ -1438,7 +1525,7 @@ _Ask me anything about bank reconciliation!_`;
         return {
             type: "projections.updateAssumption",
             success: true,
-            message: "Projection assumptions updated.",
+            message: "Projection assumptions/model inputs updated.",
             data: { updates },
         };
     }, []);
@@ -1466,19 +1553,19 @@ _Ask me anything about bank reconciliation!_`;
         setIsLoading(true);
         stopAgentRef.current = false;
 
-        const savedAfterUser = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+        const savedAfterUser = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
         if (savedAfterUser) {
             workingConversationId = savedAfterUser;
         }
 
-        const appendAssistantAndPersist = (content: string, attachment?: ChatAttachmentDownload) => {
+        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload) => {
             if (attachment?.url && attachment.url.startsWith("blob:")) {
                 blobUrlsRef.current.push(attachment.url);
             }
             const assistantMessage = buildChatMessage("assistant", content, attachment);
             workingMessages = [...workingMessages, assistantMessage];
             setMessages(workingMessages);
-            const savedConversationId = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+            const savedConversationId = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
             if (savedConversationId) {
                 workingConversationId = savedConversationId;
             }
@@ -1504,17 +1591,17 @@ _Ask me anything about bank reconciliation!_`;
                 });
                 const normalizedPlanSource: AgentPlanSource = result.planSource;
                 setPlanSource(normalizedPlanSource);
-                appendAssistantAndPersist(result.finalReply);
+                await appendAssistantAndPersist(result.finalReply);
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
-                downloadAttachments.forEach((attachment) => {
-                    appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
-                });
+                for (const attachment of downloadAttachments) {
+                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
+                }
                 const executedAnyAction = result.execution.some((step) => step.success);
                 if (executedAnyAction) {
-                    appendAssistantAndPersist("Completed in background.");
+                    await appendAssistantAndPersist("Completed in background.");
                 }
             } else {
                 setIsAgentPerforming(true);
@@ -1534,7 +1621,7 @@ _Ask me anything about bank reconciliation!_`;
                     await new Promise((resolve) => setTimeout(resolve, 850));
                 }
 
-                const savedAfterRouteChange = persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
+                const savedAfterRouteChange = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
                 if (savedAfterRouteChange) {
                     workingConversationId = savedAfterRouteChange;
                 }
@@ -1561,25 +1648,25 @@ _Ask me anything about bank reconciliation!_`;
 
                 setIsModalOpen(true);
                 await new Promise((resolve) => setTimeout(resolve, 120));
-                appendAssistantAndPersist(result.finalReply);
+                await appendAssistantAndPersist(result.finalReply);
 
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
-                downloadAttachments.forEach((attachment) => {
-                    appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
-                });
+                for (const attachment of downloadAttachments) {
+                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
+                }
 
                 const executedAnyAction = result.execution.some((step) => step.success);
                 if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(result.finalReply)) {
-                    appendAssistantAndPersist("Request complete.");
+                    await appendAssistantAndPersist("Request complete.");
                 }
             }
         } catch {
             setPlanSource("fallback");
             setIsModalOpen(true);
-            appendAssistantAndPersist("Sorry, I couldn't process that. Please try again.");
+            await appendAssistantAndPersist("Sorry, I couldn't process that. Please try again.");
         } finally {
             setIsAgentPerforming(false);
             setIsLoading(false);

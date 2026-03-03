@@ -115,6 +115,7 @@ type ProjectionActionUpdate = {
 const PROJECTIONS_CONTEXT_STORAGE_KEY = "ql::projections-context";
 const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
 const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
+const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 
 const PROJECTION_ASSUMPTION_CONFIG: Record<EditableAssumptionKey, ProjectionAssumptionConfig> = {
   revenueGrowthRate: {
@@ -1744,6 +1745,18 @@ export default function AccountingProjectionsPage() {
     }
   }, [projectionContextSnapshot]);
 
+  const handleOpenProjectionChat = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent(CHAT_MODAL_OPEN_EVENT, {
+        detail: {
+          module: "projections",
+          prompt: "Help me run this financial projection model from inputs.",
+        },
+      })
+    );
+  };
+
   const handleDownloadDashboardPdf = async () => {
     if (typeof window === "undefined" || isDownloadingPdf) return;
 
@@ -1771,6 +1784,14 @@ export default function AccountingProjectionsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Financial Projections Dashboard</h1>
           <p className="text-gray-500 mt-2">Record transactions in Accounting first. Projection charts will auto-populate from your ledgers.</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={handleOpenProjectionChat}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              <img src="/google-logo.jpg" alt="Google Chat" className="h-5 w-5 rounded-full" />
+              Open Google Chat
+            </button>
             <Link href="/accounting/projections/modelling" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
               Open Financial Modelling
             </Link>
@@ -1797,6 +1818,15 @@ export default function AccountingProjectionsPage() {
           </Link>
         </div>
         <div className="print-hidden flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleOpenProjectionChat}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+            title="Open Google Chat for projections"
+          >
+            <img src="/google-logo.jpg" alt="Google Chat" className="h-4 w-4 rounded-full" />
+            Google Chat
+          </button>
           <button
             type="button"
             onClick={handleDownloadDashboardPdf}

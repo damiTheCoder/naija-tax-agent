@@ -5,8 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import { FINANCIAL_MODELS, FINANCIAL_MODELS_BY_ID, type FinancialModelDefinition, type FinancialModelId } from "@/lib/financial/modellingCatalog";
 
 const PROJECTIONS_CONTEXT_STORAGE_KEY = "ql::projections-context";
+const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
+const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
+const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 
 type InputKind = "currency" | "number" | "percent" | "integer";
+type ProjectionActionUpdate = {
+  key: string;
+  value: number;
+  unit?: string;
+};
 
 type ModelInputDefinition = {
   key: string;
@@ -88,6 +96,49 @@ function clamp(value: number, min?: number, max?: number): number {
   if (typeof min === "number") next = Math.max(min, next);
   if (typeof max === "number") next = Math.min(max, next);
   return next;
+}
+
+function normalizeInputToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveModelInputKey(raw: string, definitions: ModelInputDefinition[]): string | null {
+  const normalized = normalizeInputToken(raw);
+  if (!normalized) return null;
+
+  for (const definition of definitions) {
+    const keyToken = normalizeInputToken(definition.key);
+    const labelToken = normalizeInputToken(definition.label);
+    if (
+      normalized === keyToken ||
+      normalized === labelToken ||
+      keyToken.includes(normalized) ||
+      labelToken.includes(normalized) ||
+      normalized.includes(keyToken) ||
+      normalized.includes(labelToken)
+    ) {
+      return definition.key;
+    }
+  }
+
+  return null;
+}
+
+function normalizeModelInputValue(definition: ModelInputDefinition, rawValue: number, rawUnit?: string): number {
+  let value = rawValue;
+  const unit = typeof rawUnit === "string" ? rawUnit.toLowerCase() : "";
+
+  if (definition.kind === "percent") {
+    const looksPercent = unit === "percent" || unit === "%" || unit === "pct";
+    if (!looksPercent && Math.abs(rawValue) <= 1) {
+      value = rawValue * 100;
+    }
+  }
+  if (definition.kind === "integer") {
+    value = Math.round(value);
+  }
+
+  return clamp(value, definition.min, definition.max);
 }
 
 function average(values: number[]): number {
@@ -1055,6 +1106,51 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
     setInputs(createInitialInputs(template.inputs));
   }, [typedModelId, template]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleReset = () => {
+      setInputs(createInitialInputs(template.inputs));
+    };
+
+    const handleUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ updates?: ProjectionActionUpdate[] }>;
+      const updates = Array.isArray(customEvent.detail?.updates) ? customEvent.detail.updates : [];
+      if (!updates.length) return;
+
+      setInputs((prev) => {
+        const next = { ...prev };
+        let changed = false;
+
+        for (const update of updates) {
+          const rawKey = typeof update?.key === "string" ? update.key : "";
+          const rawValue = typeof update?.value === "number" ? update.value : Number.NaN;
+          if (!rawKey || !Number.isFinite(rawValue)) continue;
+
+          const resolvedKey = resolveModelInputKey(rawKey, template.inputs);
+          if (!resolvedKey) continue;
+          const definition = template.inputs.find((input) => input.key === resolvedKey);
+          if (!definition) continue;
+
+          const normalizedValue = normalizeModelInputValue(definition, rawValue, update?.unit);
+          if (next[resolvedKey] === normalizedValue) continue;
+
+          next[resolvedKey] = normalizedValue;
+          changed = true;
+        }
+
+        return changed ? next : prev;
+      });
+    };
+
+    window.addEventListener(PROJECTIONS_RESET_EVENT, handleReset as EventListener);
+    window.addEventListener(PROJECTIONS_UPDATE_EVENT, handleUpdate as EventListener);
+    return () => {
+      window.removeEventListener(PROJECTIONS_RESET_EVENT, handleReset as EventListener);
+      window.removeEventListener(PROJECTIONS_UPDATE_EVENT, handleUpdate as EventListener);
+    };
+  }, [template.inputs]);
+
   const computation = useMemo(() => template.compute(inputs), [template, inputs]);
 
   useEffect(() => {
@@ -1095,6 +1191,18 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
       </div>
     );
   }
+
+  const handleOpenProjectionChat = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent(CHAT_MODAL_OPEN_EVENT, {
+        detail: {
+          module: "projections",
+          prompt: `Update ${modelMeta.name} inputs for me.`,
+        },
+      })
+    );
+  };
 
   const handleDownloadPdf = async () => {
     if (isDownloadingPdf) return;
@@ -1161,6 +1269,15 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
           <p className="text-sm text-gray-500 mt-1">{modelMeta.purpose}. {modelMeta.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleOpenProjectionChat}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            title="Open Google Chat for this model"
+          >
+            <img src="/google-logo.jpg" alt="Google Chat" className="h-4 w-4 rounded-full" />
+            Google Chat
+          </button>
           <button
             type="button"
             onClick={handleDownloadPdf}

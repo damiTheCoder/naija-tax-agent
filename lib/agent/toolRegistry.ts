@@ -58,6 +58,98 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: "createBill",
+    kind: "action",
+    description: "Create a bill draft in accounts payable.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.createBill",
+    payloadSchema: {
+      vendorName: "string (required if vendorId not set)",
+      vendorId: "string (optional)",
+      date: "string YYYY-MM-DD (optional)",
+      dueDate: "string YYYY-MM-DD (optional)",
+      lines: "array of { description, quantity, unitPrice, taxRate? } (required)",
+      currency: "string (optional, default NGN)",
+    },
+  },
+  {
+    name: "submitBill",
+    kind: "action",
+    description: "Submit a bill draft for approval.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.submitBill",
+    payloadSchema: {
+      billId: "string (required)",
+      actor: "string (optional)",
+      actorRole: "staff|manager|owner (optional)",
+    },
+  },
+  {
+    name: "approveBill",
+    kind: "action",
+    description: "Approve a submitted bill and post liability journal.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.approveBill",
+    payloadSchema: {
+      billId: "string (required)",
+      actor: "string (optional)",
+      actorRole: "manager|owner (optional)",
+      decisionNote: "string (optional)",
+    },
+  },
+  {
+    name: "payBill",
+    kind: "action",
+    description: "Pay an approved bill and clear AP.",
+    domains: ["financial", "payment", "operations"],
+    mapsToAction: "accounting.payBill",
+    payloadSchema: {
+      billId: "string (required)",
+      amount: "number > 0 (optional, defaults outstanding)",
+      date: "string YYYY-MM-DD (optional)",
+      method: "string (optional)",
+      reference: "string (optional)",
+    },
+  },
+  {
+    name: "lockPeriod",
+    kind: "action",
+    description: "Lock an accounting period to block postings.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.lockPeriod",
+    payloadSchema: {
+      period: "string YYYY-MM (required)",
+      actor: "string (optional)",
+      reason: "string (optional)",
+    },
+  },
+  {
+    name: "unlockPeriod",
+    kind: "action",
+    description: "Unlock a locked accounting period.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.unlockPeriod",
+    payloadSchema: {
+      period: "string YYYY-MM (required)",
+      actor: "string (optional)",
+      reason: "string (optional)",
+    },
+  },
+  {
+    name: "createRecurringTemplate",
+    kind: "action",
+    description: "Create a recurring bill or journal template.",
+    domains: ["financial", "operations"],
+    mapsToAction: "accounting.createRecurringTemplate",
+    payloadSchema: {
+      name: "string (required)",
+      resourceType: "bill|journal (required)",
+      frequency: "monthly|quarterly (required)",
+      startDate: "string YYYY-MM-DD (required)",
+      payload: "object (required)",
+    },
+  },
+  {
     name: "generateReport",
     kind: "internal",
     description: "Generate a report summary from reporting and module data in context.",
@@ -140,12 +232,12 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "updateProjectionAssumption",
     kind: "action",
-    description: "Update one or more projection assumptions.",
+    description: "Update one or more projection assumptions or financial model inputs.",
     domains: ["reporting", "financial"],
     mapsToAction: "projections.updateAssumption",
     payloadSchema: {
       updates:
-        "array of { key: revenueGrowthRate|operatingExpenseGrowthRate|fixedCostInflationRate|cogsRatio|variableCostRatio|marketingSpendRatio|cashCollectionRatio|cashDisbursementRatio|fixedCostBaseline, value: number, unit?: percent|decimal|ratio|currency }",
+        "array of { key: assumption key OR active model input key/label, value: number, unit?: percent|decimal|ratio|currency }",
     },
   },
   {
@@ -214,6 +306,13 @@ export function toUnifiedAction(toolRequest: ToolRequest): UnifiedAgentAction | 
 export function isAllowedActionType(actionType: string): actionType is UnifiedAgentActionType {
   return (
     actionType === "accounting.postTransaction" ||
+    actionType === "accounting.createBill" ||
+    actionType === "accounting.submitBill" ||
+    actionType === "accounting.approveBill" ||
+    actionType === "accounting.payBill" ||
+    actionType === "accounting.lockPeriod" ||
+    actionType === "accounting.unlockPeriod" ||
+    actionType === "accounting.createRecurringTemplate" ||
     actionType === "tax.recordTransaction" ||
     actionType === "wallet.sendMoney" ||
     actionType === "wallet.fund" ||

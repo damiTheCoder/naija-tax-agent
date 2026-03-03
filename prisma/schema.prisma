@@ -357,6 +357,19 @@ model Entity {
   taxReconciliations  TaxReconciliation[]
   auditLogs           AuditLog[]
   taxEngineSetting    TaxEngineSetting?
+  accountingJournals  AccountingJournal[]
+  approvalPolicies    ApprovalPolicy[]
+  approvalRequests    ApprovalRequest[]
+  periodLocks         PeriodLock[]
+  recurringTemplates  RecurringTemplate[]
+  recurringRuns       RecurringRun[]
+  exchangeRates       ExchangeRate[]
+  trackingClasses     TrackingClass[]
+  trackingLocations   TrackingLocation[]
+  migrationRuns       AccountingMigrationRun[]
+  actionExecutionLogs ActionExecutionLog[]
+  chatConversations   ChatConversation[]
+  taxSyncRuns         TaxSyncRun[]
 }
 
 model Transaction {
@@ -426,6 +439,16 @@ model Bill {
   date      DateTime
   dueDate   DateTime?
   status    String    @default("draft") // draft | received | paid | voided
+  approvalStatus String   @default("draft") // draft | pending_approval | approved | rejected | paid | voided
+  submittedAt DateTime?
+  approvedAt DateTime?
+  approvedBy String?
+  rejectedAt DateTime?
+  rejectionReason String?
+  voidedAt DateTime?
+  voidReason String?
+  trackingClassId String?
+  trackingLocationId String?
   currency  String    @default("NGN")
   subtotal  Float     @default(0)
   taxTotal  Float     @default(0)
@@ -435,8 +458,11 @@ model Bill {
 
   entity   Entity     @relation(fields: [entityId], references: [id])
   vendor   Vendor?    @relation(fields: [vendorId], references: [id])
+  trackingClass TrackingClass? @relation(fields: [trackingClassId], references: [id])
+  trackingLocation TrackingLocation? @relation(fields: [trackingLocationId], references: [id])
   lines    BillLine[]
   payments Payment[]
+  approvalRequests ApprovalRequest[]
 
   @@index([entityId, date])
   @@index([billNo])
@@ -451,9 +477,13 @@ model BillLine {
   taxRate     Float   @default(0)
   taxAmount   Float   @default(0)
   total       Float   @default(0)
+  trackingClassId String?
+  trackingLocationId String?
   metadata    String?
 
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  trackingClass TrackingClass? @relation(fields: [trackingClassId], references: [id])
+  trackingLocation TrackingLocation? @relation(fields: [trackingLocationId], references: [id])
 }
 
 model Payment {
@@ -783,4 +813,309 @@ model TaxEngineSetting {
   updatedAt                DateTime @updatedAt
 
   entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+model AccountingJournal {
+  id                String   @id @default(cuid())
+  entityId          String
+  sourceDocType     String?
+  sourceDocId       String?
+  date              DateTime
+  status            String   @default("posted") // draft | posted | voided | reversed
+  narration         String
+  reference         String?
+  baseCurrency      String   @default("NGN")
+  sourceCurrency    String   @default("NGN")
+  exchangeRate      Float    @default(1)
+  approvalStatus    String   @default("approved") // draft | pending_approval | approved | rejected
+  approvalRequestId String?
+  trackingClassId   String?
+  trackingLocationId String?
+  journalHash       String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  entity            Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  lines             AccountingJournalLine[]
+  approvalRequests  ApprovalRequest[]
+  recurringRuns     RecurringRun[]
+  trackingClass     TrackingClass?   @relation(fields: [trackingClassId], references: [id])
+  trackingLocation  TrackingLocation? @relation(fields: [trackingLocationId], references: [id])
+
+  @@index([entityId, date])
+  @@index([entityId, status])
+  @@index([entityId, sourceDocType, sourceDocId])
+  @@index([entityId, journalHash])
+}
+
+model AccountingJournalLine {
+  id               String   @id @default(cuid())
+  journalId        String
+  accountCode      String
+  accountName      String
+  debit            Float    @default(0)
+  credit           Float    @default(0)
+  memo             String?
+  sourceAmount     Float?
+  baseAmount       Float?
+  trackingClassId  String?
+  trackingLocationId String?
+  metadata         String?
+
+  journal          AccountingJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  trackingClass    TrackingClass?    @relation(fields: [trackingClassId], references: [id])
+  trackingLocation TrackingLocation? @relation(fields: [trackingLocationId], references: [id])
+
+  @@index([journalId])
+  @@index([accountCode])
+}
+
+model ApprovalPolicy {
+  id               String   @id @default(cuid())
+  entityId         String   @unique
+  currency         String   @default("NGN")
+  managerThreshold Float    @default(500000)
+  ownerThreshold   Float    @default(500000)
+  metadata         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+model ApprovalRequest {
+  id           String   @id @default(cuid())
+  entityId     String
+  resourceType String
+  resourceId   String
+  status       String   @default("pending") // pending | approved | rejected | cancelled
+  requiredRole String   @default("manager") // manager | owner
+  requestedBy  String   @default("system")
+  requestedAt  DateTime @default(now())
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String?
+  amount       Float    @default(0)
+  currency     String   @default("NGN")
+  journalId    String?
+  billId       String?
+  metadata     String?
+
+  entity  Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  journal AccountingJournal? @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  bill    Bill?             @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([entityId, status])
+  @@index([resourceType, resourceId])
+}
+
+model PeriodLock {
+  id        String   @id @default(cuid())
+  entityId  String
+  period    String
+  lockedBy  String
+  lockedAt  DateTime @default(now())
+  reason    String?
+  metadata  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, period])
+  @@index([entityId, period])
+}
+
+model RecurringTemplate {
+  id         String   @id @default(cuid())
+  entityId   String
+  name       String
+  resourceType String // bill | journal
+  frequency  String   @default("monthly") // monthly | quarterly
+  startDate  DateTime
+  endDate    DateTime?
+  nextRunAt  DateTime
+  status     String   @default("active") // active | paused | archived
+  payload    String
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  runs   RecurringRun[]
+
+  @@index([entityId, status, nextRunAt])
+}
+
+model RecurringRun {
+  id             String   @id @default(cuid())
+  entityId       String
+  templateId     String
+  periodKey      String
+  status         String   @default("generated") // generated | skipped | failed
+  resourceType   String
+  resourceId     String?
+  journalId      String?
+  runAt          DateTime @default(now())
+  idempotencyKey String
+  error          String?
+  metadata       String?
+
+  entity   Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  template RecurringTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  journal  AccountingJournal? @relation(fields: [journalId], references: [id], onDelete: SetNull)
+
+  @@unique([entityId, templateId, periodKey])
+  @@index([entityId, runAt])
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  entityId     String
+  date         DateTime
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  source       String   @default("manual")
+  metadata     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, date, fromCurrency, toCurrency])
+  @@index([entityId, date])
+}
+
+model TrackingClass {
+  id        String   @id @default(cuid())
+  entityId  String
+  name      String
+  code      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity       Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  journals     AccountingJournal[]
+  journalLines AccountingJournalLine[]
+  bills        Bill[]
+  billLines    BillLine[]
+
+  @@unique([entityId, name])
+  @@index([entityId, isActive])
+}
+
+model TrackingLocation {
+  id        String   @id @default(cuid())
+  entityId  String
+  name      String
+  code      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entity       Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  journals     AccountingJournal[]
+  journalLines AccountingJournalLine[]
+  bills        Bill[]
+  billLines    BillLine[]
+
+  @@unique([entityId, name])
+  @@index([entityId, isActive])
+}
+
+model AccountingMigrationRun {
+  id        String   @id @default(cuid())
+  entityId  String
+  clientId  String
+  status    String   @default("completed") // completed | failed
+  imported  Int      @default(0)
+  skipped   Int      @default(0)
+  conflicts Int      @default(0)
+  report    String?
+  createdAt DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, clientId])
+  @@index([entityId, createdAt])
+}
+
+model ActionExecutionLog {
+  id           String   @id @default(cuid())
+  entityId     String
+  actionId     String
+  actionType   String
+  resourceType String?
+  resourceId   String?
+  journalId    String?
+  status       String   // success | failure
+  message      String?
+  deepLink     String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, actionId])
+  @@index([entityId, createdAt])
+}
+
+model ChatConversation {
+  id         String    @id @default(cuid())
+  entityId   String
+  module     String
+  route      String
+  title      String
+  preview    String
+  createdBy  String?
+  metadata   String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  entity   Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([entityId, updatedAt(sort: Desc)])
+  @@index([entityId, module, updatedAt(sort: Desc)])
+}
+
+model ChatMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  sequence       Int
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, sequence])
+  @@index([conversationId, createdAt])
+}
+
+model TaxSyncRun {
+  id                  String   @id @default(cuid())
+  entityId            String
+  source              String
+  mode                String   @default("apply") // apply | report
+  journalCount        Int      @default(0)
+  upsertedTransactions Int     @default(0)
+  prunedTransactions  Int      @default(0)
+  duplicatesPruned    Int      @default(0)
+  staleRowsRemoved    Int      @default(0)
+  impactedPeriods     String?
+  status              String   @default("success")
+  error               String?
+  metadata            String?
+  createdAt           DateTime @default(now())
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId, createdAt])
+  @@index([entityId, status])
 }

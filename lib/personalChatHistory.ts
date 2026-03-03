@@ -4,6 +4,8 @@ export const CHAT_HISTORY_KEY = "quantum-personal-chat-history";
 const LEGACY_CHAT_HISTORY_KEY = "quantum-chat-history";
 export const PERSONAL_CHAT_HISTORY_KEY = CHAT_HISTORY_KEY;
 const CHAT_CONVERSATIONS_KEY = "quantum-chat-conversations-v2";
+const CHAT_CONVERSATIONS_SERVER_SYNC_KEY = "quantum-chat-conversations-v2::server-sync";
+const CHAT_DEFAULT_ENTITY_ID = "entity-default";
 
 export const CHAT_HISTORY_UPDATED_EVENT = "chat-history-updated";
 export const PERSONAL_CHAT_HISTORY_UPDATED_EVENT = CHAT_HISTORY_UPDATED_EVENT;
@@ -56,6 +58,12 @@ interface AddChatHistoryParams {
 interface ConversationFilters {
   module?: string;
   route?: string;
+}
+
+interface ServerConversationFilters extends ConversationFilters {
+  entityId?: string;
+  limit?: number;
+  cursor?: string;
 }
 
 function normalizeModule(module: string | undefined): string {
@@ -224,6 +232,141 @@ function saveChatConversationsInternal(conversations: ChatConversation[]): void 
   window.dispatchEvent(new CustomEvent(CHAT_HISTORY_UPDATED_EVENT));
 }
 
+type ServerConversationPayload = {
+  id: string;
+  entityId?: string;
+  module: string;
+  route: string;
+  title: string;
+  preview: string;
+  createdAt: string;
+  updatedAt: string;
+  messages?: Array<{
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    createdAt?: string;
+    sequence?: number;
+  }>;
+};
+
+const hasFetchApi = () => typeof fetch === "function";
+
+function markServerSyncAt(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CHAT_CONVERSATIONS_SERVER_SYNC_KEY, String(Date.now()));
+}
+
+function wasRecentlySynced(syncTtlMs = 15_000): boolean {
+  if (typeof window === "undefined") return false;
+  const raw = window.localStorage.getItem(CHAT_CONVERSATIONS_SERVER_SYNC_KEY);
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return false;
+  return Date.now() - value < syncTtlMs;
+}
+
+function toServerEntityId(entityId?: string): string {
+  const cleaned = String(entityId || CHAT_DEFAULT_ENTITY_ID).trim();
+  return cleaned || CHAT_DEFAULT_ENTITY_ID;
+}
+
+function toConversationFromServer(value: ServerConversationPayload): ChatConversation {
+  const messages: ChatConversationMessage[] = (Array.isArray(value.messages) ? value.messages : []).map((message, index) => ({
+    id:
+      typeof message.id === "string" && message.id
+        ? message.id
+        : `msg-${Date.now()}-${index}`,
+    role: message.role === "assistant" ? "assistant" : "user",
+    content: String(message.content || ""),
+    timestamp: Number.isFinite(new Date(String(message.createdAt || "")).getTime())
+      ? new Date(String(message.createdAt || "")).getTime()
+      : Date.now() + index,
+  }));
+
+  const createdAtMs = new Date(value.createdAt).getTime();
+  const updatedAtMs = new Date(value.updatedAt).getTime();
+
+  return normalizeConversation({
+    id: value.id,
+    title: value.title,
+    preview: value.preview,
+    module: value.module,
+    route: value.route,
+    createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
+    updatedAt: Number.isFinite(updatedAtMs) ? updatedAtMs : Date.now(),
+    messages,
+  });
+}
+
+async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T | null> {
+  if (!hasFetchApi()) return null;
+  try {
+    const response = await fetch(input, init);
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function mergeAndStoreConversations(next: ChatConversation[]): ChatConversation[] {
+  const merged = new Map<string, ChatConversation>();
+  loadChatConversations().forEach((conversation) => {
+    merged.set(conversation.id, conversation);
+  });
+  next.forEach((conversation) => {
+    merged.set(conversation.id, normalizeConversation(conversation));
+  });
+  const final = Array.from(merged.values())
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_HISTORY_ITEMS);
+  saveChatConversationsInternal(final);
+  markServerSyncAt();
+  return final;
+}
+
+async function pushConversationToServer(conversation: ChatConversation, entityId?: string): Promise<void> {
+  if (typeof window === "undefined" || !hasFetchApi()) return;
+  const resolvedEntityId = toServerEntityId(entityId);
+  const messages = conversation.messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+  }));
+
+  const created = await fetchJson<{ success?: boolean; conversation?: ServerConversationPayload }>(
+    "/api/chat/conversations",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: conversation.id,
+        entityId: resolvedEntityId,
+        module: conversation.module,
+        route: conversation.route,
+        title: conversation.title,
+      }),
+    }
+  );
+  const conversationId = created?.conversation?.id || conversation.id;
+
+  const saved = await fetchJson<{ success?: boolean; conversation?: ServerConversationPayload }>(
+    `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityId: resolvedEntityId,
+        messages,
+      }),
+    }
+  );
+  if (saved?.success && saved.conversation) {
+    mergeAndStoreConversations([toConversationFromServer(saved.conversation)]);
+  }
+}
+
 function migrateLegacyHistoryToConversations(): ChatConversation[] {
   if (typeof window === "undefined") return [];
 
@@ -303,10 +446,78 @@ export function loadChatConversations(filters?: ConversationFilters): ChatConver
   return conversations.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+export async function loadChatConversationsAsync(
+  filters?: ServerConversationFilters
+): Promise<ChatConversation[]> {
+  const local = loadChatConversations(filters);
+  if (typeof window === "undefined" || !hasFetchApi()) return local;
+  if (wasRecentlySynced()) return local;
+
+  const params = new URLSearchParams();
+  params.set("entityId", toServerEntityId(filters?.entityId));
+  if (filters?.module) params.set("module", normalizeModule(filters.module));
+  if (filters?.route) {
+    params.set(
+      "route",
+      normalizeRoute(filters.route, filters?.module ? normalizeModule(filters.module) : "general")
+    );
+  }
+  if (Number.isFinite(Number(filters?.limit))) params.set("limit", String(filters?.limit));
+  if (filters?.cursor) params.set("cursor", filters.cursor);
+
+  const data = await fetchJson<{
+    success?: boolean;
+    conversations?: ServerConversationPayload[];
+  }>(`/api/chat/conversations?${params.toString()}`, { cache: "no-store" });
+
+  if (!data?.success || !Array.isArray(data.conversations)) {
+    return local;
+  }
+
+  const fromServer = data.conversations.map((conversation) => toConversationFromServer(conversation));
+  const merged = mergeAndStoreConversations(fromServer);
+  if (!filters?.module && !filters?.route) return merged;
+  return merged.filter((conversation) => {
+    if (filters?.module && conversation.module !== normalizeModule(filters.module)) return false;
+    if (filters?.route) {
+      const expected = normalizeRoute(
+        filters.route,
+        filters?.module ? normalizeModule(filters.module) : "general"
+      );
+      if (conversation.route !== expected) return false;
+    }
+    return true;
+  });
+}
+
 export function getChatConversation(conversationId: string): ChatConversation | null {
   if (typeof window === "undefined") return null;
   const conversations = loadChatConversations();
   return conversations.find((item) => item.id === conversationId) || null;
+}
+
+export async function getChatConversationAsync(
+  conversationId: string,
+  entityId = CHAT_DEFAULT_ENTITY_ID
+): Promise<ChatConversation | null> {
+  const local = getChatConversation(conversationId);
+  if (typeof window === "undefined" || !hasFetchApi()) return local;
+
+  const params = new URLSearchParams();
+  params.set("entityId", toServerEntityId(entityId));
+  const data = await fetchJson<{
+    success?: boolean;
+    conversation?: ServerConversationPayload;
+  }>(`/api/chat/conversations/${encodeURIComponent(conversationId)}?${params.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (data?.success && data.conversation) {
+    const normalized = toConversationFromServer(data.conversation);
+    mergeAndStoreConversations([normalized]);
+    return normalized;
+  }
+  return local;
 }
 
 export function createChatConversation(params: {
@@ -332,6 +543,7 @@ export function createChatConversation(params: {
 
   const conversations = loadChatConversations();
   saveChatConversationsInternal([conversation, ...conversations]);
+  void pushConversationToServer(conversation);
   return conversation;
 }
 
@@ -381,6 +593,7 @@ export function saveChatConversationMessages(params: {
   const next = [...conversations];
   next.splice(index, 1);
   saveChatConversationsInternal([updated, ...next]);
+  void pushConversationToServer(updated);
   return updated;
 }
 
@@ -407,6 +620,7 @@ export function renameChatConversation(params: {
   const next = [...conversations];
   next.splice(index, 1);
   saveChatConversationsInternal([updated, ...next]);
+  void pushConversationToServer(updated);
   return updated;
 }
 
@@ -421,7 +635,153 @@ export function deleteChatConversation(conversationId: string): boolean {
   if (selected?.conversationId === conversationId) {
     clearSelectedChatHistory();
   }
+  if (hasFetchApi()) {
+    const params = new URLSearchParams();
+    params.set("entityId", CHAT_DEFAULT_ENTITY_ID);
+    void fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}?${params.toString()}`, {
+      method: "DELETE",
+    }).catch(() => undefined);
+  }
   return true;
+}
+
+export async function createChatConversationAsync(params: {
+  module: string;
+  route?: string;
+  title?: string;
+  entityId?: string;
+}): Promise<ChatConversation | null> {
+  const fallback = createChatConversation(params);
+  if (typeof window === "undefined" || !hasFetchApi()) return fallback;
+
+  const data = await fetchJson<{
+    success?: boolean;
+    conversation?: ServerConversationPayload;
+  }>("/api/chat/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: fallback.id,
+      entityId: toServerEntityId(params.entityId),
+      module: normalizeModule(params.module),
+      route: normalizeRoute(params.route, normalizeModule(params.module)),
+      title: params.title,
+    }),
+  });
+
+  if (data?.success && data.conversation) {
+    const normalized = toConversationFromServer(data.conversation);
+    mergeAndStoreConversations([normalized]);
+    return normalized;
+  }
+  return fallback;
+}
+
+export async function saveChatConversationMessagesAsync(params: {
+  conversationId: string;
+  module?: string;
+  route?: string;
+  title?: string;
+  messages: ChatConversationMessage[];
+  entityId?: string;
+}): Promise<ChatConversation | null> {
+  const fallback = saveChatConversationMessages(params);
+  if (typeof window === "undefined" || !hasFetchApi()) return fallback;
+
+  const safeMessages = (Array.isArray(params.messages) ? params.messages : [])
+    .filter(isMessage)
+    .map((message) => normalizeMessage(message));
+
+  const updatePayload: Record<string, unknown> = {
+    entityId: toServerEntityId(params.entityId),
+  };
+  if (params.title && sanitizePrompt(params.title)) {
+    updatePayload.title = sanitizePrompt(params.title);
+  }
+  if (params.module) {
+    updatePayload.module = normalizeModule(params.module);
+  }
+  if (params.route) {
+    updatePayload.route = normalizeRoute(
+      params.route,
+      params.module ? normalizeModule(params.module) : "general"
+    );
+  }
+
+  await fetchJson(`/api/chat/conversations/${encodeURIComponent(params.conversationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updatePayload),
+  });
+
+  const data = await fetchJson<{
+    success?: boolean;
+    conversation?: ServerConversationPayload;
+  }>(`/api/chat/conversations/${encodeURIComponent(params.conversationId)}/messages`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entityId: toServerEntityId(params.entityId),
+      messages: safeMessages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp,
+      })),
+    }),
+  });
+
+  if (data?.success && data.conversation) {
+    const normalized = toConversationFromServer(data.conversation);
+    mergeAndStoreConversations([normalized]);
+    return normalized;
+  }
+  return fallback;
+}
+
+export async function renameChatConversationAsync(params: {
+  conversationId: string;
+  title: string;
+  entityId?: string;
+}): Promise<ChatConversation | null> {
+  const fallback = renameChatConversation(params);
+  if (typeof window === "undefined" || !hasFetchApi()) return fallback;
+
+  const data = await fetchJson<{
+    success?: boolean;
+    conversation?: ServerConversationPayload;
+  }>(`/api/chat/conversations/${encodeURIComponent(params.conversationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entityId: toServerEntityId(params.entityId),
+      title: params.title,
+    }),
+  });
+
+  if (data?.success && data.conversation) {
+    const normalized = toConversationFromServer(data.conversation);
+    mergeAndStoreConversations([normalized]);
+    return normalized;
+  }
+  return fallback;
+}
+
+export async function deleteChatConversationAsync(
+  conversationId: string,
+  entityId = CHAT_DEFAULT_ENTITY_ID
+): Promise<boolean> {
+  const fallback = deleteChatConversation(conversationId);
+  if (typeof window === "undefined" || !hasFetchApi()) return fallback;
+
+  const params = new URLSearchParams();
+  params.set("entityId", toServerEntityId(entityId));
+  const response = await fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}?${params.toString()}`, {
+    method: "DELETE",
+  }).catch(() => null);
+
+  if (!response) return fallback;
+  return response.ok || fallback;
 }
 
 export function loadChatHistory(): ChatHistoryEntry[] {

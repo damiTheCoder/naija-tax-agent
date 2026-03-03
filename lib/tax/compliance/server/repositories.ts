@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/server/prisma";
 import type { TaxType } from "@/lib/tax/compliance/types";
-import type { JournalSyncInput, SyncJournalsRequest, TaxDashboardResponseV2, TaxEngineSettingsV2, VatMode } from "./types";
+import type {
+  JournalSyncInput,
+  SyncJournalsRequest,
+  SyncJournalsResult,
+  TaxDashboardResponseV2,
+  TaxEngineSettingsV2,
+  VatMode,
+} from "./types";
 import { loadTaxEngineSettingsV2, saveTaxEngineSettingsV2 } from "./settingsRepo";
 import {
   computePeriodBounds,
@@ -566,13 +573,14 @@ const writeTaxForJournal = async (params: {
     entityId,
     transactionId: txId,
   });
+  let duplicatesPruned = 0;
 
   // Clean up any stale non-canonical transactions that map to this same journal.
   const possibleDuplicates = await prisma.transaction.findMany({
     where: {
       entityId,
       id: { not: txId },
-      OR: [{ source: "accounting" }, { source: "import" }],
+      status: { not: "voided" },
     },
     select: {
       id: true,
@@ -588,6 +596,9 @@ const writeTaxForJournal = async (params: {
       source,
       journalId: journal.id,
     });
+    if (!duplicateCleanup.skipped) {
+      duplicatesPruned += 1;
+    }
     duplicateCleanup.periodKeys.forEach((key) => impactedScheduleKeys.add(key));
   }
 
@@ -996,15 +1007,60 @@ const writeTaxForJournal = async (params: {
   return {
     transactionId: txId,
     periodKeys: Array.from(impactedScheduleKeys),
+    duplicatesPruned,
   };
 };
 
+const createTaxSyncRun = async (params: {
+  entityId: string;
+  source: "live_posting" | "backfill";
+  mode: "apply" | "report";
+  journalCount: number;
+  upsertedTransactions: number;
+  prunedTransactions: number;
+  duplicatesPruned: number;
+  staleRowsRemoved: number;
+  impactedPeriods: string[];
+  status: "success" | "failed";
+  error?: string;
+  metadata?: Record<string, unknown>;
+}) => {
+  return prisma.taxSyncRun.create({
+    data: {
+      entityId: params.entityId,
+      source: params.source,
+      mode: params.mode,
+      journalCount: params.journalCount,
+      upsertedTransactions: params.upsertedTransactions,
+      prunedTransactions: params.prunedTransactions,
+      duplicatesPruned: params.duplicatesPruned,
+      staleRowsRemoved: params.staleRowsRemoved,
+      impactedPeriods: safeJsonStringify(params.impactedPeriods),
+      status: params.status,
+      error: params.error || null,
+      metadata: safeJsonStringify(params.metadata || {}),
+    },
+    select: { id: true },
+  });
+};
+
+const buildReportImpactedPeriods = (
+  journals: JournalSyncInput[],
+  settings: TaxEngineSettingsV2
+): Set<string> => {
+  const impacted = new Set<string>();
+  journals.forEach((journal) => {
+    const date = toDate(journal.date);
+    const vatPeriod = computePeriodBounds(date, settings.filingCadence.vat).period;
+    const whtPeriod = computePeriodBounds(date, settings.filingCadence.wht).period;
+    impacted.add(`VAT::${vatPeriod}`);
+    impacted.add(`WHT::${whtPeriod}`);
+  });
+  return impacted;
+};
+
 export interface TaxTransactionRepo {
-  upsertJournalTransactions(req: SyncJournalsRequest): Promise<{
-    upsertedTransactions: number;
-    prunedTransactions: number;
-    impactedPeriods: string[];
-  }>;
+  upsertJournalTransactions(req: SyncJournalsRequest): Promise<SyncJournalsResult>;
 }
 
 export interface TaxLedgerRepo {
@@ -1211,38 +1267,20 @@ export const taxTransactionRepo: TaxTransactionRepo = {
     const settings = await taxSettingsRepo.load(entityId);
     const { ruleSetId } = await ensureEntityAndRuleSet(entityId);
     const source = req.source || "live_posting";
+    const mode = req.mode === "report" ? "report" : "apply";
     const journals = req.journals || [];
     const incomingJournalIds = new Set(journals.map((journal) => journal.id));
     const impactedPeriods = new Set<string>();
     let upsertedTransactions = 0;
     let prunedTransactions = 0;
+    let duplicatesPruned = 0;
+    let staleRowsRemoved = 0;
 
-    for (const journal of journals) {
-      const status = lower(journal.status);
-      const result =
-        status === "voided"
-          ? await voidTaxForJournal({
-              entityId,
-              journalId: journal.id,
-              source,
-            })
-          : await writeTaxForJournal({
-              entityId,
-              ruleSetId,
-              journal,
-              settings,
-              source,
-            });
-      upsertedTransactions += 1;
-      result.periodKeys.forEach((key) => impactedPeriods.add(key));
-    }
-
-    if (req.fullSync) {
+    if (mode === "report") {
       const existingAccountingTransactions = await prisma.transaction.findMany({
         where: {
           entityId,
           status: { not: "voided" },
-          OR: [{ source: "accounting" }, { source: "import" }],
         },
         select: {
           id: true,
@@ -1250,28 +1288,203 @@ export const taxTransactionRepo: TaxTransactionRepo = {
         },
       });
 
+      const countsByJournal = new Map<string, number>();
       for (const transaction of existingAccountingTransactions) {
         const journalId = extractJournalIdFromTransaction(entityId, transaction);
-        if (!journalId || incomingJournalIds.has(journalId)) continue;
-
-        const removal = await voidTaxForTransaction({
-          entityId,
-          transactionId: transaction.id,
-          source,
-          journalId,
-        });
-        if (removal.skipped) continue;
-        prunedTransactions += 1;
-        removal.periodKeys.forEach((key) => impactedPeriods.add(key));
+        if (!journalId) continue;
+        countsByJournal.set(journalId, (countsByJournal.get(journalId) || 0) + 1);
       }
+
+      const wouldPruneTransactions = existingAccountingTransactions.filter((transaction) => {
+        const journalId = extractJournalIdFromTransaction(entityId, transaction);
+        return Boolean(journalId) && !incomingJournalIds.has(journalId!);
+      }).length;
+
+      const wouldPruneDuplicates = Array.from(countsByJournal.entries()).reduce((sum, [journalId, count]) => {
+        if (!incomingJournalIds.has(journalId)) return sum;
+        return sum + Math.max(0, count - 1);
+      }, 0);
+
+      const staleRows = await prisma.taxLedgerEntry.findMany({
+        where: {
+          entityId,
+          OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+          transaction: {
+            is: { status: "voided" },
+          },
+        },
+        include: { period: true },
+      });
+
+      staleRows.forEach((row) => {
+        const taxType = row.taxType as TaxType;
+        if ((taxType === "VAT" || taxType === "WHT") && row.period?.period) {
+          impactedPeriods.add(`${taxType}::${row.period.period}`);
+        }
+      });
+
+      buildReportImpactedPeriods(journals, settings).forEach((key) => impactedPeriods.add(key));
+
+      const report: SyncJournalsResult["report"] = {
+        journalsReceived: journals.length,
+        wouldUpsertTransactions: journals.length,
+        wouldPruneTransactions,
+        wouldPruneDuplicates,
+        wouldRemoveStaleRows: staleRows.length,
+        impactedPeriods: Array.from(impactedPeriods).sort(),
+      };
+
+      const syncRun = await createTaxSyncRun({
+        entityId,
+        source,
+        mode,
+        journalCount: journals.length,
+        upsertedTransactions: 0,
+        prunedTransactions: 0,
+        duplicatesPruned: 0,
+        staleRowsRemoved: 0,
+        impactedPeriods: report.impactedPeriods,
+        status: "success",
+        metadata: { report },
+      });
+
+      return {
+        syncRunId: syncRun.id,
+        upsertedTransactions: 0,
+        prunedTransactions: 0,
+        duplicatesPruned: 0,
+        staleRowsRemoved: 0,
+        impactedPeriods: report.impactedPeriods,
+        reportOnly: true,
+        report,
+      };
     }
 
-    await taxScheduleRepo.recomputeSchedules(entityId, Array.from(impactedPeriods), settings);
+    try {
+      for (const journal of journals) {
+        const status = lower(journal.status);
+        const result =
+          status === "voided"
+            ? await voidTaxForJournal({
+                entityId,
+                journalId: journal.id,
+                source,
+              })
+            : await writeTaxForJournal({
+                entityId,
+                ruleSetId,
+                journal,
+                settings,
+                source,
+              });
+        upsertedTransactions += 1;
+        duplicatesPruned += "duplicatesPruned" in result ? result.duplicatesPruned || 0 : 0;
+        result.periodKeys.forEach((key) => impactedPeriods.add(key));
+      }
 
-    return {
-      upsertedTransactions,
-      prunedTransactions,
-      impactedPeriods: Array.from(impactedPeriods).sort(),
-    };
+      if (req.fullSync) {
+        const existingAccountingTransactions = await prisma.transaction.findMany({
+          where: {
+            entityId,
+            status: { not: "voided" },
+          },
+          select: {
+            id: true,
+            metadata: true,
+          },
+        });
+
+        for (const transaction of existingAccountingTransactions) {
+          const journalId = extractJournalIdFromTransaction(entityId, transaction);
+          if (!journalId || incomingJournalIds.has(journalId)) continue;
+
+          const removal = await voidTaxForTransaction({
+            entityId,
+            transactionId: transaction.id,
+            source,
+            journalId,
+          });
+          if (removal.skipped) continue;
+          prunedTransactions += 1;
+          removal.periodKeys.forEach((key) => impactedPeriods.add(key));
+        }
+
+        // Safety sweep: if any VAT/WHT rows still point to voided transactions,
+        // remove them so tax workspace cannot show stale tax impact.
+        const staleRows = await prisma.taxLedgerEntry.findMany({
+          where: {
+            entityId,
+            OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+            transaction: {
+              is: { status: "voided" },
+            },
+          },
+          include: { period: true },
+        });
+
+        if (staleRows.length > 0) {
+          staleRows.forEach((row) => {
+            const taxType = row.taxType as TaxType;
+            if ((taxType === "VAT" || taxType === "WHT") && row.period?.period) {
+              impactedPeriods.add(`${taxType}::${row.period.period}`);
+            }
+          });
+
+          await prisma.taxLedgerEntry.deleteMany({
+            where: {
+              entityId,
+              OR: [{ taxType: "VAT" }, { taxType: "WHT" }],
+              transaction: {
+                is: { status: "voided" },
+              },
+            },
+          });
+          staleRowsRemoved += staleRows.length;
+        }
+      }
+
+      await taxScheduleRepo.recomputeSchedules(entityId, Array.from(impactedPeriods), settings);
+
+      const impactedPeriodsSorted = Array.from(impactedPeriods).sort();
+      const syncRun = await createTaxSyncRun({
+        entityId,
+        source,
+        mode,
+        journalCount: journals.length,
+        upsertedTransactions,
+        prunedTransactions,
+        duplicatesPruned,
+        staleRowsRemoved,
+        impactedPeriods: impactedPeriodsSorted,
+        status: "success",
+      });
+
+      return {
+        syncRunId: syncRun.id,
+        upsertedTransactions,
+        prunedTransactions,
+        duplicatesPruned,
+        staleRowsRemoved,
+        impactedPeriods: impactedPeriodsSorted,
+        reportOnly: false,
+      };
+    } catch (error) {
+      const syncRun = await createTaxSyncRun({
+        entityId,
+        source,
+        mode,
+        journalCount: journals.length,
+        upsertedTransactions,
+        prunedTransactions,
+        duplicatesPruned,
+        staleRowsRemoved,
+        impactedPeriods: Array.from(impactedPeriods).sort(),
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown sync error",
+      });
+      throw new Error(
+        `[Tax sync run ${syncRun.id}] ${error instanceof Error ? error.message : "Failed to sync journals"}`
+      );
+    }
   },
 };

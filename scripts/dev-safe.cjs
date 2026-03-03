@@ -73,6 +73,31 @@ function findActiveNextDevProcessInProject() {
   return null;
 }
 
+function stopProcess(pid) {
+  try {
+    process.kill(Number(pid), "SIGTERM");
+  } catch (error) {
+    console.warn(`[dev] Warning: unable to stop existing dev server pid ${pid} (${error.message})`);
+    return;
+  }
+
+  const waitUntil = Date.now() + 4000;
+  while (Date.now() < waitUntil) {
+    try {
+      process.kill(Number(pid), 0);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    } catch {
+      return;
+    }
+  }
+
+  try {
+    process.kill(Number(pid), "SIGKILL");
+  } catch {
+    // Ignore if process already exited.
+  }
+}
+
 function clearStaleArtifacts() {
   try {
     if (existsSync(lockPath)) {
@@ -100,9 +125,8 @@ function clearStaleArtifacts() {
 
 const running = findActiveNextDevProcessInProject();
 if (running) {
-  console.log(`[dev] Next.js is already running for this project (pid ${running.pid}).`);
-  console.log("[dev] Reusing existing dev server instead of starting a second instance.");
-  process.exit(0);
+  console.log(`[dev] Existing Next.js process detected (pid ${running.pid}). Restarting to load latest generated clients/code.`);
+  stopProcess(running.pid);
 }
 
 clearStaleArtifacts();

@@ -14,6 +14,14 @@ const ROUTE_LABELS: Record<string, string> = {
   "/accounting/depreciation": "Depreciation",
   "/accounting/receipts": "Receipts",
   "/accounting/invoices": "Invoices",
+  "/accounting/vendors": "Vendors",
+  "/accounting/bills": "Bills",
+  "/accounting/approvals": "Approvals",
+  "/accounting/periods": "Period Locks",
+  "/accounting/recurring": "Recurring",
+  "/accounting/fx": "Exchange Rates",
+  "/accounting/dimensions": "Dimensions",
+  "/accounting/action-logs": "Action Logs",
   "/accounting/payroll": "Payroll",
   "/accounting/banks": "Bank Connections",
   "/tax/workspace": "Tax Workspace",
@@ -85,6 +93,14 @@ export function resolveWorkspaceRouteFromText(
   }
 
   if (accountingContext) {
+    if (/(vendor|supplier)\b/.test(text)) return asResolved("/accounting/vendors", "Vendor management intent.");
+    if (/(bill|accounts payable|ap)\b/.test(text)) return asResolved("/accounting/bills", "Bill workflow intent.");
+    if (/(approval|approve bill|approval queue)\b/.test(text)) return asResolved("/accounting/approvals", "Approvals intent.");
+    if (/(close books|close period|period lock|lock period|unlock period)\b/.test(text)) return asResolved("/accounting/periods", "Period lock intent.");
+    if (/(recurring|repeat entry|scheduled entry)\b/.test(text)) return asResolved("/accounting/recurring", "Recurring workflow intent.");
+    if (/(exchange rate|fx|currency rate)\b/.test(text)) return asResolved("/accounting/fx", "FX management intent.");
+    if (/(class tracking|location tracking|dimension|department reporting|branch reporting)\b/.test(text)) return asResolved("/accounting/dimensions", "Dimensions intent.");
+    if (/(action log|execution log|agent log|receipt log)\b/.test(text)) return asResolved("/accounting/action-logs", "Execution log intent.");
     if (/(reconcil|bank statement|match transactions?)/.test(text)) return asResolved("/accounting/reconciliation", "Reconciliation intent.");
     if (/(projection|forecast|model|scenario)/.test(text)) return asResolved("/accounting/projections", "Projection intent.");
     if (/(fixed asset|assets register|asset register|asset schedule)/.test(text)) return asResolved("/accounting/assets", "Assets intent.");

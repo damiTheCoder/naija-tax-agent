@@ -7,6 +7,13 @@ export interface AgentConversationMessage {
 
 export type UnifiedAgentActionType =
   | "accounting.postTransaction"
+  | "accounting.createBill"
+  | "accounting.submitBill"
+  | "accounting.approveBill"
+  | "accounting.payBill"
+  | "accounting.lockPeriod"
+  | "accounting.unlockPeriod"
+  | "accounting.createRecurringTemplate"
   | "report.downloadPdf"
   | "tax.recordTransaction"
   | "tax.runComputation"

@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
+import JSZip from "jszip";
 import { configureJsPdfTypography } from "@/lib/pdf/jspdfTypography";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import type { JournalEntry } from "@/lib/accounting/doubleEntry";
+import { CHART_OF_ACCOUNTS, type AccountClass } from "@/lib/accounting/standards";
 import { mapJournalEntriesToCompliance } from "@/lib/tax/compliance/adapters";
 import { runTaxComputation, type ComplianceStatusStage, type FilingPackResult, type TaxSchedule } from "@/lib/tax/compliance";
 import { generateFilingPack } from "@/lib/tax/compliance/filingPack";
@@ -161,9 +163,359 @@ const downloadBlob = (blob: Blob, fileName: string) => {
   URL.revokeObjectURL(url);
 };
 
+type TaxPackageBasis = "cash" | "accrual";
+type AccountSnapshot = {
+  code: string;
+  name: string;
+  accountClass: AccountClass;
+};
+
+const inferAccountClass = (accountCode: string): AccountClass => {
+  const first = (accountCode || "").trim()[0];
+  if (first === "1") return "asset";
+  if (first === "2") return "liability";
+  if (first === "3") return "equity";
+  if (first === "4") return "revenue";
+  return "expense";
+};
+
+const csvCell = (value: unknown): string => {
+  const stringValue = String(value ?? "");
+  if (!/[",\n]/.test(stringValue)) return stringValue;
+  return `"${stringValue.replace(/"/g, "\"\"")}"`;
+};
+
+const toCsv = (rows: Array<Array<unknown>>): string =>
+  rows.map((row) => row.map((cell) => csvCell(cell)).join(",")).join("\n");
+
+const asDate = (entry: JournalEntry): Date => {
+  const parsed = new Date(entry.date || entry.createdAt || new Date().toISOString());
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const hasCashMovement = (entry: JournalEntry): boolean =>
+  entry.lines.some((line) => (line.accountCode || "").trim().startsWith("10"));
+
+const inBasis = (entry: JournalEntry, basis: TaxPackageBasis): boolean =>
+  basis === "accrual" ? true : hasCashMovement(entry);
+
+const toAmount = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
+const readMetadataField = (entry: JournalEntry, keys: string[]): string => {
+  const metadata =
+    entry.metadata && typeof entry.metadata === "object"
+      ? (entry.metadata as Record<string, unknown>)
+      : {};
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+};
+
+const toAccountSnapshots = (entries: JournalEntry[]): AccountSnapshot[] => {
+  const map = new Map<string, AccountSnapshot>();
+  CHART_OF_ACCOUNTS.forEach((account) => {
+    map.set(account.code, {
+      code: account.code,
+      name: account.name,
+      accountClass: account.class,
+    });
+  });
+  entries.forEach((entry) => {
+    entry.lines.forEach((line) => {
+      const code = (line.accountCode || "").trim();
+      if (!code || map.has(code)) return;
+      map.set(code, {
+        code,
+        name: line.accountName || `Account ${code}`,
+        accountClass: inferAccountClass(code),
+      });
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+};
+
+const toPackageCsvFiles = (params: {
+  entries: JournalEntry[];
+  year: number;
+  basis: TaxPackageBasis;
+}) => {
+  const yearStart = new Date(Date.UTC(params.year, 0, 1, 0, 0, 0));
+  const yearEnd = new Date(Date.UTC(params.year, 11, 31, 23, 59, 59, 999));
+  const toDateEntries = params.entries.filter((entry) => {
+    const date = asDate(entry);
+    return date <= yearEnd && inBasis(entry, params.basis);
+  });
+  const inYearEntries = params.entries.filter((entry) => {
+    const date = asDate(entry);
+    return date >= yearStart && date <= yearEnd && inBasis(entry, params.basis);
+  });
+  const beforeYearEntries = params.entries.filter((entry) => {
+    const date = asDate(entry);
+    return date < yearStart && inBasis(entry, params.basis);
+  });
+
+  const accounts = toAccountSnapshots(params.entries);
+  const ledgerMap = new Map<
+    string,
+    {
+      account: AccountSnapshot;
+      openingDebit: number;
+      openingCredit: number;
+      yearDebit: number;
+      yearCredit: number;
+      toDateDebit: number;
+      toDateCredit: number;
+    }
+  >();
+  const ensure = (code: string, name?: string) => {
+    if (!ledgerMap.has(code)) {
+      const found = accounts.find((item) => item.code === code);
+      const snapshot: AccountSnapshot =
+        found ||
+        ({
+          code,
+          name: name || `Account ${code}`,
+          accountClass: inferAccountClass(code),
+        } satisfies AccountSnapshot);
+      ledgerMap.set(code, {
+        account: snapshot,
+        openingDebit: 0,
+        openingCredit: 0,
+        yearDebit: 0,
+        yearCredit: 0,
+        toDateDebit: 0,
+        toDateCredit: 0,
+      });
+    }
+    return ledgerMap.get(code)!;
+  };
+
+  beforeYearEntries.forEach((entry) => {
+    entry.lines.forEach((line) => {
+      const code = (line.accountCode || "").trim();
+      if (!code) return;
+      const row = ensure(code, line.accountName);
+      row.openingDebit += toAmount(line.debit);
+      row.openingCredit += toAmount(line.credit);
+      row.toDateDebit += toAmount(line.debit);
+      row.toDateCredit += toAmount(line.credit);
+    });
+  });
+  inYearEntries.forEach((entry) => {
+    entry.lines.forEach((line) => {
+      const code = (line.accountCode || "").trim();
+      if (!code) return;
+      const row = ensure(code, line.accountName);
+      row.yearDebit += toAmount(line.debit);
+      row.yearCredit += toAmount(line.credit);
+      row.toDateDebit += toAmount(line.debit);
+      row.toDateCredit += toAmount(line.credit);
+    });
+  });
+
+  const ledgerRows = Array.from(ledgerMap.values()).sort((a, b) =>
+    a.account.code.localeCompare(b.account.code)
+  );
+
+  const toNaturalBalance = (row: (typeof ledgerRows)[number], scope: "opening" | "year" | "toDate"): number => {
+    const debit =
+      scope === "opening"
+        ? row.openingDebit
+        : scope === "year"
+        ? row.yearDebit
+        : row.toDateDebit;
+    const credit =
+      scope === "opening"
+        ? row.openingCredit
+        : scope === "year"
+        ? row.yearCredit
+        : row.toDateCredit;
+    if (row.account.accountClass === "asset" || row.account.accountClass === "expense") {
+      return debit - credit;
+    }
+    return credit - debit;
+  };
+
+  const rollforwardRows: Array<Array<unknown>> = [
+    [
+      "account_code",
+      "account_name",
+      "account_class",
+      "opening_balance",
+      "year_debits",
+      "year_credits",
+      "movement",
+      "closing_balance",
+      "basis",
+      "year",
+    ],
+  ];
+  ledgerRows.forEach((row) => {
+    const opening = toNaturalBalance(row, "opening");
+    const movement = toNaturalBalance(row, "year");
+    const closing = toNaturalBalance(row, "toDate");
+    if (
+      Math.abs(opening) < 0.005 &&
+      Math.abs(row.yearDebit) < 0.005 &&
+      Math.abs(row.yearCredit) < 0.005 &&
+      Math.abs(closing) < 0.005
+    ) {
+      return;
+    }
+    rollforwardRows.push([
+      row.account.code,
+      row.account.name,
+      row.account.accountClass,
+      opening.toFixed(2),
+      row.yearDebit.toFixed(2),
+      row.yearCredit.toFixed(2),
+      movement.toFixed(2),
+      closing.toFixed(2),
+      params.basis,
+      params.year,
+    ]);
+  });
+
+  const incomeRows = ledgerRows.filter((row) => row.account.accountClass === "revenue" || row.account.accountClass === "expense");
+  const incomeStatementRows: Array<Array<unknown>> = [
+    ["section", "account_code", "account_name", "amount", "basis", "year"],
+  ];
+  let totalRevenue = 0;
+  let totalExpense = 0;
+  incomeRows.forEach((row) => {
+    if (row.account.accountClass === "revenue") {
+      const amount = row.yearCredit - row.yearDebit;
+      if (Math.abs(amount) < 0.005) return;
+      totalRevenue += amount;
+      incomeStatementRows.push(["Revenue", row.account.code, row.account.name, amount.toFixed(2), params.basis, params.year]);
+      return;
+    }
+    const amount = row.yearDebit - row.yearCredit;
+    if (Math.abs(amount) < 0.005) return;
+    totalExpense += amount;
+    incomeStatementRows.push(["Expense", row.account.code, row.account.name, amount.toFixed(2), params.basis, params.year]);
+  });
+  incomeStatementRows.push(["Total Revenue", "", "", totalRevenue.toFixed(2), params.basis, params.year]);
+  incomeStatementRows.push(["Total Expense", "", "", totalExpense.toFixed(2), params.basis, params.year]);
+  incomeStatementRows.push(["Net Income", "", "", (totalRevenue - totalExpense).toFixed(2), params.basis, params.year]);
+
+  const balanceSheetRows: Array<Array<unknown>> = [
+    ["section", "account_code", "account_name", "amount", "basis", "as_of_year"],
+  ];
+  let totalAssets = 0;
+  let totalLiabilities = 0;
+  let totalEquity = 0;
+  let revenueToDate = 0;
+  let expenseToDate = 0;
+
+  ledgerRows.forEach((row) => {
+    const closing = toNaturalBalance(row, "toDate");
+    if (row.account.accountClass === "revenue") {
+      revenueToDate += Math.max(0, row.toDateCredit - row.toDateDebit);
+    }
+    if (row.account.accountClass === "expense") {
+      expenseToDate += Math.max(0, row.toDateDebit - row.toDateCredit);
+    }
+    if (
+      row.account.accountClass !== "asset" &&
+      row.account.accountClass !== "liability" &&
+      row.account.accountClass !== "equity"
+    ) {
+      return;
+    }
+    if (Math.abs(closing) < 0.005) return;
+    if (row.account.accountClass === "asset") {
+      totalAssets += closing;
+      balanceSheetRows.push(["Assets", row.account.code, row.account.name, closing.toFixed(2), params.basis, params.year]);
+    } else if (row.account.accountClass === "liability") {
+      totalLiabilities += closing;
+      balanceSheetRows.push(["Liabilities", row.account.code, row.account.name, closing.toFixed(2), params.basis, params.year]);
+    } else {
+      totalEquity += closing;
+      balanceSheetRows.push(["Equity", row.account.code, row.account.name, closing.toFixed(2), params.basis, params.year]);
+    }
+  });
+  const currentEarnings = revenueToDate - expenseToDate;
+  if (Math.abs(currentEarnings) >= 0.005) {
+    totalEquity += currentEarnings;
+    balanceSheetRows.push(["Equity", "CURRENT_EARNINGS", "Current Earnings", currentEarnings.toFixed(2), params.basis, params.year]);
+  }
+  balanceSheetRows.push(["Total Assets", "", "", totalAssets.toFixed(2), params.basis, params.year]);
+  balanceSheetRows.push(["Total Liabilities", "", "", totalLiabilities.toFixed(2), params.basis, params.year]);
+  balanceSheetRows.push(["Total Equity", "", "", totalEquity.toFixed(2), params.basis, params.year]);
+  balanceSheetRows.push(["Liability + Equity", "", "", (totalLiabilities + totalEquity).toFixed(2), params.basis, params.year]);
+
+  const trialBalanceRows: Array<Array<unknown>> = [
+    ["account_code", "account_name", "debit", "credit", "basis", "as_of_year"],
+  ];
+  let totalDebit = 0;
+  let totalCredit = 0;
+  ledgerRows.forEach((row) => {
+    const debit = Math.max(0, row.toDateDebit - row.toDateCredit);
+    const credit = Math.max(0, row.toDateCredit - row.toDateDebit);
+    if (Math.abs(debit) < 0.005 && Math.abs(credit) < 0.005) return;
+    totalDebit += debit;
+    totalCredit += credit;
+    trialBalanceRows.push([row.account.code, row.account.name, debit.toFixed(2), credit.toFixed(2), params.basis, params.year]);
+  });
+  trialBalanceRows.push(["TOTAL", "", totalDebit.toFixed(2), totalCredit.toFixed(2), params.basis, params.year]);
+
+  const vendorMap = new Map<string, { total: number; count: number }>();
+  inYearEntries.forEach((entry) => {
+    const expenseAmount = entry.lines.reduce((sum, line) => {
+      const code = (line.accountCode || "").trim();
+      if (!code) return sum;
+      const meta = ledgerMap.get(code)?.account;
+      if (!meta) return sum;
+      if (meta.accountClass !== "expense") return sum;
+      return sum + Math.max(0, toAmount(line.debit) - toAmount(line.credit));
+    }, 0);
+    if (expenseAmount <= 0) return;
+
+    const explicitVendor = readMetadataField(entry, [
+      "vendorName",
+      "vendor",
+      "payee",
+      "counterparty",
+      "beneficiary",
+    ]);
+    const inferred =
+      explicitVendor ||
+      (entry.narration.match(/(?:paid|payment to|to)\s+([A-Za-z0-9&.,' -]{3,60})/i)?.[1] || "").trim() ||
+      "Unspecified Vendor";
+
+    const existing = vendorMap.get(inferred) || { total: 0, count: 0 };
+    existing.total += expenseAmount;
+    existing.count += 1;
+    vendorMap.set(inferred, existing);
+  });
+  const vendorRows: Array<Array<unknown>> = [
+    ["vendor_name", "total_spend", "transaction_count", "basis", "year"],
+  ];
+  Array.from(vendorMap.entries())
+    .sort((a, b) => b[1].total - a[1].total)
+    .forEach(([vendor, value]) => {
+      vendorRows.push([vendor, value.total.toFixed(2), value.count, params.basis, params.year]);
+    });
+  if (vendorRows.length === 1) {
+    vendorRows.push(["Unspecified Vendor", "0.00", 0, params.basis, params.year]);
+  }
+
+  return [
+    { fileName: "balance_sheet.csv", csv: toCsv(balanceSheetRows) },
+    { fileName: "general_ledger_rollforward.csv", csv: toCsv(rollforwardRows) },
+    { fileName: "income_statement.csv", csv: toCsv(incomeStatementRows) },
+    { fileName: "trial_balance.csv", csv: toCsv(trialBalanceRows) },
+    { fileName: "vendor_spending.csv", csv: toCsv(vendorRows) },
+  ];
+};
+
 export default function FileTaxesPage() {
   const [returns, setReturns] = useState<FilingReturnRow[]>([]);
   const [schedules, setSchedules] = useState<TaxSchedule[]>([]);
+  const [postedEntries, setPostedEntries] = useState<JournalEntry[]>([]);
   const [filingPacks, setFilingPacks] = useState<FilingPackResult[]>([]);
   const [manualFilings, setManualFilings] = useState<ManualFilingRecord[]>([]);
   const [history, setHistory] = useState<SubmissionHistoryItem[]>([]);
@@ -173,6 +525,10 @@ export default function FileTaxesPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isGeneratingId, setIsGeneratingId] = useState<string | null>(null);
+  const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
+  const [showPackageModal, setShowPackageModal] = useState(false);
+  const [packageBasis, setPackageBasis] = useState<TaxPackageBasis>("accrual");
+  const [packageYear, setPackageYear] = useState<string>(String(new Date().getFullYear()));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -295,6 +651,7 @@ export default function FileTaxesPage() {
       });
 
       if (!isMountedRef.current) return;
+      setPostedEntries(postedEntries);
       setSchedules(scheduleRows);
       setReturns(combined);
       setFilingPacks(loadFilingPacks().filter((pack) => pack.entityId === "entity-default"));
@@ -549,6 +906,81 @@ export default function FileTaxesPage() {
       .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
   }, [filingPacks]);
 
+  const packageYearOptions = useMemo(() => {
+    const years = new Set<number>();
+    postedEntries.forEach((entry) => {
+      const date = asDate(entry);
+      years.add(date.getFullYear());
+    });
+    years.add(new Date().getFullYear());
+    return Array.from(years).sort((a, b) => b - a);
+  }, [postedEntries]);
+
+  useEffect(() => {
+    if (packageYearOptions.length === 0) return;
+    if (!packageYearOptions.includes(Number(packageYear))) {
+      setPackageYear(String(packageYearOptions[0]));
+    }
+  }, [packageYear, packageYearOptions]);
+
+  const handleGenerateTaxPackage = useCallback(async () => {
+    const selectedYear = Number(packageYear);
+    if (!Number.isInteger(selectedYear)) {
+      setError("Select a valid year for tax package generation.");
+      return;
+    }
+
+    setIsGeneratingPackage(true);
+    setError(null);
+    try {
+      accountingEngine.load();
+      const state = accountingEngine.getState();
+      const allPosted = state.journalEntries.filter((entry) => entry.status === "posted");
+      const csvFiles = toPackageCsvFiles({
+        entries: allPosted,
+        year: selectedYear,
+        basis: packageBasis,
+      });
+
+      const zip = new JSZip();
+      csvFiles.forEach((file) => {
+        zip.file(file.fileName, file.csv);
+      });
+      const generatedAt = new Date();
+      zip.file(
+        "README.txt",
+        [
+          "Quantum Ledger Tax Package",
+          `Year: ${selectedYear}`,
+          `Basis: ${packageBasis}`,
+          `Generated At: ${generatedAt.toISOString()}`,
+          "",
+          "Included files:",
+          ...csvFiles.map((file) => `- ${file.fileName}`),
+        ].join("\n")
+      );
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const fileName = `tax-package-${selectedYear}-${packageBasis}.zip`;
+      downloadBlob(blob, fileName);
+      appendHistory({
+        action: "generated_document",
+        fileName,
+        taxType: "PACKAGE",
+        period: String(selectedYear),
+      });
+      setStatusMessage(
+        `Generated tax package for ${selectedYear} (${packageBasis} basis) with ${csvFiles.length} CSV files.`
+      );
+      setShowPackageModal(false);
+    } catch (generationError) {
+      console.error("Unable to generate tax package", generationError);
+      setError("Could not generate tax package right now.");
+    } finally {
+      setIsGeneratingPackage(false);
+    }
+  }, [appendHistory, packageBasis, packageYear]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -556,17 +988,29 @@ export default function FileTaxesPage() {
           <h1 className="text-2xl font-bold text-gray-900">File Taxes</h1>
           <p className="mt-1 text-sm text-gray-500">Generate documents, download returns, upload manual filings, and track submissions.</p>
         </div>
-        <button
-          type="button"
-          onClick={refreshData}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:opacity-60"
-        >
-          <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh Filing Data
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPackageModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16m-7 5h7" />
+            </svg>
+            Generate Tax Package
+          </button>
+          <button
+            type="button"
+            onClick={refreshData}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:opacity-60"
+          >
+            <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Filing Data
+          </button>
+        </div>
       </div>
 
       {(statusMessage || error) && (
@@ -753,6 +1197,111 @@ export default function FileTaxesPage() {
           </table>
         </div>
       </section>
+
+      {showPackageModal ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-[#2b2f44] bg-[#111427] text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2b2f44] px-5 py-4">
+              <h3 className="text-xl font-semibold">Generate tax package</h3>
+              <button
+                type="button"
+                onClick={() => setShowPackageModal(false)}
+                className="rounded-md p-1 text-gray-300 hover:bg-white/10 hover:text-white"
+                aria-label="Close package modal"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-5 md:grid-cols-[1fr_260px]">
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-6">
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="package-basis"
+                      value="cash"
+                      checked={packageBasis === "cash"}
+                      onChange={() => setPackageBasis("cash")}
+                      className="h-4 w-4 accent-white"
+                    />
+                    Cash
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="package-basis"
+                      value="accrual"
+                      checked={packageBasis === "accrual"}
+                      onChange={() => setPackageBasis("accrual")}
+                      className="h-4 w-4 accent-white"
+                    />
+                    Accrual
+                  </label>
+                </div>
+
+                <div>
+                  <label htmlFor="package-year" className="mb-2 block text-xs uppercase tracking-wide text-gray-300">
+                    Filing year
+                  </label>
+                  <select
+                    id="package-year"
+                    value={packageYear}
+                    onChange={(event) => setPackageYear(event.target.value)}
+                    className="w-40 rounded-lg border border-[#3a3f5f] bg-[#0f1324] px-3 py-2 text-sm text-white"
+                  >
+                    {packageYearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#2b2f44] bg-gradient-to-b from-[#1b1f39] to-[#181c33] p-4">
+                <p className="text-lg font-medium">Tax package</p>
+                <ul className="mt-4 space-y-1 text-sm text-gray-300">
+                  <li>balance_sheet.csv</li>
+                  <li>general_ledger_rollforward.csv</li>
+                  <li>income_statement.csv</li>
+                  <li>trial_balance.csv</li>
+                  <li>vendor_spending.csv</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-[#2b2f44] px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowPackageModal(false)}
+                className="rounded-lg border border-[#3a3f5f] px-4 py-2 text-sm font-semibold text-gray-200 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleGenerateTaxPackage()}
+                disabled={isGeneratingPackage}
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#111427] hover:bg-gray-100 disabled:opacity-70"
+              >
+                <svg
+                  className={`h-4 w-4 ${isGeneratingPackage ? "animate-spin" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16" />
+                </svg>
+                {isGeneratingPackage ? "Generating..." : "Download"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

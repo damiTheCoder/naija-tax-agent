@@ -411,18 +411,48 @@ export default function TaxWorkspacePage() {
         setStatusMessage("No posted/voided journals available for backfill.");
         return;
       }
-      const response = await fetch("/api/tax/backfill", {
+      const reportResponse = await fetch("/api/tax/backfill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           entityId: "entity-default",
           journals: entries,
+          mode: "report",
         }),
       });
-      if (!response.ok) {
-        throw new Error(`Backfill failed (${response.status})`);
+      if (!reportResponse.ok) {
+        throw new Error(`Backfill preview failed (${reportResponse.status})`);
       }
-      setStatusMessage(`Backfill completed for ${entries.length} journal states (posted + voided).`);
+
+      const reportPayload = (await reportResponse.json()) as {
+        success?: boolean;
+        backfill?: {
+          report?: {
+            wouldUpsertTransactions?: number;
+            wouldPruneTransactions?: number;
+            wouldPruneDuplicates?: number;
+            wouldRemoveStaleRows?: number;
+          };
+        };
+      };
+
+      const applyResponse = await fetch("/api/tax/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: "entity-default",
+          journals: entries,
+          mode: "apply",
+        }),
+      });
+      if (!applyResponse.ok) {
+        throw new Error(`Backfill apply failed (${applyResponse.status})`);
+      }
+
+      const preview = reportPayload.backfill?.report;
+      setStatusMessage(
+        `Backfill completed for ${entries.length} journal states. Preview: upsert ${preview?.wouldUpsertTransactions || 0}, prune missing ${preview?.wouldPruneTransactions || 0}, duplicate cleanup ${preview?.wouldPruneDuplicates || 0}, stale cleanup ${preview?.wouldRemoveStaleRows || 0}.`
+      );
       await refreshTaxDashboardV2();
       await refreshTaxLedgerV2();
     } catch (backfillError) {
@@ -634,15 +664,16 @@ export default function TaxWorkspacePage() {
       return true;
     };
 
-    if (taxLedgerRowsV2.length > 0) {
-      return taxLedgerRowsV2
-        .filter((row) => inScope(row.transactionDate || row.createdAt))
-        .sort(
-          (a, b) =>
-            new Date(b.transactionDate || b.createdAt).getTime() -
-            new Date(a.transactionDate || a.createdAt).getTime()
-        )
-        .map((row) => ({
+    return taxLedgerRowsV2
+      .filter((row) => inScope(row.transactionDate || row.createdAt))
+      .sort((a, b) => {
+        return (
+          new Date(b.transactionDate || b.createdAt).getTime() -
+          new Date(a.transactionDate || a.createdAt).getTime()
+        );
+      })
+      .map((row) => {
+        return {
           id: row.id,
           transactionId: row.transactionId,
           taxType: row.taxType,
@@ -651,36 +682,9 @@ export default function TaxWorkspacePage() {
           taxAmount: row.taxAmount,
           description: row.transactionDescription || "Ledger adjustment",
           date: row.transactionDate || row.createdAt,
-        })) satisfies TimelineLedgerRow[];
-    }
-
-    const legacyLedgerEntries = computation?.ledgerEntries || [];
-    return legacyLedgerEntries
-      .filter((entry) => {
-        if (!entry.transactionId) return false;
-        const tx = transactionMap.get(entry.transactionId);
-        if (!tx || !tx.date) return false;
-        return inScope(tx.date);
-      })
-      .sort((a, b) => {
-        const dateA = transactionMap.get(a.transactionId || "")?.date || "";
-        const dateB = transactionMap.get(b.transactionId || "")?.date || "";
-        return new Date(dateB).getTime() - new Date(dateA).getTime();
-      })
-      .map((entry) => {
-        const tx = entry.transactionId ? transactionMap.get(entry.transactionId) : undefined;
-        return {
-          id: entry.id,
-          transactionId: entry.transactionId,
-          taxType: entry.taxType,
-          ledger: entry.ledger,
-          baseAmount: entry.baseAmount,
-          taxAmount: entry.taxAmount,
-          description: tx?.description || "Ledger adjustment",
-          date: tx?.date || entry.createdAt,
         };
       }) satisfies TimelineLedgerRow[];
-  }, [taxLedgerRowsV2, computation?.ledgerEntries, transactionMap, selectedYear, dateFrom, dateTo]);
+  }, [taxLedgerRowsV2, selectedYear, dateFrom, dateTo]);
 
   const timelineGroups = useMemo<TimelineTransactionGroup[]>(() => {
     const groups = new Map<string, TimelineTransactionGroup>();
@@ -1162,31 +1166,31 @@ export default function TaxWorkspacePage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#2264ff]">VAT Payable</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatPayable ?? taxSummary.netVAT)}>
-            {formatCurrency(taxDashboardV2?.vatPayable ?? taxSummary.netVAT)}
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatPayable ?? 0)}>
+            {formatCurrency(taxDashboardV2?.vatPayable ?? 0)}
           </p>
           <p className="text-[11px] text-gray-500 mt-1">Output VAT liability</p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">VAT Receivable</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatReceivable ?? taxSummary.inputVAT)}>
-            {formatCurrency(taxDashboardV2?.vatReceivable ?? taxSummary.inputVAT)}
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatReceivable ?? 0)}>
+            {formatCurrency(taxDashboardV2?.vatReceivable ?? 0)}
           </p>
           <p className="text-[11px] text-gray-500 mt-1">Input VAT credit</p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Net VAT Position</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.netVatPosition ?? taxSummary.netVAT)}>
-            {formatCurrency(taxDashboardV2?.netVatPosition ?? taxSummary.netVAT)}
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.netVatPosition ?? 0)}>
+            {formatCurrency(taxDashboardV2?.netVatPosition ?? 0)}
           </p>
           <p className="text-[11px] text-gray-500 mt-1">
-            {((taxDashboardV2?.netVatPosition ?? taxSummary.netVAT) < 0) ? "Credit / refund" : "Payable"}
+            {((taxDashboardV2?.netVatPosition ?? 0) < 0) ? "Credit / refund" : "Payable"}
           </p>
         </div>
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
           <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">WHT Payable</p>
-          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.whtPayable ?? taxSummary.totalWHT)}>
-            {formatCurrency(taxDashboardV2?.whtPayable ?? taxSummary.totalWHT)}
+          <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.whtPayable ?? 0)}>
+            {formatCurrency(taxDashboardV2?.whtPayable ?? 0)}
           </p>
           <p className="text-[11px] text-gray-500 mt-1">Withholding owed to authority</p>
         </div>

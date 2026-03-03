@@ -133,6 +133,21 @@ function detectRecipient(message: string): string | null {
   return null;
 }
 
+function extractBillId(message: string): string | null {
+  const labeled = message.match(/\bbill(?:\s+id)?\s*[:#-]?\s*([a-zA-Z0-9-]{6,64})\b/i);
+  if (labeled?.[1]) return labeled[1];
+
+  const uuidLike = message.match(/\b([a-zA-Z0-9]{8,}-[a-zA-Z0-9-]{4,})\b/);
+  if (uuidLike?.[1]) return uuidLike[1];
+  return null;
+}
+
+function extractAccountingPeriod(message: string): string | null {
+  const monthly = message.match(/\b(20\d{2}-(0[1-9]|1[0-2]))\b/);
+  if (monthly?.[1]) return monthly[1];
+  return null;
+}
+
 function findProjectionAssumption(message: string): ProjectionAssumptionMeta | null {
   const lower = message.toLowerCase();
   for (const assumption of PROJECTION_ASSUMPTIONS) {
@@ -143,11 +158,40 @@ function findProjectionAssumption(message: string): ProjectionAssumptionMeta | n
   return null;
 }
 
+function inferProjectionUnit(message: string): "percent" | "currency" | "decimal" {
+  const lower = message.toLowerCase();
+  if (/%|percent|pct/.test(lower)) return "percent";
+  if (/₦|ngn|naira/.test(message) || /\b(currency|cash|amount)\b/.test(lower)) return "currency";
+  return "decimal";
+}
+
+function extractProjectionInputTarget(message: string): string | null {
+  const setMatch = message.match(
+    /\b(?:set|update|change|adjust|input|apply|put)\s+(?:the\s+)?(.+?)\s+(?:to)\s+(?:₦|ngn|naira)?\s*-?\d[\d,]*(?:\.\d+)?/i
+  );
+  const rawTarget = setMatch?.[1] || "";
+  if (!rawTarget) return null;
+  const cleaned = rawTarget
+    .replace(/["'`]/g, "")
+    .replace(/\b(assumption|assumptions|model|models|input|inputs|value|values)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || null;
+}
+
 function inferNavigationRoute(message: string, currentRoute: string): string | null {
   const lower = normalizeIntentText(message);
   if (!/(go to|open|navigate|take me to)/.test(lower)) return null;
 
   if (/\bprojection|forecast|model\b/.test(lower)) return "/accounting/projections";
+  if (/\bvendor|supplier\b/.test(lower)) return "/accounting/vendors";
+  if (/\bbill|accounts payable|ap\b/.test(lower)) return "/accounting/bills";
+  if (/\bapproval|approve queue\b/.test(lower)) return "/accounting/approvals";
+  if (/\bperiod lock|close books|close period\b/.test(lower)) return "/accounting/periods";
+  if (/\brecurring|scheduled entries\b/.test(lower)) return "/accounting/recurring";
+  if (/\bexchange rate|fx\b/.test(lower)) return "/accounting/fx";
+  if (/\bdimension|class tracking|location tracking\b/.test(lower)) return "/accounting/dimensions";
+  if (/\baction log|execution log|agent log|receipt log\b/.test(lower)) return "/accounting/action-logs";
   if (/\bfixed asset|asset register|assets page\b/.test(lower)) return "/accounting/assets";
   if (/\bdepreciation|accumulated depreciation\b/.test(lower)) return "/accounting/depreciation";
   if (/\breconciliation\b/.test(lower)) return "/accounting/reconciliation";
@@ -256,9 +300,23 @@ function buildExecutionReplyForAction(request: ToolRequest): string {
     case "analyzeCashflow":
       return "Understood. I’ll analyze your cashflow now.";
     case "updateProjectionAssumption":
-      return "Understood. I’ll update that projection assumption now.";
+      return "Understood. I’ll update that projection input now.";
     case "resetProjectionAssumptions":
       return "Understood. I’ll reset projection assumptions to auto now.";
+    case "createBill":
+      return "Understood. I’ll draft that bill now.";
+    case "submitBill":
+      return "Understood. I’ll submit that bill for approval now.";
+    case "approveBill":
+      return "Understood. I’ll approve that bill now.";
+    case "payBill":
+      return "Understood. I’ll post that bill payment now.";
+    case "lockPeriod":
+      return "Understood. I’ll lock that period now.";
+    case "unlockPeriod":
+      return "Understood. I’ll unlock that period now.";
+    case "createRecurringTemplate":
+      return "Understood. I’ll create that recurring template now.";
     case "navigate":
       return "Understood. I’ll open that page now.";
     case "operateInterface":
@@ -276,6 +334,7 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
   const explicitActionIntent = isExplicitActionIntent(message);
   const dataLookupIntent = isDataLookupIntent(message);
   const explainOnlyIntent = isExplainOnlyIntent(message);
+  const isModelContext = /Financial Modelling:/i.test(context.contextSnapshot || "");
 
   if (explainOnlyIntent) {
     return [];
@@ -297,7 +356,7 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
     });
   }
 
-  const projectionUpdateIntent = /(set|update|change|adjust|input|apply).*(assumption|growth|ratio|baseline|cogs|marketing|collection|disbursement)/.test(
+  const projectionUpdateIntent = /(set|update|change|adjust|input|apply|put).*(assumption|growth|ratio|baseline|cogs|marketing|collection|disbursement|model|input|rate|months?|arpu|churn|cac|ltv|price|revenue|cost|capex|tax)/.test(
     lower
   );
   const assumption = findProjectionAssumption(message);
@@ -325,6 +384,24 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
       reason: "Detected projection assumption update instruction",
       confidence: 0.72,
     });
+  } else if (projectionUpdateIntent && isModelContext && signedValue !== null) {
+    const inputTarget = extractProjectionInputTarget(message);
+    if (inputTarget) {
+      addRequest({
+        name: "updateProjectionAssumption",
+        arguments: {
+          updates: [
+            {
+              key: inputTarget,
+              value: signedValue,
+              unit: inferProjectionUnit(message),
+            },
+          ],
+        },
+        reason: "Detected financial model input update instruction",
+        confidence: 0.68,
+      });
+    }
   }
 
   if (
@@ -338,6 +415,118 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
       },
       reason: "Detected cashflow analysis instruction",
       confidence: 0.68,
+    });
+  }
+
+  const billId = extractBillId(message);
+  const wantsCreateBill =
+    /\b(create|add|record|draft|raise)\b/.test(lower) &&
+    /\bbill\b/.test(lower) &&
+    typeof amount === "number" &&
+    amount > 0;
+  if (wantsCreateBill) {
+    const vendorMatch = message.match(/\b(?:to|from|vendor)\s+([a-zA-Z][a-zA-Z0-9 .,&'-]{2,50})/i);
+    addRequest({
+      name: "createBill",
+      arguments: {
+        vendorName: vendorMatch?.[1]?.trim() || "Unspecified Vendor",
+        date: new Date().toISOString().slice(0, 10),
+        lines: [
+          {
+            description: message,
+            quantity: 1,
+            unitPrice: amount,
+          },
+        ],
+        currency: "NGN",
+      },
+      reason: "Detected bill draft instruction",
+      confidence: 0.71,
+    });
+  }
+
+  if (billId && /\bsubmit\b/.test(lower) && /\bbill\b/.test(lower)) {
+    addRequest({
+      name: "submitBill",
+      arguments: { billId },
+      reason: "Detected bill submit instruction",
+      confidence: 0.7,
+    });
+  }
+
+  if (billId && /\bapprove\b/.test(lower) && /\bbill\b/.test(lower)) {
+    addRequest({
+      name: "approveBill",
+      arguments: { billId },
+      reason: "Detected bill approval instruction",
+      confidence: 0.7,
+    });
+  }
+
+  if (billId && /\b(pay|settle)\b/.test(lower) && /\bbill\b/.test(lower)) {
+    addRequest({
+      name: "payBill",
+      arguments: {
+        billId,
+        ...(typeof amount === "number" && amount > 0 ? { amount } : {}),
+      },
+      reason: "Detected bill payment instruction",
+      confidence: 0.72,
+    });
+  }
+
+  const period = extractAccountingPeriod(message);
+  if (period && /\block\b/.test(lower) && /\b(period|month|books?)\b/.test(lower)) {
+    addRequest({
+      name: "lockPeriod",
+      arguments: { period },
+      reason: "Detected period lock instruction",
+      confidence: 0.69,
+    });
+  }
+
+  if (period && /\bunlock\b/.test(lower) && /\b(period|month|books?)\b/.test(lower)) {
+    addRequest({
+      name: "unlockPeriod",
+      arguments: { period },
+      reason: "Detected period unlock instruction",
+      confidence: 0.69,
+    });
+  }
+
+  if (/\b(recurring|repeat every|monthly template|quarterly template)\b/.test(lower) && /\b(bill|journal)\b/.test(lower)) {
+    const resourceType = /\bbill\b/.test(lower) ? "bill" : "journal";
+    const frequency = /\bquarter\b/.test(lower) ? "quarterly" : "monthly";
+    addRequest({
+      name: "createRecurringTemplate",
+      arguments: {
+        name: `AI ${resourceType} template`,
+        resourceType,
+        frequency,
+        startDate: new Date().toISOString().slice(0, 10),
+        payload:
+          resourceType === "bill"
+            ? {
+                bill: {
+                  vendorName: "Recurring Vendor",
+                  lines: [
+                    {
+                      description: message,
+                      quantity: 1,
+                      unitPrice: typeof amount === "number" && amount > 0 ? amount : 0,
+                    },
+                  ],
+                },
+              }
+            : {
+                journal: {
+                  narration: message,
+                  lines: [],
+                },
+              },
+      },
+      reason: "Detected recurring template instruction",
+      confidence: 0.64,
     });
   }
 

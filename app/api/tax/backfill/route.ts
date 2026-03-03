@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 type BackfillBody = {
   entityId?: string;
   journals?: JournalEntry[];
+  mode?: "apply" | "report";
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = (await request.json()) as BackfillBody;
     const entityId = body.entityId || "entity-default";
     const journals = Array.isArray(body.journals) ? body.journals : [];
+    const mode = body.mode === "report" ? "report" : "apply";
 
     if (journals.length === 0) {
       return NextResponse.json(
@@ -44,16 +46,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })),
       source: "backfill",
+      mode,
     });
 
     return NextResponse.json({
       success: true,
       source: "tax-ledger",
       engineVersion: "v2",
+      mode,
       backfill: {
         journalsReceived: journals.length,
         transactionsUpserted: result.upsertedTransactions,
+        prunedTransactions: result.prunedTransactions,
+        duplicatesPruned: result.duplicatesPruned,
+        staleRowsRemoved: result.staleRowsRemoved,
+        syncRunId: result.syncRunId,
         impactedPeriods: result.impactedPeriods,
+        reportOnly: result.reportOnly,
+        report: result.report,
       },
     });
   } catch (error) {

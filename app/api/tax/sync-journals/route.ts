@@ -10,6 +10,7 @@ type SyncRequestBody = {
   journalEntries?: JournalEntry[];
   source?: "live_posting" | "backfill";
   fullSync?: boolean;
+  mode?: "apply" | "report";
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       })),
       source: body.source || "live_posting",
       fullSync,
+      mode: body.mode === "report" ? "report" : "apply",
     });
 
     return NextResponse.json({

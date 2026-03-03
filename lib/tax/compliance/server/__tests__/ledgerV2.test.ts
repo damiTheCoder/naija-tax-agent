@@ -40,6 +40,7 @@ const cleanupEntity = async (entityId: string) => {
   await prisma.taxPayment.deleteMany({ where: { entityId } });
   await prisma.taxReconciliation.deleteMany({ where: { entityId } });
   await prisma.auditLog.deleteMany({ where: { entityId } });
+  await prisma.taxSyncRun.deleteMany({ where: { entityId } });
   await prisma.transaction.deleteMany({ where: { entityId } });
   await prisma.taxPeriod.deleteMany({ where: { entityId } });
   await prisma.taxRuleSet.deleteMany({ where: { entityId } });
@@ -351,6 +352,46 @@ describe("tax v2 ledger-first engine", () => {
     expect(ledgerCount).toBe(0);
   });
 
+  test("full sync also prunes legacy manual-source journal-linked transactions", async () => {
+    const journal = makeJournal({
+      id: "sync-prune-legacy-manual-001",
+      date: "2026-02-24",
+      narration: "Legacy manual source transaction",
+      transactionType: "sale",
+      totalDebits: 107500,
+      totalCredits: 107500,
+      lines: [
+        { accountCode: "1020", accountName: "Bank", debit: 107500, credit: 0 },
+        { accountCode: "4000", accountName: "Sales", debit: 0, credit: 100000 },
+        { accountCode: "2200", accountName: "Output VAT Payable", debit: 0, credit: 7500 },
+      ],
+      metadata: { taxMode: "exclusive", taxCategory: "revenue" },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    await prisma.transaction.update({
+      where: { id: `tx-${ENTITY_ID}-${journal.id}` },
+      data: { source: "manual" },
+    });
+
+    const prune = await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [],
+      source: "live_posting",
+      fullSync: true,
+    });
+
+    expect(prune.upsertedTransactions).toBe(0);
+    expect(prune.prunedTransactions).toBe(1);
+    const ledgerCount = await prisma.taxLedgerEntry.count({ where: { entityId: ENTITY_ID } });
+    expect(ledgerCount).toBe(0);
+  });
+
   test("category rules still apply when legacy metadata booleans are false without manual override", async () => {
     const journal = makeJournal({
       id: "legacy-bool-001",
@@ -423,5 +464,138 @@ describe("tax v2 ledger-first engine", () => {
       },
     });
     expect(taxRows.length).toBe(0);
+  });
+
+  test("report mode previews tax sync without applying writes", async () => {
+    const journal = makeJournal({
+      id: "report-mode-001",
+      date: "2026-03-01",
+      narration: "Report mode sale preview",
+      transactionType: "sale",
+      totalDebits: 107500,
+      totalCredits: 107500,
+      lines: [
+        { accountCode: "1020", accountName: "Bank", debit: 107500, credit: 0 },
+        { accountCode: "4000", accountName: "Sales", debit: 0, credit: 100000 },
+        { accountCode: "2200", accountName: "Output VAT Payable", debit: 0, credit: 7500 },
+      ],
+      metadata: { taxMode: "exclusive", taxCategory: "revenue" },
+    });
+
+    const report = await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "backfill",
+      mode: "report",
+    });
+
+    expect(report.reportOnly).toBe(true);
+    expect(report.upsertedTransactions).toBe(0);
+    expect(report.report?.wouldUpsertTransactions).toBe(1);
+
+    const ledgerCount = await prisma.taxLedgerEntry.count({ where: { entityId: ENTITY_ID } });
+    expect(ledgerCount).toBe(0);
+
+    const syncRun = await prisma.taxSyncRun.findUnique({ where: { id: report.syncRunId } });
+    expect(syncRun).not.toBeNull();
+    expect(syncRun?.mode).toBe("report");
+  });
+
+  test("apply mode reports duplicates pruned and stale rows removed", async () => {
+    const journal = makeJournal({
+      id: "integrity-counts-001",
+      date: "2026-03-01",
+      narration: "Integrity count sample",
+      transactionType: "sale",
+      totalDebits: 107500,
+      totalCredits: 107500,
+      lines: [
+        { accountCode: "1020", accountName: "Bank", debit: 107500, credit: 0 },
+        { accountCode: "4000", accountName: "Sales", debit: 0, credit: 100000 },
+        { accountCode: "2200", accountName: "Output VAT Payable", debit: 0, credit: 7500 },
+      ],
+      metadata: { taxMode: "exclusive", taxCategory: "revenue" },
+    });
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+
+    const canonicalTxId = `tx-${ENTITY_ID}-${journal.id}`;
+    const canonicalVat = await prisma.taxLedgerEntry.findUnique({
+      where: { id: `tle-${ENTITY_ID}-${journal.id}-VAT-output` },
+    });
+    expect(canonicalVat).not.toBeNull();
+
+    await prisma.transaction.create({
+      data: {
+        id: `legacy-dup-${journal.id}`,
+        entityId: ENTITY_ID,
+        date: new Date("2026-03-01T00:00:00.000Z"),
+        description: "Legacy duplicate",
+        amount: 100000,
+        currency: "NGN",
+        type: "sale",
+        source: "manual",
+        status: "posted",
+        metadata: JSON.stringify({ journalId: journal.id }),
+      },
+    });
+
+    const duplicateRun = await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [journal],
+      source: "live_posting",
+    });
+    expect(duplicateRun.duplicatesPruned).toBeGreaterThanOrEqual(1);
+
+    await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [
+        makeJournal({
+          id: journal.id,
+          date: journal.date,
+          narration: journal.narration,
+          transactionType: journal.transactionType,
+          status: "voided",
+          totalDebits: journal.totalDebits,
+          totalCredits: journal.totalCredits,
+          lines: journal.lines,
+          metadata: journal.metadata,
+        }),
+      ],
+      source: "live_posting",
+    });
+
+    await prisma.taxLedgerEntry.create({
+      data: {
+        id: `stale-${journal.id}-VAT-output`,
+        entityId: ENTITY_ID,
+        transactionId: canonicalTxId,
+        taxType: "VAT",
+        ruleSetId: canonicalVat!.ruleSetId,
+        periodId: canonicalVat!.periodId,
+        baseAmount: 100000,
+        taxAmount: 7500,
+        direction: "payable",
+        ledger: "output",
+        metadata: "{}",
+      },
+    });
+
+    const staleCleanupRun = await taxTransactionRepo.upsertJournalTransactions({
+      entityId: ENTITY_ID,
+      journals: [],
+      source: "live_posting",
+      fullSync: true,
+    });
+
+    expect(staleCleanupRun.staleRowsRemoved).toBeGreaterThanOrEqual(1);
+    const staleRow = await prisma.taxLedgerEntry.findUnique({
+      where: { id: `stale-${journal.id}-VAT-output` },
+    });
+    expect(staleRow).toBeNull();
   });
 });
