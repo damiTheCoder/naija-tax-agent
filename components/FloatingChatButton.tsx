@@ -1695,7 +1695,7 @@ _Ask me anything about bank reconciliation!_`;
                     playGoogleButtonClickSound();
                     setIsModalOpen(true);
                 }}
-                className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 -translate-x-[calc(100%+0.25rem)] lg:left-[calc(50%_+_7.5rem)] lg:-translate-x-1/2 z-40 flex items-center justify-center gap-2 bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-2.5 py-1.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 -translate-x-1/2 lg:left-[calc(50%_+_7.5rem)] lg:-translate-x-1/2 z-40 flex items-center justify-center gap-2 bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-2.5 py-1.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                 aria-label="Open chat"
             >
                 {/* Red badge for clarification */}

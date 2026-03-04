@@ -16,9 +16,13 @@ import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import PageSkeleton from "@/components/PageSkeleton";
-import MobileBottomNav from "@/components/MobileBottomNav";
 
 const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
+  ssr: false,
+  loading: () => null,
+});
+
+const MobileBottomNav = dynamic(() => import("@/components/MobileBottomNav"), {
   ssr: false,
   loading: () => null,
 });

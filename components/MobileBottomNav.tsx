@@ -2,62 +2,71 @@
 
 import { usePathname } from "next/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
-import { useMemo } from "react";
+import { NavIconBadge } from "@/components/NavIconBadge";
+import type { NavIcon } from "@/lib/navigation";
 
-const NAV_ITEMS: Array<{ label: string; href: string }> = [
+const NAV_ITEMS: Array<{ label: string; href: string; icon: NavIcon }> = [
     {
         label: "Home",
         href: "/accounting",
+        icon: "home",
     },
     {
         label: "Reports",
         href: "/accounting/workspace",
+        icon: "report",
     },
     {
         label: "Projections",
         href: "/accounting/projections",
+        icon: "trend",
     },
     {
         label: "Tax",
         href: "/tax/workspace",
+        icon: "calculator",
     },
 ];
 
 export default function MobileBottomNav() {
     const pathname = usePathname();
     const { navigateTo } = useNavigation();
-    const activeIndex = useMemo(
-        () =>
-            NAV_ITEMS.findIndex((item) =>
-                item.href === "/accounting" ? pathname === "/accounting" : pathname.startsWith(item.href)
-            ),
-        [pathname]
-    );
-    const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % NAV_ITEMS.length : 0;
-    const nextItem = NAV_ITEMS[nextIndex];
 
     return (
-        <button
-            type="button"
-            onClick={() => navigateTo(nextItem.href)}
-            className="fixed left-1/2 z-50 inline-flex h-11 w-11 translate-x-[1rem] items-center justify-center rounded-full bg-[#2264ff] text-white shadow-lg transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40 lg:hidden"
-            style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
-            aria-label="Go to next page"
-            title="Go to next page"
+        <nav
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white lg:hidden"
+            style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+            aria-label="Mobile navigation"
         >
-            <svg
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-            >
-                <path d="M5 12h14" />
-                <path d="m13 6 6 6-6 6" />
-            </svg>
-        </button>
+            <div className="grid grid-cols-4 px-2 py-1.5">
+                {NAV_ITEMS.map((item) => {
+                    const isActive =
+                        item.href === "/accounting"
+                            ? pathname === "/accounting"
+                            : pathname.startsWith(item.href);
+
+                    return (
+                        <button
+                            key={item.href}
+                            type="button"
+                            onClick={() => {
+                                if (pathname !== item.href) navigateTo(item.href);
+                            }}
+                            className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors ${
+                                isActive ? "text-[#2264ff]" : "text-[#8f8f8f]"
+                            }`}
+                            aria-current={isActive ? "page" : undefined}
+                            aria-label={item.label}
+                            title={item.label}
+                        >
+                            <NavIconBadge icon={item.icon} className="h-[20px] w-[20px]" />
+                            <span className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}>
+                                {item.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </nav>
     );
 }
