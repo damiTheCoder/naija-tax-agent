@@ -17,6 +17,8 @@ import {
     type UnifiedCustomActionExecutor
 } from "@/lib/agent/unifiedClient";
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
+import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
+import { buildWorkspaceRouteCatalogText, findWorkspacePageByRoute } from "@/lib/agent/workspaceRegistry";
 import {
     ChatConversation,
     ChatConversationMessage,
@@ -79,12 +81,31 @@ const PROJECTIONS_UPDATE_EVENT = "ql:projections-assumptions-update";
 const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
 const AGENT_CHAT_MODE_STORAGE_KEY = "ql::agent-chat-mode";
 const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
+const HAS_WORKSPACE_ROUTE_CATALOG = buildWorkspaceRouteCatalogText({ maxItems: 1 }).trim().length > 0;
 
 type ChatModalOpenDetail = {
     module?: string;
     prompt?: string;
     newChat?: boolean;
 };
+
+function toPlainChatText(content: string): string {
+    if (!content) return "";
+
+    return content
+        .replace(/\r\n/g, "\n")
+        .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, "").trim())
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/__(.*?)__/g, "$1")
+        .replace(/(^|[\s(])\*(?!\s)([^*]+?)\*(?=[\s).,!?]|$)/g, "$1$2")
+        .replace(/(^|[\s(])_(?!\s)([^_]+?)_(?=[\s).,!?]|$)/g, "$1$2")
+        .replace(/^\s*>\s?/gm, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
 
 function readProjectionsContextSnapshot(): string {
     if (typeof window === "undefined") return "";
@@ -310,6 +331,32 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "indigo"
     },
+    budgeting: {
+        id: "budgeting",
+        name: "Budgeting",
+        title: "Budgeting Assistant",
+        placeholder: "Ask about budgets and forecasts...",
+        greeting: "Hi! I can help with budgets, scenarios, variances, and forecasting workflows.",
+        examples: [
+            '"Create a monthly marketing budget"',
+            '"Show budget vs actual for this month"',
+            '"Open variance analysis"'
+        ],
+        color: "blue"
+    },
+    marketplace: {
+        id: "marketplace",
+        name: "Marketplace",
+        title: "Marketplace Assistant",
+        placeholder: "Ask about integrations and products...",
+        greeting: "Hi! I can help you navigate products and integrations in the marketplace.",
+        examples: [
+            '"Open my marketplace profile"',
+            '"Show available integrations"',
+            '"Connect a new service"'
+        ],
+        color: "blue"
+    },
     personal: {
         id: "personal",
         name: "Personal",
@@ -454,6 +501,14 @@ function getPageAssistantProfile(pathname: string): PageAssistantProfile {
             crossPagePolicy: "If user gives accounting or tax requests, run those module actions in background while preserving wallet context.",
         };
     }
+    const pageDefinition = findWorkspacePageByRoute(route);
+    if (pageDefinition) {
+        return {
+            label: pageDefinition.label,
+            guidance: `${pageDefinition.purpose} Key functions: ${pageDefinition.keyFunctions.join(", ")}.`,
+            crossPagePolicy: `${pageDefinition.executionLogic} Always route to the best page before performing actions.`,
+        };
+    }
     return {
         label: "Workspace",
         guidance: "Use page context and conversation intent to decide execution steps.",
@@ -572,6 +627,7 @@ function buildGlobalDataSnapshot(): string {
 
 function buildPageContextSnapshot(pathname: string, moduleId: string): string {
     const profile = getPageAssistantProfile(pathname);
+    const pageDefinition = findWorkspacePageByRoute(pathname);
     const lines = [
         `Active route: ${pathname || "/"}`,
         `Active module id: ${moduleId || "general"}`,
@@ -579,6 +635,23 @@ function buildPageContextSnapshot(pathname: string, moduleId: string): string {
         `Page guidance: ${profile.guidance}`,
         `Cross-page policy: ${profile.crossPagePolicy}`,
     ];
+    if (pageDefinition) {
+        lines.push(
+            `Active page logic: ${pageDefinition.executionLogic}`,
+            `Active page functions: ${pageDefinition.keyFunctions.join(", ")}`
+        );
+    }
+
+    const moduleRouteCatalog = buildWorkspaceRouteCatalogText({
+        moduleFilter: pageDefinition?.module || moduleId,
+        maxItems: 18,
+    });
+    if (moduleRouteCatalog.trim()) {
+        lines.push(`Module route map:\n${moduleRouteCatalog}`);
+    }
+    if (HAS_WORKSPACE_ROUTE_CATALOG) {
+        lines.push("Global route intelligence: full page-function catalog loaded for cross-module execution.");
+    }
 
     const globalDataSnapshot = buildGlobalDataSnapshot();
     if (globalDataSnapshot.trim()) {
@@ -607,38 +680,21 @@ function createIntroMessage(module: ModuleConfig, pathname: string): ChatMessage
 
 function resolvePreferredAgentRoute(message: string, currentPath: string): string | null {
     const lower = message.toLowerCase();
-    const inAccounting = currentPath.startsWith("/accounting");
-    const inTax = currentPath.startsWith("/tax") || currentPath.startsWith("/tax-tools");
-    const accountingIntent = /\b(accounting|journal|ledger|trial balance|income statement|balance sheet|cash flow|invoice|receipt|payroll|reconciliation|transaction)\b/.test(lower);
-    const taxIntent = /\b(tax|vat|wht|cit|paye|firs|filing|return)\b/.test(lower);
+    const navigationIntent =
+        /\b(page|link|url|where|go to|open|navigate|take me|which page|location|switch to|visit|move to)\b/.test(lower);
+    const actionIntent =
+        /\b(post|record|create|add|run|process|review|check|analy[sz]e|calculate|compute|connect|sync|classify|file|submit|upload|download|export|print|approve|pay|lock|unlock|set|update|change)\b/.test(
+            lower
+        );
+    const pageIntent =
+        /\b(report|statement|trial balance|balance sheet|cash flow|projections?|forecast|model|reconcil|bank connection|payroll|invoice|receipt|vendor|bill|approval|period|recurring|fx|dimension|tax|wallet|budget|cashflow|marketplace|supersheet|profile)\b/.test(
+            lower
+        );
 
-    if (inAccounting || accountingIntent) {
-        if (/(reconcil|bank statement|match transactions?)/.test(lower)) return "/accounting/reconciliation";
-        if (/(projection|forecast|model|scenario)/.test(lower)) return "/accounting/projections";
-        if (/(fixed asset|assets register|asset register|asset schedule)/.test(lower)) return "/accounting/assets";
-        if (/(depreciation|depreciate|accumulated depreciation)/.test(lower)) return "/accounting/depreciation";
-        if (/(invoice|bill customer|quotation)/.test(lower)) return "/accounting/invoices";
-        if (/(receipt|expense receipt|upload receipt)/.test(lower)) return "/accounting/receipts";
-        if (/(payroll|employee salary|salary run|employee tax)/.test(lower)) return "/accounting/payroll";
-        if (/(bank account|connect bank|bank link)/.test(lower)) return "/accounting/banks";
-        if (/(report|financial statement|trial balance|p&l|profit|balance sheet|cash flow)/.test(lower)) return "/accounting/reports";
-        if (/(workspace|ledger|journal entries|tax payables|cashbook)/.test(lower)) return "/accounting/workspace";
-        if (/(post|record|create|journal|entry|transaction|sold|paid|received|buy|bought|expense|purchase)/.test(lower)) return "/accounting";
-    }
-
-    if (inTax || taxIntent) {
-        if (/(calendar|deadline|reminder)/.test(lower)) return "/tax/calendar";
-        if (/(payment|pay|receipt|outstanding)/.test(lower)) return "/tax/payments";
-        if (/(file tax|submit|upload filing|download return|tax authority)/.test(lower)) return "/tax/file-taxes";
-        if (/(return|filed|draft|ready)/.test(lower)) return "/tax/returns";
-        if (/(adjustment|deduction|allowance|tax credit|loss carryforward)/.test(lower)) return "/tax/adjustments";
-        if (/(setting|jurisdiction|rate|fiscal year|company info)/.test(lower)) return "/tax/settings";
-        if (/(transaction|classif|bulk edit|vat eligible|withholding applicable)/.test(lower)) return "/tax/transactions";
-        if (/(compute|computation|cit|vat|wht|paye|education tax|tax payable)/.test(lower)) return "/tax/computation";
-        return "/tax/workspace";
-    }
-
-    return null;
+    if (!navigationIntent && !actionIntent && !pageIntent) return null;
+    const resolved = resolveWorkspaceRouteFromText(message, currentPath, getModuleFromPath(currentPath).id);
+    if (!resolved || resolved.route === currentPath) return null;
+    return resolved.route;
 }
 
 function extractDownloadAttachment(data: unknown): ChatAttachmentDownload | null {
@@ -675,6 +731,7 @@ export default function FloatingChatButton() {
     const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
+    const [mobileConversationMenuPosition, setMobileConversationMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
@@ -775,6 +832,7 @@ export default function FloatingChatButton() {
         revokeBlobUrls();
         setActiveConversationId(null);
         setOpenConversationMenuId(null);
+        setMobileConversationMenuPosition(null);
         setMessages([createIntroMessage(currentModule, pathname)]);
         setInputValue("");
         setPlanSource("fallback");
@@ -786,6 +844,7 @@ export default function FloatingChatButton() {
         const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
         if (!conversation) return;
         setOpenConversationMenuId(null);
+        setMobileConversationMenuPosition(null);
         if (conversation.route && conversation.route !== pathname) {
             selectChatConversation(conversation.id);
             router.push(conversation.route);
@@ -798,8 +857,32 @@ export default function FloatingChatButton() {
         setIsModalOpen(true);
     }, [openConversation, pathname, router]);
 
-    const handleToggleConversationMenu = useCallback((conversationId: string) => {
-        setOpenConversationMenuId((current) => (current === conversationId ? null : conversationId));
+    const handleToggleConversationMenu = useCallback((conversationId: string, trigger?: HTMLElement | null) => {
+        const menuWidth = 132;
+        const viewportPadding = 8;
+        setOpenConversationMenuId((current) => {
+            const next = current === conversationId ? null : conversationId;
+            if (!next) {
+                setMobileConversationMenuPosition(null);
+                return null;
+            }
+
+            if (trigger && typeof window !== "undefined" && window.innerWidth < 1024) {
+                const rect = trigger.getBoundingClientRect();
+                const left = Math.min(
+                    Math.max(viewportPadding, rect.right - menuWidth),
+                    window.innerWidth - menuWidth - viewportPadding
+                );
+                const top = Math.max(
+                    viewportPadding,
+                    Math.min(rect.bottom + 8, window.innerHeight - 96)
+                );
+                setMobileConversationMenuPosition({ top, left });
+            } else {
+                setMobileConversationMenuPosition(null);
+            }
+            return next;
+        });
     }, []);
 
     const handleRenameConversation = useCallback(async (conversationId: string) => {
@@ -820,6 +903,7 @@ export default function FloatingChatButton() {
         if (!updated) return;
 
         setOpenConversationMenuId(null);
+        setMobileConversationMenuPosition(null);
         await refreshConversationList();
 
         if (activeConversationId === conversationId) {
@@ -839,6 +923,7 @@ export default function FloatingChatButton() {
         if (!deleted) return;
 
         setOpenConversationMenuId(null);
+        setMobileConversationMenuPosition(null);
         await refreshConversationList();
 
         if (activeConversationId === conversationId) {
@@ -1021,6 +1106,12 @@ export default function FloatingChatButton() {
         return () => {
             document.removeEventListener("mousedown", handlePointerDown);
         };
+    }, [openConversationMenuId]);
+
+    useEffect(() => {
+        if (!openConversationMenuId) {
+            setMobileConversationMenuPosition(null);
+        }
     }, [openConversationMenuId]);
 
     // Listen for clarification requests
@@ -1553,7 +1644,8 @@ _Ask me anything about bank reconciliation!_`;
             if (attachment?.url && attachment.url.startsWith("blob:")) {
                 blobUrlsRef.current.push(attachment.url);
             }
-            const assistantMessage = buildChatMessage("assistant", content, attachment);
+            const cleanContent = toPlainChatText(content);
+            const assistantMessage = buildChatMessage("assistant", cleanContent, attachment);
             workingMessages = [...workingMessages, assistantMessage];
             setMessages(workingMessages);
             const savedConversationId = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
@@ -1734,49 +1826,38 @@ _Ask me anything about bank reconciliation!_`;
                                     animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
                                 }}
                             />
-                            <div className="relative m-[3px] rounded-[25px] bg-gray-100 dark:bg-[#1a1a1a] flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
+                            <div className="relative m-[3px] rounded-[25px] bg-white flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
                                 {/* Header */}
                                 <div className="flex items-center gap-3 px-4 sm:px-5 py-4">
                                     <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
                                         {currentModule.title}
                                     </h3>
-                                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
+                                    <span className={`hidden lg:inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
                                         {currentModule.name}
                                     </span>
-                                    <div className="flex items-center">
-                                        <div className="relative">
-                                            <select
-                                                value={agentChatMode}
-                                                onChange={(e) => setAgentChatMode(e.target.value as AgentChatMode)}
-                                                className="h-7 w-[108px] appearance-none rounded-full border border-gray-300 bg-white pl-6 pr-6 text-[10px] font-semibold text-gray-700 outline-none transition-colors focus:border-blue-400"
-                                                aria-label="Assistant mode"
-                                            >
-                                                <option value="response-only">Response</option>
-                                                <option value="full-agentic">Agentic</option>
-                                            </select>
-                                            <svg
-                                                className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                                aria-hidden="true"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l2.4 4.9L20 9l-4 3.9.9 5.5L12 16l-4.9 2.4.9-5.5L4 9l5.6-1.1L12 3z" />
-                                            </svg>
-                                            <svg
-                                                className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-500"
-                                                viewBox="0 0 20 20"
-                                                fill="currentColor"
-                                                aria-hidden="true"
-                                            >
-                                                <path
-                                                    fillRule="evenodd"
-                                                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.156l3.71-3.925a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                                                    clipRule="evenodd"
-                                                />
-                                            </svg>
-                                        </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#2264ff]">
+                                            {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setAgentChatMode((prev) =>
+                                                    prev === "response-only" ? "full-agentic" : "response-only"
+                                                )
+                                            }
+                                            role="switch"
+                                            aria-checked={agentChatMode === "full-agentic"}
+                                            className="relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
+                                            style={{ background: "#2264ff" }}
+                                            aria-label="Toggle assistant mode"
+                                            title="Toggle assistant mode"
+                                        >
+                                            <span
+                                                className={`inline-flex h-5 w-5 rounded-full bg-white transition-transform duration-300 ${agentChatMode === "full-agentic" ? "translate-x-5" : "translate-x-1"
+                                                    }`}
+                                            />
+                                        </button>
                                     </div>
                                     <button
                                         onClick={() => setIsModalOpen(false)}
@@ -1791,10 +1872,10 @@ _Ask me anything about bank reconciliation!_`;
                                     {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
                                 </div>
                                 <div className="px-4 sm:px-5 pb-3 lg:hidden">
-                                    <div className="flex items-center gap-2 overflow-x-auto">
+                                    <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible hide-scrollbar">
                                         <button
                                             onClick={handleStartNewChat}
-                                            className="shrink-0 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                            className="shrink-0 rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-300"
                                         >
                                             New chat
                                         </button>
@@ -1802,9 +1883,9 @@ _Ask me anything about bank reconciliation!_`;
                                             <div
                                                 key={conversation.id}
                                                 data-conversation-menu="true"
-                                                className={`relative shrink-0 flex max-w-[180px] items-center rounded-full border ${activeConversationId === conversation.id
-                                                    ? "border-blue-400 bg-blue-50 text-blue-700"
-                                                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                                                className={`relative shrink-0 flex max-w-[180px] items-center rounded-full ${activeConversationId === conversation.id
+                                                    ? "bg-gray-300 text-blue-700"
+                                                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
                                                     }`}
                                             >
                                                 <button
@@ -1816,7 +1897,7 @@ _Ask me anything about bank reconciliation!_`;
                                                 <button
                                                     onClick={(event) => {
                                                         event.stopPropagation();
-                                                        handleToggleConversationMenu(conversation.id);
+                                                        handleToggleConversationMenu(conversation.id, event.currentTarget);
                                                     }}
                                                     className="shrink-0 rounded-r-full pr-2 text-gray-500 hover:text-gray-700"
                                                     aria-label={`Chat options for ${conversation.title}`}
@@ -1827,25 +1908,29 @@ _Ask me anything about bank reconciliation!_`;
                                                         <circle cx="18" cy="12" r="1.8" />
                                                     </svg>
                                                 </button>
-                                                {openConversationMenuId === conversation.id ? (
-                                                    <div className="absolute right-0 top-8 z-30 min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-                                                        <button
-                                                            onClick={() => handleRenameConversation(conversation.id)}
-                                                            className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
-                                                        >
-                                                            Rename chat
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteConversation(conversation.id)}
-                                                            className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                ) : null}
                                             </div>
                                         ))}
                                     </div>
+                                    {openConversationMenuId && mobileConversationMenuPosition ? (
+                                        <div
+                                            data-conversation-menu="true"
+                                            className="fixed z-[160] min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+                                            style={{ top: mobileConversationMenuPosition.top, left: mobileConversationMenuPosition.left }}
+                                        >
+                                            <button
+                                                onClick={() => handleRenameConversation(openConversationMenuId)}
+                                                className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                            >
+                                                Rename chat
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteConversation(openConversationMenuId)}
+                                                className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    ) : null}
                                 </div>
 
                                 <div className="flex min-h-0 flex-1">
@@ -1882,7 +1967,7 @@ _Ask me anything about bank reconciliation!_`;
                                                             <button
                                                                 onClick={(event) => {
                                                                     event.stopPropagation();
-                                                                    handleToggleConversationMenu(conversation.id);
+                                                                    handleToggleConversationMenu(conversation.id, event.currentTarget);
                                                                 }}
                                                                 className="mt-0.5 shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
                                                                 aria-label={`Chat options for ${conversation.title}`}
@@ -1930,7 +2015,7 @@ _Ask me anything about bank reconciliation!_`;
                                                         </div>
                                                     ) : (
                                                         <div className="inline-block max-w-[90%]">
-                                                            <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-gray-100 text-gray-900 dark:bg-[#1a1a1a] dark:text-gray-100">
+                                                            <div className="px-1 py-1 text-sm leading-relaxed whitespace-pre-wrap text-gray-900">
                                                                 {msg.content}
                                                             </div>
                                                             {msg.attachment?.kind === "download" && (

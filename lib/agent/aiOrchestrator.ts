@@ -3,6 +3,7 @@ import { buildModuleContext, type BuiltModuleContext } from "@/lib/agent/context
 import { AIService, type GeminiPlannerResponse } from "@/lib/agent/aiService";
 import { GeminiClient } from "@/lib/agent/geminiClient";
 import { getToolByName, type ToolRequest } from "@/lib/agent/toolRegistry";
+import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
 
 type ProjectionAssumptionMeta = {
   key: string;
@@ -179,32 +180,19 @@ function extractProjectionInputTarget(message: string): string | null {
   return cleaned || null;
 }
 
-function inferNavigationRoute(message: string, currentRoute: string): string | null {
+function inferNavigationRoute(message: string, currentRoute: string, moduleHint?: string): string | null {
   const lower = normalizeIntentText(message);
-  if (!/(go to|open|navigate|take me to)/.test(lower)) return null;
+  const hasNavigationCue = /\b(go to|open|navigate|take me to|switch to|visit|move to|show page)\b/.test(lower);
+  const hasPageIntentCue =
+    hasNavigationCue ||
+    /\b(report|statement|trial balance|balance sheet|cash flow|projections?|forecast|model|reconcil|bank connection|payroll|invoice|receipt|vendors?|bills?|approvals?|period lock|recurring|fx|dimension|tax|wallet|budget|cashflow|marketplace|supersheet|profile)\b/.test(
+      lower
+    );
+  if (!hasPageIntentCue) return null;
 
-  if (/\bprojection|forecast|model\b/.test(lower)) return "/accounting/projections";
-  if (/\bvendor|supplier\b/.test(lower)) return "/accounting/vendors";
-  if (/\bbill|accounts payable|ap\b/.test(lower)) return "/accounting/bills";
-  if (/\bapproval|approve queue\b/.test(lower)) return "/accounting/approvals";
-  if (/\bperiod lock|close books|close period\b/.test(lower)) return "/accounting/periods";
-  if (/\brecurring|scheduled entries\b/.test(lower)) return "/accounting/recurring";
-  if (/\bexchange rate|fx\b/.test(lower)) return "/accounting/fx";
-  if (/\bdimension|class tracking|location tracking\b/.test(lower)) return "/accounting/dimensions";
-  if (/\baction log|execution log|agent log|receipt log\b/.test(lower)) return "/accounting/action-logs";
-  if (/\bfixed asset|asset register|assets page\b/.test(lower)) return "/accounting/assets";
-  if (/\bdepreciation|accumulated depreciation\b/.test(lower)) return "/accounting/depreciation";
-  if (/\breconciliation\b/.test(lower)) return "/accounting/reconciliation";
-  if (/\breport\b/.test(lower)) return "/accounting/reports";
-  if (/\btax\b/.test(lower)) return "/tax-tools";
-  if (/\bwallet\b/.test(lower)) return "/wallet";
-  if (/\baccounting\b/.test(lower)) return "/accounting";
-  if (/\bpersonal\b/.test(lower)) return "/personal";
-  if (/\bdashboard\b/.test(lower)) {
-    return currentRoute.startsWith("/personal") ? "/personal/dashboard" : "/dashboard";
-  }
-
-  return null;
+  const resolved = resolveWorkspaceRouteFromText(message, currentRoute, moduleHint);
+  if (!resolved?.route || resolved.route === currentRoute) return null;
+  return resolved.route;
 }
 
 function normalizeIntentText(message: string): string {
@@ -578,7 +566,7 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
     }
   }
 
-  const navigateRoute = inferNavigationRoute(message, context.route);
+  const navigateRoute = inferNavigationRoute(message, context.route, context.module);
   if (navigateRoute) {
     addRequest({
       name: "navigate",

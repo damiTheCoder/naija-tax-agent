@@ -65,6 +65,7 @@ const EFFECTFUL_ACTION_TYPES = new Set<UnifiedAgentAction["type"]>([
   "wallet.fund",
   "projections.updateAssumption",
   "projections.resetAssumptions",
+  "navigate",
   "ui.operate",
 ]);
 
@@ -765,6 +766,10 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   const navigationIntent =
     /\b(page|link|url|where|go to|open|navigate|take me|which page|location)\b/.test(lower) ||
     /\bupload (it|this|that)\b/.test(lower);
+  const pageScopedIntent =
+    /\b(report|statement|trial balance|balance sheet|cash flow|projection|forecast|model|reconcil|bank connection|payroll|invoice|receipt|vendor|bill|approval|period|recurring|fx|dimension|tax|wallet|budget)\b/.test(
+      lower
+    );
   const recentConversation = (request.conversation || [])
     .slice(-6)
     .map((item) => item.content)
@@ -785,10 +790,11 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
 
   if (
     routeSuggestion &&
-    navigationIntent &&
+    (navigationIntent || (explicitActionIntent && pageScopedIntent)) &&
     !walletIntent &&
     !transactionIntent &&
-    !explainOnlyIntent
+    !explainOnlyIntent &&
+    routeSuggestion.route !== request.route
   ) {
     actions.push({
       type: "navigate",
@@ -1974,7 +1980,8 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
     const persistedToServer =
       data.source === "prisma" ||
       (data.prismaSync?.enabled === true && data.prismaSync.success === true);
-    if (!persistedToServer) {
+    const postedLocally = data.source === "local" || Boolean(data.journalEntry?.id);
+    if (!persistedToServer && !postedLocally) {
       return {
         type: "accounting.postTransaction",
         success: false,
@@ -1993,6 +2000,9 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
     const mirrorPayload = toAccountingUiMirrorPayload(description);
     const mirrorNote = mirrorPayload ? await runAccountingUiMirror(mirrorPayload) : "";
     const journalId = data.journalEntry?.id;
+    const localStorageNote = !persistedToServer
+      ? "\nNote: Transaction posted locally. Server confirmation is pending."
+      : "";
     const syncWarning =
       data.prismaSync?.enabled && data.prismaSync.success === false
         ? `\nWarning: Prisma sync pending (${data.prismaSync.error || "unknown error"}).`
@@ -2001,7 +2011,7 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
     return {
       type: "accounting.postTransaction",
       success: true,
-      message: `${baseMessage}${formatReceiptTail(data.receipt)}${syncWarning}${mirrorNote ? `\n${mirrorNote}` : ""}`,
+      message: `${baseMessage}${formatReceiptTail(data.receipt)}${localStorageNote}${syncWarning}${mirrorNote ? `\n${mirrorNote}` : ""}`,
       data,
     };
   } catch (error) {

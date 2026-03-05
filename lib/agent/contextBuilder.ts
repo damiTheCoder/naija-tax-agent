@@ -1,6 +1,7 @@
 import { buildContextSnippet, retrieveKnowledge } from "@/lib/agent/rag";
 import type { AgentConversationMessage, UnifiedAgentRequest } from "@/lib/agent/unifiedTypes";
 import { listToolNamesForDomain, type ModuleDomain } from "@/lib/agent/toolRegistry";
+import { buildWorkspaceRouteCatalogText, findWorkspacePageByRoute } from "@/lib/agent/workspaceRegistry";
 
 type ModuleProfile = {
   domain: ModuleDomain;
@@ -14,6 +15,7 @@ type ModuleProfile = {
 const MAX_SNAPSHOT_CHARS = 2800;
 const MAX_UI_SNAPSHOT_CHARS = 2200;
 const MAX_MEMORY_CHARS = 1800;
+const MAX_ROUTE_CATALOG_CHARS = 3400;
 const MAX_MESSAGES = 12;
 
 const MODULE_PROFILES: ModuleProfile[] = [
@@ -31,7 +33,14 @@ const MODULE_PROFILES: ModuleProfile[] = [
     description: "Financial reporting, analytics, scenario modeling, and projection analysis.",
     relevantEntities: ["Report", "Projection", "Scenario", "Metric", "Assumption"],
     databaseEntities: ["reports", "projection_runs", "projection_assumptions", "metrics"],
-    routes: ["/accounting/reports", "/accounting/projections", "/accounting/projections/modelling", "/cashflow-intelligence"],
+    routes: [
+      "/accounting/reports",
+      "/accounting/projections",
+      "/accounting/projections/modelling",
+      "/cashflow-intelligence",
+      "/budgeting",
+      "/dashboard",
+    ],
   },
   {
     domain: "customer",
@@ -55,7 +64,7 @@ const MODULE_PROFILES: ModuleProfile[] = [
     description: "Tax, treasury, compliance, and system workflow operations.",
     relevantEntities: ["TaxRecord", "ComplianceTask", "RunwayMetric", "SystemAction"],
     databaseEntities: ["tax_transactions", "compliance_records", "system_events"],
-    routes: ["/tax", "/tax-tools", "/cashflow-intelligence/chat"],
+    routes: ["/tax", "/tax-tools", "/cashflow-intelligence/chat", "/marketplace", "/profile", "/supersheet", "/personal/apps"],
   },
 ];
 
@@ -87,7 +96,7 @@ function findProfileByModule(module?: string): ModuleProfile | null {
   if (["accounting", "reconciliation", "financial", "personal", "general"].includes(normalized)) {
     return MODULE_PROFILES.find((profile) => profile.domain === "financial") || null;
   }
-  if (["reports", "reporting", "projections", "dashboard", "cashflow"].includes(normalized)) {
+  if (["reports", "reporting", "projections", "dashboard", "cashflow", "budgeting"].includes(normalized)) {
     return MODULE_PROFILES.find((profile) => profile.domain === "reporting") || null;
   }
   if (["customer", "customers", "crm"].includes(normalized)) {
@@ -152,6 +161,8 @@ export interface BuiltModuleContext {
   moduleLabel: string;
   moduleDescription: string;
   route: string;
+  activePageContext: string;
+  routeCatalog: string;
   availableFunctions: string[];
   relevantEntities: string[];
   databaseEntities: string[];
@@ -173,17 +184,37 @@ export function buildModuleContext(request: UnifiedAgentRequest): BuiltModuleCon
   const byModule = findProfileByModule(request.module);
   const byRoute = findProfileByRoute(route);
   const profile = byModule || byRoute || MODULE_PROFILES.find((item) => item.domain === "operations")!;
+  const activePage = findWorkspacePageByRoute(route);
 
   const objective = truncateText(typeof request.objective === "string" ? request.objective : request.message || "", 260);
   const memorySnapshot = truncateText(typeof request.memorySnapshot === "string" ? request.memorySnapshot : "", MAX_MEMORY_CHARS);
   const contextSnapshot = truncateText(typeof request.contextSnapshot === "string" ? request.contextSnapshot : "", MAX_SNAPSHOT_CHARS);
   const uiSnapshot = truncateText(typeof request.uiSnapshot === "string" ? request.uiSnapshot : "", MAX_UI_SNAPSHOT_CHARS);
+  const routeCatalog = truncateText(
+    [
+      "Workspace route capability catalog:",
+      buildWorkspaceRouteCatalogText({
+        moduleFilter: activePage?.module || request.module || undefined,
+        maxItems: 18,
+      }),
+      "Cross-module route catalog:",
+      buildWorkspaceRouteCatalogText({ maxItems: 48 }),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    MAX_ROUTE_CATALOG_CHARS
+  );
+  const activePageContext = activePage
+    ? `${activePage.label} (${activePage.route}) | purpose: ${activePage.purpose} | logic: ${activePage.executionLogic}`
+    : `Unknown page for route ${route}. Use route catalog for best match.`;
 
   return {
     module: profile.domain,
     moduleLabel: profile.label,
     moduleDescription: `${profile.description} Cross-page execution is enabled when user intent maps to another module.`,
     route,
+    activePageContext,
+    routeCatalog,
     availableFunctions: resolveCrossDomainFunctions(profile.domain),
     relevantEntities: profile.relevantEntities,
     databaseEntities: profile.databaseEntities,
