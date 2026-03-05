@@ -30,8 +30,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-    processTransaction,
-    processTransactions,
+    processTransactionWithAI,
+    processTransactionsWithAI,
 } from "@/lib/banking/transactionPipeline";
 import type {
     InboundBankTransaction,
@@ -43,10 +43,7 @@ import type {
 // WEBHOOK SIGNATURE VERIFICATION
 // =============================================================================
 
-async function verifyWebhookSignature(
-    request: NextRequest,
-    body: string
-): Promise<boolean> {
+async function verifyWebhookSignature(request: NextRequest): Promise<boolean> {
     const monoSignature = request.headers.get("x-mono-signature");
     const okraSignature = request.headers.get("x-okra-signature");
 
@@ -160,7 +157,7 @@ export async function POST(request: NextRequest) {
     const bodyText = await request.text();
 
     // Verify webhook signature
-    const isValid = await verifyWebhookSignature(request, bodyText);
+    const isValid = await verifyWebhookSignature(request);
     if (!isValid) {
         return NextResponse.json(
             { success: false, error: "Invalid webhook signature" },
@@ -220,7 +217,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 if (transactions.length === 1) {
-                    const result = processTransaction(transactions[0], options);
+                    const result = await processTransactionWithAI(transactions[0], options);
                     return NextResponse.json({
                         success: result.success,
                         data: {
@@ -234,7 +231,7 @@ export async function POST(request: NextRequest) {
                     });
                 }
 
-                const batchResult = processTransactions(transactions, options);
+                const batchResult = await processTransactionsWithAI(transactions, options);
                 return NextResponse.json({
                     success: true,
                     data: {
@@ -259,7 +256,7 @@ export async function POST(request: NextRequest) {
                 });
 
                 if (transactions.length > 0) {
-                    const batchResult = processTransactions(transactions, options);
+                    const batchResult = await processTransactionsWithAI(transactions, options);
                     return NextResponse.json({
                         success: true,
                         event: "sync.completed",

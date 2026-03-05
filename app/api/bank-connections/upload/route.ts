@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { parseCSVStatement } from "@/lib/banking/transactionPipeline";
-import { processTransactions } from "@/lib/banking/transactionPipeline";
+import { processTransactionsWithAI } from "@/lib/banking/transactionPipeline";
 
 export async function POST(request: NextRequest) {
   try {
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Run through the full cross-module pipeline
-    const pipelineResult = processTransactions(transactions, {
+    const pipelineResult = await processTransactionsWithAI(transactions, {
       entityId: connectionId,
       autoPost: true,
       runTaxClassification: true,
@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
       updateCashflow: true,
       bankAccountCode: "1000",
     });
+    const transactionById = new Map(transactions.map((tx) => [tx.id, tx]));
 
     // Compute date range
     const dates = transactions.map((t) => new Date(t.date).getTime()).filter((d) => !isNaN(d));
@@ -141,11 +142,16 @@ export async function POST(request: NextRequest) {
         pipeline: {
           summary: pipelineResult.summary,
           details: pipelineResult.results.map((r) => ({
+            txDate: transactionById.get(r.bankTransactionId)?.date,
+            txDescription: transactionById.get(r.bankTransactionId)?.description,
+            txAmount: transactionById.get(r.bankTransactionId)?.amount,
+            txDirection: transactionById.get(r.bankTransactionId)?.direction,
             bankTxId: r.bankTransactionId,
             journalId: r.accounting.journalId,
             category: r.classification.categoryLabel,
             nature: r.classification.nature,
             confidence: Math.round(r.classification.confidence * 100),
+            source: r.classification.source,
             taxClassified: r.tax.classified,
             budgetCategory: r.budgeting.categoryMatch,
             warnings: r.warnings,

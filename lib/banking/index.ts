@@ -29,7 +29,9 @@ export type {
 // Pipeline (primary entry points)
 export {
     processTransaction,
+    processTransactionWithAI,
     processTransactions,
+    processTransactionsWithAI,
     parseCSVStatement,
 } from "./transactionPipeline";
 
@@ -37,6 +39,8 @@ export {
 export {
     classifyBankTransaction,
     classifyBankTransactions,
+    classifyBankTransactionWithAI,
+    classifyBankTransactionsWithAI,
 } from "./aiClassifier";
 
 // Router (for advanced / direct use)

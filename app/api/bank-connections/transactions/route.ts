@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processTransactions } from "@/lib/banking/transactionPipeline";
+import { processTransactionsWithAI } from "@/lib/banking/transactionPipeline";
 import type { InboundBankTransaction } from "@/lib/banking/types";
 
 /**
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Run through the full cross-module pipeline
-        const pipelineResult = processTransactions(toProcess, {
+        const pipelineResult = await processTransactionsWithAI(toProcess, {
             entityId: connectionId,
             autoPost: true,
             runTaxClassification: true,
@@ -264,6 +264,7 @@ export async function POST(request: NextRequest) {
             updateCashflow: true,
             bankAccountCode: "1000",
         });
+        const transactionById = new Map(toProcess.map((tx) => [tx.id, tx]));
 
         return NextResponse.json({
             success: true,
@@ -274,11 +275,16 @@ export async function POST(request: NextRequest) {
             pipeline: {
                 summary: pipelineResult.summary,
                 details: pipelineResult.results.map((r) => ({
+                    txDate: transactionById.get(r.bankTransactionId)?.date,
+                    txDescription: transactionById.get(r.bankTransactionId)?.description,
+                    txAmount: transactionById.get(r.bankTransactionId)?.amount,
+                    txDirection: transactionById.get(r.bankTransactionId)?.direction,
                     bankTxId: r.bankTransactionId,
                     journalId: r.accounting.journalId,
                     category: r.classification.categoryLabel,
                     nature: r.classification.nature,
                     confidence: Math.round(r.classification.confidence * 100),
+                    source: r.classification.source,
                     taxClassified: r.tax.classified,
                     budgetCategory: r.budgeting.categoryMatch,
                     warnings: r.warnings,

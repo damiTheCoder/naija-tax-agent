@@ -45,6 +45,34 @@ export interface BankProvider {
   features: string[];
 }
 
+type ClassificationSource = "rule" | "ai" | "hybrid";
+
+type RecentBankTransaction = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: "credit" | "debit";
+  narration?: string;
+  journalId?: string;
+  category?: string;
+  confidence?: number;
+  source?: ClassificationSource;
+};
+
+type PipelineDetail = {
+  bankTxId?: string;
+  journalId?: string;
+  txDate?: string;
+  txDescription?: string;
+  txAmount?: number;
+  txDirection?: "credit" | "debit";
+  category?: string;
+  nature?: string;
+  confidence?: number;
+  source?: ClassificationSource;
+};
+
 // =============================================================================
 // BANK DATA
 // =============================================================================
@@ -183,6 +211,24 @@ function BankLogoBadge({
   );
 }
 
+function mapPipelineDetailsToRecent(details: PipelineDetail[]): RecentBankTransaction[] {
+  return details
+    .slice(0, 8)
+    .map((detail, index): RecentBankTransaction => ({
+      id: detail.bankTxId || `synced-${index}`,
+      date: detail.txDate || new Date().toISOString(),
+      description: detail.txDescription || detail.category || "Bank transaction",
+      amount: Math.abs(Number(detail.txAmount || 0)),
+      type: detail.txDirection === "credit" ? "credit" : "debit",
+      narration: detail.nature,
+      journalId: detail.journalId,
+      category: detail.category,
+      confidence: typeof detail.confidence === "number" ? detail.confidence : undefined,
+      source: detail.source,
+    }))
+    .filter((tx) => tx.description || tx.journalId);
+}
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -201,14 +247,7 @@ export default function BankConnectionsPage() {
     expenses: number;
     message?: string;
   } | null>(null);
-  const [recentTransactions, setRecentTransactions] = useState<Array<{
-    id: string;
-    date: string;
-    description: string;
-    amount: number;
-    type: "credit" | "debit";
-    narration?: string;
-  }>>([]);
+  const [recentTransactions, setRecentTransactions] = useState<RecentBankTransaction[]>([]);
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -246,7 +285,17 @@ export default function BankConnectionsPage() {
         const res = await fetch("/api/bank-connections/transactions?connectionId=demo&limit=5");
         if (res.ok) {
           const data = await res.json();
-          setRecentTransactions(data.transactions || []);
+          const initial = Array.isArray(data.transactions)
+            ? data.transactions.map((tx: Record<string, unknown>, index: number): RecentBankTransaction => ({
+              id: String(tx.id || `tx-${index}`),
+              date: String(tx.date || new Date().toISOString()),
+              description: String(tx.description || tx.narration || "Transaction"),
+              amount: Math.abs(Number(tx.amount || 0)),
+              type: tx.type === "credit" ? "credit" : "debit",
+              narration: typeof tx.narration === "string" ? tx.narration : undefined,
+            }))
+            : [];
+          setRecentTransactions(initial);
         }
       } catch (e) {
         console.error(e);
@@ -380,14 +429,7 @@ export default function BankConnectionsPage() {
 
         // Populate recent transactions from pipeline results
         if (pipeline.details?.length > 0) {
-          const recent = pipeline.details.slice(0, 5).map((d: Record<string, string | number | string[]>, i: number) => ({
-            id: String(d.bankTxId || `synced-${i}`),
-            date: new Date().toISOString(),
-            description: String(d.category || "Transaction"),
-            amount: 0,
-            type: "debit" as const,
-            narration: String(d.nature || ""),
-          }));
+          const recent = mapPipelineDetailsToRecent(pipeline.details as PipelineDetail[]);
           setRecentTransactions(recent);
         }
 
@@ -473,6 +515,10 @@ export default function BankConnectionsPage() {
         expenses: result.pipeline?.summary?.totalDebits || 0,
         message: `${result.transactionsImported} transactions from ${uploadFile.name} processed across all modules`,
       });
+
+      if (result.pipeline?.details?.length > 0) {
+        setRecentTransactions(mapPipelineDetailsToRecent(result.pipeline.details as PipelineDetail[]));
+      }
 
       // Close modal and reset
       setShowUploadModal(false);
@@ -738,18 +784,18 @@ export default function BankConnectionsPage() {
         )}
       </div>
 
-      {/* Recent Transactions */}
+      {/* Recent Transactions / Posted Journals */}
       {recentTransactions.length > 0 && (
         <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Recent Transactions</h2>
+            <h2 className="text-base font-semibold text-gray-900">Processed Transactions</h2>
             <Link href="/accounting/workspace" className="text-sm text-[#2264ff] hover:underline font-medium">
               View all →
             </Link>
           </div>
           <div className="divide-y divide-gray-100">
             {recentTransactions.slice(0, 5).map((tx) => (
-              <div key={tx.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              <div key={`${tx.id}-${tx.journalId || "none"}`} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "credit" ? "bg-blue-50" : "bg-red-50"
                     }`}>
@@ -759,12 +805,31 @@ export default function BankConnectionsPage() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 text-sm">{tx.description}</p>
-                    <p className="text-xs text-gray-400">{formatDate(tx.date)}</p>
+                    <p className="text-xs text-gray-400">
+                      {formatDate(tx.date)}
+                      {tx.category ? ` • ${tx.category}` : ""}
+                      {tx.source ? ` • ${tx.source.toUpperCase()}` : ""}
+                    </p>
+                    {tx.journalId ? (
+                      <p className="text-[11px] text-gray-500 mt-1">Journal: {tx.journalId}</p>
+                    ) : null}
                   </div>
                 </div>
-                <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
-                  {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
+                    {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                  </span>
+                  {tx.journalId ? (
+                    <Link
+                      href={`/accounting?editEntry=${encodeURIComponent(tx.journalId)}&resetDraft=1`}
+                      className="text-xs font-medium text-[#2264ff] hover:underline"
+                    >
+                      Edit entry
+                    </Link>
+                  ) : (
+                    <span className="text-[11px] text-gray-400">Journal pending</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>

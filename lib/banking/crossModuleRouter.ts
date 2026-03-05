@@ -60,8 +60,7 @@ const natureToRawType = (
 
 function postToAccounting(
     tx: InboundBankTransaction,
-    classification: ClassificationResult,
-    autoPost: boolean
+    classification: ClassificationResult
 ): { posted: boolean; journalId?: string; journalEntry?: JournalEntry; error?: string } {
     try {
         const result = accountingEngine.processTransactionWithAIAccounts(
@@ -74,7 +73,7 @@ function postToAccounting(
                 type: natureToRawType(classification.nature),
                 reference: tx.reference,
                 currency: tx.currency || "NGN",
-                classificationSource: classification.source === "ai" ? "ai" : "rule",
+                classificationSource: classification.source,
                 classificationConfidence: classification.confidence,
                 vatApplicable: classification.tax.vatApplicable,
                 vatAmount: classification.tax.vatAmount,
@@ -230,7 +229,7 @@ export function routeTransaction(
     const warnings: string[] = [];
 
     // ── 1. ACCOUNTING ──────────────────────────────────────────────────
-    const accounting = postToAccounting(tx, classification, options.autoPost ?? true);
+    const accounting = postToAccounting(tx, classification);
     if (!accounting.posted) {
         warnings.push(`Accounting: ${accounting.error}`);
     }

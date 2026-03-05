@@ -28,7 +28,7 @@
 
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import { cashflowEngine } from "@/lib/cashflow/cashflowEngine";
-import { classifyBankTransaction } from "./aiClassifier";
+import { classifyBankTransaction, classifyBankTransactionWithAI } from "./aiClassifier";
 import { routeTransaction } from "./crossModuleRouter";
 import type {
     InboundBankTransaction,
@@ -66,6 +66,42 @@ function isDuplicate(tx: InboundBankTransaction): boolean {
     });
 }
 
+function duplicateResult(tx: InboundBankTransaction): PipelineResult {
+    return {
+        success: false,
+        bankTransactionId: tx.id,
+        internalRef: "",
+        classification: {
+            nature: "other",
+            category: "duplicate",
+            categoryLabel: "Duplicate Transaction",
+            debitAccountCode: "",
+            debitAccountName: "",
+            creditAccountCode: "",
+            creditAccountName: "",
+            confidence: 1,
+            source: "rule",
+            reasoning: "Transaction already imported",
+            tax: {
+                vatApplicable: false,
+                vatAmount: 0,
+                whtApplicable: false,
+                whtRate: 0,
+                whtAmount: 0,
+                cgtApplicable: false,
+                stampDutyApplicable: false,
+            },
+            budget: {},
+        },
+        accounting: { posted: false, error: "Duplicate — already imported" },
+        tax: { classified: false, classifications: [] },
+        budgeting: { tracked: false },
+        cashflow: { updated: false },
+        warnings: ["Duplicate transaction skipped"],
+        processedAt: new Date().toISOString(),
+    };
+}
+
 // =============================================================================
 // SINGLE TRANSACTION PROCESSING
 // =============================================================================
@@ -83,43 +119,41 @@ export function processTransaction(
 ): PipelineResult {
     // Step 1: Duplicate check
     if (!options.skipDuplicateCheck && isDuplicate(tx)) {
-        return {
-            success: false,
-            bankTransactionId: tx.id,
-            internalRef: "",
-            classification: {
-                nature: "other",
-                category: "duplicate",
-                categoryLabel: "Duplicate Transaction",
-                debitAccountCode: "",
-                debitAccountName: "",
-                creditAccountCode: "",
-                creditAccountName: "",
-                confidence: 1,
-                source: "rule",
-                reasoning: "Transaction already imported",
-                tax: {
-                    vatApplicable: false,
-                    vatAmount: 0,
-                    whtApplicable: false,
-                    whtRate: 0,
-                    whtAmount: 0,
-                    cgtApplicable: false,
-                    stampDutyApplicable: false,
-                },
-                budget: {},
-            },
-            accounting: { posted: false, error: "Duplicate — already imported" },
-            tax: { classified: false, classifications: [] },
-            budgeting: { tracked: false },
-            cashflow: { updated: false },
-            warnings: ["Duplicate transaction skipped"],
-            processedAt: new Date().toISOString(),
-        };
+        return duplicateResult(tx);
     }
 
     // Step 2: Classify
     const classification = classifyBankTransaction(
+        tx,
+        options.bankAccountCode || "1000"
+    );
+
+    // Step 3: Route through all modules
+    return routeTransaction(tx, classification, {
+        entityId: options.entityId,
+        autoPost: options.autoPost ?? true,
+        runTaxClassification: options.runTaxClassification ?? true,
+        updateBudgets: options.updateBudgets ?? true,
+        updateCashflow: options.updateCashflow ?? true,
+        fiscalPeriod: options.fiscalPeriod,
+    });
+}
+
+/**
+ * Process a single bank transaction through the full pipeline
+ * with Gemini-assisted fallback for ambiguous classifications.
+ */
+export async function processTransactionWithAI(
+    tx: InboundBankTransaction,
+    options: PipelineOptions
+): Promise<PipelineResult> {
+    // Step 1: Duplicate check
+    if (!options.skipDuplicateCheck && isDuplicate(tx)) {
+        return duplicateResult(tx);
+    }
+
+    // Step 2: Classify (rules + Gemini fallback for low-confidence cases)
+    const classification = await classifyBankTransactionWithAI(
         tx,
         options.bankAccountCode || "1000"
     );
@@ -203,6 +237,90 @@ export function processTransactions(
     }
 
     // Now refresh cashflow once after all transactions are posted
+    if (options.updateCashflow !== false) {
+        try {
+            const accountingState = accountingEngine.getState();
+            cashflowEngine.refresh(accountingState);
+        } catch {
+            // Non-critical — cashflow will refresh on next dashboard load
+        }
+    }
+
+    return {
+        total: transactions.length,
+        processed: results.filter((r) => r.success).length,
+        failed: results.filter((r) => !r.success && r.classification.category !== "duplicate").length,
+        duplicatesSkipped,
+        results,
+        summary: {
+            totalCredits,
+            totalDebits,
+            netAmount: totalCredits - totalDebits,
+            byNature,
+            taxImplications: {
+                vatOutput,
+                vatInput,
+                whtDeducted,
+            },
+        },
+        processedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Process a batch with Gemini-assisted classification fallback.
+ */
+export async function processTransactionsWithAI(
+    transactions: InboundBankTransaction[],
+    options: PipelineOptions
+): Promise<BatchPipelineResult> {
+    const sorted = [...transactions].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    const results: PipelineResult[] = [];
+    let duplicatesSkipped = 0;
+    let totalCredits = 0;
+    let totalDebits = 0;
+    const byNature: Record<string, { count: number; amount: number }> = {};
+    let vatOutput = 0;
+    let vatInput = 0;
+    let whtDeducted = 0;
+
+    for (const tx of sorted) {
+        const result = await processTransactionWithAI(tx, {
+            ...options,
+            updateCashflow: false,
+        });
+
+        results.push(result);
+
+        if (result.classification.category === "duplicate") {
+            duplicatesSkipped++;
+            continue;
+        }
+
+        if (tx.direction === "credit") {
+            totalCredits += tx.amount;
+        } else {
+            totalDebits += tx.amount;
+        }
+
+        const nature = result.classification.nature;
+        if (!byNature[nature]) byNature[nature] = { count: 0, amount: 0 };
+        byNature[nature].count++;
+        byNature[nature].amount += tx.amount;
+
+        if (result.classification.tax.vatCategory === "output") {
+            vatOutput += result.classification.tax.vatAmount;
+        } else if (result.classification.tax.vatCategory === "input") {
+            vatInput += result.classification.tax.vatAmount;
+        }
+        if (result.classification.tax.whtApplicable) {
+            whtDeducted += result.classification.tax.whtAmount;
+        }
+    }
+
     if (options.updateCashflow !== false) {
         try {
             const accountingState = accountingEngine.getState();

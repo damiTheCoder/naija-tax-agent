@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { processTransactions } from "@/lib/banking/transactionPipeline";
+import { processTransactionsWithAI } from "@/lib/banking/transactionPipeline";
 import type { InboundBankTransaction } from "@/lib/banking/types";
 
 // =============================================================================
@@ -125,7 +125,7 @@ export async function POST(
     const transactions = generateSyncTransactions(connectionId);
 
     // ── Run through the full cross-module pipeline ──────────────────
-    const pipelineResult = processTransactions(transactions, {
+    const pipelineResult = await processTransactionsWithAI(transactions, {
       entityId: connectionId,
       autoPost: true,
       runTaxClassification: true,
@@ -133,6 +133,7 @@ export async function POST(
       updateCashflow: true,
       bankAccountCode: "1000",
     });
+    const transactionById = new Map(transactions.map((tx) => [tx.id, tx]));
 
     const completedAt = new Date().toISOString();
 
@@ -155,11 +156,16 @@ export async function POST(
           summary: pipelineResult.summary,
           // Per-transaction details
           details: pipelineResult.results.map((r) => ({
+            txDate: transactionById.get(r.bankTransactionId)?.date,
+            txDescription: transactionById.get(r.bankTransactionId)?.description,
+            txAmount: transactionById.get(r.bankTransactionId)?.amount,
+            txDirection: transactionById.get(r.bankTransactionId)?.direction,
             bankTxId: r.bankTransactionId,
             journalId: r.accounting.journalId,
             category: r.classification.categoryLabel,
             nature: r.classification.nature,
             confidence: Math.round(r.classification.confidence * 100),
+            source: r.classification.source,
             taxClassifications: r.tax.classifications.length,
             budgetCategory: r.budgeting.categoryMatch,
             warnings: r.warnings,
