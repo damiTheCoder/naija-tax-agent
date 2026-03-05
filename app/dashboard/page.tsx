@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
-import { accountingEngine, AccountingState } from "@/lib/accounting/transactionBridge";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
 
 // Types
 type KpiMetric = {
@@ -29,6 +29,8 @@ const icons = {
 
 // Color palette for charts
 const CHART_COLORS = ["#2264ff", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
+const MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY = "ql::mobile-projections-entry";
+const MOBILE_PROJECTIONS_ENTRY_EVENT = "ql:mobile-projections-entry-change";
 
 function formatCompactNaira(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
@@ -191,6 +193,7 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [engineStatements, setEngineStatements] = useState<StatementDraft | null>(null);
   const [journalCount, setJournalCount] = useState(0);
+  const [showMobileProjectionToggle, setShowMobileProjectionToggle] = useState(false);
 
   // Helper to derive transactions from journal entries based on account codes
   const deriveTransactionsFromJournals = (journalEntries: {
@@ -345,6 +348,36 @@ export default function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncProjectionToggle = () => {
+      try {
+        setShowMobileProjectionToggle(window.localStorage.getItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY) === "1");
+      } catch {
+        setShowMobileProjectionToggle(false);
+      }
+    };
+
+    const handleProjectionToggleEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === "boolean") {
+        setShowMobileProjectionToggle(customEvent.detail.enabled);
+        return;
+      }
+      syncProjectionToggle();
+    };
+
+    syncProjectionToggle();
+    window.addEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleProjectionToggleEvent as EventListener);
+    window.addEventListener("storage", syncProjectionToggle);
+
+    return () => {
+      window.removeEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleProjectionToggleEvent as EventListener);
+      window.removeEventListener("storage", syncProjectionToggle);
+    };
+  }, []);
+
   // Calculate metrics from transactions (prefer engine statements if available)
   const calculatedData = useMemo(() => {
     // Use engine statements for accurate double-entry figures
@@ -493,6 +526,27 @@ export default function DashboardPage() {
 
   return (
     <div className={`space-y-6 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
+      {showMobileProjectionToggle ? (
+        <div className="lg:hidden">
+          <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
+            <button
+              type="button"
+              className="rounded-full bg-[#2264ff] px-3 py-1.5 text-xs font-semibold text-white"
+              aria-label="Accounting dashboard view"
+            >
+              Accounting Dashboard
+            </button>
+            <Link
+              href="/accounting/projections"
+              className="rounded-full px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
+              aria-label="Switch to financial projections"
+            >
+              Financial Projections
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>

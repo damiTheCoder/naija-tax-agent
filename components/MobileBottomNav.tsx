@@ -4,24 +4,34 @@ import { usePathname } from "next/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "@/components/NavIconBadge";
 import type { NavIcon } from "@/lib/navigation";
+import { useEffect, useState } from "react";
 
-const NAV_ITEMS: Array<{ label: string; href: string; icon: NavIcon }> = [
+type MobileNavItemKey = "home" | "reports" | "projections" | "tax";
+
+const MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY = "ql::mobile-projections-entry";
+const MOBILE_PROJECTIONS_ENTRY_EVENT = "ql:mobile-projections-entry-change";
+
+const NAV_ITEMS: Array<{ key: MobileNavItemKey; label: string; href: string; icon: NavIcon }> = [
     {
+        key: "home",
         label: "Home",
         href: "/accounting",
         icon: "home",
     },
     {
+        key: "reports",
         label: "Reports",
         href: "/accounting/workspace",
         icon: "report",
     },
     {
+        key: "projections",
         label: "Projections",
-        href: "/accounting/projections",
+        href: "/dashboard",
         icon: "trend",
     },
     {
+        key: "tax",
         label: "Tax",
         href: "/tax/workspace",
         icon: "calculator",
@@ -31,6 +41,52 @@ const NAV_ITEMS: Array<{ label: string; href: string; icon: NavIcon }> = [
 export default function MobileBottomNav() {
     const pathname = usePathname();
     const { navigateTo } = useNavigation();
+    const [isProjectionsEntryMode, setIsProjectionsEntryMode] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const readMode = () => {
+            try {
+                setIsProjectionsEntryMode(window.localStorage.getItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY) === "1");
+            } catch {
+                setIsProjectionsEntryMode(false);
+            }
+        };
+
+        const handleModeEvent = (event: Event) => {
+            const customEvent = event as CustomEvent<{ enabled?: boolean }>;
+            if (typeof customEvent.detail?.enabled === "boolean") {
+                setIsProjectionsEntryMode(customEvent.detail.enabled);
+                return;
+            }
+            readMode();
+        };
+
+        readMode();
+        window.addEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleModeEvent as EventListener);
+        window.addEventListener("storage", readMode);
+
+        return () => {
+            window.removeEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleModeEvent as EventListener);
+            window.removeEventListener("storage", readMode);
+        };
+    }, []);
+
+    const updateProjectionsEntryMode = (enabled: boolean) => {
+        if (typeof window === "undefined") return;
+        try {
+            if (enabled) {
+                window.localStorage.setItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY, "1");
+            } else {
+                window.localStorage.removeItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY);
+            }
+        } catch {
+            // no-op
+        }
+        setIsProjectionsEntryMode(enabled);
+        window.dispatchEvent(new CustomEvent(MOBILE_PROJECTIONS_ENTRY_EVENT, { detail: { enabled } }));
+    };
 
     return (
         <nav
@@ -41,15 +97,26 @@ export default function MobileBottomNav() {
             <div className="grid grid-cols-4 px-2 py-1.5">
                 {NAV_ITEMS.map((item) => {
                     const isActive =
-                        item.href === "/accounting"
-                            ? pathname === "/accounting"
-                            : pathname.startsWith(item.href);
+                        item.key === "home"
+                            ? pathname === "/accounting" && !isProjectionsEntryMode
+                            : item.key === "projections"
+                                ? pathname.startsWith("/accounting/projections") || (pathname === "/dashboard" && isProjectionsEntryMode)
+                                : pathname.startsWith(item.href);
 
                     return (
                         <button
-                            key={item.href}
+                            key={item.key}
                             type="button"
                             onClick={() => {
+                                if (item.key === "projections") {
+                                    updateProjectionsEntryMode(true);
+                                    if (pathname !== "/dashboard") {
+                                        navigateTo("/dashboard");
+                                    }
+                                    return;
+                                }
+
+                                updateProjectionsEntryMode(false);
                                 if (pathname !== item.href) navigateTo(item.href);
                             }}
                             className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors ${
