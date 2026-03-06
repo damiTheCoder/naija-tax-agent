@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
+import type { JournalEntry } from "@/lib/accounting/doubleEntry";
 
 // =============================================================================
 // TYPES
@@ -248,6 +250,7 @@ export default function BankConnectionsPage() {
     message?: string;
   } | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<RecentBankTransaction[]>([]);
+  const [journalEntryLookup, setJournalEntryLookup] = useState<Record<string, JournalEntry>>({});
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -310,6 +313,25 @@ export default function BankConnectionsPage() {
   useEffect(() => {
     localStorage.setItem("insight::bank-connections", JSON.stringify(connections));
   }, [connections]);
+
+  // Load accounting journal entries so processed bank rows can display debit/credit posting lines
+  const refreshJournalLookup = useCallback(() => {
+    try {
+      accountingEngine.load();
+      const entries = accountingEngine.getState().journalEntries || [];
+      const lookup: Record<string, JournalEntry> = {};
+      for (const entry of entries) {
+        lookup[entry.id] = entry;
+      }
+      setJournalEntryLookup(lookup);
+    } catch (error) {
+      console.error("Failed to load accounting journal entries:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshJournalLookup();
+  }, [refreshJournalLookup, recentTransactions]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -546,6 +568,21 @@ export default function BankConnectionsPage() {
   const formatDate = (date: string) => new Date(date).toLocaleDateString("en-NG", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
   });
+  const formatSourceLabel = (source?: ClassificationSource) => {
+    if (source === "ai") return "AI";
+    if (source === "hybrid") return "HYBRID";
+    return "RULE";
+  };
+  const formatConfidence = (value?: number) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    const normalized = value <= 1 ? value * 100 : value;
+    return Math.max(0, Math.min(100, normalized));
+  };
+  const sourceBadgeClass = (sourceLabel: string) => {
+    if (sourceLabel === "AI") return "bg-blue-50 text-blue-700";
+    if (sourceLabel === "HYBRID") return "bg-indigo-50 text-indigo-700";
+    return "bg-gray-100 text-gray-700";
+  };
 
   if (isLoading) {
     return (
@@ -793,45 +830,113 @@ export default function BankConnectionsPage() {
               View all →
             </Link>
           </div>
-          <div className="divide-y divide-gray-100">
-            {recentTransactions.slice(0, 5).map((tx) => (
-              <div key={`${tx.id}-${tx.journalId || "none"}`} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "credit" ? "bg-blue-50" : "bg-red-50"
-                    }`}>
-                    <svg className={`w-5 h-5 ${tx.type === "credit" ? "text-blue-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={tx.type === "credit" ? "M12 4v16m0-16l-4 4m4-4l4 4" : "M12 20V4m0 16l-4-4m4 4l4-4"} />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">{tx.description}</p>
-                    <p className="text-xs text-gray-400">
-                      {formatDate(tx.date)}
-                      {tx.category ? ` • ${tx.category}` : ""}
-                      {tx.source ? ` • ${tx.source.toUpperCase()}` : ""}
-                    </p>
-                    {tx.journalId ? (
-                      <p className="text-[11px] text-gray-500 mt-1">Journal: {tx.journalId}</p>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
-                    {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
-                  </span>
-                  {tx.journalId ? (
-                    <Link
-                      href={`/accounting?editEntry=${encodeURIComponent(tx.journalId)}&resetDraft=1`}
-                      className="text-xs font-medium text-[#2264ff] hover:underline"
-                    >
-                      Edit entry
-                    </Link>
-                  ) : (
-                    <span className="text-[11px] text-gray-400">Journal pending</span>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="max-h-[480px] overflow-auto">
+            <table className="w-full min-w-[1180px]">
+              <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+                <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                  <th className="px-3 py-3 font-semibold">Date</th>
+                  <th className="px-3 py-3 font-semibold">Bank Transaction</th>
+                  <th className="px-3 py-3 font-semibold">Debit Account(s)</th>
+                  <th className="px-3 py-3 font-semibold">Credit Account(s)</th>
+                  <th className="px-3 py-3 text-right font-semibold">Amount</th>
+                  <th className="px-3 py-3 font-semibold">AI Posting</th>
+                  <th className="px-3 py-3 font-semibold">Journal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {recentTransactions.slice(0, 8).map((tx) => {
+                  const linkedJournal = tx.journalId ? journalEntryLookup[tx.journalId] : undefined;
+                  const debitLines = linkedJournal?.lines.filter((line) => (line.debit || 0) > 0) || [];
+                  const creditLines = linkedJournal?.lines.filter((line) => (line.credit || 0) > 0) || [];
+                  const sourceLabel = formatSourceLabel(tx.source);
+                  const confidenceValue = formatConfidence(tx.confidence ?? linkedJournal?.confidence);
+                  const assumptions = Array.isArray(linkedJournal?.assumptions) ? linkedJournal.assumptions : [];
+
+                  return (
+                    <tr key={`${tx.id}-${tx.journalId || "none"}`} className="hover:bg-gray-50/70 transition-colors align-top">
+                      <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(tx.date)}</td>
+                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
+                        <p className="font-medium text-gray-900 uppercase tracking-tight">{tx.description}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {tx.category ? `${tx.category} • ` : ""}
+                          {tx.narration ? `${tx.narration} • ` : ""}
+                          {sourceLabel}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
+                        <div className="space-y-1">
+                          {debitLines.length === 0 ? (
+                            <span className="text-xs text-gray-400">Pending journal lines</span>
+                          ) : (
+                            debitLines.map((line, index) => (
+                              <p key={`${tx.id}-dr-${line.accountCode}-${index}`} className="truncate">
+                                <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
+                                {line.accountName}
+                                <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.debit)}</span>
+                              </p>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
+                        <div className="space-y-1">
+                          {creditLines.length === 0 ? (
+                            <span className="text-xs text-gray-400">Pending journal lines</span>
+                          ) : (
+                            creditLines.map((line, index) => (
+                              <p key={`${tx.id}-cr-${line.accountCode}-${index}`} className="truncate">
+                                <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
+                                {line.accountName}
+                                <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.credit)}</span>
+                              </p>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-right whitespace-nowrap">
+                        <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
+                          {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-sm min-w-[170px]">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${sourceBadgeClass(sourceLabel)}`}>
+                            {sourceLabel}
+                          </span>
+                          {confidenceValue !== null ? (
+                            <span className="text-xs text-gray-600">Confidence {Math.round(confidenceValue)}%</span>
+                          ) : (
+                            <span className="text-xs text-gray-400">Confidence pending</span>
+                          )}
+                          {assumptions.length > 0 ? (
+                            <p className="text-[11px] text-gray-500 truncate" title={assumptions.join("; ")}>
+                              Assumptions: {assumptions.join("; ")}
+                            </p>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">Assumptions: none</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-sm whitespace-nowrap">
+                        {tx.journalId ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="font-mono text-xs text-purple-700">{tx.journalId}</span>
+                            <Link
+                              href={`/accounting?editEntry=${encodeURIComponent(tx.journalId)}&resetDraft=1`}
+                              className="text-xs font-medium text-[#2264ff] hover:underline"
+                            >
+                              Edit entry
+                            </Link>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">Journal pending</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

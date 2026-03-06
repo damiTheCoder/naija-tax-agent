@@ -1816,17 +1816,17 @@ _Ask me anything about bank reconciliation!_`;
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
                         <div
-                            className="relative mt-auto mx-1.5 sm:mx-2 mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
+                            className="relative mt-auto mx-0 sm:mx-2 mb-0 sm:mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-t-[28px] rounded-b-none sm:rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
                             style={{ animation: "slideUp 0.3s ease-out forwards", maxHeight: "85vh" }}
                         >
                             <div
-                                className="absolute inset-0 rounded-[28px] pointer-events-none"
+                                className="absolute inset-0 rounded-t-[28px] rounded-b-none sm:rounded-[28px] pointer-events-none"
                                 style={{
                                     background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
                                     animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
                                 }}
                             />
-                            <div className="relative m-[3px] rounded-[25px] bg-white flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
+                            <div className="relative m-[3px] mb-0 rounded-t-[25px] rounded-b-none sm:rounded-[25px] bg-white flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
                                 {/* Header */}
                                 <div className="flex items-center gap-3 px-4 sm:px-5 py-4">
                                     <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
