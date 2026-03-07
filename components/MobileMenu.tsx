@@ -9,7 +9,9 @@ import {
     BUDGETING_NAV_ITEMS,
     INTELLIGENCE_NAV_ITEMS,
     WALLET_NAV_ITEMS,
+    SUPERSHEET_NAV_ITEMS,
     MARKETPLACE_NAV_ITEMS,
+    PAYROLL_NAV_ITEMS,
     PERSONAL_NAV_ITEMS,
     AppMode
 } from "@/lib/navigation";
@@ -45,15 +47,19 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         ? "personal"
         : pathname.startsWith("/wallet")
             ? "wallet"
-            : pathname.startsWith("/budgeting")
-                ? "budgeting"
-                : pathname.startsWith("/cashflow-intelligence")
-                    ? "intelligence"
-                    : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
-                        ? "accounting"
-                        : pathname.startsWith("/marketplace")
-                            ? "marketplace"
-                            : "tax";
+            : pathname.startsWith("/supersheet")
+                ? "supersheet"
+                : pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")
+                    ? "payroll"
+                : pathname.startsWith("/budgeting")
+                    ? "budgeting"
+                    : pathname.startsWith("/cashflow-intelligence")
+                        ? "intelligence"
+                        : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
+                            ? "accounting"
+                            : pathname.startsWith("/marketplace")
+                                ? "marketplace"
+                                : "tax";
 
     const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
         ? [
@@ -62,9 +68,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         : [
             { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
             { id: "budgeting", label: "Budgeting", items: BUDGETING_NAV_ITEMS },
+            { id: "payroll", label: "Payroll & Compliance", items: PAYROLL_NAV_ITEMS },
             { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
             { id: "intelligence", label: "Financial Management", items: INTELLIGENCE_NAV_ITEMS },
             { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
+            { id: "supersheet", label: "SuperSheet", items: SUPERSHEET_NAV_ITEMS },
             { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
         ];
 
@@ -125,8 +133,8 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                 </button>
                                 {/* Sub-menu Items */}
                                 <div className={`
-                                    overflow-hidden transition-all duration-300 ease-in-out bg-gray-50/50 dark:bg-white/5
-                                    ${isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}
+                                    transition-all duration-300 ease-in-out bg-gray-50/50 dark:bg-white/5
+                                    ${isExpanded ? "max-h-[60vh] opacity-100 overflow-y-auto" : "max-h-0 opacity-0 overflow-hidden"}
                                 `}>
                                     <div className="px-3 pb-3 pt-1 space-y-1">
                                         {module.items.map((item) => {
