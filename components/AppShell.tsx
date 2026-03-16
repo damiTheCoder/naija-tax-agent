@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import ModuleButtonBar from "@/components/ModuleButtonBar";
+import DeferredFloatingChat from "@/components/DeferredFloatingChat";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
@@ -16,11 +17,6 @@ import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import PageSkeleton from "@/components/PageSkeleton";
-
-const FloatingChatButton = dynamic(() => import("@/components/FloatingChatButton"), {
-  ssr: false,
-  loading: () => null,
-});
 
 const MobileBottomNav = dynamic(() => import("@/components/MobileBottomNav"), {
   ssr: false,
@@ -33,52 +29,13 @@ const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isLanding = pathname === "/";
   const isPersonalRoute = pathname.startsWith("/personal");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
   const { mode, mounted } = useMode();
-  const isModeMismatch = mounted && ((mode === "user" && !isPersonalRoute) || (mode === "enterprise" && isPersonalRoute));
-
-  useEffect(() => {
-    const routesToPrefetch = [
-      "/accounting",
-      "/dashboard",
-      "/accounting/workspace",
-      "/accounting/assets",
-      "/accounting/depreciation",
-      "/accounting/projections",
-      "/accounting/projections/modelling",
-      "/accounting/vendors",
-      "/accounting/bills",
-      "/accounting/approvals",
-      "/accounting/periods",
-      "/accounting/recurring",
-      "/accounting/fx",
-      "/accounting/dimensions",
-      "/accounting/action-logs",
-      "/budgeting/dashboard",
-      "/budgeting/budgets",
-      "/budgeting/forecasting",
-      "/budgeting/scenarios",
-      "/tax/computation",
-      "/tax/adjustments",
-      "/tax/settings",
-      "/tax/file-taxes",
-      "/tax/calendar",
-      "/tax/payments",
-      "/tax/returns",
-      "/tax-tools",
-      "/wallet",
-      "/marketplace",
-      "/personal",
-      "/personal/dashboard",
-    ];
-
-    routesToPrefetch.forEach((route) => {
-      router.prefetch(route);
-    });
-  }, [router]);
+  const isModeMismatch =
+    mounted &&
+    ((mode === "user" && !isPersonalRoute) || (mode === "enterprise" && isPersonalRoute));
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -177,13 +134,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [mode, mounted, pathname, router]);
 
-  if (isLanding) {
-    return (
-      <div className="min-h-screen flex flex-col" style={{ background: 'var(--cream)' }}>
-        <main className="flex-1">{children}</main>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (pathname.startsWith("/api")) return;
+    if (process.env.NODE_ENV !== "production") return;
+
+    const payload = JSON.stringify({
+      eventType: "page_view",
+      module: pathname.split("/")[1] || "landing",
+      path: pathname,
+      metadata: {
+        referrer: document.referrer || "",
+      },
+    });
+
+    const sendPageView = () => {
+      if (navigator.sendBeacon) {
+        const sent = navigator.sendBeacon("/api/usage/track", new Blob([payload], { type: "application/json" }));
+        if (sent) return;
+      }
+
+      fetch("/api/usage/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(sendPageView, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = globalThis.setTimeout(sendPageView, 500);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [pathname]);
 
   if (isModeMismatch) {
     return (
@@ -255,7 +241,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative w-9 h-9 overflow-hidden rounded-full">
                 <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" priority />
               </div>
-              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Quantum Ledger</span>
+              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Atom Ledger</span>
             </Link>
 
             <div className="flex items-center gap-1 flex-shrink-0">
@@ -311,26 +297,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="app-shell-content-main flex-1 px-4 sm:px-6 py-4 lg:p-8">
-          <div className="app-shell-content-container max-w-6xl mx-auto w-full">
-            <Suspense fallback={<PageSkeleton />}>
-              {children}
-            </Suspense>
-          </div>
-        </main>
+        <div
+          className="app-shell-page-layout flex-1 lg:grid lg:items-start lg:gap-5 lg:px-6 lg:pb-6 xl:gap-6 xl:px-8"
+          style={{
+            gridTemplateColumns: isPersonalRoute
+              ? "minmax(0, 1fr)"
+              : "minmax(0, 1fr) var(--chat-sidebar-width, 5.75rem)",
+          }}
+        >
+          {/* Page Content */}
+          <main className="app-shell-content-main min-w-0 flex-1 px-4 py-4 sm:px-6 lg:min-h-[calc(100vh-5.5rem)] lg:px-0 lg:py-6">
+            <div className="app-shell-content-container mx-auto w-full min-w-0 max-w-[1320px]">
+              <Suspense fallback={<PageSkeleton />}>
+                {children}
+              </Suspense>
+            </div>
+          </main>
+
+          {!isPersonalRoute && (
+            <aside className="app-shell-chat-host relative h-0 min-w-0 lg:block lg:h-auto lg:self-start lg:sticky lg:top-24">
+              <DeferredFloatingChat />
+            </aside>
+          )}
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}
       {!isPersonalRoute && (
         <MobileBottomNav />
-      )}
-
-      {/* Floating Chat Button for transaction input */}
-      {!isPersonalRoute && (
-        <div className="app-shell-floating-chat">
-          <FloatingChatButton />
-        </div>
       )}
 
     </div>

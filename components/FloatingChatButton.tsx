@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
@@ -38,23 +38,6 @@ import {
     selectChatConversation,
 } from "@/lib/personalChatHistory";
 
-// ============================================================================
-// CLAWDBOT INTEGRATION
-// ============================================================================
-// Set to true to route all chat messages through Clawdbot AI (requires clawdbot daemon)
-// Set to false to use Gemini for AI validation layer only
-const USE_CLAWDBOT = process.env.NEXT_PUBLIC_USE_CLAWDBOT === "true";
-
-interface ClawdbotResponse {
-    reply: string;
-    actions?: Array<{
-        tool: string;
-        result: unknown;
-    }>;
-    fallback?: boolean;
-    error?: string;
-}
-
 interface AgentResponse {
     answer?: string;
     finalAnswer?: string;
@@ -82,6 +65,8 @@ const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
 const AGENT_CHAT_MODE_STORAGE_KEY = "ql::agent-chat-mode";
 const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 const HAS_WORKSPACE_ROUTE_CATALOG = buildWorkspaceRouteCatalogText({ maxItems: 1 }).trim().length > 0;
+const DESKTOP_CHAT_COLLAPSED_WIDTH = 92;
+const DESKTOP_CHAT_EXPANDED_WIDTH = 336;
 
 type ChatModalOpenDetail = {
     module?: string;
@@ -114,42 +99,6 @@ function readProjectionsContextSnapshot(): string {
         return typeof raw === "string" ? raw : "";
     } catch {
         return "";
-    }
-}
-
-/**
- * Send a message to Clawdbot AI and get a response
- */
-async function sendToClawdbot(
-    message: string,
-    moduleId: string,
-    userId?: string
-): Promise<ClawdbotResponse> {
-    try {
-        const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message,
-                userId: userId || "default_user",
-                context: {
-                    module: moduleId,
-                },
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error("[Clawdbot] Error:", error);
-        return {
-            reply: "I'm having trouble connecting to my AI brain. Please check that Clawdbot is running and try again.",
-            fallback: true,
-            error: error instanceof Error ? error.message : "Unknown error",
-        };
     }
 }
 
@@ -398,9 +347,9 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     },
     default: {
         id: "general",
-        name: "Quantum Ledger",
-        title: "Quantum Ledger Assistant",
-        placeholder: "Ask Quantum Ledger...",
+        name: "Atom Ledger",
+        title: "Atom Ledger Assistant",
+        placeholder: "Ask Atom Ledger...",
         greeting: "Hi! I'm your AI financial assistant. How can I help you today?",
         examples: [
             '"Record a transaction"',
@@ -1159,6 +1108,34 @@ export default function FloatingChatButton() {
         };
     }, [revokeBlobUrls]);
 
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const root = document.documentElement;
+
+        const syncDesktopChatClass = () => {
+            const isDesktop = window.innerWidth >= 1024;
+            if (isDesktop) {
+                root.style.setProperty(
+                    "--chat-sidebar-width",
+                    `${isModalOpen ? DESKTOP_CHAT_EXPANDED_WIDTH : DESKTOP_CHAT_COLLAPSED_WIDTH}px`
+                );
+                root.classList.toggle("chat-sidebar-open", isModalOpen);
+            } else {
+                root.classList.remove("chat-sidebar-open");
+                root.style.removeProperty("--chat-sidebar-width");
+            }
+        };
+
+        syncDesktopChatClass();
+        window.addEventListener("resize", syncDesktopChatClass);
+
+        return () => {
+            window.removeEventListener("resize", syncDesktopChatClass);
+            root.classList.remove("chat-sidebar-open");
+            root.style.removeProperty("--chat-sidebar-width");
+        };
+    }, [isModalOpen]);
+
     // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
@@ -1516,7 +1493,7 @@ _Ask me anything about bank reconciliation!_`;
 
             return `📊 **Business Overview**\n\nRevenue: ₦${revenue.toLocaleString()}\nExpenses: ₦${expenses.toLocaleString()}\nProfit: ${profit >= 0 ? '+' : ''}₦${profit.toLocaleString()}\nProfit Margin: ${profitMargin}%\n\n_Navigate to specific modules for detailed analysis._`;
         } catch {
-            return "Welcome to Quantum Ledger! Start by recording transactions in the Accounting module.";
+            return "Welcome to Atom Ledger! Start by recording transactions in the Accounting module.";
         }
     }, []);
 
@@ -1779,333 +1756,323 @@ _Ask me anything about bank reconciliation!_`;
         }
     };
 
-    return (
+    const GeminiBadge = () => {
+        const gradientId = useId();
+
+        return (
+            <span className="w-9 h-9 flex-shrink-0 grid place-items-center">
+                <svg viewBox="0 0 24 24" className="w-8 h-8" aria-hidden="true">
+                    <defs>
+                        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#ff4b4b" />
+                            <stop offset="28%" stopColor="#facc15" />
+                            <stop offset="58%" stopColor="#22c55e" />
+                            <stop offset="100%" stopColor="#3b82f6" />
+                        </linearGradient>
+                    </defs>
+                    <path
+                        d="M12 1.8c1.7 4.6 3 6 7.6 7.6-4.6 1.7-6 3-7.6 7.6-1.7-4.6-3-6-7.6-7.6 4.6-1.6 5.9-3 7.6-7.6z"
+                        fill={`url(#${gradientId})`}
+                    />
+                </svg>
+            </span>
+        );
+    };
+
+    const openChat = () => {
+        playGoogleButtonClickSound();
+        setIsModalOpen(true);
+    };
+
+    const chatPanelContent = (
         <>
-            {/* Floating Chat Button */}
-            <button
-                onClick={() => {
-                    playGoogleButtonClickSound();
-                    setIsModalOpen(true);
-                }}
-                className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] lg:bottom-8 left-1/2 -translate-x-1/2 lg:left-[calc(50%_+_7.5rem)] lg:-translate-x-1/2 z-40 flex items-center justify-center gap-2 bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-2.5 py-1.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                aria-label="Open chat"
-            >
-                {/* Red badge for clarification */}
-                {clarificationData && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm z-50 animate-bounce">
-                        1
+            <div className="flex items-start gap-3 border-b border-gray-100 px-4 py-3.5">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <h3 className="truncate text-[15px] font-semibold text-gray-900">
+                            {currentModule.title}
+                        </h3>
+                        <span className={`hidden lg:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
+                            {currentModule.name}
+                        </span>
                     </div>
-                )}
-                <img
-                    src="/google-logo.jpg"
-                    alt="Google"
-                    className="w-8 h-8 flex-shrink-0 rounded-full"
-                />
-                <span className="font-semibold text-sm">Chat</span>
-            </button>
-
-            {/* Chat Modal */}
-            {
-                isModalOpen && (
-                    <div
-                        className="fixed inset-0 z-[100] flex flex-col lg:pl-60"
-                        onClick={(e) => {
-                            if (e.target === e.currentTarget) setIsModalOpen(false);
-                        }}
+                    <div className="mt-1 text-[11px] text-gray-500">
+                        {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 pl-2">
+                    <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-[#2264ff] sm:inline">
+                        {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setAgentChatMode((prev) =>
+                                prev === "response-only" ? "full-agentic" : "response-only"
+                            )
+                        }
+                        role="switch"
+                        aria-checked={agentChatMode === "full-agentic"}
+                        className="relative inline-flex h-6 w-10 items-center rounded-full transition-colors"
+                        style={{ background: "#2264ff" }}
+                        aria-label="Toggle assistant mode"
+                        title="Toggle assistant mode"
                     >
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                        <span
+                            className={`inline-flex h-[18px] w-[18px] rounded-full bg-white transition-transform duration-300 ${agentChatMode === "full-agentic" ? "translate-x-5" : "translate-x-1"
+                                }`}
+                        />
+                    </button>
+                    <button
+                        onClick={() => setIsModalOpen(false)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100"
+                        aria-label="Close assistant"
+                    >
+                        <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
 
+            <div className="border-b border-gray-100 px-4 py-3">
+                <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible pb-1 hide-scrollbar">
+                    <button
+                        onClick={handleStartNewChat}
+                        className="shrink-0 rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-300"
+                    >
+                        New chat
+                    </button>
+                    {conversationList.map((conversation) => (
                         <div
-                            className="relative mt-auto mx-0 sm:mx-2 mb-0 sm:mb-4 lg:mx-auto lg:max-w-3xl lg:w-full lg:mb-8 rounded-t-[28px] rounded-b-none sm:rounded-[28px] shadow-2xl flex flex-col overflow-hidden"
-                            style={{ animation: "slideUp 0.3s ease-out forwards", maxHeight: "85vh" }}
+                            key={conversation.id}
+                            data-conversation-menu="true"
+                            className={`relative shrink-0 flex max-w-[150px] items-center rounded-full ${activeConversationId === conversation.id
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                                }`}
                         >
-                            <div
-                                className="absolute inset-0 rounded-t-[28px] rounded-b-none sm:rounded-[28px] pointer-events-none"
-                                style={{
-                                    background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
-                                    animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
+                            <button
+                                onClick={() => handleSelectConversation(conversation.id)}
+                                className="min-w-0 max-w-[112px] rounded-l-full px-3 py-1 text-[11px]"
+                            >
+                                <span className="block truncate">{conversation.title}</span>
+                            </button>
+                            <button
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleToggleConversationMenu(conversation.id, event.currentTarget);
                                 }}
-                            />
-                            <div className="relative m-[3px] mb-0 rounded-t-[25px] rounded-b-none sm:rounded-[25px] bg-white flex flex-col" style={{ minHeight: "calc(100% - 6px)" }}>
-                                {/* Header */}
-                                <div className="flex items-center gap-3 px-4 sm:px-5 py-4">
-                                    <h3 className="flex-1 font-semibold text-gray-900 dark:text-white text-base">
-                                        {currentModule.title}
-                                    </h3>
-                                    <span className={`hidden lg:inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
-                                        {currentModule.name}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#2264ff]">
-                                            {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setAgentChatMode((prev) =>
-                                                    prev === "response-only" ? "full-agentic" : "response-only"
-                                                )
-                                            }
-                                            role="switch"
-                                            aria-checked={agentChatMode === "full-agentic"}
-                                            className="relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
-                                            style={{ background: "#2264ff" }}
-                                            aria-label="Toggle assistant mode"
-                                            title="Toggle assistant mode"
-                                        >
-                                            <span
-                                                className={`inline-flex h-5 w-5 rounded-full bg-white transition-transform duration-300 ${agentChatMode === "full-agentic" ? "translate-x-5" : "translate-x-1"
-                                                    }`}
-                                            />
-                                        </button>
+                                className="shrink-0 rounded-r-full pr-2 text-gray-500 hover:text-gray-700"
+                                aria-label={`Chat options for ${conversation.title}`}
+                            >
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <circle cx="6" cy="12" r="1.8" />
+                                    <circle cx="12" cy="12" r="1.8" />
+                                    <circle cx="18" cy="12" r="1.8" />
+                                </svg>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                {openConversationMenuId && mobileConversationMenuPosition ? (
+                    <div
+                        data-conversation-menu="true"
+                        className="fixed z-[160] min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+                        style={{ top: mobileConversationMenuPosition.top, left: mobileConversationMenuPosition.left }}
+                    >
+                        <button
+                            onClick={() => handleRenameConversation(openConversationMenuId)}
+                            className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Rename chat
+                        </button>
+                        <button
+                            onClick={() => handleDeleteConversation(openConversationMenuId)}
+                            className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                ) : null}
+            </div>
+
+            <div className="flex min-h-0 flex-1">
+                <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3">
+                        {messages.map((msg) => (
+                            <div
+                                key={msg.id}
+                                className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                            >
+                                {msg.role === "user" ? (
+                                    <div className="inline-block max-w-[86%] break-words rounded-2xl bg-blue-500 px-3.5 py-2.5 text-[13px] leading-6 text-white">
+                                        {msg.content}
                                     </div>
-                                    <button
-                                        onClick={() => setIsModalOpen(false)}
-                                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                <div className="px-4 sm:px-5 pb-2 text-[11px] text-gray-500 dark:text-gray-400">
-                                    {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
-                                </div>
-                                <div className="px-4 sm:px-5 pb-3 lg:hidden">
-                                    <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible hide-scrollbar">
-                                        <button
-                                            onClick={handleStartNewChat}
-                                            className="shrink-0 rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-300"
-                                        >
-                                            New chat
-                                        </button>
-                                        {conversationList.map((conversation) => (
-                                            <div
-                                                key={conversation.id}
-                                                data-conversation-menu="true"
-                                                className={`relative shrink-0 flex max-w-[180px] items-center rounded-full ${activeConversationId === conversation.id
-                                                    ? "bg-gray-300 text-blue-700"
-                                                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                                                    }`}
+                                ) : (
+                                    <div className="inline-block max-w-[92%]">
+                                        <div className="break-words px-1 py-1 text-[13px] leading-6 text-gray-900">
+                                            {msg.content}
+                                        </div>
+                                        {msg.attachment?.kind === "download" && (
+                                            <a
+                                                href={msg.attachment.url}
+                                                download={msg.attachment.fileName}
+                                                className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
                                             >
-                                                <button
-                                                    onClick={() => handleSelectConversation(conversation.id)}
-                                                    className="min-w-0 max-w-[140px] rounded-l-full px-3 py-1 text-xs"
-                                                >
-                                                    <span className="block truncate">{conversation.title}</span>
-                                                </button>
-                                                <button
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        handleToggleConversationMenu(conversation.id, event.currentTarget);
-                                                    }}
-                                                    className="shrink-0 rounded-r-full pr-2 text-gray-500 hover:text-gray-700"
-                                                    aria-label={`Chat options for ${conversation.title}`}
-                                                >
-                                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                                        <circle cx="6" cy="12" r="1.8" />
-                                                        <circle cx="12" cy="12" r="1.8" />
-                                                        <circle cx="18" cy="12" r="1.8" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        ))}
+                                                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
+                                                    <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+                                                </svg>
+                                                Download PDF
+                                            </a>
+                                        )}
                                     </div>
-                                    {openConversationMenuId && mobileConversationMenuPosition ? (
-                                        <div
-                                            data-conversation-menu="true"
-                                            className="fixed z-[160] min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
-                                            style={{ top: mobileConversationMenuPosition.top, left: mobileConversationMenuPosition.left }}
-                                        >
-                                            <button
-                                                onClick={() => handleRenameConversation(openConversationMenuId)}
-                                                className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Rename chat
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteConversation(openConversationMenuId)}
-                                                className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    ) : null}
-                                </div>
-
-                                <div className="flex min-h-0 flex-1">
-                                    <aside className="hidden w-56 flex-col border-r border-gray-200 bg-white/70 lg:flex">
-                                        <div className="border-b border-gray-200 p-3">
-                                            <button
-                                                onClick={handleStartNewChat}
-                                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                            >
-                                                + New chat
-                                            </button>
-                                        </div>
-                                        <div className="flex-1 overflow-y-auto p-2">
-                                            {conversationList.length === 0 ? (
-                                                <p className="px-2 py-2 text-xs text-gray-500">No chat history yet.</p>
-                                            ) : (
-                                                conversationList.map((conversation) => (
-                                                    <div
-                                                        key={conversation.id}
-                                                        data-conversation-menu="true"
-                                                        className={`relative mb-1 w-full rounded-lg px-1 py-1 ${activeConversationId === conversation.id
-                                                            ? "bg-blue-50 text-blue-700"
-                                                            : "text-gray-700 hover:bg-gray-100"
-                                                            }`}
-                                                    >
-                                                        <div className="flex min-w-0 items-start gap-1">
-                                                            <button
-                                                                onClick={() => handleSelectConversation(conversation.id)}
-                                                                className="min-w-0 flex-1 rounded-md px-1 py-1 text-left"
-                                                            >
-                                                                <p className="truncate text-xs font-semibold">{conversation.title}</p>
-                                                                <p className="truncate text-[11px] text-gray-500">{conversation.preview}</p>
-                                                            </button>
-                                                            <button
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    handleToggleConversationMenu(conversation.id, event.currentTarget);
-                                                                }}
-                                                                className="mt-0.5 shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-                                                                aria-label={`Chat options for ${conversation.title}`}
-                                                            >
-                                                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                                                    <circle cx="6" cy="12" r="1.8" />
-                                                                    <circle cx="12" cy="12" r="1.8" />
-                                                                    <circle cx="18" cy="12" r="1.8" />
-                                                                </svg>
-                                                            </button>
-                                                        </div>
-                                                        {openConversationMenuId === conversation.id ? (
-                                                            <div className="absolute right-1 top-9 z-30 min-w-[132px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-                                                                <button
-                                                                    onClick={() => handleRenameConversation(conversation.id)}
-                                                                    className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
-                                                                >
-                                                                    Rename chat
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDeleteConversation(conversation.id)}
-                                                                    className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        ) : null}
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </aside>
-
-                                    <div className="flex min-h-0 flex-1 flex-col">
-                                        {/* Messages */}
-                                        <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4">
-                                            {messages.map((msg) => (
-                                                <div
-                                                    key={msg.id}
-                                                    className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
-                                                >
-                                                    {msg.role === "user" ? (
-                                                        <div className="inline-block max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-blue-500 text-white">
-                                                            {msg.content}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="inline-block max-w-[90%]">
-                                                            <div className="px-1 py-1 text-sm leading-relaxed whitespace-pre-wrap text-gray-900">
-                                                                {msg.content}
-                                                            </div>
-                                                            {msg.attachment?.kind === "download" && (
-                                                                <a
-                                                                    href={msg.attachment.url}
-                                                                    download={msg.attachment.fileName}
-                                                                    className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                                                >
-                                                                    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                                        <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
-                                                                        <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
-                                                                    </svg>
-                                                                    Download PDF
-                                                                </a>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {isLoading && (
-                                                <div className="mb-4">
-                                                    <div className="flex gap-1">
-                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div ref={chatEndRef} />
-                                        </div>
-
-                                        {/* Input */}
-                                        <div className="px-3 sm:px-4 py-4">
-                                            <div className="flex items-center gap-2 bg-gray-200 dark:bg-[#2a2a2a] rounded-full px-2 py-1.5">
-                                                <button
-                                                    onClick={handleStartNewChat}
-                                                    title="New chat"
-                                                    className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                                    </svg>
-                                                </button>
-
-                                                <textarea
-                                                    ref={textareaRef}
-                                                    rows={1}
-                                                    placeholder={currentModule.placeholder}
-                                                    className="flex-1 bg-transparent border-none text-sm text-gray-700 dark:text-white placeholder:text-gray-400 focus:outline-none resize-none py-2.5 min-h-[40px]"
-                                                    value={inputValue}
-                                                    onChange={(e) => setInputValue(e.target.value)}
-                                                    onKeyDown={handleKeyDown}
-                                                />
-
-                                                <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                                    </svg>
-                                                </button>
-
-                                                <button
-                                                    onClick={isAgentPerforming ? handleStopAgent : handleSend}
-                                                    disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
-                                                    className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all ${isAgentPerforming
-                                                        ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
-                                                        : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600"
-                                                        }`}
-                                                    title={isAgentPerforming ? "Stop agent" : "Send"}
-                                                >
-                                                    {isAgentPerforming ? (
-                                                        <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
-                                                    ) : inputValue.trim() ? (
-                                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                                        </svg>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {isLoading && (
+                            <div className="mb-4">
+                                <div className="flex gap-1">
+                                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "0ms" }} />
+                                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "150ms" }} />
+                                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "300ms" }} />
                                 </div>
                             </div>
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
+
+                    <div className="border-t border-gray-100 px-3 py-3">
+                        <div className="flex items-end gap-2 rounded-[24px] bg-gray-100 px-2 py-2">
+                            <button
+                                onClick={handleStartNewChat}
+                                title="New chat"
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-200"
+                            >
+                                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+
+                            <textarea
+                                ref={textareaRef}
+                                rows={1}
+                                placeholder={currentModule.placeholder}
+                                className="min-h-[38px] flex-1 resize-none border-none bg-transparent py-2 text-[13px] text-gray-700 placeholder:text-gray-400 focus:outline-none"
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                            />
+
+                            <button className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-200">
+                                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                </svg>
+                            </button>
+
+                            <button
+                                onClick={isAgentPerforming ? handleStopAgent : handleSend}
+                                disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
+                                className={`flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-all ${isAgentPerforming
+                                    ? "bg-red-50 text-red-600 hover:bg-red-100"
+                                    : "bg-white text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    }`}
+                                title={isAgentPerforming ? "Stop agent" : "Send"}
+                            >
+                                {isAgentPerforming ? (
+                                    <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
+                                ) : inputValue.trim() ? (
+                                    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                                    </svg>
+                                ) : (
+                                    <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                    </svg>
+                                )}
+                            </button>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            </div>
+        </>
+    );
+
+    return (
+        <>
+            {!isModalOpen && (
+                <>
+                    <button
+                        onClick={openChat}
+                        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2 py-1.5 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl lg:hidden"
+                        aria-label="Open chat"
+                    >
+                        {clarificationData && (
+                            <div className="absolute -right-1 -top-1 z-50 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs font-bold text-white shadow-sm animate-bounce">
+                                1
+                            </div>
+                        )}
+                        <GeminiBadge />
+                        <span className="text-sm font-semibold">Chat</span>
+                    </button>
+
+                    <div className="hidden lg:flex lg:min-h-[calc(100vh-7rem)] lg:items-end lg:justify-end">
+                        <button
+                            onClick={openChat}
+                            className="group relative flex w-full max-w-[5.75rem] flex-col items-center gap-2 rounded-[28px] border border-gray-200 bg-white px-3 py-4 text-slate-700 shadow-[0_18px_45px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_22px_50px_rgba(34,100,255,0.16)]"
+                            aria-label="Open chat"
+                        >
+                            {clarificationData && (
+                                <div className="absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                                    1
+                                </div>
+                            )}
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] shadow-[0_16px_34px_rgba(34,100,255,0.24)]">
+                                <GeminiBadge />
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2264ff]">
+                                Chat
+                            </span>
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {isModalOpen && (
+                <div
+                    className="fixed inset-0 z-[100] flex flex-col lg:hidden"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setIsModalOpen(false);
+                    }}
+                >
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+                    <div className="relative pointer-events-auto mt-auto mb-0 max-h-[85vh] rounded-t-[28px] rounded-b-none shadow-2xl sm:mx-2 sm:mb-4 sm:rounded-[28px]">
+                        <div
+                            className="absolute inset-0 rounded-t-[28px] rounded-b-none pointer-events-none sm:rounded-[28px]"
+                            style={{
+                                background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
+                                animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
+                            }}
+                        />
+                        <div
+                            className="relative m-[3px] mb-0 flex h-full min-h-0 flex-col rounded-t-[25px] rounded-b-none bg-white sm:rounded-[25px]"
+                            style={{ minHeight: "calc(100% - 6px)" }}
+                        >
+                            {chatPanelContent}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isModalOpen && (
+                <div className="hidden lg:flex lg:min-h-[calc(100vh-7rem)] lg:w-full lg:flex-col">
+                    <div className="flex h-[calc(100vh-7rem)] w-full flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.14)]">
+                        {chatPanelContent}
+                    </div>
+                </div>
+            )}
         </>
     );
 }

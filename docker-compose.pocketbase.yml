@@ -1,0 +1,12 @@
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: ql-pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./.pocketbase/pb_data:/pb/pb_data
+      - ./.pocketbase/pb_public:/pb/pb_public
+      - ./.pocketbase/pb_migrations:/pb/pb_migrations
+    command: ["--http=0.0.0.0:8090", "--dir=/pb/pb_data", "serve"]

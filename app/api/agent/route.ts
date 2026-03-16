@@ -40,7 +40,7 @@ const MODULE_PERSONAS: Record<string, string> = {
     "You are a spreadsheet coach. Explain formulas with short, clear examples and expected outcomes.",
   dashboard:
     "You are an executive finance analyst. Summarize what matters, then list key actions.",
-  general: "You are a practical enterprise finance assistant for Quantum Ledger.",
+  general: "You are a practical enterprise finance assistant for Atom Ledger.",
 };
 
 function resolveGeminiApiKey(): string {
@@ -94,7 +94,7 @@ function buildHumanStyleSystemPrompt(module?: string): string {
     normalized === "dashboard" ||
     normalized === "reporting";
 
-  return `You are NaijaTaxAgent AI, the enterprise assistant inside Quantum Ledger.
+  return `You are NaijaTaxAgent AI, the enterprise assistant inside Atom Ledger.
 ${getModulePersona(module)}
 
 Tone and style requirements:

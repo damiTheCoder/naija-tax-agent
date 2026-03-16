@@ -10,7 +10,7 @@ import { TAX_RATES_2026 } from "@/lib/accounting/transactionTaxAnalyzer";
 import { taxScheduleRepo } from "@/lib/tax/compliance/server";
 
 /**
- * Tax Computation API for Clawdbot
+ * Tax Computation API
  * 
  * Computes Nigerian taxes (VAT, WHT, CIT, PAYE, CGT).
  * Called by the cashos_compute_tax tool.

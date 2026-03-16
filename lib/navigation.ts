@@ -212,6 +212,13 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     description: "Automatic depreciation schedule and monthly journal guidance",
     mode: "accounting",
   },
+  {
+    label: "Support",
+    href: "/support",
+    icon: "message-square",
+    description: "Report issues and track support resolution",
+    mode: "accounting",
+  },
 ];
 
 // Budgeting module navigation

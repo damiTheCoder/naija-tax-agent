@@ -99,7 +99,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                         <div className="relative w-9 h-9 overflow-hidden rounded-full">
                             <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" />
                         </div>
-                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>Quantum Ledger</span>
+                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>Atom Ledger</span>
                     </Link>
                     <button
                         onClick={onClose}
@@ -185,7 +185,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     {/* Top Border */}
                     <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: isDark ? '#333333' : '#e5e5e5' }} />
                     <p className="text-xs text-center" style={{ color: isDark ? '#a0a0a0' : '#9ca3af' }}>
-                        © 2025 Quantum Ledger
+                        © 2025 Atom Ledger
                     </p>
                 </div>
             </div>

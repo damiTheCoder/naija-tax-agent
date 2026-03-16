@@ -17,6 +17,15 @@ const trustLogos = [
   { name: "24/7 AI Support", icon: "bot" },
 ];
 
+const heroAvatars = [
+  { src: "/j1.jpeg", alt: "Happy customer using Atom Ledger" },
+  { src: "/j2.jpeg", alt: "Business owner smiling" },
+  { src: "/j3.jpeg", alt: "Satisfied entrepreneur" },
+  { src: "/j1.jpeg", alt: "Business owner testimonial" },
+];
+
+const currentYear = new Date().getFullYear();
+
 export default function LandingPage() {
   return (
     <ScrollAnimator>
@@ -28,7 +37,7 @@ export default function LandingPage() {
               <div className="relative w-7 h-7 overflow-hidden rounded-full">
                 <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="28px" />
               </div>
-              <span className="nav-brand-text">Quantum Ledger</span>
+              <span className="nav-brand-text">Atom Ledger</span>
             </Link>
 
             <div className="nav-links-modern">
@@ -72,6 +81,14 @@ export default function LandingPage() {
             <p className="hero-subtitle-modern">
               Know your numbers. Control your cash. Run your business with confidence.
             </p>
+
+            <div className="hero-avatar-row" aria-label="Happy business owners using Atom Ledger">
+              {heroAvatars.map((avatar, index) => (
+                <div key={`${avatar.src}-${index}`} className="hero-avatar-item">
+                  <img src={avatar.src} alt={avatar.alt} className="hero-avatar-image" width={48} height={48} loading="lazy" />
+                </div>
+              ))}
+            </div>
 
             <div className="hero-cta-group">
               <Link href="/accounting" className="cta-primary-modern">
@@ -195,7 +212,13 @@ export default function LandingPage() {
 
               {/* Hero Image */}
               <div className="why-matters-image">
-                <Image src="/why-matters-hero.png" alt="Quantum Ledger Financial Visibility" width={600} height={400} style={{ width: '100%', height: 'auto' }} />
+                <div className="why-matters-avatar-cluster" aria-label="Business owners using Atom Ledger">
+                  {heroAvatars.map((avatar, index) => (
+                    <div key={`why-matters-${avatar.src}-${index}`} className="why-matters-avatar-item">
+                      <img src={avatar.src} alt={avatar.alt} className="why-matters-avatar-image" width={88} height={88} loading="lazy" />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -241,16 +264,16 @@ export default function LandingPage() {
               <h2 className="section-title-modern">
                 Introducing
                 <br />
-                <span className="title-highlight">Quantum Ledger</span>
+                <span className="title-highlight">Atom Ledger</span>
               </h2>
             </div>
           </div>
           {/* Full Width Hero Image */}
-          <Image src="/cashflow-boosted-hero.png" alt="Cashflow Boosted - Accounting and Tax" className="hero-full-image" width={1200} height={600} style={{ width: '100%', height: 'auto' }} priority />
+          <Image src="/cashflow-boosted-hero.png?v=20260316-1" alt="Atom Ledger dashboard preview" className="hero-full-image" width={1440} height={768} style={{ width: '100%', height: 'auto' }} priority />
 
           {/* CashOS Features List - Horizontal Scroll */}
           <div className="cashos-features-section section-container">
-            <h2 className="cashos-brand-title">Quantum Ledger</h2>
+            <h2 className="cashos-brand-title">Atom Ledger</h2>
             <p className="cashos-intro">
               is an AI-powered financial operating system that helps business owners:
             </p>
@@ -374,7 +397,7 @@ export default function LandingPage() {
                 Stop guessing. <span className="title-highlight">Start knowing.</span>
               </h2>
               <p className="final-cta-subtitle">
-                Join thousands of SMEs building financial clarity with Quantum Ledger.
+                Join thousands of SMEs building financial clarity with Atom Ledger.
               </p>
               <Link href="/accounting" className="final-cta-btn">
                 Get Started
@@ -393,7 +416,7 @@ export default function LandingPage() {
                   <div className="relative w-9 h-9 overflow-hidden rounded-full">
                     <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" />
                   </div>
-                  <span>Quantum Ledger</span>
+                  <span>Atom Ledger</span>
                 </Link>
                 <p className="footer-tagline">AI Accounting for Nigerian Businesses</p>
               </div>
@@ -408,30 +431,30 @@ export default function LandingPage() {
                 <div className="footer-col">
                   <h4>Company</h4>
                   <Link href="#about">About</Link>
-                  <Link href="#">Careers</Link>
-                  <Link href="#">Contact</Link>
+                  <Link href="/careers">Careers</Link>
+                  <Link href="/contact">Contact</Link>
                 </div>
                 <div className="footer-col">
                   <h4>Legal</h4>
-                  <Link href="#">Privacy</Link>
-                  <Link href="#">Terms</Link>
-                  <Link href="#">Security</Link>
+                  <Link href="/privacy">Privacy</Link>
+                  <Link href="/terms">Terms</Link>
+                  <Link href="/security">Security</Link>
                 </div>
               </div>
             </div>
 
             <div className="footer-bottom-modern">
-              <p>© 2024 Quantum Ledger. Built with ❤️ for Nigerian businesses.</p>
+              <p>© {currentYear} Atom Ledger. Built with ❤️ for Nigerian businesses.</p>
               <div className="footer-socials">
-                <a href="#" aria-label="Twitter">
+                <Link href="/contact#x" aria-label="Twitter">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
-                </a>
-                <a href="#" aria-label="LinkedIn">
+                </Link>
+                <Link href="/contact#linkedin" aria-label="LinkedIn">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
-                </a>
-                <a href="#" aria-label="Instagram">
+                </Link>
+                <Link href="/contact#instagram" aria-label="Instagram">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg>
-                </a>
+                </Link>
               </div>
             </div>
           </div>

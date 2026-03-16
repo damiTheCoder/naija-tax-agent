@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 
 /**
- * Reports API for Clawdbot
+ * Reports API
  * 
  * Generates financial reports (P&L, Balance Sheet, Cashflow).
  * Called by the cashos_get_report tool.

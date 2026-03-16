@@ -15,7 +15,7 @@ const DEFAULT_GEMINI_MODELS = [
 
 const thoughtStateByThread = new Map<string, string[]>();
 
-const MCP_SYSTEM_PROMPT = `You are the Quantum Ledger MCP bridge planner.
+const MCP_SYSTEM_PROMPT = `You are the Atom Ledger MCP bridge planner.
 You must orchestrate financial workflows using MCP tools when the user is requesting actions.
 
 Rules:

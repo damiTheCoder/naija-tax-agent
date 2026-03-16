@@ -2,11 +2,11 @@
  * AI Transaction Validator (Layer 2)
  * 
  * ============================================================================
- * CLAWDBOT INTEGRATION (Replaces Google Gemini)
+ * GEMINI INTEGRATION
  * ============================================================================
  * 
- * Uses Clawdbot AI to validate and correct transaction interpretations
- * from the system logic (Layer 1).
+ * Uses Gemini AI to validate and correct transaction interpretations from
+ * the system logic (Layer 1).
  * 
  * This provides a second layer of verification to ensure:
  * 1. Correct accounting logic (debit/credit accounts)
@@ -19,10 +19,6 @@ import { CHART_OF_ACCOUNTS, getAccount, getAccountByName } from './doubleEntry';
 // CONFIGURATION
 // ============================================================================
 
-// AI Provider: 'clawdbot' or 'gemini' (for backward compatibility)
-const RAW_AI_PROVIDER = process.env.AI_VALIDATION_PROVIDER || 'gemini';
-const CLAWDBOT_API_URL = process.env.CLAWDBOT_API_URL || 'http://localhost:8080';
-const CLAWDBOT_API_KEY = process.env.CLAWDBOT_API_KEY || '';
 const VALIDATION_RETRY_LIMIT = 2;
 const VALIDATION_RETRY_DELAY_MS = 300;
 const DEFAULT_DEBIT_ACCOUNT = { code: "5010", name: "Purchases" };
@@ -36,13 +32,6 @@ const DEFAULT_GEMINI_MODEL_CANDIDATES = [
 ];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-function normalizeProvider(provider: string | undefined): 'clawdbot' | 'gemini' {
-    const normalized = (provider || '').trim().toLowerCase();
-    if (['clawdbot', 'claw', 'clawdbot-ai'].includes(normalized)) return 'clawdbot';
-    if (['gemini', 'google', 'google-gemini', 'google_gemini'].includes(normalized)) return 'gemini';
-    return 'gemini';
-}
 
 function resolveGeminiApiKey(): string {
     const keys = [
@@ -178,7 +167,7 @@ function ensureChartAccount(
 }
 
 // ============================================================================
-// CLAWDBOT AI VALIDATOR CLASS
+// AI VALIDATOR CLASS
 // ============================================================================
 
 // In-memory cache for AI validation results to save quota
@@ -187,24 +176,14 @@ const CONFIDENCE_THRESHOLD = 0.85;
 
 export class AITransactionValidator {
     private isEnabled: boolean = true;
-    private provider: 'clawdbot' | 'gemini' = normalizeProvider(RAW_AI_PROVIDER);
+    private provider = 'gemini' as const;
     private geminiApiKey: string = '';
 
     constructor() {
         const enabled = process.env.ENABLE_AI_VALIDATION !== 'false';
         this.geminiApiKey = resolveGeminiApiKey();
-
-        if (enabled && this.provider === 'clawdbot') {
-            this.isEnabled = true;
-            console.log('[AI Validator] Initialized with Clawdbot');
-        } else if (enabled && this.provider === 'gemini') {
-            // Gemini support - check for API key aliases
-            this.isEnabled = !!this.geminiApiKey;
-            console.log(`[AI Validator] Gemini mode - ${this.isEnabled ? 'enabled' : 'disabled (missing API key)'}`);
-        } else {
-            this.isEnabled = false;
-            console.log('[AI Validator] Disabled by configuration');
-        }
+        this.isEnabled = enabled && !!this.geminiApiKey;
+        console.log(`[AI Validator] Gemini mode - ${this.isEnabled ? 'enabled' : 'disabled (missing API key or disabled via config)'}`);
     }
 
     /**
@@ -214,12 +193,12 @@ export class AITransactionValidator {
         return this.isEnabled;
     }
 
-    getProvider(): 'clawdbot' | 'gemini' {
+    getProvider(): 'gemini' {
         return this.provider;
     }
 
     /**
-     * Validate a transaction interpretation using AI (Clawdbot or Gemini)
+     * Validate a transaction interpretation using AI (Gemini)
      * Includes caching and confidence thresholding to optimize quota usage.
      */
     async validateTransaction(
@@ -269,12 +248,7 @@ export class AITransactionValidator {
         let lastError: unknown = null;
         for (let attempt = 1; attempt <= VALIDATION_RETRY_LIMIT; attempt++) {
             try {
-                let result: AIValidationResult;
-                if (this.provider === 'clawdbot') {
-                    result = await this.validateWithClawdbot(systemInterpretation, startTime);
-                } else {
-                    result = await this.validateWithGemini(systemInterpretation, startTime);
-                }
+                const result = await this.validateWithGemini(systemInterpretation, startTime);
 
                 // Store successful result in cache
                 validationCache.set(textKey, result);
@@ -301,49 +275,7 @@ export class AITransactionValidator {
     }
 
     /**
-     * Validate using Clawdbot API
-     */
-    private async validateWithClawdbot(
-        interpretation: SystemInterpretation,
-        startTime: number
-    ): Promise<AIValidationResult> {
-        const prompt = this.buildPrompt(interpretation);
-
-        const response = await fetch(`${CLAWDBOT_API_URL}/api/chat`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(CLAWDBOT_API_KEY && { Authorization: `Bearer ${CLAWDBOT_API_KEY}` }),
-            },
-            body: JSON.stringify({
-                message: prompt,
-                user_id: 'ai_validator',
-                context: {
-                    module: 'accounting_validation',
-                    expect_json: true,
-                },
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Clawdbot API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const text = data.reply || '';
-
-        if (!text || text.trim().length === 0) {
-            throw new Error('Empty response from Clawdbot');
-        }
-
-        const aiResult = this.parseAIResponse(text, interpretation);
-        aiResult.processingTimeMs = Date.now() - startTime;
-
-        return aiResult;
-    }
-
-    /**
-     * Validate using Gemini API (legacy support)
+     * Validate using Gemini API
      */
     private async validateWithGemini(
         interpretation: SystemInterpretation,
@@ -583,7 +515,7 @@ export function getAIValidator(): AITransactionValidator {
 /**
  * Validate a transaction using the 2-layer system
  * Layer 1: System logic (already applied)
- * Layer 2: AI verification (this function) - Now uses Clawdbot by default
+ * Layer 2: AI verification (this function)
  */
 export async function validateWithAI(
     systemInterpretation: SystemInterpretation

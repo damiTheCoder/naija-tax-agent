@@ -344,7 +344,7 @@ export const applyTaxSettingsToRuleSet = (
 export const getTaxpayerProfile = (entityId = "entity-default") => {
   const settings = loadTaxSettings(entityId);
   const businessName =
-    settings.companyInfo.tradingName || settings.companyInfo.legalName || "Quantum Ledger";
+    settings.companyInfo.tradingName || settings.companyInfo.legalName || "Atom Ledger";
   const taxpayerName = settings.companyInfo.legalName || businessName || "Authorized Taxpayer";
   return {
     taxpayerName,

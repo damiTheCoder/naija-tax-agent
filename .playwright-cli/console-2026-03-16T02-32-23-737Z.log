@@ -1,0 +1,1 @@
+[  261177ms] [WARNING] Image with src "/quantum-ledger-logo.png" has "fill" and parent element with invalid "position". Provided "static" should be one of absolute,fixed,relative. @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/next-devtools/shared/forward-logs-shared.js:27

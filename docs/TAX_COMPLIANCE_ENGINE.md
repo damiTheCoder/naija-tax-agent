@@ -1,4 +1,4 @@
-# Quantum Ledger Tax Compliance Engine - Technical Design
+# Atom Ledger Tax Compliance Engine - Technical Design
 
 ## Goals
 - Deterministic, explainable tax computation with versioned rule sets.

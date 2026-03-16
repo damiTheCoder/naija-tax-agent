@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 
 /**
- * Cashflow Metrics API for Clawdbot
+ * Cashflow Metrics API
  * 
  * Returns cashflow analysis based on accounting data.
  * Called by the cashos_get_cashflow tool.

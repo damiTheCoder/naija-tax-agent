@@ -124,7 +124,7 @@ export async function generateFinancialRatiosPDF(payload: FinancialRatiosPdfPayl
   let y = margin;
 
   const title = "Financial Ratios Report";
-  const subtitle = payload.businessName ? payload.businessName : "Quantum Ledger";
+  const subtitle = payload.businessName ? payload.businessName : "Atom Ledger";
   const generatedAt = payload.generatedAt ? new Date(payload.generatedAt) : new Date();
   const generatedLabel = `Generated ${generatedAt.toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}`;
 

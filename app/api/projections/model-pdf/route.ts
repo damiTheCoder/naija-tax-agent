@@ -151,9 +151,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       margin: 50,
       info: {
         Title: `${modelName} - Financial Model`,
-        Author: "Quantum Ledger",
+        Author: "Atom Ledger",
         Subject: "Financial Modelling Export",
-        Creator: "Quantum Ledger",
+        Creator: "Atom Ledger",
       },
     });
 
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .font(fonts.bold)
       .fontSize(22)
       .fillColor("#0f172a")
-      .text("Quantum Ledger", { align: "left" });
+      .text("Atom Ledger", { align: "left" });
 
     doc
       .moveDown(0.25)

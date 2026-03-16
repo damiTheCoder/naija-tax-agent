@@ -550,9 +550,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       margin: 32,
       info: {
         Title: "Financial Projections Dashboard",
-        Author: "Quantum Ledger",
+        Author: "Atom Ledger",
         Subject: "Financial Projections Export",
-        Creator: "Quantum Ledger",
+        Creator: "Atom Ledger",
       },
     });
 

@@ -8,6 +8,13 @@ const { execSync, spawn } = require("child_process");
 const projectDir = process.cwd();
 const lockPath = join(projectDir, ".next", "dev", "lock");
 const devServerPath = join(projectDir, ".next", "dev", "server");
+const isVerbose = process.env.DEV_SAFE_VERBOSE === "1";
+
+function logVerbose(message) {
+  if (isVerbose) {
+    console.log(message);
+  }
+}
 
 function getProjectCwdForPid(pid) {
   try {
@@ -99,27 +106,39 @@ function stopProcess(pid) {
 }
 
 function clearStaleArtifacts() {
+  const cleanedArtifacts = [];
+  let hadLock = false;
+
   try {
     if (existsSync(lockPath)) {
+      hadLock = true;
       unlinkSync(lockPath);
-      console.log(`[dev] Removed stale Next.js lock at ${lockPath}`);
+      cleanedArtifacts.push("lock");
     }
   } catch (error) {
     console.warn(`[dev] Warning: unable to clear Next.js lock (${error.message})`);
   }
 
   try {
-    if (existsSync(devServerPath)) {
+    // If lock existed, assume previous shutdown was unclean and clear server cache.
+    // Can also be forced with NEXT_DEV_FORCE_CLEAN=1.
+    if ((hadLock || process.env.NEXT_DEV_FORCE_CLEAN === "1") && existsSync(devServerPath)) {
       rmSync(devServerPath, {
         recursive: true,
         force: true,
         maxRetries: 3,
         retryDelay: 100,
       });
-      console.log(`[dev] Cleared stale Next.js dev server dir at ${devServerPath}`);
+      cleanedArtifacts.push("dev-server-dir");
     }
   } catch (error) {
     console.warn(`[dev] Warning: unable to clear Next.js dev server dir (${error.message})`);
+  }
+
+  if (cleanedArtifacts.length > 0) {
+    console.log(`[dev] Cleaned stale Next.js artifacts (${cleanedArtifacts.join(", ")}).`);
+    logVerbose(`[dev] lockPath=${lockPath}`);
+    logVerbose(`[dev] devServerPath=${devServerPath}`);
   }
 }
 
