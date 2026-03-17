@@ -297,34 +297,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div
-          className="app-shell-page-layout flex-1 lg:grid lg:items-start lg:gap-5 lg:px-6 lg:pb-6 xl:gap-6 xl:px-8"
-          style={{
-            gridTemplateColumns: isPersonalRoute
-              ? "minmax(0, 1fr)"
-              : "minmax(0, 1fr) var(--chat-sidebar-width, 5.75rem)",
-          }}
-        >
-          {/* Page Content */}
-          <main className="app-shell-content-main min-w-0 flex-1 px-4 py-4 sm:px-6 lg:min-h-[calc(100vh-5.5rem)] lg:px-0 lg:py-6">
-            <div className="app-shell-content-container mx-auto w-full min-w-0 max-w-[1320px]">
-              <Suspense fallback={<PageSkeleton />}>
-                {children}
-              </Suspense>
-            </div>
-          </main>
-
-          {!isPersonalRoute && (
-            <aside className="app-shell-chat-host relative h-0 min-w-0 lg:block lg:h-auto lg:self-start lg:sticky lg:top-24">
-              <DeferredFloatingChat />
-            </aside>
-          )}
-        </div>
+        {/* Page Content */}
+        <main className="app-shell-content-main flex-1 px-4 sm:px-6 py-4 lg:p-8">
+          <div className="app-shell-content-container max-w-[1320px] mx-auto w-full min-w-0">
+            <Suspense fallback={<PageSkeleton />}>
+              {children}
+            </Suspense>
+          </div>
+        </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
       {!isPersonalRoute && (
         <MobileBottomNav />
+      )}
+
+      {!isPersonalRoute && (
+        <div className="app-shell-floating-chat">
+          <DeferredFloatingChat />
+        </div>
       )}
 
     </div>

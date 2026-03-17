@@ -86,22 +86,17 @@ export default function DeferredFloatingChat() {
           void loadFloatingChat();
         }}
         aria-label="Open assistant"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-[0_18px_40px_rgba(34,100,255,0.28)] transition-transform duration-200 hover:scale-[1.03] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/25 lg:hidden"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-transform duration-200 hover:scale-[1.03] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/25 lg:hidden"
       >
         {isLoading ? (
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
         ) : (
-          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8 10h8M8 14h5m6 6-3.8-2.1a3 3 0 0 0-1.45-.37H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v6a4 4 0 0 1-2 3.46Z"
-            />
-          </svg>
+          <img src="/google-logo.jpg" alt="Google" className="h-8 w-8 rounded-full object-cover ring-2 ring-white/95" />
         )}
+        <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
       </button>
 
-      <div className="hidden lg:flex lg:min-h-[calc(100vh-7rem)] lg:items-end lg:justify-end">
+      <div className="hidden lg:block">
         <button
           type="button"
           onClick={() => {
@@ -112,22 +107,16 @@ export default function DeferredFloatingChat() {
             void loadFloatingChat();
           }}
           aria-label="Open assistant"
-          className="group relative flex w-full max-w-[5.75rem] flex-col items-center gap-2 rounded-[28px] border border-gray-200 bg-white px-3 py-4 text-slate-700 shadow-[0_18px_45px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_22px_50px_rgba(34,100,255,0.16)] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/15"
+          className="group fixed bottom-8 right-8 z-40 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(34,100,255,0.32)] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/15"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white shadow-[0_14px_30px_rgba(34,100,255,0.24)]">
+          <span className="flex items-center">
             {isLoading ? (
-              <span className="h-[18px] w-[18px] animate-spin rounded-full border-2 border-white/35 border-t-white" />
+              <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/35 border-t-white" />
             ) : (
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 10h8M8 14h5m6 6-3.8-2.1a3 3 0 0 0-1.45-.37H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v6a4 4 0 0 1-2 3.46Z"
-                />
-              </svg>
+              <img src="/google-logo.jpg" alt="Google" className="h-8 w-8 rounded-full object-cover ring-2 ring-white/95" />
             )}
           </span>
-          <span className="text-[11px] font-semibold tracking-[0.18em] text-[#2264ff] uppercase">Chat</span>
+          <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
         </button>
       </div>
     </>

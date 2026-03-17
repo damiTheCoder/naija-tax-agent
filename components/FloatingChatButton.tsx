@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useId } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
 import { RawTransaction, TransactionType } from "@/lib/accounting/types";
@@ -65,9 +65,6 @@ const PROJECTIONS_RESET_EVENT = "ql:projections-assumptions-reset";
 const AGENT_CHAT_MODE_STORAGE_KEY = "ql::agent-chat-mode";
 const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 const HAS_WORKSPACE_ROUTE_CATALOG = buildWorkspaceRouteCatalogText({ maxItems: 1 }).trim().length > 0;
-const DESKTOP_CHAT_COLLAPSED_WIDTH = 92;
-const DESKTOP_CHAT_EXPANDED_WIDTH = 336;
-
 type ChatModalOpenDetail = {
     module?: string;
     prompt?: string;
@@ -685,6 +682,9 @@ export default function FloatingChatButton() {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
     const blobUrlsRef = useRef<string[]>([]);
+    const desktopResizeSessionRef = useRef<{ startX: number; startWidth: number } | null>(null);
+    const [desktopModalWidth, setDesktopModalWidth] = useState(380);
+    const [isDesktopResizing, setIsDesktopResizing] = useState(false);
 
     const revokeBlobUrls = useCallback(() => {
         for (const url of blobUrlsRef.current) {
@@ -727,10 +727,10 @@ export default function FloatingChatButton() {
                 route,
                 title: firstUserMessage,
             })) || createChatConversation({
-                    module: moduleId,
-                    route,
-                    title: firstUserMessage,
-                });
+                module: moduleId,
+                route,
+                title: firstUserMessage,
+            });
             conversationId = created.id;
             setActiveConversationId(created.id);
         }
@@ -754,10 +754,10 @@ export default function FloatingChatButton() {
                 route,
                 title: firstUserMessage,
             })) || createChatConversation({
-                    module: moduleId,
-                    route,
-                    title: firstUserMessage,
-                });
+                module: moduleId,
+                route,
+                title: firstUserMessage,
+            });
             conversationId = created.id;
             setActiveConversationId(created.id);
             saved = (await saveChatConversationMessagesAsync({
@@ -1108,33 +1108,72 @@ export default function FloatingChatButton() {
         };
     }, [revokeBlobUrls]);
 
+    const clampDesktopModalWidth = useCallback((width: number) => {
+        if (typeof window === "undefined") {
+            return Math.min(Math.max(width, 320), 560);
+        }
+
+        const maxAllowed = Math.max(320, Math.min(620, window.innerWidth - 72));
+        return Math.min(Math.max(width, 320), maxAllowed);
+    }, []);
+
     useEffect(() => {
         if (typeof window === "undefined") return;
-        const root = document.documentElement;
 
-        const syncDesktopChatClass = () => {
-            const isDesktop = window.innerWidth >= 1024;
-            if (isDesktop) {
-                root.style.setProperty(
-                    "--chat-sidebar-width",
-                    `${isModalOpen ? DESKTOP_CHAT_EXPANDED_WIDTH : DESKTOP_CHAT_COLLAPSED_WIDTH}px`
-                );
-                root.classList.toggle("chat-sidebar-open", isModalOpen);
-            } else {
-                root.classList.remove("chat-sidebar-open");
-                root.style.removeProperty("--chat-sidebar-width");
-            }
+        const handlePointerMove = (event: PointerEvent) => {
+            const session = desktopResizeSessionRef.current;
+            if (!session) return;
+            const nextWidth = clampDesktopModalWidth(session.startWidth + (session.startX - event.clientX));
+            setDesktopModalWidth(nextWidth);
         };
 
-        syncDesktopChatClass();
-        window.addEventListener("resize", syncDesktopChatClass);
+        const stopResize = () => {
+            if (!desktopResizeSessionRef.current) return;
+            desktopResizeSessionRef.current = null;
+            setIsDesktopResizing(false);
+            document.body.style.userSelect = "";
+            document.body.style.cursor = "";
+        };
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", stopResize);
+        window.addEventListener("pointercancel", stopResize);
 
         return () => {
-            window.removeEventListener("resize", syncDesktopChatClass);
-            root.classList.remove("chat-sidebar-open");
-            root.style.removeProperty("--chat-sidebar-width");
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", stopResize);
+            window.removeEventListener("pointercancel", stopResize);
+            document.body.style.userSelect = "";
+            document.body.style.cursor = "";
         };
-    }, [isModalOpen]);
+    }, [clampDesktopModalWidth]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const syncDesktopModalWidth = () => {
+            setDesktopModalWidth((current) => clampDesktopModalWidth(current));
+        };
+
+        syncDesktopModalWidth();
+        window.addEventListener("resize", syncDesktopModalWidth);
+
+        return () => {
+            window.removeEventListener("resize", syncDesktopModalWidth);
+        };
+    }, [clampDesktopModalWidth]);
+
+    const handleDesktopResizeStart = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        desktopResizeSessionRef.current = {
+            startX: event.clientX,
+            startWidth: desktopModalWidth,
+        };
+        setIsDesktopResizing(true);
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "ew-resize";
+    }, [desktopModalWidth]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -1756,28 +1795,14 @@ _Ask me anything about bank reconciliation!_`;
         }
     };
 
-    const GeminiBadge = () => {
-        const gradientId = useId();
-
-        return (
-            <span className="w-9 h-9 flex-shrink-0 grid place-items-center">
-                <svg viewBox="0 0 24 24" className="w-8 h-8" aria-hidden="true">
-                    <defs>
-                        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor="#ff4b4b" />
-                            <stop offset="28%" stopColor="#facc15" />
-                            <stop offset="58%" stopColor="#22c55e" />
-                            <stop offset="100%" stopColor="#3b82f6" />
-                        </linearGradient>
-                    </defs>
-                    <path
-                        d="M12 1.8c1.7 4.6 3 6 7.6 7.6-4.6 1.7-6 3-7.6 7.6-1.7-4.6-3-6-7.6-7.6 4.6-1.6 5.9-3 7.6-7.6z"
-                        fill={`url(#${gradientId})`}
-                    />
-                </svg>
-            </span>
-        );
-    };
+    const GoogleChatMark = ({ size = "mobile" }: { size?: "mobile" | "desktop" }) => (
+        <img
+            src="/google-logo.jpg"
+            alt="Google"
+            className={`rounded-full object-cover ring-2 ring-white/95 ${size === "desktop" ? "h-8 w-8" : "h-8 w-8"
+                }`}
+        />
+    );
 
     const openChat = () => {
         playGoogleButtonClickSound();
@@ -2005,7 +2030,7 @@ _Ask me anything about bank reconciliation!_`;
                 <>
                     <button
                         onClick={openChat}
-                        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2 py-1.5 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl lg:hidden"
+                        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-300 hover:scale-105 hover:shadow-xl lg:hidden"
                         aria-label="Open chat"
                     >
                         {clarificationData && (
@@ -2013,25 +2038,23 @@ _Ask me anything about bank reconciliation!_`;
                                 1
                             </div>
                         )}
-                        <GeminiBadge />
-                        <span className="text-sm font-semibold">Chat</span>
+                        <GoogleChatMark />
+                        <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
                     </button>
 
-                    <div className="hidden lg:flex lg:min-h-[calc(100vh-7rem)] lg:items-end lg:justify-end">
+                    <div className="hidden lg:block">
                         <button
                             onClick={openChat}
-                            className="group relative flex w-full max-w-[5.75rem] flex-col items-center gap-2 rounded-[28px] border border-gray-200 bg-white px-3 py-4 text-slate-700 shadow-[0_18px_45px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_22px_50px_rgba(34,100,255,0.16)]"
+                            className="group fixed bottom-8 right-8 z-40 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(34,100,255,0.32)]"
                             aria-label="Open chat"
                         >
                             {clarificationData && (
-                                <div className="absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                                <div className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-[10px] font-bold text-white shadow-sm">
                                     1
                                 </div>
                             )}
-                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] shadow-[0_16px_34px_rgba(34,100,255,0.24)]">
-                                <GeminiBadge />
-                            </span>
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2264ff]">
+                            <GoogleChatMark size="desktop" />
+                            <span className="pr-0.5 text-[15px] font-semibold tracking-tight">
                                 Chat
                             </span>
                         </button>
@@ -2067,8 +2090,26 @@ _Ask me anything about bank reconciliation!_`;
             )}
 
             {isModalOpen && (
-                <div className="hidden lg:flex lg:min-h-[calc(100vh-7rem)] lg:w-full lg:flex-col">
-                    <div className="flex h-[calc(100vh-7rem)] w-full flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.14)]">
+                <div
+                    className="hidden lg:flex fixed inset-0 z-[100] items-start justify-end p-6"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setIsModalOpen(false);
+                    }}
+                >
+                    <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" />
+                    <div
+                        className={`relative flex h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] ${isDesktopResizing ? "select-none" : ""
+                            }`}
+                        style={{ width: `${desktopModalWidth}px` }}
+                    >
+                        <button
+                            type="button"
+                            aria-label="Resize chat modal"
+                            onPointerDown={handleDesktopResizeStart}
+                            className="absolute inset-y-0 left-0 z-20 flex w-4 cursor-ew-resize touch-none items-center justify-center"
+                        >
+                            <span className="h-14 w-1 rounded-full bg-gray-200 transition-colors hover:bg-blue-300" />
+                        </button>
                         {chatPanelContent}
                     </div>
                 </div>

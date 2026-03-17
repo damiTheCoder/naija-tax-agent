@@ -1,6 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  formatCurrency,
+  formatCurrencyFull,
+  formatDate,
+  type ComplianceStatusEntry,
+  type DashboardTaxType,
+  type DeadlineItem,
+  type FilingIndicator,
+  type MonthlyTrendPoint,
+  type RemittanceAuditRecord,
+  type TaxSummary,
+  type TaxTypeImpact,
+  type TaxWorkspaceInsights,
+  type TaxWorkspacePayment,
+  type WorkspaceDocument,
+} from "@/components/tax/workspace/shared";
 import { buildTransactionsFromFiles } from "@/lib/accounting/statementEngine";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import type { JournalEntry } from "@/lib/accounting/doubleEntry";
@@ -27,59 +44,7 @@ import {
 import { generateTaxRemittancePdf, type TaxRemittancePdfPayload } from "@/lib/taxRemittancePdf";
 import { getTaxpayerProfile } from "@/lib/tax/settings";
 
-type WorkspaceDocument = {
-  id: string;
-  name: string;
-  size: number;
-  extracted: number;
-  uploadedAt: string;
-};
-
-type RemittanceAuditRecord = {
-  id: string;
-  paymentReference: string;
-  taxpayerName: string;
-  businessName?: string;
-  taxType: string;
-  period: string;
-  dueDate: string;
-  taxAmount: number;
-  scheduleId: string;
-  source: string;
-  createdAt: string;
-};
-
 type ActiveTab = "timeline" | "schedules" | "flows" | "documents";
-type DashboardTaxType = "CIT" | "VAT" | "PAYE" | "WHT" | "EDT";
-type FilingIndicator = "Filed" | "Pending" | "Overdue";
-
-type DeadlineItem = {
-  id: string;
-  taxType: string;
-  period: string;
-  dueDate: string;
-  amount: number;
-  filingState: FilingIndicator;
-  stage: string;
-  source: "schedule" | "derived";
-};
-
-type MonthlyTrendPoint = {
-  monthKey: string;
-  monthLabel: string;
-  vat: number;
-  wht: number;
-  cit: number;
-  paye: number;
-  edt: number;
-  total: number;
-};
-
-type TaxTypeImpact = {
-  payable: number;
-  credit: number;
-  net: number;
-};
 
 type TaxDashboardV2 = {
   entityId: string;
@@ -133,46 +98,26 @@ type TimelineTransactionGroup = {
   }>;
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-NG", {
-  style: "currency",
-  currency: "NGN",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
+const WorkspaceTabLoading = () => (
+  <div className="p-6 text-sm text-gray-500">Loading workspace panel...</div>
+);
 
-const formatCurrencyFull = (amount: number) => currencyFormatter.format(Math.round(amount || 0));
-const formatCurrency = (amount: number) => {
-  const value = Math.round(amount || 0);
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
-
-  if (abs < 1_000) return `${sign}${formatCurrencyFull(abs)}`;
-
-  const compactTo = (divisor: number, suffix: string) => {
-    const scaled = abs / divisor;
-    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, "");
-    return `${sign}₦${rounded}${suffix}`;
-  };
-
-  if (abs < 1_000_000) return compactTo(1_000, "K");
-  if (abs < 1_000_000_000) return compactTo(1_000_000, "M");
-  return compactTo(1_000_000_000, "b");
-};
-const formatFileSize = (size: number) => {
-  if (size >= 1024 * 1024) {
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${Math.max(1, Math.round(size / 1024))} KB`;
-};
-
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return "Pending date";
-  return new Date(dateStr).toLocaleDateString("en-NG", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
+const TaxTimelineTab = dynamic(
+  () => import("@/components/tax/workspace/TaxTimelineTab"),
+  { loading: WorkspaceTabLoading }
+);
+const TaxSchedulesTab = dynamic(
+  () => import("@/components/tax/workspace/TaxSchedulesTab"),
+  { loading: WorkspaceTabLoading }
+);
+const TaxFlowsTab = dynamic(
+  () => import("@/components/tax/workspace/TaxFlowsTab"),
+  { loading: WorkspaceTabLoading }
+);
+const TaxDocumentsTab = dynamic(
+  () => import("@/components/tax/workspace/TaxDocumentsTab"),
+  { loading: WorkspaceTabLoading }
+);
 
 const getYearPrefix = (value: unknown): number | null => {
   if (typeof value !== "string") return null;
@@ -242,8 +187,8 @@ export default function TaxWorkspacePage() {
   const [filingPacks, setFilingPacks] = useState<FilingPackResult[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   // Keep first server/client render deterministic; hydrate persisted values after mount.
-  const [complianceStatuses, setComplianceStatuses] = useState<ReturnType<typeof loadComplianceStatuses>>([]);
-  const [payments, setPayments] = useState<ReturnType<typeof loadPayments>>([]);
+  const [complianceStatuses, setComplianceStatuses] = useState<ComplianceStatusEntry[]>([]);
+  const [payments, setPayments] = useState<TaxWorkspacePayment[]>([]);
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isRefreshingRules, setIsRefreshingRules] = useState(false);
@@ -622,8 +567,67 @@ export default function TaxWorkspacePage() {
     }
   }, [refreshAudit]);
 
+  const handleScheduleStatusChange = useCallback(
+    (schedule: TaxSchedule, stage: ComplianceStatusStage) => {
+      setComplianceStatus({
+        entityId: "entity-default",
+        period: schedule.period,
+        taxType: schedule.taxType,
+        stage,
+        actor: "user",
+      });
+      setComplianceStatuses(loadComplianceStatuses());
+    },
+    []
+  );
 
-  const taxSummary = useMemo(() => {
+  const handleMarkSchedulePaid = useCallback((schedule: TaxSchedule) => {
+    recordPayment({
+      entityId: "entity-default",
+      period: schedule.period,
+      taxType: schedule.taxType,
+      amount: schedule.totalTax,
+      actor: "user",
+    });
+    setComplianceStatus({
+      entityId: "entity-default",
+      period: schedule.period,
+      taxType: schedule.taxType,
+      stage: "paid",
+      actor: "user",
+    });
+    setComplianceStatuses(loadComplianceStatuses());
+    setPayments(loadPayments());
+  }, []);
+
+  const handleRefreshRemittanceHistory = useCallback(() => {
+    void loadRemittanceHistory();
+  }, [loadRemittanceHistory]);
+
+  const handleOpenDocumentsTab = useCallback(() => {
+    setActiveTab("documents");
+  }, []);
+
+  const handleDocumentDragEnter = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(true);
+  }, []);
+
+  const handleDocumentDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  }, []);
+
+  const handleDocumentDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+  }, []);
+
+  const handleBrowseDocuments = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+
+  const taxSummary = useMemo<TaxSummary>(() => {
     const vatSchedule = schedules.find((schedule) => schedule.taxType === "VAT");
     const whtSchedule = schedules.find((schedule) => schedule.taxType === "WHT");
     const cgtSchedule = schedules.find((schedule) => schedule.taxType === "CGT");
@@ -731,7 +735,7 @@ export default function TaxWorkspacePage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredLedgerEntries]);
 
-  const workspaceInsights = useMemo(() => {
+  const workspaceInsights = useMemo<TaxWorkspaceInsights>(() => {
     const fromBoundary = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
     const toBoundary = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
     const now = new Date();
@@ -1435,472 +1439,56 @@ export default function TaxWorkspacePage() {
 
       {/* Tab Content */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden min-h-[400px]">
+        {activeTab === "timeline" ? (
+          <TaxTimelineTab
+            timelineGroups={timelineGroups}
+            ledgerEntryCount={filteredLedgerEntries.length}
+            selectedYear={selectedYear}
+            onOpenDocuments={handleOpenDocumentsTab}
+          />
+        ) : null}
 
-        {/* Timeline Tab */}
-        {activeTab === 'timeline' && (
-          <div>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-900">Tax Computation Timeline</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {timelineGroups.length} transaction{timelineGroups.length === 1 ? "" : "s"} • {filteredLedgerEntries.length} tax line{filteredLedgerEntries.length === 1 ? "" : "s"} for {selectedYear}
-                </p>
-              </div>
-            </div>
-            {timelineGroups.length === 0 ? (
-              <div className="px-6 py-12 text-center text-gray-400">
-                <p>No tax ledger activity found for this period</p>
-                <button onClick={() => setActiveTab("documents")} className="text-xs mt-2 text-[#2264ff] hover:underline">Upload documents to start</button>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {timelineGroups.map((entry) => {
-                  return (
-                    <div key={entry.id} className="p-4 hover:bg-gray-50/50 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                              {(entry.transactionId || entry.id).slice(-6)}
-                            </span>
-                            {entry.lines.map((line) => (
-                              <span key={line.id} className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                                {line.taxType} {line.ledger}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-sm font-medium text-gray-900 mt-1">{entry.description || "Ledger adjustment"}</p>
-                        </div>
-                        <span className="text-xs text-gray-400">{formatDate(entry.date)}</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-                        <span className="text-xs text-gray-500">
-                          Base Amount: <span className="text-gray-900 font-medium" title={formatCurrencyFull(entry.baseAmount)}>{formatCurrency(entry.baseAmount)}</span>
-                        </span>
-                        <div className="text-right">
-                          <span className="text-xs text-gray-500 block">Net Tax Ledger Amount</span>
-                          <span className="text-sm font-mono font-bold text-gray-900" title={formatCurrencyFull(entry.netTaxAmount)}>{formatCurrency(entry.netTaxAmount)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        {activeTab === "schedules" ? (
+          <TaxSchedulesTab
+            schedules={schedules}
+            complianceStatuses={complianceStatuses}
+            isLoadingRemittanceHistory={isLoadingRemittanceHistory}
+            remittanceHistory={remittanceHistory}
+            onGenerateRemittance={handleGenerateRemittance}
+            onGenerateFilingPack={handleGenerateFilingPack}
+            onStatusChange={handleScheduleStatusChange}
+            onMarkPaid={handleMarkSchedulePaid}
+            onRefreshRemittanceHistory={handleRefreshRemittanceHistory}
+          />
+        ) : null}
 
-        {/* Schedules Tab */}
-        {activeTab === 'schedules' && (
-          <div>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="font-semibold text-gray-900">Statutory Schedules</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Upcoming tax filing obligations</p>
-            </div>
-            {schedules.length === 0 ? (
-              <div className="px-6 py-12 text-center text-gray-400">
-                <p>No active schedules generated</p>
-              </div>
-            ) : (
-              <div>
-                <div className="divide-y divide-gray-100">
-                  {schedules.slice().reverse().map((schedule) => {
-                    const status = complianceStatuses.find(
-                      (item) => item.period === schedule.period && item.taxType === schedule.taxType
-                    );
-                    return (
-                      <div key={schedule.id} className="p-4 flex items-center justify-between hover:bg-gray-50/50">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-semibold text-gray-900">{schedule.taxType} Schedule</h3>
-                            <span className="px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs uppercase tracking-wide font-medium">
-                              {status?.stage || schedule.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">Period: {schedule.period} • Due: {schedule.dueDate}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-gray-900" title={formatCurrencyFull(schedule.totalTax)}>{formatCurrency(schedule.totalTax)}</p>
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateRemittance(schedule)}
-                            className="text-xs text-[#2264ff] hover:underline font-medium mt-1"
-                          >
-                            Generate Remittance
-                          </button>
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateFilingPack(schedule, "pdf")}
-                              className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
-                            >
-                              Download PDF
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateFilingPack(schedule, "csv")}
-                              className="text-[11px] px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-gray-300"
-                            >
-                              Export CSV
-                            </button>
-                          </div>
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            <select
-                              value={status?.stage || schedule.status}
-                              onChange={(event) => {
-                                setComplianceStatus({
-                                  entityId: "entity-default",
-                                  period: schedule.period,
-                                  taxType: schedule.taxType,
-                                  stage: event.target.value as ComplianceStatusStage,
-                                  actor: "user",
-                                });
-                                setComplianceStatuses(loadComplianceStatuses());
-                              }}
-                              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600"
-                            >
-                              {["draft", "review", "ready", "filed", "paid", "reconciled"].map((stage) => (
-                                <option key={stage} value={stage}>
-                                  {stage}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                recordPayment({
-                                  entityId: "entity-default",
-                                  period: schedule.period,
-                                  taxType: schedule.taxType,
-                                  amount: schedule.totalTax,
-                                  actor: "user",
-                                });
-                                setComplianceStatus({
-                                  entityId: "entity-default",
-                                  period: schedule.period,
-                                  taxType: schedule.taxType,
-                                  stage: "paid",
-                                  actor: "user",
-                                });
-                                setComplianceStatuses(loadComplianceStatuses());
-                                setPayments(loadPayments());
-                              }}
-                              className="text-xs px-2 py-1 rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50"
-                            >
-                              Mark Paid
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {activeTab === "flows" ? (
+          <TaxFlowsTab
+            taxSummary={taxSummary}
+            issues={issues}
+            workspaceInsights={workspaceInsights}
+          />
+        ) : null}
 
-                <div className="border-t border-gray-100 px-4 py-4 bg-gray-50/40">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Remittance Audit History</h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void loadRemittanceHistory();
-                      }}
-                      className="text-xs text-[#2264ff] hover:underline font-medium"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-
-                  {isLoadingRemittanceHistory ? (
-                    <p className="text-xs text-gray-500 mt-3">Loading remittance history...</p>
-                  ) : remittanceHistory.length === 0 ? (
-                    <p className="text-xs text-gray-500 mt-3">No remittance records yet.</p>
-                  ) : (
-                    <div className="mt-3 space-y-2">
-                      {remittanceHistory.slice(0, 8).map((record) => (
-                        <div key={record.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-[11px] sm:text-xs font-mono text-gray-700">{record.paymentReference}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {record.taxType} • {record.period} • Due {record.dueDate}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-semibold text-gray-900" title={formatCurrencyFull(record.taxAmount)}>{formatCurrency(record.taxAmount)}</p>
-                              <p className="text-[11px] text-gray-400">{record.createdAt.slice(0, 16).replace("T", " ")}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Flows Tab */}
-        {activeTab === 'flows' && (
-          <div>
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="font-semibold text-gray-900">Tax Heads Overview</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Breakdown by tax type</p>
-            </div>
-            <div className="p-6 grid gap-6 md:grid-cols-2">
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-indigo-900">Value Added Tax</h3>
-                  <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Output VAT collected</span>
-                    <span className="font-mono text-gray-900" title={formatCurrencyFull(taxSummary.outputVAT)}>{formatCurrency(taxSummary.outputVAT)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Input VAT credit</span>
-                    <span className="font-mono text-gray-900" title={formatCurrencyFull(taxSummary.inputVAT)}>({formatCurrency(taxSummary.inputVAT)})</span>
-                  </div>
-                  <div className="pt-2 border-t border-indigo-200/50 flex justify-between font-bold text-indigo-900">
-                    <span>Net Payable</span>
-                    <span title={formatCurrencyFull(taxSummary.netVAT)}>{formatCurrency(taxSummary.netVAT)}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-slate-900">CIT / PIT Projection</h3>
-                  <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Turnover</span>
-                    <span className="font-mono text-gray-900" title={formatCurrencyFull(taxSummary.turnover)}>{formatCurrency(taxSummary.turnover)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Est. Profit</span>
-                    <span className="font-mono text-gray-900" title={formatCurrencyFull(taxSummary.profit)}>{formatCurrency(taxSummary.profit)}</span>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
-                    <span>Estimated Liability</span>
-                    <span title={formatCurrencyFull(taxSummary.estimatedCIT)}>{formatCurrency(taxSummary.estimatedCIT)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 pb-6">
-              <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-rose-900">Compliance Issues</h3>
-                  <span className="text-xs text-rose-600">{issues.length} open item(s)</span>
-                </div>
-                {issues.length === 0 ? (
-                  <p className="text-sm text-rose-700">No issues flagged. Your schedules reconcile with ledger entries.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {issues.slice(0, 4).map((issue) => (
-                      <div key={issue.id} className="rounded-lg bg-white border border-rose-100 px-3 py-2 text-sm text-rose-700">
-                        {issue.message}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white p-5 mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Monthly Tax Trend Chart</h3>
-                    <p className="text-xs text-gray-500">Combined monthly liabilities across CIT, VAT, PAYE, WHT, and Education Tax</p>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Peak month: <span title={formatCurrencyFull(workspaceInsights.maxMonthlyTrend)}>{formatCurrency(workspaceInsights.maxMonthlyTrend)}</span> • Year total: <span title={formatCurrencyFull(workspaceInsights.trendTotals.total)}>{formatCurrency(workspaceInsights.trendTotals.total)}</span>
-                  </div>
-                </div>
-
-                <div className="h-44 border border-gray-100 rounded-lg px-2 py-3 bg-gray-50/40">
-                  <div className="h-full grid grid-cols-12 gap-1 items-end">
-                    {workspaceInsights.monthlyTrend.map((point) => (
-                      <div key={point.monthKey} className="h-full flex flex-col items-center justify-end gap-1">
-                        <div className="w-full flex-1 flex items-end">
-                          <div
-                            className="w-full rounded-t-md bg-[#2264ff]"
-                            style={{ height: `${Math.max(4, Math.round((point.total / workspaceInsights.maxMonthlyTrend) * 100))}%` }}
-                            title={`${point.monthLabel}: ${formatCurrencyFull(point.total)}`}
-                          />
-                        </div>
-                        <span className="text-[10px] text-gray-500">{point.monthLabel}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-indigo-700 font-semibold">VAT</p>
-                    <p className="text-sm font-semibold text-indigo-900 mt-1" title={formatCurrencyFull(workspaceInsights.trendTotals.vat)}>{formatCurrency(workspaceInsights.trendTotals.vat)}</p>
-                  </div>
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">WHT</p>
-                    <p className="text-sm font-semibold text-emerald-900 mt-1" title={formatCurrencyFull(workspaceInsights.trendTotals.wht)}>{formatCurrency(workspaceInsights.trendTotals.wht)}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-700 font-semibold">CIT</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-1" title={formatCurrencyFull(workspaceInsights.trendTotals.cit)}>{formatCurrency(workspaceInsights.trendTotals.cit)}</p>
-                  </div>
-                  <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-cyan-700 font-semibold">PAYE</p>
-                    <p className="text-sm font-semibold text-cyan-900 mt-1" title={formatCurrencyFull(workspaceInsights.trendTotals.paye)}>{formatCurrency(workspaceInsights.trendTotals.paye)}</p>
-                  </div>
-                  <div className="rounded-lg border border-amber-100 bg-amber-50/40 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-amber-700 font-semibold">Education Tax</p>
-                    <p className="text-sm font-semibold text-amber-900 mt-1" title={formatCurrencyFull(workspaceInsights.trendTotals.edt)}>{formatCurrency(workspaceInsights.trendTotals.edt)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Documents Tab - Repurposed drag & drop area */}
-        {activeTab === 'documents' && (
-          <div
-            className={`flex flex-col items-center justify-center p-12 transition-colors ${dragActive ? "bg-blue-50" : "bg-white"}`}
-            onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-            onDragOver={(e) => e.preventDefault()}
-            onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+        {activeTab === "documents" ? (
+          <TaxDocumentsTab
+            dragActive={dragActive}
+            isUploading={isUploading}
+            statusMessage={statusMessage}
+            error={error}
+            documents={documents}
+            filingPacks={filingPacks}
+            auditLogs={auditLogs}
+            payments={payments}
+            fileInputRef={fileInputRef}
+            onFilesSelected={handleFilesSelected}
             onDrop={handleDrop}
-          >
-            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Upload Financial Documents</h3>
-            <p className="text-sm text-gray-500 max-w-sm text-center mt-2">
-              Drop bank statements (PDF/CSV), audited accounts, or payroll spreadsheets here to auto-extract transactions.
-            </p>
-
-            <input
-              type="file"
-              multiple
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFilesSelected}
-              accept=".csv,.pdf,.xlsx,.xls,.json"
-            />
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="mt-6 px-6 py-2.5 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {isUploading ? "Processing..." : "Select Files"}
-            </button>
-
-            {statusMessage && (
-              <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-sm max-w-md text-center">
-                {statusMessage}
-              </div>
-            )}
-            {error && (
-              <div className="mt-6 p-4 rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm max-w-md text-center">
-                {error}
-              </div>
-            )}
-
-            {documents.length > 0 && (
-              <div className="mt-12 w-full max-w-2xl">
-                <h4 className="text-xs uppercase tracking-wider text-gray-400 font-medium mb-3">Recently Uploaded</h4>
-                <div className="grid gap-2">
-                  {documents.map(doc => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg bg-gray-50/50">
-                      <div className="flex items-center gap-3">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                          <p className="text-xs text-gray-500">{formatFileSize(doc.size)} • {new Date(doc.uploadedAt).toLocaleTimeString()}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">Parsed</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-12 w-full max-w-4xl">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-gray-900">Filing Packs</h4>
-                    <span className="text-xs text-gray-400">{filingPacks.length} generated</span>
-                  </div>
-                  {filingPacks.length === 0 ? (
-                    <p className="text-xs text-gray-500 mt-3">No filing packs generated yet.</p>
-                  ) : (
-                    <div className="mt-3 space-y-2">
-                      {filingPacks.slice(0, 5).map((pack) => (
-                        <div key={pack.id} className="p-2 rounded-lg border border-gray-100 bg-gray-50/60">
-                          <p className="text-xs font-medium text-gray-900">{pack.taxType} • {pack.period}</p>
-                          <p className="text-[11px] text-gray-500">{pack.fileName}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-gray-900">Audit Log</h4>
-                    <span className="text-xs text-gray-400">{auditLogs.length} entries</span>
-                  </div>
-                  {auditLogs.length === 0 ? (
-                    <p className="text-xs text-gray-500 mt-3">No audit activity logged yet.</p>
-                  ) : (
-                    <div className="mt-3 space-y-2">
-                      {auditLogs.slice(0, 5).map((log) => (
-                        <div key={log.id} className="p-2 rounded-lg border border-gray-100 bg-gray-50/60">
-                          <p className="text-xs font-medium text-gray-900">{log.action}</p>
-                          <p className="text-[11px] text-gray-500">{new Date(log.createdAt).toLocaleString("en-NG")}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-900">Payments</h4>
-                  <span className="text-xs text-gray-400">{payments.length} records</span>
-                </div>
-                {payments.length === 0 ? (
-                  <p className="text-xs text-gray-500 mt-3">No payments recorded yet.</p>
-                ) : (
-                  <div className="mt-3 grid gap-2 md:grid-cols-2">
-                    {payments.slice(0, 6).map((payment) => (
-                      <div key={payment.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/60">
-                        <p className="text-xs font-semibold text-gray-900">{payment.taxType} • {payment.period}</p>
-                        <p className="text-[11px] text-gray-500"><span title={formatCurrencyFull(payment.amount)}>{formatCurrency(payment.amount)}</span> • {payment.status}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
+            onDragEnter={handleDocumentDragEnter}
+            onDragOver={handleDocumentDragOver}
+            onDragLeave={handleDocumentDragLeave}
+            onBrowse={handleBrowseDocuments}
+          />
+        ) : null}
       </div>
     </div>
   );

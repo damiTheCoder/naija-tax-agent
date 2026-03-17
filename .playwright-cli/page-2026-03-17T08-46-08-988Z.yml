@@ -1,0 +1,237 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Atom Ledger Logo Atom Ledger" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img "Atom Ledger Logo" [ref=e7]
+          - generic [ref=e8]: Atom Ledger
+        - generic [ref=e9]:
+          - link "Features" [ref=e10] [cursor=pointer]:
+            - /url: "#features"
+          - link "How It Works" [ref=e11] [cursor=pointer]:
+            - /url: "#how-it-works"
+          - link "Marketplace" [ref=e12] [cursor=pointer]:
+            - /url: /marketplace
+          - link "About" [ref=e13] [cursor=pointer]:
+            - /url: "#about"
+        - link "Get Started" [ref=e14] [cursor=pointer]:
+          - /url: /accounting
+          - text: Get Started
+          - img [ref=e15]
+    - generic [ref=e18]:
+      - generic [ref=e19]: The AI-Powered Cash Operating System for SMEs
+      - heading "Your Business Finances, Simplified." [level=1] [ref=e21]:
+        - text: Your Business
+        - text: Finances,
+        - text: Simplified.
+      - paragraph [ref=e22]: Know your numbers. Control your cash. Run your business with confidence.
+      - generic "Happy business owners using Atom Ledger" [ref=e23]:
+        - img "Happy customer using Atom Ledger" [ref=e25]
+        - img "Business owner smiling" [ref=e27]
+        - img "Satisfied entrepreneur" [ref=e29]
+        - img "Business owner testimonial" [ref=e31]
+      - generic [ref=e32]:
+        - link "Start Free Trial" [ref=e33] [cursor=pointer]:
+          - /url: /accounting
+          - generic [ref=e34]: Start Free Trial
+          - img [ref=e35]
+        - link "Watch Demo" [ref=e37] [cursor=pointer]:
+          - /url: "#how-it-works"
+          - text: Watch Demo
+          - img [ref=e38]
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - img [ref=e43]
+          - generic [ref=e47]: 500+ Businesses
+        - generic [ref=e48]:
+          - img [ref=e50]
+          - generic [ref=e52]: Bank-Grade Security
+        - generic [ref=e53]:
+          - img [ref=e55]
+          - generic [ref=e57]: FIRS Compliant
+        - generic [ref=e58]:
+          - img [ref=e60]
+          - generic [ref=e64]: 24/7 AI Support
+    - generic [ref=e67]:
+      - generic [ref=e68]: The Problem
+      - heading "Most small businesses are flying blind" [level=2] [ref=e69]:
+        - text: Most small businesses are
+        - generic [ref=e70]:
+          - text: flying blind
+          - img [ref=e72]
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - paragraph [ref=e77]: "If you're like most SMEs, you probably:"
+          - list [ref=e78]:
+            - listitem [ref=e79]:
+              - generic [ref=e80]: ✕
+              - text: Don't know your real profit
+            - listitem [ref=e81]:
+              - generic [ref=e82]: ✕
+              - text: Don't know where money is leaking
+            - listitem [ref=e83]:
+              - generic [ref=e84]: ✕
+              - text: Don't track cash flow properly
+            - listitem [ref=e85]:
+              - generic [ref=e86]: ✕
+              - text: Only discover tax issues when penalties arrive
+        - generic [ref=e87]:
+          - paragraph [ref=e88]: "Accounting today is:"
+          - list [ref=e89]:
+            - listitem [ref=e90]:
+              - generic [ref=e91]: ✕
+              - text: Manual or delayed
+            - listitem [ref=e92]:
+              - generic [ref=e93]: ✕
+              - text: Expensive
+            - listitem [ref=e94]:
+              - generic [ref=e95]: ✕
+              - text: Built for accountants, not founders
+      - paragraph [ref=e96]:
+        - text: Finance exists — but
+        - strong [ref=e97]: clarity doesn't.
+    - generic [ref=e99]:
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - generic [ref=e102]: Why This Matters
+          - heading "Businesses don't fail from lack of effort. They fail from lack of visibility." [level=2] [ref=e103]:
+            - text: Businesses don't fail from lack of effort.
+            - text: They fail from lack of visibility.
+          - paragraph [ref=e104]: "Without financial clarity:"
+        - generic "Business owners using Atom Ledger" [ref=e106]:
+          - img "Happy customer using Atom Ledger" [ref=e108]
+          - img "Business owner smiling" [ref=e110]
+          - img "Satisfied entrepreneur" [ref=e112]
+          - img "Business owner testimonial" [ref=e114]
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - img [ref=e118]
+          - generic [ref=e120]: Decisions are instinct-driven
+        - generic [ref=e121]:
+          - img [ref=e123]
+          - generic [ref=e125]: Taxes are reactive and error-prone
+        - generic [ref=e126]:
+          - img [ref=e128]
+          - generic [ref=e131]: Audits become panic events
+        - generic [ref=e132]:
+          - img [ref=e134]
+          - generic [ref=e137]: Growth becomes guesswork
+      - paragraph [ref=e138]:
+        - text: This isn't a tooling problem.
+        - text: It's an
+        - strong [ref=e139]: economic visibility problem.
+    - generic [ref=e140]:
+      - generic [ref=e142]:
+        - generic [ref=e143]: The Solution
+        - heading "Introducing Atom Ledger" [level=2] [ref=e144]:
+          - text: Introducing
+          - text: Atom Ledger
+      - img "Atom Ledger dashboard preview" [ref=e145]
+      - generic [ref=e146]:
+        - heading "Atom Ledger" [level=2] [ref=e147]
+        - paragraph [ref=e148]: "is an AI-powered financial operating system that helps business owners:"
+        - generic [ref=e150]:
+          - img "Automatically prepare clean accounting records" [ref=e153]
+          - img "Understand profit, costs, and cash flow in real time" [ref=e156]
+          - img "Calculate and manage taxes proactively" [ref=e159]
+          - img "Ask questions — and get answers in plain language" [ref=e162]
+          - img "Automate savings, investments, and estimate runway" [ref=e165]
+        - generic [ref=e166]:
+          - paragraph [ref=e167]: No dashboards to learn.
+          - paragraph [ref=e168]: No spreadsheets to fear.
+          - paragraph [ref=e169]: Just a simple, conversational finance experience.
+    - generic [ref=e171]:
+      - generic [ref=e172]:
+        - generic [ref=e173]: Pricing
+        - heading "Simple today. Powerful tomorrow." [level=2] [ref=e174]
+      - generic [ref=e175]:
+        - generic [ref=e176]:
+          - generic [ref=e177]:
+            - heading "Starter" [level=3] [ref=e178]
+            - generic [ref=e179]:
+              - generic [ref=e180]: $1.5
+              - generic [ref=e181]: /month
+          - list [ref=e182]:
+            - listitem [ref=e183]:
+              - img [ref=e184]
+              - text: Accounting
+            - listitem [ref=e186]:
+              - img [ref=e187]
+              - text: AI finance chat
+          - link "Get Started" [ref=e189] [cursor=pointer]:
+            - /url: /accounting
+        - generic [ref=e190]:
+          - generic [ref=e191]: Most Popular
+          - generic [ref=e192]:
+            - heading "Growth" [level=3] [ref=e193]
+            - generic [ref=e194]:
+              - generic [ref=e195]: $3.1
+              - generic [ref=e196]: /month
+          - paragraph [ref=e197]: "Everything in Starter, plus:"
+          - list [ref=e198]:
+            - listitem [ref=e199]:
+              - img [ref=e200]
+              - text: Tax calculator
+            - listitem [ref=e202]:
+              - img [ref=e203]
+              - text: Cashflow analysis
+            - listitem [ref=e205]:
+              - img [ref=e206]
+              - text: Automated savings & investments
+          - link "Get Started" [ref=e208] [cursor=pointer]:
+            - /url: /accounting
+    - generic [ref=e211]:
+      - heading "Stop guessing. Start knowing." [level=2] [ref=e212]
+      - paragraph [ref=e213]: Join thousands of SMEs building financial clarity with Atom Ledger.
+      - link "Get Started" [ref=e214] [cursor=pointer]:
+        - /url: /accounting
+        - text: Get Started
+        - img [ref=e215]
+    - contentinfo [ref=e217]:
+      - generic [ref=e218]:
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - link "Atom Ledger Logo Atom Ledger" [ref=e221] [cursor=pointer]:
+              - /url: /
+              - img "Atom Ledger Logo" [ref=e223]
+              - generic [ref=e224]: Atom Ledger
+            - paragraph [ref=e225]: AI Accounting for Nigerian Businesses
+          - generic [ref=e226]:
+            - generic [ref=e227]:
+              - heading "Product" [level=4] [ref=e228]
+              - link "Features" [ref=e229] [cursor=pointer]:
+                - /url: "#features"
+              - link "How It Works" [ref=e230] [cursor=pointer]:
+                - /url: "#how-it-works"
+              - link "Dashboard" [ref=e231] [cursor=pointer]:
+                - /url: /accounting
+            - generic [ref=e232]:
+              - heading "Company" [level=4] [ref=e233]
+              - link "About" [ref=e234] [cursor=pointer]:
+                - /url: "#about"
+              - link "Careers" [ref=e235] [cursor=pointer]:
+                - /url: /careers
+              - link "Contact" [ref=e236] [cursor=pointer]:
+                - /url: /contact
+            - generic [ref=e237]:
+              - heading "Legal" [level=4] [ref=e238]
+              - link "Privacy" [ref=e239] [cursor=pointer]:
+                - /url: /privacy
+              - link "Terms" [ref=e240] [cursor=pointer]:
+                - /url: /terms
+              - link "Security" [ref=e241] [cursor=pointer]:
+                - /url: /security
+        - generic [ref=e242]:
+          - paragraph [ref=e243]: © 2026 Atom Ledger. Built with ❤️ for Nigerian businesses.
+          - generic [ref=e244]:
+            - link "Twitter" [ref=e245] [cursor=pointer]:
+              - /url: /contact#x
+              - img [ref=e246]
+            - link "LinkedIn" [ref=e248] [cursor=pointer]:
+              - /url: /contact#linkedin
+              - img [ref=e249]
+            - link "Instagram" [ref=e251] [cursor=pointer]:
+              - /url: /contact#instagram
+              - img [ref=e252]
+  - alert [ref=e254]: Your Business Finances, Simplified.

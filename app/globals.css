@@ -4034,7 +4034,7 @@ tr:hover td {
   border: 2px solid #f8fbff;
 }
 
-.hero-avatar-item + .hero-avatar-item {
+.hero-avatar-item+.hero-avatar-item {
   margin-left: -14px;
 }
 
@@ -4467,7 +4467,7 @@ tr:hover td {
   border: 3px solid #ffffff;
 }
 
-.why-matters-avatar-item + .why-matters-avatar-item {
+.why-matters-avatar-item+.why-matters-avatar-item {
   margin-left: -26px;
 }
 
@@ -4492,7 +4492,7 @@ tr:hover td {
     height: 72px;
   }
 
-  .why-matters-avatar-item + .why-matters-avatar-item {
+  .why-matters-avatar-item+.why-matters-avatar-item {
     margin-left: -20px;
   }
 
@@ -4539,25 +4539,37 @@ tr:hover td {
 }
 
 /* CashOS Features - Grid Layout */
-.cashos-features-section {
-  margin-top: 6rem;
-  padding-top: 3rem;
-  border-top: 1px solid #e5e7eb;
+.cashos-features-section.section-container {
+  margin-top: 4rem;
+  padding-top: 0;
+  border-top: none;
 }
 
 .cashos-intro {
   font-size: 1.25rem;
   font-weight: 600;
   color: #0a0a0a;
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
   max-width: 800px;
 }
 
 .cashos-brand-title {
-  font-size: 2.5rem;
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.75rem 1.8rem;
+  border-radius: 999px;
+  border: 2px solid #2264ff;
+  background: rgba(226, 238, 255, 0.82);
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  font-weight: 700;
   color: #1a50cc;
-  margin: 0 0 0.5rem;
+  margin: 0 0 1rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
 .cashos-brand-name {
@@ -4688,17 +4700,21 @@ tr:hover td {
 }
 
 @media (max-width: 768px) {
-  .cashos-features-section {
-    margin: 2rem 0 0;
+  .cashos-features-section.section-container {
+    margin: 2.4rem 0 0;
     padding: 0 1rem;
   }
 
   .cashos-brand-title {
-    font-size: 2rem;
+    font-size: 1.3rem;
+    padding: 0.65rem 1.15rem;
+    border-radius: 999px;
+    border-width: 1.5px;
   }
 
   .cashos-intro {
     font-size: 1.1rem;
+    margin-bottom: 1.15rem;
   }
 
   .cashos-scroll-container {
@@ -5772,7 +5788,7 @@ tr:hover td {
     height: 42px;
   }
 
-  .hero-avatar-item + .hero-avatar-item {
+  .hero-avatar-item+.hero-avatar-item {
     margin-left: -12px;
   }
 
@@ -6243,22 +6259,24 @@ tr:hover td {
     opacity: 0;
   }
 }
+
 /* Utility to hide scrollbars */
 .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
+
 .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Print layout: hide app shell chrome so exported PDFs contain only page content */
 @media print {
+
   .app-shell-topbar,
   .app-shell-sidebar,
   .app-shell-mobile-menu,
-  .app-shell-floating-chat,
-  .app-shell-chat-host {
+  .app-shell-floating-chat {
     display: none !important;
   }
 
