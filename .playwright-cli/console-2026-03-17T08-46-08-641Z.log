@@ -5061,3 +5061,8 @@ Caused by:
 Import trace for requested module:
 ./components/ui/TrendMetricCard.tsx
 ./app/(app)/cashflow-intelligence/page.tsx @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/next-devtools/userspace/app/errors/intercept-console-error.js:51
+[ 3234639ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3000/_next/webpack-hmr?id=0IYPWW6uKnE0pxacsXm9g' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js:59
+[ 3235641ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3000/_next/webpack-hmr?id=0IYPWW6uKnE0pxacsXm9g' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js:59
+[ 3236649ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3000/_next/webpack-hmr?id=0IYPWW6uKnE0pxacsXm9g' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js:59
+[ 3237653ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3000/_next/webpack-hmr?id=0IYPWW6uKnE0pxacsXm9g' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js:59
+[ 3238659ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3000/_next/webpack-hmr?id=0IYPWW6uKnE0pxacsXm9g' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ webpack-internal:///(app-pages-browser)/../node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js:59

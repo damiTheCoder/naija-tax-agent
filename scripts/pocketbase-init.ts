@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import PocketBase from "pocketbase";
 import {
   POCKETBASE_ADMIN_AUDIT_COLLECTION,
@@ -9,6 +10,10 @@ import {
   getPocketBaseSuperuserPassword,
   getPocketBaseUrl,
 } from "@/lib/pocketbase/config";
+import {
+  getLocalPocketBaseDataDbPath,
+  runLocalTimestampRepair,
+} from "@/scripts/pocketbase-backfill-local-timestamps";
 
 type CollectionSpec = {
   name: string;
@@ -23,6 +28,20 @@ type CollectionSpec = {
   authRule?: string | null;
   manageRule?: string | null;
 };
+
+function shouldAutoRepairLocalTimestamps(pocketBaseUrl: string): boolean {
+  if (process.env.POCKETBASE_AUTO_REPAIR_LOCAL_TIMESTAMPS === "0") {
+    return false;
+  }
+
+  try {
+    const url = new URL(pocketBaseUrl);
+    const isLoopback = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+    return isLoopback && existsSync(getLocalPocketBaseDataDbPath());
+  } catch {
+    return false;
+  }
+}
 
 function timestampFields(): Array<Record<string, unknown>> {
   return [
@@ -405,7 +424,8 @@ async function ensureDefaultSuperAdmin(pb: PocketBase): Promise<void> {
 }
 
 async function main() {
-  const pb = new PocketBase(getPocketBaseUrl());
+  const pocketBaseUrl = getPocketBaseUrl();
+  const pb = new PocketBase(pocketBaseUrl);
   await pb.collection("_superusers").authWithPassword(
     getPocketBaseSuperuserEmail(),
     getPocketBaseSuperuserPassword(),
@@ -417,6 +437,11 @@ async function main() {
   await ensureCollection(pb, usageEventsCollectionSpec());
   await ensureCollection(pb, adminAuditCollectionSpec());
   await ensureDefaultSuperAdmin(pb);
+
+  if (shouldAutoRepairLocalTimestamps(pocketBaseUrl)) {
+    console.log("[pb:init] repairing local PocketBase timestamps");
+    runLocalTimestampRepair();
+  }
 
   console.log("[pb:init] complete");
 }
