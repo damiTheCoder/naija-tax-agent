@@ -3,8 +3,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import type { JournalEntry } from "@/lib/accounting/doubleEntry";
+import { parseCSVStatement, processTransactionsWithAI } from "@/lib/banking/transactionPipeline";
+import type { InboundBankTransaction } from "@/lib/banking/types";
 
 // =============================================================================
 // TYPES
@@ -47,32 +50,17 @@ export interface BankProvider {
   features: string[];
 }
 
-type ClassificationSource = "rule" | "ai" | "hybrid";
-
-type RecentBankTransaction = {
+type BankFeedTransaction = {
   id: string;
   date: string;
   description: string;
+  balance?: number;
   amount: number;
   type: "credit" | "debit";
   narration?: string;
-  journalId?: string;
-  category?: string;
-  confidence?: number;
-  source?: ClassificationSource;
-};
-
-type PipelineDetail = {
-  bankTxId?: string;
-  journalId?: string;
-  txDate?: string;
-  txDescription?: string;
-  txAmount?: number;
-  txDirection?: "credit" | "debit";
-  category?: string;
-  nature?: string;
-  confidence?: number;
-  source?: ClassificationSource;
+  reference?: string;
+  currency?: string;
+  channel?: InboundBankTransaction["channel"];
 };
 
 // =============================================================================
@@ -195,40 +183,97 @@ function BankLogoBadge({
   imageSizes: string;
 }) {
   return (
-    <div className={`relative overflow-hidden border border-black bg-white ${containerClassName}`}>
+    <div className={`relative flex items-center justify-center overflow-hidden bg-gray-100 ${containerClassName}`}>
       <span className="text-gray-700 font-bold text-sm">{shortName.slice(0, 2)}</span>
       {logoPath ? (
-        <Image
-          src={logoPath}
-          alt={alt}
-          fill
-          sizes={imageSizes}
-          className={`${imageClassName} bg-white`}
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
-        />
+        <div className="absolute inset-[14%] overflow-hidden rounded-full bg-white/95">
+          <Image
+            src={logoPath}
+            alt={alt}
+            fill
+            sizes={imageSizes}
+            className={`${imageClassName} bg-transparent`}
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        </div>
       ) : null}
     </div>
   );
 }
 
-function mapPipelineDetailsToRecent(details: PipelineDetail[]): RecentBankTransaction[] {
-  return details
-    .slice(0, 8)
-    .map((detail, index): RecentBankTransaction => ({
-      id: detail.bankTxId || `synced-${index}`,
-      date: detail.txDate || new Date().toISOString(),
-      description: detail.txDescription || detail.category || "Bank transaction",
-      amount: Math.abs(Number(detail.txAmount || 0)),
-      type: detail.txDirection === "credit" ? "credit" : "debit",
-      narration: detail.nature,
-      journalId: detail.journalId,
-      category: detail.category,
-      confidence: typeof detail.confidence === "number" ? detail.confidence : undefined,
-      source: detail.source,
-    }))
-    .filter((tx) => tx.description || tx.journalId);
+function getContextJournalLabel(entry: JournalEntry): string {
+  const txType = entry.transactionType;
+  const narration = entry.narration.toLowerCase();
+  const hasCashLine = entry.lines.some(
+    (line) => line.accountCode.startsWith("10") || /cash|bank/i.test(line.accountName)
+  );
+  const hasSalesLine = entry.lines.some((line) => line.accountCode.startsWith("4") && line.credit > 0);
+  const hasPurchaseLine = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("50") || /purchase|inventory|stock|materials/i.test(line.accountName)) &&
+      line.debit > 0
+  );
+  const hasExpenseLine = entry.lines.some(
+    (line) =>
+      (line.accountCode.startsWith("5") || line.accountCode.startsWith("6") || line.accountCode.startsWith("7")) &&
+      line.debit > 0
+  );
+
+  if (txType === "sale" || txType === "sale-return" || hasSalesLine) return "Sales Journal";
+  if (txType === "purchase" || txType === "purchase-return" || hasPurchaseLine) return "Purchase Journal";
+  if (txType === "expense" || hasExpenseLine) return "Expense Journal";
+
+  if (txType === "receipt" || txType === "payment" || txType === "transfer" || hasCashLine) {
+    if (hasSalesLine || /received|receipt|cash sale/.test(narration)) return "Cash Receipt Journal";
+    if (hasExpenseLine || /paid|payment|disburse|withdraw/.test(narration)) return "Cash Payment Journal";
+    return "Cash Journal";
+  }
+
+  if (txType === "adjustment") return "Adjustment Journal";
+  if (txType === "opening-balance") return "Opening Journal";
+  if (txType === "closing") return "Closing Journal";
+  return "General Journal";
+}
+
+function isBankOriginEntry(entry: JournalEntry): boolean {
+  const reference = (entry.reference || "").toLowerCase();
+  return reference.startsWith("bank-") || typeof entry.matchedBankTransactionId === "string";
+}
+
+function buildStableBankTransactionId(
+  connectionId: string,
+  tx: Pick<InboundBankTransaction, "date" | "amount" | "direction" | "description" | "reference">,
+  sourceId?: string
+): string {
+  if (sourceId) return `feed-${connectionId}-${sourceId}`;
+
+  const seed = [
+    connectionId,
+    tx.date.split("T")[0],
+    tx.direction,
+    tx.amount.toFixed(2),
+    (tx.reference || tx.description).toLowerCase().trim(),
+  ].join("|");
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) | 0;
+  }
+  return `feed-${Math.abs(hash)}`;
+}
+
+function formatJournalDate(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "—";
+
+  const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toISOString().split("T")[0];
 }
 
 // =============================================================================
@@ -236,6 +281,7 @@ function mapPipelineDetailsToRecent(details: PipelineDetail[]): RecentBankTransa
 // =============================================================================
 
 export default function BankConnectionsPage() {
+  const router = useRouter();
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -249,8 +295,7 @@ export default function BankConnectionsPage() {
     expenses: number;
     message?: string;
   } | null>(null);
-  const [recentTransactions, setRecentTransactions] = useState<RecentBankTransaction[]>([]);
-  const [journalEntryLookup, setJournalEntryLookup] = useState<Record<string, JournalEntry>>({});
+  const [processedJournalEntries, setProcessedJournalEntries] = useState<JournalEntry[]>([]);
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -284,22 +329,6 @@ export default function BankConnectionsPage() {
             localStorage.setItem("insight::bank-connections", JSON.stringify(unique));
           }
         }
-
-        const res = await fetch("/api/bank-connections/transactions?connectionId=demo&limit=5");
-        if (res.ok) {
-          const data = await res.json();
-          const initial = Array.isArray(data.transactions)
-            ? data.transactions.map((tx: Record<string, unknown>, index: number): RecentBankTransaction => ({
-              id: String(tx.id || `tx-${index}`),
-              date: String(tx.date || new Date().toISOString()),
-              description: String(tx.description || tx.narration || "Transaction"),
-              amount: Math.abs(Number(tx.amount || 0)),
-              type: tx.type === "credit" ? "credit" : "debit",
-              narration: typeof tx.narration === "string" ? tx.narration : undefined,
-            }))
-            : [];
-          setRecentTransactions(initial);
-        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -314,24 +343,44 @@ export default function BankConnectionsPage() {
     localStorage.setItem("insight::bank-connections", JSON.stringify(connections));
   }, [connections]);
 
-  // Load accounting journal entries so processed bank rows can display debit/credit posting lines
-  const refreshJournalLookup = useCallback(() => {
+  const refreshProcessedJournalEntries = useCallback(() => {
     try {
       accountingEngine.load();
       const entries = accountingEngine.getState().journalEntries || [];
-      const lookup: Record<string, JournalEntry> = {};
-      for (const entry of entries) {
-        lookup[entry.id] = entry;
-      }
-      setJournalEntryLookup(lookup);
+      const bankEntries = entries
+        .filter((entry) => isBankOriginEntry(entry))
+        .sort((left, right) => {
+          const leftTime = new Date(left.postedAt || left.createdAt || left.date).getTime();
+          const rightTime = new Date(right.postedAt || right.createdAt || right.date).getTime();
+          return rightTime - leftTime;
+        });
+      setProcessedJournalEntries(bankEntries);
     } catch (error) {
-      console.error("Failed to load accounting journal entries:", error);
+      console.error("Failed to load processed bank journals:", error);
     }
   }, []);
 
   useEffect(() => {
-    refreshJournalLookup();
-  }, [refreshJournalLookup, recentTransactions]);
+    refreshProcessedJournalEntries();
+
+    const handleAccountingUpdate = () => {
+      refreshProcessedJournalEntries();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "insight::accounting-engine") {
+        refreshProcessedJournalEntries();
+      }
+    };
+
+    window.addEventListener("accounting-update", handleAccountingUpdate);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("accounting-update", handleAccountingUpdate);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [refreshProcessedJournalEntries]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -341,6 +390,45 @@ export default function BankConnectionsPage() {
     totalBalance: connections.reduce((acc, c) =>
       acc + c.accounts.filter(a => a.currency === "NGN").reduce((s, a) => s + (a.balance || 0), 0), 0),
   }), [connections]);
+
+  const broadcastAccountingUpdate = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "bank-connections" } }));
+  }, []);
+
+  const processTransactionsLocally = useCallback(async (
+    transactions: InboundBankTransaction[],
+    entityId: string,
+    messageBuilder: (processedCount: number) => string
+  ) => {
+    accountingEngine.load();
+    const pipeline = await processTransactionsWithAI(transactions, {
+      entityId,
+      autoPost: true,
+      runTaxClassification: true,
+      updateBudgets: true,
+      updateCashflow: true,
+      bankAccountCode: "1000",
+    });
+
+    const summary = pipeline.summary || {
+      totalCredits: 0,
+      totalDebits: 0,
+    };
+
+    setImportResult({
+      show: true,
+      imported: pipeline.processed || 0,
+      income: summary.totalCredits || 0,
+      expenses: summary.totalDebits || 0,
+      message: messageBuilder(pipeline.processed || 0),
+    });
+
+    refreshProcessedJournalEntries();
+    broadcastAccountingUpdate();
+    setTimeout(() => setImportResult(null), 6000);
+
+    return pipeline;
+  }, [broadcastAccountingUpdate, refreshProcessedJournalEntries]);
 
   // Connect bank — for statement_upload banks, open upload modal instead
   const handleConnectBank = async (bank: BankProvider) => {
@@ -416,27 +504,44 @@ export default function BankConnectionsPage() {
     }
   };
 
-  // Sync via real pipeline — POST /api/bank-connections/[id]/sync
+  // Sync via client-side posting so journals persist to the local accounting engine
   const handleSync = useCallback(async (connectionId: string) => {
     setSyncingId(connectionId);
     try {
-      const res = await fetch(`/api/bank-connections/${connectionId}/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetch(`/api/bank-connections/transactions?connectionId=${encodeURIComponent(connectionId)}&limit=50`);
       const data = await res.json();
 
-      if (data.success && data.data?.pipeline) {
-        const pipeline = data.data.pipeline;
-        const summary = pipeline.summary || {};
+      if (data.success && Array.isArray(data.transactions)) {
+        const transactions = data.transactions.map((tx: BankFeedTransaction, index: number): InboundBankTransaction => ({
+          id: buildStableBankTransactionId(
+            connectionId,
+            {
+              date: tx.date,
+              amount: Math.abs(Number(tx.amount || 0)),
+              direction: tx.type === "credit" ? "credit" : "debit",
+              description: tx.description || tx.narration || "Transaction",
+              reference: tx.reference,
+            },
+            tx.id || String(index)
+          ),
+          connectionId,
+          accountId: `${connectionId}-primary`,
+          date: tx.date,
+          description: tx.description || tx.narration || "Transaction",
+          narration: tx.narration || undefined,
+          amount: Math.abs(Number(tx.amount || 0)),
+          balance: typeof tx.balance === "number" ? tx.balance : undefined,
+          direction: tx.type === "credit" ? "credit" : "debit",
+          currency: tx.currency || "NGN",
+          reference: tx.reference || undefined,
+          channel: tx.channel || "transfer",
+        }));
 
-        setImportResult({
-          show: true,
-          imported: pipeline.processed || 0,
-          income: summary.totalCredits || 0,
-          expenses: summary.totalDebits || 0,
-          message: `${pipeline.processed} transactions processed across Accounting, Tax & Cashflow`,
-        });
+        const pipeline = await processTransactionsLocally(
+          transactions,
+          connectionId,
+          (processedCount) => `${processedCount} transactions processed across Accounting, Tax & Cashflow`
+        );
 
         setConnections(prev => prev.map(c =>
           c.id === connectionId
@@ -448,21 +553,13 @@ export default function BankConnectionsPage() {
             }
             : c
         ));
-
-        // Populate recent transactions from pipeline results
-        if (pipeline.details?.length > 0) {
-          const recent = mapPipelineDetailsToRecent(pipeline.details as PipelineDetail[]);
-          setRecentTransactions(recent);
-        }
-
-        setTimeout(() => setImportResult(null), 6000);
       }
     } catch (e) {
       console.error("Sync failed:", e);
     } finally {
       setSyncingId(null);
     }
-  }, []);
+  }, [processTransactionsLocally]);
 
   // Upload CSV statement
   const handleUpload = async () => {
@@ -472,43 +569,50 @@ export default function BankConnectionsPage() {
     setUploadError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("bankCode", uploadBankCode);
-      if (uploadAccountNumber) formData.append("accountNumber", uploadAccountNumber);
-      formData.append("dateFormat", "DD/MM/YYYY");
-
-      const res = await fetch("/api/bank-connections/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        setUploadError(data.error || "Upload failed");
+      const csvText = await uploadFile.text();
+      if (!csvText.trim()) {
+        setUploadError("File is empty");
         return;
       }
 
-      const result = data.data;
+      const existingConn = connections.find(c => c.bankCode === uploadBankCode);
+      const bank = SUPPORTED_BANKS.find(b => b.code === uploadBankCode);
+      const connectionId = existingConn?.id || `conn_${uploadBankCode}_upload_${Date.now()}`;
+      const accountId = uploadAccountNumber ? `acc_${uploadAccountNumber}` : `acc_${connectionId}`;
+      const parsedTransactions = parseCSVStatement(csvText, connectionId, accountId, {
+        currency: "NGN",
+        dateFormat: "DD/MM/YYYY",
+      }).map((tx, index) => ({
+        ...tx,
+        id: buildStableBankTransactionId(connectionId, tx, tx.reference || `${uploadBankCode}-${index}`),
+      }));
+
+      if (parsedTransactions.length === 0) {
+        setUploadError("No transactions could be extracted from the file. Please ensure it has Date, Description, Debit/Credit, and Balance columns.");
+        return;
+      }
+
+      const pipeline = await processTransactionsLocally(
+        parsedTransactions,
+        connectionId,
+        (processedCount) => `${processedCount} transactions from ${uploadFile.name} processed across all modules`
+      );
 
       // Add or update connection
-      const existingConn = connections.find(c => c.bankCode === uploadBankCode);
       if (existingConn) {
         setConnections(prev => prev.map(c =>
           c.bankCode === uploadBankCode
             ? {
               ...c,
               lastSyncAt: new Date().toISOString(),
-              transactionCount: c.transactionCount + result.transactionsImported,
+              transactionCount: c.transactionCount + (pipeline.processed || 0),
               accounts: c.accounts.map(a => ({ ...a, lastSynced: new Date().toISOString() })),
             }
             : c
         ));
       } else {
-        const bank = SUPPORTED_BANKS.find(b => b.code === uploadBankCode);
         const newConn: BankConnection = {
-          id: result.connectionId || `conn_${uploadBankCode}_${Date.now()}`,
+          id: connectionId,
           bankCode: uploadBankCode,
           bankName: bank?.name || uploadBankCode,
           status: "connected",
@@ -525,21 +629,9 @@ export default function BankConnectionsPage() {
           connectedAt: new Date().toISOString(),
           lastSyncAt: new Date().toISOString(),
           syncFrequency: "manual",
-          transactionCount: result.transactionsImported,
+          transactionCount: pipeline.processed || 0,
         };
         setConnections(prev => [...prev, newConn]);
-      }
-
-      setImportResult({
-        show: true,
-        imported: result.transactionsImported,
-        income: result.pipeline?.summary?.totalCredits || 0,
-        expenses: result.pipeline?.summary?.totalDebits || 0,
-        message: `${result.transactionsImported} transactions from ${uploadFile.name} processed across all modules`,
-      });
-
-      if (result.pipeline?.details?.length > 0) {
-        setRecentTransactions(mapPipelineDetailsToRecent(result.pipeline.details as PipelineDetail[]));
       }
 
       // Close modal and reset
@@ -547,8 +639,6 @@ export default function BankConnectionsPage() {
       setUploadFile(null);
       setUploadBankCode("");
       setUploadAccountNumber("");
-      setTimeout(() => setImportResult(null), 6000);
-
     } catch (e) {
       console.error("Upload failed:", e);
       setUploadError("Something went wrong. Please try again.");
@@ -568,21 +658,24 @@ export default function BankConnectionsPage() {
   const formatDate = (date: string) => new Date(date).toLocaleDateString("en-NG", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
   });
-  const formatSourceLabel = (source?: ClassificationSource) => {
-    if (source === "ai") return "AI";
-    if (source === "hybrid") return "HYBRID";
-    return "RULE";
-  };
-  const formatConfidence = (value?: number) => {
-    if (typeof value !== "number" || !Number.isFinite(value)) return null;
-    const normalized = value <= 1 ? value * 100 : value;
-    return Math.max(0, Math.min(100, normalized));
-  };
-  const sourceBadgeClass = (sourceLabel: string) => {
-    if (sourceLabel === "AI") return "bg-blue-50 text-blue-700";
-    if (sourceLabel === "HYBRID") return "bg-indigo-50 text-indigo-700";
-    return "bg-gray-100 text-gray-700";
-  };
+  const openJournalEntry = useCallback((journalId: string) => {
+    router.push(`/accounting?editEntry=${encodeURIComponent(journalId)}&resetDraft=1`);
+  }, [router]);
+
+  const handleVoidJournalEntry = useCallback((journalId: string) => {
+    if (!confirm("Are you sure you want to void this journal entry? This will reverse all related ledger entries and keep an audit trail.")) {
+      return;
+    }
+
+    try {
+      accountingEngine.load();
+      accountingEngine.deleteJournalEntry(journalId);
+      refreshProcessedJournalEntries();
+      broadcastAccountingUpdate();
+    } catch (error) {
+      console.error("Failed to void bank journal entry:", error);
+    }
+  }, [broadcastAccountingUpdate, refreshProcessedJournalEntries]);
 
   if (isLoading) {
     return (
@@ -660,7 +753,7 @@ export default function BankConnectionsPage() {
                       logoPath={bank.logoPath}
                       alt={`${bank.name} logo`}
                       containerClassName="w-16 h-16 rounded-full group-hover:scale-110 transition-transform"
-                      imageClassName="absolute inset-0 w-full h-full object-contain p-2"
+                      imageClassName="absolute inset-0 w-full h-full object-contain"
                       imageSizes="64px"
                     />
                     {isConnected ? (
@@ -821,116 +914,110 @@ export default function BankConnectionsPage() {
         )}
       </div>
 
-      {/* Recent Transactions / Posted Journals */}
-      {recentTransactions.length > 0 && (
-        <div className="rounded-2xl bg-white border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Processed Transactions</h2>
-            <Link href="/accounting/workspace" className="text-sm text-[#2264ff] hover:underline font-medium">
-              View all →
-            </Link>
+      {/* Processed Transactions */}
+      {processedJournalEntries.length > 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="px-3 md:px-5 py-2 md:py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Processed Transactions</h3>
+                  <p className="text-xs text-gray-500">{processedJournalEntries.length} entries • Double-entry ledger</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Balanced
+              </span>
+            </div>
           </div>
-          <div className="max-h-[480px] overflow-auto">
-            <table className="w-full min-w-[1180px]">
+          <div className="max-h-[560px] overflow-auto">
+            <table className="w-full min-w-[1080px]">
               <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
                 <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
-                  <th className="px-3 py-3 font-semibold">Date</th>
-                  <th className="px-3 py-3 font-semibold">Bank Transaction</th>
-                  <th className="px-3 py-3 font-semibold">Debit Account(s)</th>
-                  <th className="px-3 py-3 font-semibold">Credit Account(s)</th>
-                  <th className="px-3 py-3 text-right font-semibold">Amount</th>
-                  <th className="px-3 py-3 font-semibold">AI Posting</th>
-                  <th className="px-3 py-3 font-semibold">Journal</th>
+                  <th className="px-2 py-3 font-semibold">Date</th>
+                  <th className="px-2 py-3 font-semibold">Number</th>
+                  <th className="px-2 py-3 font-semibold">Partner</th>
+                  <th className="px-2 py-3 font-semibold">Reference</th>
+                  <th className="px-2 py-3 font-semibold">Journal</th>
+                  <th className="px-2 py-3 text-right font-semibold">Total</th>
+                  <th className="px-2 py-3 font-semibold">Status</th>
+                  <th className="px-2 py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {recentTransactions.slice(0, 8).map((tx) => {
-                  const linkedJournal = tx.journalId ? journalEntryLookup[tx.journalId] : undefined;
-                  const debitLines = linkedJournal?.lines.filter((line) => (line.debit || 0) > 0) || [];
-                  const creditLines = linkedJournal?.lines.filter((line) => (line.credit || 0) > 0) || [];
-                  const sourceLabel = formatSourceLabel(tx.source);
-                  const confidenceValue = formatConfidence(tx.confidence ?? linkedJournal?.confidence);
-                  const assumptions = Array.isArray(linkedJournal?.assumptions) ? linkedJournal.assumptions : [];
+                {processedJournalEntries.slice(0, 200).map((entry) => {
+                  const total = entry.totalDebits || entry.lines.reduce((sum, line) => sum + (line.debit || 0), 0);
+                  const partner = entry.reference ? entry.reference.replace(/^bank-/, "").slice(0, 28) : "Bank Feed";
+                  const journalLabel = getContextJournalLabel(entry);
+                  const isVoided = entry.status === "voided";
 
                   return (
-                    <tr key={`${tx.id}-${tx.journalId || "none"}`} className="hover:bg-gray-50/70 transition-colors align-top">
-                      <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(tx.date)}</td>
-                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
-                        <p className="font-medium text-gray-900 uppercase tracking-tight">{tx.description}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {tx.category ? `${tx.category} • ` : ""}
-                          {tx.narration ? `${tx.narration} • ` : ""}
-                          {sourceLabel}
-                        </p>
+                    <tr
+                      key={entry.id}
+                      onClick={() => {
+                        if (!isVoided) {
+                          openJournalEntry(entry.id);
+                        }
+                      }}
+                      className={`hover:bg-gray-50/70 transition-colors ${isVoided ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{formatJournalDate(entry.date)}</td>
+                      <td className="px-2 py-3 text-sm font-mono text-purple-700 whitespace-nowrap">{entry.id}</td>
+                      <td className="px-2 py-3 text-sm text-gray-600 whitespace-nowrap">{partner || "—"}</td>
+                      <td className="px-2 py-3 text-sm text-gray-700 max-w-[340px]">
+                        <p className="truncate" title={entry.narration}>{entry.narration}</p>
                       </td>
-                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
-                        <div className="space-y-1">
-                          {debitLines.length === 0 ? (
-                            <span className="text-xs text-gray-400">Pending journal lines</span>
-                          ) : (
-                            debitLines.map((line, index) => (
-                              <p key={`${tx.id}-dr-${line.accountCode}-${index}`} className="truncate">
-                                <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
-                                {line.accountName}
-                                <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.debit)}</span>
-                              </p>
-                            ))
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-gray-700 min-w-[260px]">
-                        <div className="space-y-1">
-                          {creditLines.length === 0 ? (
-                            <span className="text-xs text-gray-400">Pending journal lines</span>
-                          ) : (
-                            creditLines.map((line, index) => (
-                              <p key={`${tx.id}-cr-${line.accountCode}-${index}`} className="truncate">
-                                <span className="font-mono text-gray-500 mr-1">{line.accountCode}</span>
-                                {line.accountName}
-                                <span className="ml-2 font-mono text-gray-900">{formatCurrency(line.credit)}</span>
-                              </p>
-                            ))
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-right whitespace-nowrap">
-                        <span className={`font-semibold ${tx.type === "credit" ? "text-blue-600" : "text-gray-900"}`}>
-                          {tx.type === "credit" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                      <td className="px-2 py-3 text-sm text-gray-700 whitespace-nowrap">{journalLabel}</td>
+                      <td className="px-2 py-3 text-sm text-right font-mono text-gray-900 whitespace-nowrap">₦{total.toLocaleString()}</td>
+                      <td className="px-2 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${isVoided
+                          ? "bg-rose-100 text-rose-700"
+                          : entry.status === "draft"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                          }`}>
+                          {isVoided ? "Voided" : entry.status === "draft" ? "Draft" : "Posted"}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-sm min-w-[170px]">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${sourceBadgeClass(sourceLabel)}`}>
-                            {sourceLabel}
-                          </span>
-                          {confidenceValue !== null ? (
-                            <span className="text-xs text-gray-600">Confidence {Math.round(confidenceValue)}%</span>
-                          ) : (
-                            <span className="text-xs text-gray-400">Confidence pending</span>
-                          )}
-                          {assumptions.length > 0 ? (
-                            <p className="text-[11px] text-gray-500 truncate" title={assumptions.join("; ")}>
-                              Assumptions: {assumptions.join("; ")}
-                            </p>
-                          ) : (
-                            <span className="text-[11px] text-gray-400">Assumptions: none</span>
-                          )}
+                      <td className="px-2 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (!isVoided) {
+                                openJournalEntry(entry.id);
+                              }
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={isVoided ? "Voided entries are read-only" : "Edit entry"}
+                            disabled={isVoided}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (!isVoided) {
+                                handleVoidJournalEntry(entry.id);
+                              }
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={isVoided ? "Entry already voided" : "Void entry"}
+                            disabled={isVoided}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
-                      </td>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
-                        {tx.journalId ? (
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="font-mono text-xs text-purple-700">{tx.journalId}</span>
-                            <Link
-                              href={`/accounting?editEntry=${encodeURIComponent(tx.journalId)}&resetDraft=1`}
-                              className="text-xs font-medium text-[#2264ff] hover:underline"
-                            >
-                              Edit entry
-                            </Link>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-gray-400">Journal pending</span>
-                        )}
                       </td>
                     </tr>
                   );
@@ -938,6 +1025,11 @@ export default function BankConnectionsPage() {
               </tbody>
             </table>
           </div>
+          {processedJournalEntries.length > 200 && (
+            <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100 bg-gray-50/70">
+              Showing latest 200 entries. Open workspace for full historical view.
+            </div>
+          )}
         </div>
       )}
 

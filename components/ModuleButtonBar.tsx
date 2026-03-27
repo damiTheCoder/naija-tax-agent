@@ -1,7 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { AppMode } from "@/lib/navigation";
+import { AppMode, getStoredProjectionsModuleOwner, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useMode } from "@/lib/ModeContext";
@@ -84,46 +85,39 @@ const MODULES: {
 
 export default function ModuleButtonBar() {
     const pathname = usePathname();
-    const { navigateTo, isNavigating } = useNavigation();
+    const { navigateTo, prefetchTo, isNavigating } = useNavigation();
     const { theme } = useTheme();
     const { mode: experienceMode } = useMode();
     const isDark = theme === 'dark';
+    const projectionsOwner = useSyncExternalStore(
+        subscribeToProjectionsModuleOwner,
+        getStoredProjectionsModuleOwner,
+        () => "accounting"
+    );
 
     // Hide enterprise module buttons in personal mode
     if (experienceMode === "user") return null;
 
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {
-
-        if (pathname.startsWith("/marketplace")) return "marketplace";
-        if (pathname.startsWith("/wallet")) return "wallet";
-        if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
-        if (pathname.startsWith("/budgeting")) return "budgeting";
-        if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) return "payroll";
-        if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
-        return "tax";
+        return resolveModuleForPath(pathname, projectionsOwner);
     };
 
     const currentMode = getCurrentMode();
 
+    const getModuleHref = (targetMode: AppMode) => {
+        if (targetMode === "tax") return "/tax/workspace";
+        if (targetMode === "budgeting") return "/budgeting/dashboard";
+        if (targetMode === "intelligence") return "/cashflow-intelligence";
+        if (targetMode === "wallet") return "/wallet";
+        if (targetMode === "marketplace") return "/marketplace";
+        if (targetMode === "payroll") return "/accounting/employees";
+        return "/accounting";
+    };
+
     const handleModeSwitch = (newMode: AppMode) => {
         if (currentMode === newMode) return;
-
-        if (newMode === "tax") {
-            navigateTo("/tax/workspace");
-        } else if (newMode === "budgeting") {
-            navigateTo("/budgeting/dashboard");
-        } else if (newMode === "intelligence") {
-            navigateTo("/cashflow-intelligence");
-        } else if (newMode === "wallet") {
-            navigateTo("/wallet");
-        } else if (newMode === "marketplace") {
-            navigateTo("/marketplace");
-        } else if (newMode === "payroll") {
-            navigateTo("/accounting/employees");
-        } else {
-            navigateTo("/accounting");
-        }
+        navigateTo(getModuleHref(newMode));
     };
 
     return (
@@ -146,6 +140,8 @@ export default function ModuleButtonBar() {
                     return (
                         <button
                             key={module.mode}
+                            onMouseEnter={() => prefetchTo(getModuleHref(module.mode))}
+                            onFocus={() => prefetchTo(getModuleHref(module.mode))}
                             onClick={() => handleModeSwitch(module.mode)}
                             disabled={isNavigating}
                             className={`

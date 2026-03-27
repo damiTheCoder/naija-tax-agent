@@ -48,6 +48,7 @@ export interface AccountingState {
 class AccountingEngine {
   private state: AccountingState;
   private listeners: Set<(state: AccountingState) => void> = new Set();
+  private lastLoadedSnapshot: string | null = null;
 
   constructor() {
     this.state = {
@@ -214,13 +215,26 @@ class AccountingEngine {
       customAccounts: this.state.customAccounts,
       lastUpdated: this.state.lastUpdated,
     };
-    window.localStorage.setItem("insight::accounting-engine", JSON.stringify(serializable));
+    const snapshot = JSON.stringify(serializable);
+    window.localStorage.setItem("insight::accounting-engine", snapshot);
+    this.lastLoadedSnapshot = snapshot;
   }
 
   // Load from localStorage
   load() {
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem("insight::accounting-engine");
+    if (!saved) {
+      this.lastLoadedSnapshot = null;
+      return;
+    }
+
+    // Route changes trigger many repeated reads; skip the full parse/rebuild
+    // path when the persisted snapshot is identical to the in-memory copy.
+    if (saved === this.lastLoadedSnapshot) {
+      return;
+    }
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -253,9 +267,11 @@ class AccountingEngine {
         // Auto-rebuild ledger to fix any discrepancies
         console.log("[Load] Auto-rebuilding ledger to ensure trial balance is correct...");
         this.rebuildLedger();
+        this.lastLoadedSnapshot = window.localStorage.getItem("insight::accounting-engine") || saved;
         void this.flushPendingTaxSync();
       } catch {
         // Ignore malformed cache
+        this.lastLoadedSnapshot = null;
       }
     }
   }

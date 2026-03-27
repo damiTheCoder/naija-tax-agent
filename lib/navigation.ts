@@ -1,6 +1,7 @@
 export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop" | "message-square";
 
 export type AppMode = "tax" | "accounting" | "budgeting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
+export type ProjectionsModuleOwner = "accounting" | "intelligence";
 
 export interface TaxNavItem {
   label: string;
@@ -8,6 +9,72 @@ export interface TaxNavItem {
   icon: NavIcon;
   description?: string;
   mode?: AppMode; // Which mode this nav item belongs to
+}
+
+const PROJECTIONS_MODULE_OWNER_STORAGE_KEY = "ql::projections-module-owner";
+const PROJECTIONS_MODULE_OWNER_EVENT = "ql:projections-module-owner-change";
+
+export function isProjectionsRoute(pathname: string): boolean {
+  return pathname.startsWith("/accounting/projections");
+}
+
+export function getStoredProjectionsModuleOwner(): ProjectionsModuleOwner {
+  if (typeof window === "undefined") return "accounting";
+
+  const stored = window.localStorage.getItem(PROJECTIONS_MODULE_OWNER_STORAGE_KEY);
+  return stored === "intelligence" ? "intelligence" : "accounting";
+}
+
+export function setStoredProjectionsModuleOwner(owner: ProjectionsModuleOwner): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PROJECTIONS_MODULE_OWNER_STORAGE_KEY, owner);
+  window.dispatchEvent(new Event(PROJECTIONS_MODULE_OWNER_EVENT));
+}
+
+export function subscribeToProjectionsModuleOwner(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== PROJECTIONS_MODULE_OWNER_STORAGE_KEY) return;
+    onStoreChange();
+  };
+
+  const handleOwnerChange = () => onStoreChange();
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(PROJECTIONS_MODULE_OWNER_EVENT, handleOwnerChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(PROJECTIONS_MODULE_OWNER_EVENT, handleOwnerChange);
+  };
+}
+
+export function resolveModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner = "accounting"): AppMode {
+  if (pathname.startsWith("/personal")) return "personal";
+  if (pathname.startsWith("/marketplace")) return "marketplace";
+  if (pathname.startsWith("/supersheet")) return "supersheet";
+  if (pathname.startsWith("/wallet")) return "wallet";
+  if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
+  if (pathname.startsWith("/budgeting")) return "budgeting";
+  if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) return "payroll";
+  if (isProjectionsRoute(pathname)) return projectionsOwner;
+  if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
+  return "tax";
+}
+
+export function isNavItemActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+
+  if (href === "/accounting/projections/modelling") {
+    return pathname.startsWith("/accounting/projections/modelling");
+  }
+
+  if (href === "/accounting/projections") {
+    return pathname.startsWith("/accounting/projections") && !pathname.startsWith("/accounting/projections/modelling");
+  }
+
+  return false;
 }
 
 // Tax-related navigation items
@@ -328,6 +395,20 @@ export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
     href: "/cashflow-intelligence",
     icon: "intelligence",
     description: "Cashflow analytics, treasury movement, and investment tools",
+    mode: "intelligence",
+  },
+  {
+    label: "Financial Projections",
+    href: "/accounting/projections",
+    icon: "trend",
+    description: "Forecast revenue, expenses, and cash position",
+    mode: "intelligence",
+  },
+  {
+    label: "Financial Modelling",
+    href: "/accounting/projections/modelling",
+    icon: "spreadsheet",
+    description: "Build assumptions, scenarios, and AI-native forecast models",
     mode: "intelligence",
   },
   {

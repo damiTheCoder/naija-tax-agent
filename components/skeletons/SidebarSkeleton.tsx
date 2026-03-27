@@ -7,7 +7,7 @@ export default function SidebarSkeleton() {
         <aside
             className="flex flex-col h-full w-full overflow-hidden"
             style={{
-                background: '#0a0a0a',
+                background: 'linear-gradient(180deg, #2f2f33 0%, #18181b 42%, #050505 100%)',
             }}
         >
             {/* Logo Section */}

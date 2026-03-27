@@ -12,14 +12,14 @@ export default function GlobalSpinner() {
     return (
         <div className="fixed inset-0 z-[100] bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-sm transition-opacity duration-300 overflow-hidden">
             {/* Sidebar Skeleton - Desktop Only */}
-            <div className="hidden lg:block fixed left-3 top-3 bottom-0 w-60 z-[101]">
-                <div className="h-full rounded-t-2xl overflow-hidden shadow-2xl border border-white/10">
+            <div className="hidden lg:block fixed left-3 top-4 bottom-0 w-60 z-[101]">
+                <div className="h-full overflow-hidden rounded-t-[1rem] shadow-2xl border border-slate-400/25">
                     <SidebarSkeleton />
                 </div>
             </div>
 
             {/* Content Area Skeleton */}
-            <div className="w-full h-full lg:ml-[15.75rem] flex flex-col">
+            <div className="w-full h-full lg:ml-[16.25rem] flex flex-col">
                 {/* Simulated Header */}
                 <header className="h-16 w-full flex items-center justify-between px-8 py-3 bg-white/50 dark:bg-black/50 backdrop-blur-md border-b border-gray-100 dark:border-white/5">
                     <div className="flex gap-3">

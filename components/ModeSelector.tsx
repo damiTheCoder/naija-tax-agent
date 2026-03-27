@@ -1,16 +1,20 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { AppMode } from "@/lib/navigation";
+import { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import { AppMode, getStoredProjectionsModuleOwner, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 
 export default function ModeSelector() {
     const pathname = usePathname();
-    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { navigateTo, isNavigating } = useNavigation();
+    const { navigateTo, prefetchTo, isNavigating } = useNavigation();
+    const projectionsOwner = useSyncExternalStore(
+        subscribeToProjectionsModuleOwner,
+        getStoredProjectionsModuleOwner,
+        () => "accounting"
+    );
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -25,33 +29,24 @@ export default function ModeSelector() {
 
     // Determine current mode based on pathname
     const getCurrentMode = (): AppMode => {
-        if (pathname.startsWith("/marketplace")) return "marketplace";
-        if (pathname.startsWith("/wallet")) return "wallet";
-        if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
-        if (pathname.startsWith("/budgeting")) return "budgeting";
-        if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
-        return "tax";
+        return resolveModuleForPath(pathname, projectionsOwner);
     };
 
     const mode = getCurrentMode();
 
+    const getModeHref = (targetMode: AppMode) => {
+        if (targetMode === "tax") return "/tax/workspace";
+        if (targetMode === "budgeting") return "/budgeting/dashboard";
+        if (targetMode === "intelligence") return "/cashflow-intelligence";
+        if (targetMode === "wallet") return "/wallet";
+        if (targetMode === "marketplace") return "/marketplace";
+        return "/accounting";
+    };
+
     const handleModeSwitch = (newMode: AppMode) => {
         setIsOpen(false);
         if (mode === newMode) return;
-
-        if (newMode === "tax") {
-            navigateTo("/tax/workspace");
-        } else if (newMode === "budgeting") {
-            navigateTo("/budgeting/dashboard");
-        } else if (newMode === "intelligence") {
-            navigateTo("/cashflow-intelligence");
-        } else if (newMode === "wallet") {
-            navigateTo("/wallet");
-        } else if (newMode === "marketplace") {
-            navigateTo("/marketplace");
-        } else {
-            navigateTo("/accounting");
-        }
+        navigateTo(getModeHref(newMode));
     };
 
     const getModeLabel = (m: AppMode) => {
@@ -96,36 +91,42 @@ export default function ModeSelector() {
                             mode="accounting"
                             label="Accounting"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("accounting"))}
                             onClick={() => handleModeSwitch("accounting")}
                         />
                         <ModeOption
                             mode="tax"
                             label="Tax Manager"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("tax"))}
                             onClick={() => handleModeSwitch("tax")}
                         />
                         <ModeOption
                             mode="budgeting"
                             label="Budgeting"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("budgeting"))}
                             onClick={() => handleModeSwitch("budgeting")}
                         />
                         <ModeOption
                             mode="intelligence"
                             label="Financial Management"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("intelligence"))}
                             onClick={() => handleModeSwitch("intelligence")}
                         />
                         <ModeOption
                             mode="wallet"
                             label="Wallet"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("wallet"))}
                             onClick={() => handleModeSwitch("wallet")}
                         />
                         <ModeOption
                             mode="marketplace"
                             label="Marketplace"
                             currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("marketplace"))}
                             onClick={() => handleModeSwitch("marketplace")}
                         />
 
@@ -140,17 +141,21 @@ function ModeOption({
     mode,
     label,
     currentMode,
+    onHover,
     onClick
 }: {
     mode: AppMode;
     label: string;
     currentMode: AppMode;
+    onHover: () => void;
     onClick: () => void;
 }) {
     const isSelected = mode === currentMode;
 
     return (
         <button
+            onMouseEnter={onHover}
+            onFocus={onHover}
             onClick={onClick}
             className={`
                 w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-all
@@ -168,34 +173,4 @@ function ModeOption({
             )}
         </button>
     );
-}
-
-function ModeIcon({ mode, className }: { mode: AppMode; className?: string }) {
-    if (mode === "accounting") {
-        return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h11l3 3v13H6z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9h14" />
-            </svg>
-        );
-    }
-
-    if (mode === "tax") {
-        return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-                <rect x="4" y="2" width="16" height="20" rx="2" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h8M8 10h2M14 10h2" />
-            </svg>
-        );
-    }
-
-    if (mode === "intelligence") {
-        return (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-        );
-    }
-
-    return null;
 }

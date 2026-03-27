@@ -40,7 +40,7 @@ const NAV_ITEMS: Array<{ key: MobileNavItemKey; label: string; href: string; ico
 
 export default function MobileBottomNav() {
     const pathname = usePathname();
-    const { navigateTo } = useNavigation();
+    const { navigateTo, prefetchTo } = useNavigation();
     const [isProjectionsEntryMode, setIsProjectionsEntryMode] = useState(false);
 
     useEffect(() => {
@@ -107,6 +107,7 @@ export default function MobileBottomNav() {
                         <button
                             key={item.key}
                             type="button"
+                            onTouchStart={() => prefetchTo(item.key === "projections" ? "/dashboard" : item.href)}
                             onClick={() => {
                                 if (item.key === "projections") {
                                     updateProjectionsEntryMode(true);

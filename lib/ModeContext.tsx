@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useSyncExternalStore, ReactNode } from "react";
 
 export type ExperienceMode = "enterprise" | "user";
 
@@ -12,25 +12,47 @@ interface ModeContextValue {
 }
 
 const ModeContext = createContext<ModeContextValue | undefined>(undefined);
+const MODE_STORAGE_KEY = "quantum-ledger-mode";
+const MODE_CHANGE_EVENT = "quantum-ledger-mode-change";
+const noopSubscribe = () => () => {};
+
+function readModeSnapshot(): ExperienceMode {
+  if (typeof window === "undefined") return "enterprise";
+  const stored = window.localStorage.getItem(MODE_STORAGE_KEY) as ExperienceMode | null;
+  return stored === "user" || stored === "enterprise" ? stored : "enterprise";
+}
+
+function subscribeToMode(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== MODE_STORAGE_KEY) return;
+    onStoreChange();
+  };
+
+  const handleModeChange = () => onStoreChange();
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(MODE_CHANGE_EVENT, handleModeChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(MODE_CHANGE_EVENT, handleModeChange);
+  };
+}
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ExperienceMode>(() => {
-    if (typeof window === "undefined") return "enterprise";
-    const stored = localStorage.getItem("quantum-ledger-mode") as ExperienceMode | null;
-    if (stored === "user" || stored === "enterprise") {
-      return stored;
-    }
-    return "enterprise";
-  });
-  const mounted = true;
+  const mode = useSyncExternalStore(subscribeToMode, readModeSnapshot, () => "enterprise");
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
-  useEffect(() => {
+  const setMode = (nextMode: ExperienceMode) => {
     if (typeof window === "undefined") return;
-    localStorage.setItem("quantum-ledger-mode", mode);
-  }, [mode]);
+    window.localStorage.setItem(MODE_STORAGE_KEY, nextMode);
+    window.dispatchEvent(new Event(MODE_CHANGE_EVENT));
+  };
 
   const toggleMode = () => {
-    setMode((prev) => (prev === "enterprise" ? "user" : "enterprise"));
+    setMode(mode === "enterprise" ? "user" : "enterprise");
   };
 
   return (

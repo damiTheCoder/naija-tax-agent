@@ -24,6 +24,37 @@ const heroAvatars = [
   { src: "/j1.jpeg", alt: "Business owner testimonial" },
 ];
 
+const cashosFeatures = [
+  {
+    eyebrow: "Accounting Automation",
+    title: "Close your books without the busywork",
+    description: "Automatically prepare clean accounting records and keep every transaction organized.",
+    imageSrc: "/A.jpeg",
+    imageAlt: "Atom Ledger accounting dashboard overview",
+  },
+  {
+    eyebrow: "Cash Flow Visibility",
+    title: "See profit, costs, and cash flow clearly",
+    description: "Track margin, monitor spend, and understand where money is moving in real time.",
+    imageSrc: "/B.jpeg",
+    imageAlt: "Atom Ledger cash flow and order performance widgets",
+  },
+  {
+    eyebrow: "Tax Workspace",
+    title: "Stay ahead of taxes before deadlines hit",
+    description: "Calculate liabilities early, surface issues quickly, and stay filing-ready before penalties arrive.",
+    imageSrc: "/A.jpeg",
+    imageAlt: "Atom Ledger tax and finance dashboard workflow",
+  },
+  {
+    eyebrow: "AI Finance Copilot",
+    title: "Ask questions and get plain-language answers",
+    description: "Chat with your numbers and turn accounting data into clear next steps for the business.",
+    imageSrc: "/B.jpeg",
+    imageAlt: "Atom Ledger AI-guided finance insights interface",
+  },
+];
+
 const currentYear = new Date().getFullYear();
 
 export default function LandingPage() {
@@ -268,52 +299,36 @@ export default function LandingPage() {
               </h2>
             </div>
           </div>
-          {/* Full Width Hero Image */}
-          <Image src="/cashflow-boosted-hero.png?v=20260316-1" alt="Atom Ledger dashboard preview" className="hero-full-image" width={1440} height={768} style={{ width: '100%', height: 'auto' }} priority />
 
-          {/* CashOS Features List - Horizontal Scroll */}
+          {/* CashOS Features Grid */}
           <div className="cashos-features-section section-container">
             <h2 className="cashos-brand-title">Atom Ledger</h2>
             <p className="cashos-intro">
               is an AI-powered financial operating system that helps business owners:
             </p>
-            <div className="cashos-scroll-container">
-              <div className="cashos-scroll-track">
-                {/* Card 1: Accounting Records */}
-                <div className="cashos-scroll-card">
-                  <div className="scroll-card-image scroll-card-image-full">
-                    <Image src="/feature-accounting-records.jpg" alt="Automatically prepare clean accounting records" width={800} height={500} style={{ width: '100%', height: 'auto' }} />
+            <div className="cashos-feature-grid">
+              {cashosFeatures.map((feature) => (
+                <article key={feature.title} className="cashos-feature-card">
+                  <div className="cashos-feature-media">
+                    <div className="cashos-feature-image-shell">
+                      <Image
+                        src={feature.imageSrc}
+                        alt={feature.imageAlt}
+                        className="cashos-feature-image"
+                        width={800}
+                        height={800}
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Card 2: Profit & Cash Flow */}
-                <div className="cashos-scroll-card">
-                  <div className="scroll-card-image scroll-card-image-full">
-                    <Image src="/feature-profit-cashflow.jpg" alt="Understand profit, costs, and cash flow in real time" width={800} height={500} style={{ width: '100%', height: 'auto' }} />
+                  <div className="cashos-feature-content">
+                    <span className="cashos-feature-eyebrow">{feature.eyebrow}</span>
+                    <h3 className="cashos-feature-title">{feature.title}</h3>
+                    <p className="cashos-feature-description">{feature.description}</p>
                   </div>
-                </div>
-
-                {/* Card 3: Taxes */}
-                <div className="cashos-scroll-card">
-                  <div className="scroll-card-image scroll-card-image-full">
-                    <Image src="/feature-taxes.png" alt="Calculate and manage taxes proactively" width={800} height={500} style={{ width: '100%', height: 'auto' }} />
-                  </div>
-                </div>
-
-                {/* Card 4: AI Questions */}
-                <div className="cashos-scroll-card">
-                  <div className="scroll-card-image scroll-card-image-full">
-                    <Image src="/feature-questions.png" alt="Ask questions — and get answers in plain language" width={800} height={500} style={{ width: '100%', height: 'auto' }} />
-                  </div>
-                </div>
-
-                {/* Card 5: Savings & Investments */}
-                <div className="cashos-scroll-card">
-                  <div className="scroll-card-image scroll-card-image-full">
-                    <Image src="/feature-savings.png" alt="Automate savings, investments, and estimate runway" width={800} height={500} style={{ width: '100%', height: 'auto' }} />
-                  </div>
-                </div>
-              </div>
+                </article>
+              ))}
             </div>
             <div className="cashos-tagline">
               <p>No dashboards to learn.</p>

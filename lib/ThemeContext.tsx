@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore, ReactNode } from "react";
 
 type Theme = "light" | "dark";
 
@@ -12,46 +12,61 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const THEME_STORAGE_KEY = "theme";
+const THEME_CHANGE_EVENT = "app-theme-change";
+const noopSubscribe = () => () => {};
+const getServerTheme = () => "light" as const;
 
-const getInitialThemeState = (): { theme: Theme; hasUserPreference: boolean } => {
-    if (typeof window === "undefined") {
-        return { theme: "light", hasUserPreference: false };
-    }
+function readStoredTheme(): Theme | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+    return stored === "dark" || stored === "light" ? stored : null;
+}
 
-    const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored === "dark" || stored === "light") {
-        return { theme: stored, hasUserPreference: true };
-    }
+function readSystemTheme(): Theme {
+    if (typeof window === "undefined") return "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    return {
-        theme: systemPrefersDark ? "dark" : "light",
-        hasUserPreference: false,
+function subscribeToStoredTheme(onStoreChange: () => void) {
+    if (typeof window === "undefined") return () => {};
+
+    const handleStorage = (event: StorageEvent) => {
+        if (event.key && event.key !== THEME_STORAGE_KEY) return;
+        onStoreChange();
     };
-};
+
+    const handleThemeChange = () => onStoreChange();
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+
+    return () => {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    };
+}
+
+function subscribeToSystemTheme(onStoreChange: () => void) {
+    if (typeof window === "undefined") return () => {};
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => onStoreChange();
+
+    if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", handleChange);
+        return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setThemeState] = useState<Theme>(() => getInitialThemeState().theme);
-    const [hasUserPreference, setHasUserPreference] = useState<boolean>(
-        () => getInitialThemeState().hasUserPreference
-    );
-    const mounted = true;
-
-    // Watch for OS/browser theme changes when user hasn't picked a preference
-    useEffect(() => {
-        if (hasUserPreference) return;
-        const media = window.matchMedia("(prefers-color-scheme: dark)");
-        const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
-            setThemeState(event.matches ? "dark" : "light");
-        };
-        if (typeof media.addEventListener === "function") {
-            media.addEventListener("change", handleChange);
-            return () => media.removeEventListener("change", handleChange);
-        } else if (typeof media.addListener === "function") {
-            media.addListener(handleChange);
-            return () => media.removeListener(handleChange);
-        }
-    }, [mounted, hasUserPreference]);
+    const storedTheme = useSyncExternalStore(subscribeToStoredTheme, readStoredTheme, () => null);
+    const systemTheme = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme, getServerTheme);
+    const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
+    const theme = storedTheme ?? systemTheme;
 
     // Apply theme class to document
     useEffect(() => {
@@ -73,23 +88,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff"));
     }, [theme]);
 
-    // Persist only explicit user preferences
-    useEffect(() => {
-        if (hasUserPreference) {
-            localStorage.setItem("theme", theme);
-        } else {
-            localStorage.removeItem("theme");
-        }
-    }, [theme, hasUserPreference]);
-
     const toggleTheme = () => {
-        setHasUserPreference(true);
-        setThemeState((prev) => (prev === "light" ? "dark" : "light"));
+        if (typeof window === "undefined") return;
+        const nextTheme = theme === "light" ? "dark" : "light";
+        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
     };
 
     const setTheme = (nextTheme: Theme) => {
-        setHasUserPreference(true);
-        setThemeState(nextTheme);
+        if (typeof window === "undefined") return;
+        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
     };
 
     // Render children always, but with suppressed hydration warning div wrapper

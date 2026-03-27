@@ -54,6 +54,18 @@ const natureToRawType = (
     }
 };
 
+const normalizePostingDate = (value?: string): string => {
+    const raw = String(value || "").trim();
+    if (!raw) return new Date().toISOString().split("T")[0];
+
+    const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) return isoMatch[1];
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return new Date().toISOString().split("T")[0];
+    return parsed.toISOString().split("T")[0];
+};
+
 // =============================================================================
 // 1. ACCOUNTING MODULE
 // =============================================================================
@@ -66,7 +78,7 @@ function postToAccounting(
         const result = accountingEngine.processTransactionWithAIAccounts(
             {
                 id: `bank-${tx.id}`,
-                date: tx.date,
+                date: normalizePostingDate(tx.date),
                 description: `${tx.description}${tx.narration ? ` — ${tx.narration}` : ""}`,
                 category: classification.category,
                 amount: tx.amount,

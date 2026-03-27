@@ -194,7 +194,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="app-shell-content-wrapper lg:ml-[15.75rem] min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
+      <div className="app-shell-content-wrapper lg:ml-[16.25rem] min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
         {/* Desktop Header */}
         <header
           className="app-shell-topbar hidden lg:flex sticky top-0 z-50 px-8 py-3 justify-between items-center pointer-events-none backdrop-blur-xl"

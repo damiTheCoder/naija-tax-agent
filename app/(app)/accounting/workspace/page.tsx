@@ -458,7 +458,6 @@ export default function WorkspacePage() {
             <span className="text-sm font-medium text-gray-700">Filter by:</span>
           </div>
 
-          {/* Year Selector */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-500">Year:</label>
             <select
@@ -472,7 +471,6 @@ export default function WorkspacePage() {
             </select>
           </div>
 
-          {/* Date Range */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-500">From:</label>
             <input
@@ -492,7 +490,6 @@ export default function WorkspacePage() {
             />
           </div>
 
-          {/* Clear Filters */}
           {(dateFrom || dateTo) && (
             <button
               onClick={() => { setDateFrom(""); setDateTo(""); }}
@@ -503,7 +500,6 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        {/* Year Summary Cards */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs uppercase tracking-wider text-gray-400 mb-3">Yearly Records Summary</p>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -516,14 +512,14 @@ export default function WorkspacePage() {
                   key={year}
                   onClick={() => setSelectedYear(year)}
                   className={`p-3 rounded-lg border text-left transition-all ${isSelected
-                    ? 'border-[#2264ff] bg-blue-50 ring-2 ring-[#2264ff]/20'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                    ? 'border-gray-200 bg-gray-100'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
                     }`}
                 >
-                  <p className={`text-lg font-bold ${isSelected ? 'text-[#2264ff]' : 'text-gray-900'}`}>{year}</p>
+                  <p className="text-lg font-bold text-gray-900">{year}</p>
                   <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
                   {yearStatement && (
-                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
                       ₦{Math.abs(yearStatement.netIncome).toLocaleString("en-NG")}
                     </p>
                   )}
@@ -532,7 +528,7 @@ export default function WorkspacePage() {
             })}
           </div>
         </div>
-      </div >
+      </div>
 
       {/* Tabs */}
       < div className="" >
@@ -559,7 +555,7 @@ export default function WorkspacePage() {
         {
           activeTab === "journal" && (
             <div>
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+              <div className="px-6 py-4 bg-white flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-900">General Journal - {selectedYear}</h2>
                   <p className="text-xs text-gray-500 mt-0.5">{classifiedJournalEntries.length} entries {dateFrom || dateTo ? '(filtered)' : ''} • Classified journal view</p>

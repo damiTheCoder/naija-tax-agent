@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,7 +13,13 @@ import {
     MARKETPLACE_NAV_ITEMS,
     PAYROLL_NAV_ITEMS,
     PERSONAL_NAV_ITEMS,
-    AppMode
+    AppMode,
+    isNavItemActive,
+    isProjectionsRoute,
+    getStoredProjectionsModuleOwner,
+    setStoredProjectionsModuleOwner,
+    subscribeToProjectionsModuleOwner,
+    resolveModuleForPath,
 } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { useMode } from "@/lib/ModeContext";
@@ -30,11 +36,16 @@ interface MobileMenuProps {
 
 export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const pathname = usePathname();
-    const { navigateTo } = useNavigation();
+    const { navigateTo, prefetchTo } = useNavigation();
     const { theme } = useTheme();
     const { mode } = useMode();
     const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
     const [expandedModule, setExpandedModule] = useState<AppMode | null>(null);
+    const projectionsOwner = useSyncExternalStore(
+        subscribeToProjectionsModuleOwner,
+        getStoredProjectionsModuleOwner,
+        () => "accounting"
+    );
 
     const isDark = theme === "dark";
 
@@ -45,21 +56,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
 
     const defaultExpandedModule: AppMode = mode === "user"
         ? "personal"
-        : pathname.startsWith("/wallet")
-            ? "wallet"
-            : pathname.startsWith("/supersheet")
-                ? "supersheet"
-                : pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")
-                    ? "payroll"
-                : pathname.startsWith("/budgeting")
-                    ? "budgeting"
-                    : pathname.startsWith("/cashflow-intelligence")
-                        ? "intelligence"
-                        : pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")
-                            ? "accounting"
-                            : pathname.startsWith("/marketplace")
-                                ? "marketplace"
-                                : "tax";
+        : resolveModuleForPath(pathname, projectionsOwner);
 
     const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
         ? [
@@ -138,14 +135,18 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                 `}>
                                     <div className="px-3 pb-3 pt-1 space-y-1">
                                         {module.items.map((item) => {
-                                            const isActive = pathname === item.href;
+                                            const isActive = isNavItemActive(pathname, item.href);
                                             const isNavigating = navigatingTo === item.href;
 
                                             return (
                                                 <button
                                                     key={item.href}
+                                                    onTouchStart={() => prefetchTo(item.href)}
                                                     onClick={() => {
                                                         if (pathname !== item.href) {
+                                                            if (isProjectionsRoute(item.href)) {
+                                                                setStoredProjectionsModuleOwner(module.id === "intelligence" ? "intelligence" : "accounting");
+                                                            }
                                                             setNavigatingTo(item.href);
                                                             navigateTo(item.href);
                                                         }

@@ -4524,23 +4524,13 @@ tr:hover td {
   background: #ffffff;
 }
 
-.introducing-image {
-  max-width: 100%;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
-  border: 4px solid #0a0a0a;
-}
-
-.introducing-image img {
-  width: 100%;
-  height: auto;
-  display: block;
+.introducing-section .section-header-modern {
+  margin-bottom: 0;
 }
 
 /* CashOS Features - Grid Layout */
 .cashos-features-section.section-container {
-  margin-top: 4rem;
+  margin-top: 2rem;
   padding-top: 0;
   border-top: none;
 }
@@ -4578,102 +4568,120 @@ tr:hover td {
   color: #1a50cc;
 }
 
-.cashos-scroll-container {
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 1rem 0 2rem;
-  margin: 0;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+.cashos-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.75rem;
+  align-items: stretch;
 }
 
-.cashos-scroll-container::-webkit-scrollbar {
-  display: none;
-}
-
-.cashos-scroll-track {
-  display: flex;
-  gap: 1.5rem;
-  padding-right: 2rem;
-}
-
-.cashos-scroll-card {
-  flex: 0 0 320px;
-  min-width: 320px;
-  max-width: 320px;
-  padding: 0;
-  border-radius: 20px;
+.cashos-feature-card {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  padding: 1rem;
+  border-radius: 30px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
   overflow: hidden;
-  transition: all 0.3s ease;
-  background: transparent;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.cashos-scroll-card:hover {
-  transform: translateY(-4px);
+.cashos-feature-card::after {
+  content: none;
 }
 
-/* Card color variants based on images */
-.cashos-scroll-card.card-blue {
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+.cashos-feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.12);
+  border-color: rgba(37, 99, 235, 0.22);
 }
 
-.cashos-scroll-card.card-cyan {
-  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+.cashos-feature-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  max-width: calc((100% - 1.75rem) / 2);
+  justify-self: center;
 }
 
-.cashos-scroll-card.card-silver {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-}
-
-.cashos-scroll-card.card-grey {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-}
-
-.cashos-scroll-card.card-holographic {
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
-}
-
-.scroll-card-image {
-  width: 100px;
-  height: 100px;
-  border-radius: 16px;
+.cashos-feature-media {
+  position: relative;
+  min-height: 18rem;
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+  border-radius: 24px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  z-index: 1;
 }
 
-.scroll-card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.cashos-feature-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.3) 100%);
+  pointer-events: none;
 }
 
-.scroll-card-image-full {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
+.cashos-feature-media::after {
+  content: none;
+}
+
+.cashos-feature-image-shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 28rem);
+  margin: 0 auto;
+  border-radius: 22px;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 24px 45px rgba(15, 23, 42, 0.14);
 }
 
-.scroll-card-image-full img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.cashos-feature-image {
   display: block;
+  width: 100%;
+  height: auto;
 }
 
-.scroll-card-text {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #1e293b;
-  text-align: center;
-  line-height: 1.5;
+.cashos-feature-content {
+  position: relative;
+  z-index: 1;
+  padding: 1.35rem 0.35rem 0.25rem;
+}
+
+.cashos-feature-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cashos-feature-title {
+  font-size: clamp(1.65rem, 2.5vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.12;
+  color: #0f172a;
+  margin: 1rem 0 0.85rem;
+  letter-spacing: -0.03em;
+  max-width: 12ch;
+}
+
+.cashos-feature-description {
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: #64748b;
   margin: 0;
+  max-width: 34ch;
 }
 
 .cashos-tagline {
@@ -4701,7 +4709,7 @@ tr:hover td {
 
 @media (max-width: 768px) {
   .cashos-features-section.section-container {
-    margin: 2.4rem 0 0;
+    margin: 1.5rem 0 0;
     padding: 0 1rem;
   }
 
@@ -4717,35 +4725,43 @@ tr:hover td {
     margin-bottom: 1.15rem;
   }
 
-  .cashos-scroll-container {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    margin: 0 -1rem;
+  .cashos-feature-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .cashos-feature-card {
+    padding: 0.9rem;
+    border-radius: 24px;
+  }
+
+  .cashos-feature-card:last-child:nth-child(odd) {
+    grid-column: auto;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .cashos-feature-media {
+    min-height: 14rem;
     padding: 1rem;
   }
 
-  .cashos-scroll-track {
-    display: flex;
-    grid-template-columns: none;
-    gap: 1rem;
-    padding-right: 1rem;
+  .cashos-feature-content {
+    padding: 1rem 0.15rem 0.15rem;
   }
 
-  .cashos-scroll-card {
-    flex: 0 0 75vw;
-    min-width: 75vw;
-    max-width: 75vw;
+  .cashos-feature-title {
+    font-size: 1.7rem;
+    max-width: none;
   }
 
-  .scroll-card-image-full img {
-    width: 100%;
-    height: auto;
+  .cashos-feature-description {
+    font-size: 1rem;
+    max-width: none;
   }
 
   .cashos-tagline {
-    padding-right: 1rem;
+    padding-right: 0;
   }
 }
 

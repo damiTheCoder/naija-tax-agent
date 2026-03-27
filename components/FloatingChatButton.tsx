@@ -2071,17 +2071,18 @@ _Ask me anything about bank reconciliation!_`;
                 >
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
-                    <div className="relative pointer-events-auto mt-auto mb-0 max-h-[85vh] rounded-t-[28px] rounded-b-none shadow-2xl sm:mx-2 sm:mb-4 sm:rounded-[28px]">
+                    <div className="relative pointer-events-auto mt-auto mb-0 max-h-[85vh] overflow-hidden rounded-t-[28px] rounded-b-none bg-blue-100/70 p-[2px] shadow-2xl sm:mx-2 sm:mb-4 sm:rounded-[28px]">
                         <div
                             className="absolute inset-0 rounded-t-[28px] rounded-b-none pointer-events-none sm:rounded-[28px]"
                             style={{
-                                background: "conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)",
-                                animation: "spinBorder 1.5s linear forwards, fadeBorder 1.5s ease-out forwards",
+                                background: "conic-gradient(from 90deg, rgba(59, 130, 246, 0.12) 0deg, rgba(59, 130, 246, 0.16) 120deg, rgba(37, 99, 235, 0.98) 170deg, rgba(147, 197, 253, 0.82) 200deg, rgba(37, 99, 235, 0.2) 245deg, rgba(59, 130, 246, 0.12) 360deg)",
+                                animation: "spinBorder 3s linear infinite",
+                                transformOrigin: "center",
+                                willChange: "transform",
                             }}
                         />
                         <div
-                            className="relative m-[3px] mb-0 flex h-full min-h-0 flex-col rounded-t-[25px] rounded-b-none bg-white sm:rounded-[25px]"
-                            style={{ minHeight: "calc(100% - 6px)" }}
+                            className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-t-[26px] rounded-b-none bg-white sm:rounded-[26px]"
                         >
                             {chatPanelContent}
                         </div>
