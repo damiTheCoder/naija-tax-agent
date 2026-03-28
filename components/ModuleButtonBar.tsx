@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { AppMode, getStoredProjectionsModuleOwner, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
+import { AppMode, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useMode } from "@/lib/ModeContext";
@@ -92,7 +92,7 @@ export default function ModuleButtonBar() {
     const projectionsOwner = useSyncExternalStore(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
-        () => "accounting"
+        getServerProjectionsModuleOwnerSnapshot
     );
 
     // Hide enterprise module buttons in personal mode

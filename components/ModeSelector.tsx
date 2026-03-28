@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { AppMode, getStoredProjectionsModuleOwner, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
+import { AppMode, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 
 export default function ModeSelector() {
@@ -13,7 +13,7 @@ export default function ModeSelector() {
     const projectionsOwner = useSyncExternalStore(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
-        () => "accounting"
+        getServerProjectionsModuleOwnerSnapshot
     );
 
     // Close dropdown when clicking outside

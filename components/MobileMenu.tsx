@@ -17,6 +17,7 @@ import {
     isNavItemActive,
     isProjectionsRoute,
     getStoredProjectionsModuleOwner,
+    getServerProjectionsModuleOwnerSnapshot,
     setStoredProjectionsModuleOwner,
     subscribeToProjectionsModuleOwner,
     resolveModuleForPath,
@@ -44,7 +45,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const projectionsOwner = useSyncExternalStore(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
-        () => "accounting"
+        getServerProjectionsModuleOwnerSnapshot
     );
 
     const isDark = theme === "dark";

@@ -25,6 +25,10 @@ export function getStoredProjectionsModuleOwner(): ProjectionsModuleOwner {
   return stored === "intelligence" ? "intelligence" : "accounting";
 }
 
+export function getServerProjectionsModuleOwnerSnapshot(): ProjectionsModuleOwner {
+  return "accounting";
+}
+
 export function setStoredProjectionsModuleOwner(owner: ProjectionsModuleOwner): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(PROJECTIONS_MODULE_OWNER_STORAGE_KEY, owner);

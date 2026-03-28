@@ -22,6 +22,10 @@ function readModeSnapshot(): ExperienceMode {
   return stored === "user" || stored === "enterprise" ? stored : "enterprise";
 }
 
+function getServerModeSnapshot(): ExperienceMode {
+  return "enterprise";
+}
+
 function subscribeToMode(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {};
 
@@ -42,7 +46,7 @@ function subscribeToMode(onStoreChange: () => void) {
 }
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const mode = useSyncExternalStore(subscribeToMode, readModeSnapshot, () => "enterprise");
+  const mode = useSyncExternalStore(subscribeToMode, readModeSnapshot, getServerModeSnapshot);
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const setMode = (nextMode: ExperienceMode) => {
