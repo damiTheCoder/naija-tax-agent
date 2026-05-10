@@ -201,10 +201,10 @@ export default function ProfilePage() {
     <div className="space-y-6 pb-24">
       <section
         className={`relative overflow-hidden rounded-[28px] border px-5 py-6 sm:px-7 sm:py-8 ${
-          isDark ? "border-gray-700 bg-[#0c111a]" : "border-[#dbe4ff] bg-[#f6f9ff]"
+          isDark ? "border-gray-700 bg-[#0c111a]" : "border-[#dff3ba] bg-[#fbfff3]"
         }`}
       >
-        <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#2264ff]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#8fff00]/20 blur-3xl" />
         <div className="pointer-events-none absolute -left-10 bottom-[-60px] h-44 w-44 rounded-full bg-[#0b0f19]/10 blur-3xl" />
 
         <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-start">
@@ -213,7 +213,7 @@ export default function ProfilePage() {
               Profile Command Center
             </p>
             <div className="mt-3 flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2264ff] to-[#0b0f19] text-xl font-bold text-white shadow-lg">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8fff00] to-[#2c4300] text-xl font-bold text-[#101010] shadow-lg">
                 {initials}
               </div>
               <div>
@@ -244,7 +244,7 @@ export default function ProfilePage() {
                 onClick={() => setTheme("light")}
                 className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                   theme === "light"
-                    ? "border-[#2264ff] bg-[#e9f0ff] text-[#1e4fd6]"
+                    ? "border-[#8fff00] bg-[#eefbd9] text-[#446b00]"
                     : isDark
                       ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
                       : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
@@ -256,7 +256,7 @@ export default function ProfilePage() {
                 onClick={() => setTheme("dark")}
                 className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                   theme === "dark"
-                    ? "border-[#2264ff] bg-[#15213d] text-[#8fb0ff]"
+                    ? "border-[#8fff00] bg-[#1b2a08] text-[#d8ffae]"
                     : isDark
                       ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
                       : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
@@ -304,7 +304,7 @@ export default function ProfilePage() {
                     setIsEditing(true);
                   }
                 }}
-                className="rounded-lg bg-[#2264ff] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1c52d4]"
+                className="rounded-lg bg-[#8fff00] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#6fcc00]"
               >
                 {isEditing ? "Save Changes" : "Edit Profile"}
               </button>
@@ -327,7 +327,7 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className={`mt-5 rounded-2xl border px-4 py-3 ${isDark ? "border-[#1d2945] bg-[#0b1220]" : "border-[#d7e4ff] bg-[#f7faff]"}`}>
+          <div className={`mt-5 rounded-2xl border px-4 py-3 ${isDark ? "border-[#31480c] bg-[#101909]" : "border-[#dff3ba] bg-[#fbfff3]"}`}>
             <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-blue-300" : "text-blue-700"}`}>
               Data Isolation
             </p>
@@ -361,7 +361,7 @@ export default function ProfilePage() {
             <button
               onClick={handleCreateWorkspace}
               disabled={!newWorkspaceName.trim()}
-              className="rounded-xl bg-[#2264ff] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1c52d4] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-[#8fff00] px-3 py-2 text-xs font-semibold text-white hover:bg-[#6fcc00] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create
             </button>
@@ -376,8 +376,8 @@ export default function ProfilePage() {
                   className={`rounded-2xl border p-3 transition ${
                     isCurrent
                       ? isDark
-                        ? "border-[#3056d8] bg-[#0f1f4a]"
-                        : "border-[#bcd0ff] bg-[#edf3ff]"
+                        ? "border-[#6fcc00] bg-[#182708]"
+                        : "border-[#d7f4a6] bg-[#f5ffe4]"
                       : isDark
                         ? "border-gray-700 bg-[#0b0f1a] hover:border-gray-500"
                         : "border-gray-200 bg-white hover:border-gray-300"
@@ -405,7 +405,7 @@ export default function ProfilePage() {
                           />
                           <button
                             onClick={() => handleRenameWorkspace(workspace.id)}
-                            className="rounded-lg bg-[#2264ff] px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                            className="rounded-lg bg-[#8fff00] px-2.5 py-1.5 text-[11px] font-semibold text-white"
                           >
                             Save
                           </button>
@@ -423,7 +423,7 @@ export default function ProfilePage() {
                     </div>
 
                     {isCurrent ? (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? "bg-[#1f3b8a] text-blue-200" : "bg-[#dbe7ff] text-[#1f4dd8]"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? "bg-[#22350a] text-[#d8ffae]" : "bg-[#eefbd9] text-[#446b00]"}`}>
                         Active
                       </span>
                     ) : (
@@ -569,7 +569,7 @@ export default function ProfilePage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href="/auth/sign-in?next=%2Fsupport"
-                className="rounded-xl bg-[#2264ff] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1c52d4]"
+                className="rounded-xl bg-[#8fff00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00]"
               >
                 Sign In
               </Link>

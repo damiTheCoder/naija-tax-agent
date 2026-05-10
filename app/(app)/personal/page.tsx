@@ -420,7 +420,7 @@ export default function PersonalChatPage() {
                                             rounded-2xl px-3 py-2.5 text-sm leading-relaxed
                                             ${msg.role === "assistant"
                                                 ? isDark ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
-                                                : "bg-[#2264ff] text-white"
+                                                : "bg-[#8fff00] text-white"
                                             }
                                         `}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -465,7 +465,7 @@ export default function PersonalChatPage() {
                             playGoogleButtonClickSound();
                             setIsExpanded(true);
                         }}
-                        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] text-white px-3 py-2 transition-all duration-300 hover:scale-105"
+                        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#8fff00] to-[#6fcc00] px-3 py-2 text-[#101010] transition-all duration-300 hover:scale-105"
                     >
                         <img src="/google-logo.jpg" alt="Google" className="w-8 h-8 flex-shrink-0 rounded-full" />
                         <span className="font-semibold text-sm text-white">Chat</span>
@@ -532,7 +532,7 @@ export default function PersonalChatPage() {
                                     ${isTyping
                                         ? "bg-red-500 hover:bg-red-600 text-white"
                                         : input.trim()
-                                            ? "bg-[#2264ff] hover:bg-[#1b54d9] text-white"
+                                            ? "bg-[#8fff00] hover:bg-[#6fcc00] text-white"
                                         : isDark ? "bg-gray-800 text-gray-600" : "bg-gray-100 text-gray-400"
                                     }
                                 `}

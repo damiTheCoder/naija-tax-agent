@@ -1336,7 +1336,7 @@ export default function AccountingProjectionsPage() {
             <Link href="/accounting/projections/modelling" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
               Open Financial Modelling
             </Link>
-            <Link href="/accounting" className="px-4 py-2 rounded-lg bg-[#2264ff] text-white text-sm font-semibold hover:bg-[#1a50cc]">
+            <Link href="/accounting" className="px-4 py-2 rounded-lg bg-[#8fff00] text-white text-sm font-semibold hover:bg-[#6fcc00]">
               Go to Accounting Chat
             </Link>
             <Link href="/accounting/workspace" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -1354,7 +1354,7 @@ export default function AccountingProjectionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Projections Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">Decision-focused projection view from real accounting records, tuned for management and investors.</p>
-          <Link href="/accounting/projections/modelling" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+          <Link href="/accounting/projections/modelling" className="mt-2 inline-flex text-sm font-medium text-[#446b00] hover:text-[#446b00]">
             Open Financial Modelling
           </Link>
         </div>

@@ -1963,7 +1963,19 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
       error?: string;
       response?: string;
       source?: string;
-      journalEntry?: { id?: string };
+      journalEntry?: {
+        id?: string;
+        date?: string;
+        narration?: string;
+        reference?: string;
+        lines?: Array<{
+          accountCode?: string;
+          accountName?: string;
+          debit?: number;
+          credit?: number;
+          memo?: string;
+        }>;
+      };
       prismaSync?: { enabled?: boolean; success?: boolean; error?: string };
       receipt?: { actionId?: string; deepLink?: string };
     };
@@ -1993,6 +2005,24 @@ async function executeAccountingPost(action: UnifiedAgentAction): Promise<Unifie
             "Open /accounting/action-logs or /api/accounting/health, verify Prisma sync, then retry.",
         },
       };
+    }
+
+    if (Array.isArray(data.journalEntry?.lines) && data.journalEntry.lines.length > 0 && data.journalEntry?.id) {
+      accountingEngine.upsertExternalJournalEntry({
+        id: data.journalEntry.id,
+        date,
+        narration: data.journalEntry.narration || description,
+        reference: data.journalEntry.reference,
+        lines: data.journalEntry.lines.map((line) => ({
+          accountCode: toText(line.accountCode),
+          accountName: toText(line.accountName),
+          debit: Math.abs(toNumber(line.debit)),
+          credit: Math.abs(toNumber(line.credit)),
+          memo: toText(line.memo),
+        })),
+        status: "posted",
+        source: persistedToServer ? "server-mirror" : "agent-local-mirror",
+      });
     }
 
     window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "unified-agent" } }));

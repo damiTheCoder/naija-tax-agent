@@ -5,7 +5,7 @@ export default function SecurityPage() {
     <main className="mx-auto max-w-4xl px-6 py-14">
       <h1 className="text-3xl font-bold text-slate-900">Security</h1>
       <p className="mt-3 text-slate-600">
-        Atom Ledger is designed to protect financial records, user access, and system operations.
+        Bace is designed to protect financial records, user access, and system operations.
       </p>
 
       <section className="mt-8 grid gap-4">
@@ -30,7 +30,7 @@ export default function SecurityPage() {
       </section>
 
       <div className="mt-8">
-        <Link href="/contact" className="text-sm font-semibold text-[#2264ff]">
+        <Link href="/contact" className="text-sm font-semibold text-[#446b00]">
           Report a Security Concern
         </Link>
       </div>

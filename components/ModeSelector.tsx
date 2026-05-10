@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { AppMode, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
+import { AppMode, ProjectionsModuleOwner, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 
 export default function ModeSelector() {
@@ -10,7 +10,7 @@ export default function ModeSelector() {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { navigateTo, prefetchTo, isNavigating } = useNavigation();
-    const projectionsOwner = useSyncExternalStore(
+    const projectionsOwner = useSyncExternalStore<ProjectionsModuleOwner>(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
         getServerProjectionsModuleOwnerSnapshot

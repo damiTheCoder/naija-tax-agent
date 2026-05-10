@@ -2,16 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { accountingEngine, parseTransactionFromChat } from "@/lib/accounting/transactionBridge";
-import { RawTransaction, TransactionType } from "@/lib/accounting/types";
+import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import { taxEngine } from "@/lib/tax/taxEngine";
 import { walletEngine } from "@/lib/wallet/walletEngine";
 import { calculateCashPosition, calculateCashflowMetrics } from "@/lib/cashflow/cashflowEngine";
 import { loadBudgetingState } from "@/lib/budgeting/store";
 import { payrollEngine } from "@/lib/payroll/payrollEngine";
-import { playGoogleButtonClickSound } from "@/lib/sounds";
 import {
-    formatPlanSourceLabel,
     runUnifiedAgentMessage,
     type AgentPlanSource,
     type UnifiedCustomActionExecutor
@@ -37,12 +34,6 @@ import {
     saveChatConversationMessagesAsync,
     selectChatConversation,
 } from "@/lib/personalChatHistory";
-
-interface AgentResponse {
-    answer?: string;
-    finalAnswer?: string;
-    error?: string;
-}
 
 interface ClarificationData {
     transaction: {
@@ -96,42 +87,6 @@ function readProjectionsContextSnapshot(): string {
         return typeof raw === "string" ? raw : "";
     } catch {
         return "";
-    }
-}
-
-async function humanizeDraftReply(
-    message: string,
-    moduleId: string,
-    draftReply: string
-): Promise<string> {
-    if (!draftReply.trim()) return draftReply;
-
-    try {
-        const response = await fetch("/api/agent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                module: moduleId,
-                draftReply,
-                includeSources: false,
-                messages: [{ role: "user", content: message }],
-            }),
-        });
-
-        if (!response.ok) return draftReply;
-        const data: AgentResponse = await response.json();
-
-        if (typeof data.answer === "string" && data.answer.trim()) {
-            return data.answer;
-        }
-
-        if (typeof data.finalAnswer === "string" && data.finalAnswer.trim()) {
-            return data.finalAnswer;
-        }
-
-        return draftReply;
-    } catch {
-        return draftReply;
     }
 }
 
@@ -344,9 +299,9 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     },
     default: {
         id: "general",
-        name: "Atom Ledger",
-        title: "Atom Ledger Assistant",
-        placeholder: "Ask Atom Ledger...",
+        name: "Bace",
+        title: "Bace Assistant",
+        placeholder: "Ask Bace...",
         greeting: "Hi! I'm your AI financial assistant. How can I help you today?",
         examples: [
             '"Record a transaction"',
@@ -666,12 +621,11 @@ export default function FloatingChatButton() {
     const pathname = usePathname();
     const router = useRouter();
     const [currentModule, setCurrentModule] = useState<ModuleConfig>(moduleConfigs.default);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isAgentPerforming, setIsAgentPerforming] = useState(false);
-    const [planSource, setPlanSource] = useState<AgentPlanSource>("fallback");
+    const [, setPlanSource] = useState<AgentPlanSource>("fallback");
     const [agentChatMode, setAgentChatMode] = useState<AgentChatMode>("response-only");
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
@@ -679,12 +633,11 @@ export default function FloatingChatButton() {
     const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
     const [mobileConversationMenuPosition, setMobileConversationMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const chatSectionRef = useRef<HTMLElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
     const blobUrlsRef = useRef<string[]>([]);
-    const desktopResizeSessionRef = useRef<{ startX: number; startWidth: number } | null>(null);
-    const [desktopModalWidth, setDesktopModalWidth] = useState(380);
-    const [isDesktopResizing, setIsDesktopResizing] = useState(false);
+    const shouldAutoScrollRef = useRef(false);
 
     const revokeBlobUrls = useCallback(() => {
         for (const url of blobUrlsRef.current) {
@@ -696,6 +649,26 @@ export default function FloatingChatButton() {
         }
         blobUrlsRef.current = [];
     }, []);
+
+    const queueAutoScroll = useCallback(() => {
+        shouldAutoScrollRef.current = true;
+    }, []);
+
+    const focusComposer = useCallback((delay = 120) => {
+        if (typeof window === "undefined") return;
+        window.setTimeout(() => textareaRef.current?.focus(), delay);
+    }, []);
+
+    const revealChatSection = useCallback((options?: { focus?: boolean; behavior?: ScrollBehavior }) => {
+        if (typeof window === "undefined") return;
+        const behavior = options?.behavior ?? "smooth";
+        window.requestAnimationFrame(() => {
+            chatSectionRef.current?.scrollIntoView({ behavior, block: "start" });
+        });
+        if (options?.focus) {
+            focusComposer(180);
+        }
+    }, [focusComposer]);
 
     const refreshConversationList = useCallback(async () => {
         const conversations = await loadChatConversationsAsync();
@@ -786,8 +759,8 @@ export default function FloatingChatButton() {
         setInputValue("");
         setPlanSource("fallback");
         void refreshConversationList();
-        setIsModalOpen(true);
-    }, [currentModule, pathname, refreshConversationList, revokeBlobUrls]);
+        revealChatSection({ focus: true });
+    }, [currentModule, pathname, refreshConversationList, revealChatSection, revokeBlobUrls]);
 
     const handleSelectConversation = useCallback(async (conversationId: string) => {
         const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
@@ -797,14 +770,14 @@ export default function FloatingChatButton() {
         if (conversation.route && conversation.route !== pathname) {
             selectChatConversation(conversation.id);
             router.push(conversation.route);
-            setIsModalOpen(true);
             return;
         }
         const moduleConfig = getModuleFromPath(conversation.route || pathname);
         setCurrentModule(moduleConfig);
         openConversation(conversation, moduleConfig, conversation.route || pathname);
-        setIsModalOpen(true);
-    }, [openConversation, pathname, router]);
+        queueAutoScroll();
+        revealChatSection({ focus: true });
+    }, [openConversation, pathname, queueAutoScroll, revealChatSection, router]);
 
     const handleToggleConversationMenu = useCallback((conversationId: string, trigger?: HTMLElement | null) => {
         const menuWidth = 132;
@@ -816,7 +789,7 @@ export default function FloatingChatButton() {
                 return null;
             }
 
-            if (trigger && typeof window !== "undefined" && window.innerWidth < 1024) {
+            if (trigger && typeof window !== "undefined") {
                 const rect = trigger.getBoundingClientRect();
                 const left = Math.min(
                     Math.max(viewportPadding, rect.right - menuWidth),
@@ -901,7 +874,8 @@ export default function FloatingChatButton() {
                     getChatConversation(selected.conversationId);
                 if (selectedConversation) {
                     openConversation(selectedConversation, activeModule, pathname);
-                    setIsModalOpen(true);
+                    queueAutoScroll();
+                    revealChatSection({ focus: true });
                     return;
                 }
             }
@@ -928,7 +902,8 @@ export default function FloatingChatButton() {
                 setMessages(restoredMessages);
                 setInputValue(selected.response ? "" : selected.prompt);
                 setActiveConversationId(null);
-                setIsModalOpen(true);
+                queueAutoScroll();
+                revealChatSection({ focus: !selected.response });
                 return;
             }
 
@@ -948,7 +923,7 @@ export default function FloatingChatButton() {
         return () => {
             active = false;
         };
-    }, [pathname, openConversation, revokeBlobUrls]);
+    }, [openConversation, pathname, queueAutoScroll, revealChatSection, revokeBlobUrls]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -973,14 +948,14 @@ export default function FloatingChatButton() {
                 setInputValue(detail.prompt);
             }
 
-            setIsModalOpen(true);
+            revealChatSection({ focus: true });
         };
 
         window.addEventListener(CHAT_MODAL_OPEN_EVENT, handleExternalChatOpen as EventListener);
         return () => {
             window.removeEventListener(CHAT_MODAL_OPEN_EVENT, handleExternalChatOpen as EventListener);
         };
-    }, [pathname]);
+    }, [pathname, revealChatSection]);
 
     useEffect(() => {
         const handleHistorySelection = () => {
@@ -995,7 +970,8 @@ export default function FloatingChatButton() {
                 const selectedConversation = getChatConversation(selected.conversationId);
                 if (selectedConversation) {
                     openConversation(selectedConversation, activeModule, pathname);
-                    setIsModalOpen(true);
+                    queueAutoScroll();
+                    revealChatSection({ focus: true });
                     return;
                 }
             }
@@ -1020,14 +996,15 @@ export default function FloatingChatButton() {
             setActiveConversationId(null);
             setMessages(restoredMessages);
             setInputValue(selected.response ? "" : selected.prompt);
-            setIsModalOpen(true);
+            queueAutoScroll();
+            revealChatSection({ focus: !selected.response });
         };
 
         window.addEventListener(CHAT_HISTORY_SELECTED_EVENT, handleHistorySelection as EventListener);
         return () => {
             window.removeEventListener(CHAT_HISTORY_SELECTED_EVENT, handleHistorySelection as EventListener);
         };
-    }, [openConversation, pathname, refreshConversationList]);
+    }, [openConversation, pathname, queueAutoScroll, refreshConversationList, revealChatSection]);
 
     useEffect(() => {
         const refresh = () => {
@@ -1108,73 +1085,6 @@ export default function FloatingChatButton() {
         };
     }, [revokeBlobUrls]);
 
-    const clampDesktopModalWidth = useCallback((width: number) => {
-        if (typeof window === "undefined") {
-            return Math.min(Math.max(width, 320), 560);
-        }
-
-        const maxAllowed = Math.max(320, Math.min(620, window.innerWidth - 72));
-        return Math.min(Math.max(width, 320), maxAllowed);
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const handlePointerMove = (event: PointerEvent) => {
-            const session = desktopResizeSessionRef.current;
-            if (!session) return;
-            const nextWidth = clampDesktopModalWidth(session.startWidth + (session.startX - event.clientX));
-            setDesktopModalWidth(nextWidth);
-        };
-
-        const stopResize = () => {
-            if (!desktopResizeSessionRef.current) return;
-            desktopResizeSessionRef.current = null;
-            setIsDesktopResizing(false);
-            document.body.style.userSelect = "";
-            document.body.style.cursor = "";
-        };
-
-        window.addEventListener("pointermove", handlePointerMove);
-        window.addEventListener("pointerup", stopResize);
-        window.addEventListener("pointercancel", stopResize);
-
-        return () => {
-            window.removeEventListener("pointermove", handlePointerMove);
-            window.removeEventListener("pointerup", stopResize);
-            window.removeEventListener("pointercancel", stopResize);
-            document.body.style.userSelect = "";
-            document.body.style.cursor = "";
-        };
-    }, [clampDesktopModalWidth]);
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const syncDesktopModalWidth = () => {
-            setDesktopModalWidth((current) => clampDesktopModalWidth(current));
-        };
-
-        syncDesktopModalWidth();
-        window.addEventListener("resize", syncDesktopModalWidth);
-
-        return () => {
-            window.removeEventListener("resize", syncDesktopModalWidth);
-        };
-    }, [clampDesktopModalWidth]);
-
-    const handleDesktopResizeStart = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        desktopResizeSessionRef.current = {
-            startX: event.clientX,
-            startWidth: desktopModalWidth,
-        };
-        setIsDesktopResizing(true);
-        document.body.style.userSelect = "none";
-        document.body.style.cursor = "ew-resize";
-    }, [desktopModalWidth]);
-
     // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
@@ -1186,39 +1096,36 @@ export default function FloatingChatButton() {
 
     // Scroll to bottom
     useEffect(() => {
+        if (!shouldAutoScrollRef.current) return;
+        shouldAutoScrollRef.current = false;
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // Focus input when modal opens and handle clarification message
+    // Inject clarification messages into the inline thread and bring the chat into view.
     useEffect(() => {
-        if (isModalOpen) {
-            if (textareaRef.current) {
-                setTimeout(() => textareaRef.current?.focus(), 100);
+        if (!clarificationData) return;
+
+        const { transaction } = clarificationData;
+        const clarificationMsg = `Pls clarify transaction\n\n**Details:**\nAmount: ₦${transaction.amount.toLocaleString()}\nDate: ${transaction.date}\nDesc: ${transaction.description}\nBank: ${transaction.bankName}\n\nI need more context to categorise this correctly. What was this for?`;
+
+        queueAutoScroll();
+        revealChatSection({ focus: true });
+        setMessages((prev) => {
+            if (prev[prev.length - 1]?.content === clarificationMsg) {
+                return prev;
             }
-
-            // Inject clarification message if available
-            if (clarificationData) {
-                const { transaction } = clarificationData;
-                const clarificationMsg = `Pls clarify transaction\n\n**Details:**\nAmount: ₦${transaction.amount.toLocaleString()}\nDate: ${transaction.date}\nDesc: ${transaction.description}\nBank: ${transaction.bankName}\n\nI need more context to categorise this correctly. What was this for?`;
-
-                // Add message only if it's not already the last message
-                setMessages(prev => {
-                    if (prev[prev.length - 1]?.content !== clarificationMsg) {
-                        return [...prev, {
-                            id: `clarify-${Date.now()}`,
-                            role: "assistant",
-                            content: clarificationMsg,
-                            timestamp: Date.now()
-                        }];
-                    }
-                    return prev;
-                });
-
-                // Clear the clarification flag so it doesn't trigger again for the same event
-                setClarificationData(null);
-            }
-        }
-    }, [isModalOpen, clarificationData]);
+            return [
+                ...prev,
+                {
+                    id: `clarify-${Date.now()}`,
+                    role: "assistant",
+                    content: clarificationMsg,
+                    timestamp: Date.now(),
+                },
+            ];
+        });
+        setClarificationData(null);
+    }, [clarificationData, queueAutoScroll, revealChatSection]);
 
     const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload): ChatMessage => ({
         id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1237,358 +1144,6 @@ export default function FloatingChatButton() {
             buildChatMessage(role, content, attachment),
         ]);
     }, [buildChatMessage]);
-
-    // Handle accounting module
-    const handleAccountingMessage = useCallback(async (message: string) => {
-        const parsedTx = parseTransactionFromChat(message);
-
-        if (parsedTx && parsedTx.amount && parsedTx.amount > 0) {
-            const typeMap: Record<string, TransactionType> = {
-                'sale': 'income', 'receipt': 'income', 'purchase': 'expense',
-                'expense': 'expense', 'payment': 'liability', 'transfer': 'asset',
-                'asset': 'asset', 'equity': 'equity', 'loan': 'liability', 'other': 'expense',
-            };
-
-            const categoryToType: Record<string, TransactionType> = {
-                'sales': 'income', 'service': 'income', 'receipt': 'income',
-                'purchases': 'expense', 'rent': 'expense', 'salary': 'expense',
-                'utilities': 'expense', 'transport': 'expense', 'expense': 'expense',
-                'asset': 'asset', 'capital': 'equity', 'drawing': 'equity',
-                'loan-received': 'liability', 'loan-repayment': 'liability',
-                'supplier-payment': 'liability', 'payment': 'liability', 'transfer': 'asset',
-            };
-
-            const transactionType = categoryToType[parsedTx.category || ''] || typeMap[parsedTx.parsedType] || 'expense';
-
-            const newTransaction: RawTransaction = {
-                id: `chat-${Date.now()}`,
-                date: new Date().toISOString().split("T")[0],
-                description: parsedTx.description || message.substring(0, 150),
-                category: parsedTx.category || "other",
-                amount: parsedTx.amount,
-                type: transactionType,
-            };
-
-            const results: string[] = [];
-
-            try {
-                const accountingResult = accountingEngine.processTransactionEnhanced(newTransaction);
-                accountingEngine.generateStatements();
-
-                const debitLine = accountingResult.journalEntry.lines.find(l => l.debit > 0);
-                const creditLine = accountingResult.journalEntry.lines.find(l => l.credit > 0);
-                const confidence = Math.round((accountingResult.analysis.debitAccount.confidence + accountingResult.analysis.creditAccount.confidence) / 2 * 100);
-
-                results.push(`📚 **Accounting** (${confidence}% confidence): ${accountingResult.journalEntry.id}`);
-                results.push(`   DR: ${debitLine?.accountName} ₦${debitLine?.debit.toLocaleString()}`);
-                results.push(`   CR: ${creditLine?.accountName} ₦${creditLine?.credit.toLocaleString()}`);
-            } catch {
-                results.push("📚 **Accounting**: Could not post (check manually)");
-            }
-
-            results.push("💰 **Tax**: Synced from posted journal to ledger-first tax engine");
-
-            if (typeof window !== "undefined") {
-                window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "chat" } }));
-                window.dispatchEvent(new StorageEvent("storage", { key: "insight::accounting-engine" }));
-            }
-
-            const confidenceText = parsedTx.confidence >= 0.9 ? "✓ High confidence" :
-                parsedTx.confidence >= 0.7 ? "⚡ Medium confidence" : "⚠️ Low confidence";
-
-            return `Transaction processed!\n\n${results.join("\n")}\n\n_${confidenceText} (${parsedTx.parsedType} detected)_`;
-        }
-
-        return "I couldn't detect a valid transaction. Please try again with an amount, e.g.:\n\n• \"Sold goods for ₦50,000\"\n• \"Paid rent ₦150,000\"";
-    }, []);
-
-    // Handle cashflow module
-    const handleCashflowMessage = useCallback((message: string) => {
-        const lowerMessage = message.toLowerCase();
-
-        try {
-            const statements = accountingEngine.generateStatements();
-            const cashBalance = statements.assets || 0;
-            const monthlyInflow = statements.revenue || 0;
-            const monthlyOutflow = (statements.costOfSales || 0) + (statements.operatingExpenses || 0);
-            const netCashflow = monthlyInflow - monthlyOutflow;
-            const burnRate = monthlyOutflow / 30;
-            const runway = monthlyOutflow > 0 ? Math.round(cashBalance / monthlyOutflow) : 999;
-
-            if (lowerMessage.includes('runway')) {
-                return `📊 **Cash Runway Analysis**\n\nCurrent Cash: ₦${cashBalance.toLocaleString()}\nMonthly Burn: ₦${monthlyOutflow.toLocaleString()}\n\n🗓️ **Runway: ${runway === 999 ? 'Sustainable (no burn)' : `${runway} months`}**`;
-            }
-
-            if (lowerMessage.includes('burn') || lowerMessage.includes('spend')) {
-                return `🔥 **Burn Rate Analysis**\n\nDaily Burn: ₦${Math.round(burnRate).toLocaleString()}/day\nMonthly Outflow: ₦${monthlyOutflow.toLocaleString()}/month\n\n${netCashflow >= 0 ? '✅ Net positive cashflow' : '⚠️ Burning more than earning'}`;
-            }
-
-            if (lowerMessage.includes('balance') || lowerMessage.includes('cash')) {
-                return `💰 **Cash Position**\n\nCash Balance: ₦${cashBalance.toLocaleString()}\nMonthly Inflow: +₦${monthlyInflow.toLocaleString()}\nMonthly Outflow: -₦${monthlyOutflow.toLocaleString()}\nNet Cashflow: ${netCashflow >= 0 ? '+' : ''}₦${netCashflow.toLocaleString()}`;
-            }
-
-            // Default: show summary
-            return `📈 **Cashflow Summary**\n\nCash Balance: ₦${cashBalance.toLocaleString()}\nMonthly Inflow: +₦${monthlyInflow.toLocaleString()}\nMonthly Outflow: -₦${monthlyOutflow.toLocaleString()}\nRunway: ${runway === 999 ? 'Sustainable' : `${runway} months`}\n\nAsk me about runway, burn rate, or spending!`;
-        } catch {
-            return "I couldn't fetch your cashflow data. Please add some transactions first.";
-        }
-    }, []);
-
-    // Handle tax module
-    const handleTaxMessage = useCallback((message: string) => {
-        const lowerMessage = message.toLowerCase();
-
-        // Extract amount if present
-        const amountMatch = message.match(/₦?\s*([\d,]+(?:\.\d{2})?)/);
-        const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
-
-        if (lowerMessage.includes('vat') && amount > 0) {
-            const vatRate = 0.075;
-            const vatAmount = amount * vatRate;
-            const total = amount + vatAmount;
-            return `🧾 **VAT Calculation**\n\nBase Amount: ₦${amount.toLocaleString()}\nVAT (7.5%): ₦${vatAmount.toLocaleString()}\n**Total: ₦${total.toLocaleString()}**\n\n_VAT is charged at 7.5% on most goods and services in Nigeria._`;
-        }
-
-        if (lowerMessage.includes('wht') && amount > 0) {
-            const whtRate = lowerMessage.includes('contract') ? 0.05 : 0.10;
-            const whtAmount = amount * whtRate;
-            const netAmount = amount - whtAmount;
-            return `💼 **WHT Calculation**\n\nGross Amount: ₦${amount.toLocaleString()}\nWHT (${whtRate * 100}%): ₦${whtAmount.toLocaleString()}\n**Net Payment: ₦${netAmount.toLocaleString()}**\n\n_WHT rates: 5% contracts, 10% services/dividends_`;
-        }
-
-        if (lowerMessage.includes('cgt') && amount > 0) {
-            const cgtRate = 0.10;
-            const cgtAmount = amount * cgtRate;
-            return `📈 **CGT Calculation**\n\nCapital Gain: ₦${amount.toLocaleString()}\nCGT (10%): ₦${cgtAmount.toLocaleString()}\n\n_CGT is 10% on chargeable gains from disposal of assets._`;
-        }
-
-        if (lowerMessage.includes('rate')) {
-            return `📋 **Nigerian Tax Rates**\n\n• **VAT**: 7.5% on goods/services\n• **WHT**: 5-10% depending on payment type\n• **CGT**: 10% on capital gains\n• **CIT**: 0% (<₦25M), 20% (₦25M-100M), 30% (>₦100M)\n• **PIT**: 7-24% progressive rates\n\nTell me an amount and I'll calculate it!`;
-        }
-
-        return `I can help with Nigerian tax calculations!\n\nTry:\n• "Calculate VAT on ₦100,000"\n• "What\'s WHT on ₦50,000 for services"\n• "CGT on ₦1,000,000 gain"\n• "What are the tax rates?"`;
-    }, []);
-
-    // Handle wallet module
-    const handleWalletMessage = useCallback((message: string) => {
-        const lowerMessage = message.toLowerCase();
-
-        if (lowerMessage.includes('balance')) {
-            return "💳 **Wallet Balance**\n\nMain Balance: ₦0.00\nSavings: ₦0.00\nInvestments: ₦0.00\n\n_Connect your wallet to see real balances._";
-        }
-
-        if (lowerMessage.includes('transfer') || lowerMessage.includes('send')) {
-            return "📤 **Transfers**\n\nNo recent transfers found.\n\nTo make a transfer, go to the Wallet section and click 'Send Money'.";
-        }
-
-        return "💼 **Wallet Overview**\n\nYour fintech wallet is ready!\n\nAsk about:\n• Wallet balance\n• Recent transfers\n• Savings progress";
-    }, []);
-
-    // Handle reconciliation module
-    const handleReconciliationMessage = useCallback(async (message: string) => {
-        const lowerMessage = message.toLowerCase();
-
-        // Help with discrepancy types
-        if (lowerMessage.includes('discrepanc') || lowerMessage.includes('difference')) {
-            return `📋 **Common Discrepancy Types**
-
-• **Unmatched Bank**: Transaction in bank statement but not in ledger
-• **Unmatched Ledger**: Entry in books but not in bank statement
-• **Timing Difference**: Cheques/transfers not yet cleared
-• **Duplicate**: Same transaction recorded twice
-• **Amount Difference**: Matched transactions with different amounts
-
-_Upload your files above to detect discrepancies automatically!_`;
-        }
-
-        // Help with matching
-        if (lowerMessage.includes('match') || lowerMessage.includes('pair')) {
-            return `🔗 **Transaction Matching**
-
-The system automatically matches transactions by:
-1. **Exact Amount** - Most important factor
-2. **Date** - Same day or within 3 days
-3. **Reference** - Cheque numbers, transfer IDs
-4. **Description** - Similar keywords
-
-**Match Confidence Scores:**
-• 90%+ = Exact match
-• 70-89% = Fuzzy match (review recommended)
-• Below 70% = Manual review needed
-
-_Upload your bank statement and ledger to start matching!_`;
-        }
-
-        // Help with timing differences
-        if (lowerMessage.includes('timing') || lowerMessage.includes('outstanding') || lowerMessage.includes('cheque')) {
-            return `⏱️ **Timing Differences**
-
-Common timing differences include:
-
-• **Outstanding Cheques**: Cheques written but not yet cleared
-• **Deposits in Transit**: Deposits made but not yet credited
-• **Bank Charges**: Deducted automatically but not yet recorded
-• **Interest**: Credited by bank but not yet recorded
-
-**Resolution:**
-1. Add to reconciliation adjustments
-2. Create journal entries if needed
-3. Follow up on items older than 30 days`;
-        }
-
-        // Help with process
-        if (lowerMessage.includes('how') || lowerMessage.includes('start') || lowerMessage.includes('process') || lowerMessage.includes('step')) {
-            return `📝 **Bank Reconciliation Process**
-
-**Step 1:** Upload Bank Statement (CSV)
-**Step 2:** Upload Ledger/Journal (CSV)
-**Step 3:** Click "Start Reconciliation"
-**Step 4:** Review matched transactions
-**Step 5:** Investigate discrepancies
-**Step 6:** Click "AI Analysis" for insights
-
-**File Format Required:**
-• Bank: Date, Description, Debit, Credit
-• Ledger: Date, Narration, Debit, Credit
-
-_Ready to begin? Upload your files above!_`;
-        }
-
-        // AI-powered complex queries
-        if (lowerMessage.includes('analyze') || lowerMessage.includes('insight') || lowerMessage.includes('explain') || lowerMessage.includes('why')) {
-            try {
-                const response = await fetch('/api/ai/bank-reconciliation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        reconciliationResult: {
-                            id: 'chat-query',
-                            reconciliationDate: new Date().toISOString().split('T')[0],
-                            bankStatementPeriod: { start: '', end: '' },
-                            bankOpeningBalance: 0,
-                            bankClosingBalance: 0,
-                            ledgerOpeningBalance: 0,
-                            ledgerClosingBalance: 0,
-                            totalBankTransactions: 0,
-                            totalLedgerTransactions: 0,
-                            matchedPairs: [],
-                            discrepancies: [],
-                            unmatchedBankTransactions: [],
-                            unmatchedLedgerTransactions: [],
-                            summary: {
-                                matchedCount: 0,
-                                unmatchedBankCount: 0,
-                                unmatchedLedgerCount: 0,
-                                discrepancyCount: 0,
-                                balanceDifference: 0,
-                                reconciliationStatus: 'pending'
-                            }
-                        },
-                        additionalContext: `User question: ${message}`
-                    }),
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-
-                    if (result.conversationalResponse) {
-                        return result.conversationalResponse;
-                    }
-
-                    return `🤖 **AI Insights**\n\n${result.summary || 'Upload your files and run reconciliation first for detailed insights.'}\n\n${result.recommendations?.slice(0, 3).map((r: string, i: number) => `${i + 1}. ${r}`).join('\n') || ''}`;
-                }
-            } catch {
-                // Fall through to default
-            }
-        }
-
-        // Default response
-        return `🏦 **Bank Reconciliation Help**
-
-I can help you with:
-• "What are common discrepancy types?"
-• "How do I match transactions?"
-• "Explain timing differences"
-• "How to start reconciliation?"
-
-**Quick Start:**
-1. Upload your bank statement CSV
-2. Upload your ledger/journal CSV
-3. Click 'Start Reconciliation'
-4. Use 'AI Analysis' for insights
-
-_Ask me anything about bank reconciliation!_`;
-    }, []);
-
-    // Handle dashboard/general queries
-    const handleDashboardMessage = useCallback((message: string) => {
-        void message;
-        try {
-            const statements = accountingEngine.generateStatements();
-            const revenue = statements.revenue || 0;
-            const expenses = (statements.costOfSales || 0) + (statements.operatingExpenses || 0);
-            const profit = revenue - expenses;
-            const profitMargin = revenue > 0 ? (profit / revenue * 100).toFixed(1) : 0;
-
-            return `📊 **Business Overview**\n\nRevenue: ₦${revenue.toLocaleString()}\nExpenses: ₦${expenses.toLocaleString()}\nProfit: ${profit >= 0 ? '+' : ''}₦${profit.toLocaleString()}\nProfit Margin: ${profitMargin}%\n\n_Navigate to specific modules for detailed analysis._`;
-        } catch {
-            return "Welcome to Atom Ledger! Start by recording transactions in the Accounting module.";
-        }
-    }, []);
-
-    // Handle supersheet queries
-    const handleSupersheetMessage = useCallback((message: string) => {
-        const lowerMessage = message.toLowerCase();
-
-        if (lowerMessage.includes('sum') || lowerMessage.includes('add')) {
-            return `📝 **SUM Formula**\n\nTo sum values, use:\n\`=SUM(A1:A10)\` - Sum range A1 to A10\n\`=SUM(A1,B1,C1)\` - Sum specific cells\n\n_Just type the formula in a cell starting with = sign!_`;
-        }
-
-        if (lowerMessage.includes('average') || lowerMessage.includes('avg') || lowerMessage.includes('mean')) {
-            return `📊 **AVERAGE Formula**\n\nTo calculate average:\n\`=AVG(B1:B20)\` - Average of B1 to B20\n\`=AVERAGE(A1:A10)\` - Same function\n\n_Works with any range of numeric values._`;
-        }
-
-        if (lowerMessage.includes('if') || lowerMessage.includes('condition')) {
-            return `🔀 **IF Formula**\n\nConditional logic:\n\`=IF(A1>100,"High","Low")\`\n\`=IF(B1=0,"Empty","Has Value")\`\n\n**Syntax:** IF(condition, true_value, false_value)`;
-        }
-
-        if (lowerMessage.includes('max') || lowerMessage.includes('highest')) {
-            return `📈 **MAX Formula**\n\nFind the maximum:\n\`=MAX(A1:A100)\` - Highest in range\n\`=MAX(A1,B1,C1)\` - Highest of cells\n\n_Returns the largest numeric value._`;
-        }
-
-        if (lowerMessage.includes('min') || lowerMessage.includes('lowest')) {
-            return `📉 **MIN Formula**\n\nFind the minimum:\n\`=MIN(A1:A100)\` - Lowest in range\n\`=MIN(A1,B1,C1)\` - Lowest of cells\n\n_Returns the smallest numeric value._`;
-        }
-
-        if (lowerMessage.includes('count')) {
-            return `🔢 **COUNT Formula**\n\nCount numeric values:\n\`=COUNT(A1:A50)\` - Count numbers\n\`=COUNTA(A1:A50)\` - Count non-empty\n\n_COUNT only counts numbers, COUNTA counts any value._`;
-        }
-
-        if (lowerMessage.includes('formula') || lowerMessage.includes('function')) {
-            return `📋 **Available Formulas**\n\n**Math:** SUM, AVG, MIN, MAX, COUNT, ROUND, ABS, SQRT, POWER\n\n**Text:** CONCAT, LEFT, RIGHT, LEN, UPPER, LOWER, TRIM\n\n**Logic:** IF\n\n**Financial:** PMT, FV, NPV\n\n**Date:** NOW, TODAY\n\n_Type = in a cell to start a formula!_`;
-        }
-
-        if (lowerMessage.includes('analyze') || lowerMessage.includes('insight')) {
-            return `🔍 **Data Analysis**\n\nI can help you analyze your data! Try:\n• Click on a range of cells\n• Ask "What's the trend?"\n• Or "Give me statistics"\n\n_The AI chat in the bottom-right can provide deeper insights._`;
-        }
-
-        return `📊 **SuperSheet Help**\n\nI can help you with:\n• "How do I sum a column?"\n• "Create an IF formula"\n• "What formulas are available?"\n• "Analyze my data"\n\n_Use the chat button in SuperSheet for contextual AI assistance!_`;
-    }, []);
-
-    const handleProjectionsMessage = useCallback((message: string) => {
-        const lower = message.toLowerCase();
-        const context = readProjectionsContextSnapshot();
-        if (!context) {
-            return "Open the projections dashboard first so I can read live metrics and assumptions.";
-        }
-
-        if (lower.includes("assumption") || lower.includes("growth") || lower.includes("cogs") || lower.includes("baseline") || lower.includes("input") || lower.includes("model")) {
-            return "I can update projections and model inputs directly here. Try: set revenue growth assumption to 12%, set tax rate to 22, or reset assumptions to auto.";
-        }
-
-        const topLines = context.split("\n").slice(0, 5).join("\n");
-        return `Here is a quick projection snapshot from your live dashboard:\n\n${topLines}`;
-    }, []);
 
     const executeProjectionAction = useCallback<UnifiedCustomActionExecutor>(async (action: UnifiedAgentAction) => {
         if (typeof window === "undefined") return null;
@@ -1650,6 +1205,8 @@ _Ask me anything about bank reconciliation!_`;
         setInputValue("");
         setIsLoading(true);
         stopAgentRef.current = false;
+        queueAutoScroll();
+        revealChatSection();
 
         const savedAfterUser = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
         if (savedAfterUser) {
@@ -1688,8 +1245,7 @@ _Ask me anything about bank reconciliation!_`;
                     executionMode: "background",
                     autoApproveUiActions: false,
                 });
-                const normalizedPlanSource: AgentPlanSource = result.planSource;
-                setPlanSource(normalizedPlanSource);
+                setPlanSource(result.planSource);
                 await appendAssistantAndPersist(result.finalReply);
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
@@ -1704,20 +1260,18 @@ _Ask me anything about bank reconciliation!_`;
                 }
             } else {
                 setIsAgentPerforming(true);
-                let hasClosedForExecution = false;
-                const closeModalForExecution = () => {
-                    if (hasClosedForExecution) return;
-                    hasClosedForExecution = true;
-                    setIsModalOpen(false);
+                const announceExecutionStart = () => {
+                    queueAutoScroll();
+                    revealChatSection();
                 };
 
                 const preferredRoute = resolvePreferredAgentRoute(trimmed, pathname);
                 if (preferredRoute && preferredRoute !== pathname) {
-                    closeModalForExecution();
                     activeRoute = preferredRoute;
                     activeModuleId = getModuleFromPath(preferredRoute).id;
                     router.push(preferredRoute);
                     await new Promise((resolve) => setTimeout(resolve, 850));
+                    announceExecutionStart();
                 }
 
                 const savedAfterRouteChange = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
@@ -1737,7 +1291,7 @@ _Ask me anything about bank reconciliation!_`;
                     rollbackOnStop: true,
                     autoApproveUiActions: true,
                     executionMode: "interactive",
-                    onExecutionStart: closeModalForExecution,
+                    onExecutionStart: announceExecutionStart,
                 });
 
                 setPlanSource(result.planSource);
@@ -1745,8 +1299,6 @@ _Ask me anything about bank reconciliation!_`;
                     router.push(result.navigateTo);
                 }
 
-                setIsModalOpen(true);
-                await new Promise((resolve) => setTimeout(resolve, 120));
                 await appendAssistantAndPersist(result.finalReply);
 
                 const downloadAttachments = result.execution
@@ -1764,7 +1316,6 @@ _Ask me anything about bank reconciliation!_`;
             }
         } catch {
             setPlanSource("fallback");
-            setIsModalOpen(true);
             await appendAssistantAndPersist("Sorry, I couldn't process that. Please try again.");
         } finally {
             setIsAgentPerforming(false);
@@ -1783,6 +1334,8 @@ _Ask me anything about bank reconciliation!_`;
         messages,
         pathname,
         persistConversation,
+        queueAutoScroll,
+        revealChatSection,
         router,
     ]);
 
@@ -1795,170 +1348,133 @@ _Ask me anything about bank reconciliation!_`;
         }
     };
 
-    const GoogleChatMark = ({ size = "mobile" }: { size?: "mobile" | "desktop" }) => (
-        <img
-            src="/google-logo.jpg"
-            alt="Google"
-            className={`rounded-full object-cover ring-2 ring-white/95 ${size === "desktop" ? "h-8 w-8" : "h-8 w-8"
-                }`}
-        />
-    );
+    const visibleMessages = messages.filter((message) => message.id !== "intro");
+    const isEmptyConversation = visibleMessages.length === 0;
+    const currentPageProfile = getPageAssistantProfile(pathname);
 
-    const openChat = () => {
-        playGoogleButtonClickSound();
-        setIsModalOpen(true);
+    const handleExampleClick = (example: string) => {
+        const cleanedExample = example.replace(/^"(.*)"$/, "$1");
+        setInputValue(cleanedExample);
+        revealChatSection({ focus: true });
     };
 
-    const chatPanelContent = (
-        <>
-            <div className="flex items-start gap-3 border-b border-gray-100 px-4 py-3.5">
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <h3 className="truncate text-[15px] font-semibold text-gray-900">
-                            {currentModule.title}
-                        </h3>
-                        <span className={`hidden lg:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] rounded-full bg-${currentModule.color}-100 text-${currentModule.color}-700 dark:bg-${currentModule.color}-900/30 dark:text-${currentModule.color}-400`}>
-                            {currentModule.name}
-                        </span>
-                    </div>
-                    <div className="mt-1 text-[11px] text-gray-500">
-                        {formatPlanSourceLabel(planSource)}{` • mode: ${agentChatMode === "full-agentic" ? "full agentic" : "response only"}`}
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 pl-2">
-                    <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-[#2264ff] sm:inline">
-                        {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setAgentChatMode((prev) =>
-                                prev === "response-only" ? "full-agentic" : "response-only"
-                            )
-                        }
-                        role="switch"
-                        aria-checked={agentChatMode === "full-agentic"}
-                        className="relative inline-flex h-6 w-10 items-center rounded-full transition-colors"
-                        style={{ background: "#2264ff" }}
-                        aria-label="Toggle assistant mode"
-                        title="Toggle assistant mode"
-                    >
-                        <span
-                            className={`inline-flex h-[18px] w-[18px] rounded-full bg-white transition-transform duration-300 ${agentChatMode === "full-agentic" ? "translate-x-5" : "translate-x-1"
-                                }`}
-                        />
-                    </button>
-                    <button
-                        onClick={() => setIsModalOpen(false)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100"
-                        aria-label="Close assistant"
-                    >
-                        <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <div className="border-b border-gray-100 px-4 py-3">
-                <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible pb-1 hide-scrollbar">
-                    <button
-                        onClick={handleStartNewChat}
-                        className="shrink-0 rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-300"
-                    >
-                        New chat
-                    </button>
-                    {conversationList.map((conversation) => (
-                        <div
-                            key={conversation.id}
-                            data-conversation-menu="true"
-                            className={`relative shrink-0 flex max-w-[150px] items-center rounded-full ${activeConversationId === conversation.id
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                                }`}
-                        >
-                            <button
-                                onClick={() => handleSelectConversation(conversation.id)}
-                                className="min-w-0 max-w-[112px] rounded-l-full px-3 py-1 text-[11px]"
-                            >
-                                <span className="block truncate">{conversation.title}</span>
-                            </button>
-                            <button
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleToggleConversationMenu(conversation.id, event.currentTarget);
-                                }}
-                                className="shrink-0 rounded-r-full pr-2 text-gray-500 hover:text-gray-700"
-                                aria-label={`Chat options for ${conversation.title}`}
-                            >
-                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                    <circle cx="6" cy="12" r="1.8" />
-                                    <circle cx="12" cy="12" r="1.8" />
-                                    <circle cx="18" cy="12" r="1.8" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                {openConversationMenuId && mobileConversationMenuPosition ? (
-                    <div
-                        data-conversation-menu="true"
-                        className="fixed z-[160] min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
-                        style={{ top: mobileConversationMenuPosition.top, left: mobileConversationMenuPosition.left }}
-                    >
+    return (
+        <section ref={chatSectionRef} className="sticky top-[4.75rem] scroll-mt-24 lg:top-24">
+            <div className="flex h-[calc(100dvh-7.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-8rem)]">
+                <div className="px-0 pt-1 pb-2 sm:py-3">
+                    <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible pb-1 hide-scrollbar">
                         <button
-                            onClick={() => handleRenameConversation(openConversationMenuId)}
-                            className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            onClick={handleStartNewChat}
+                            className="shrink-0 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100"
                         >
-                            Rename chat
+                            New chat
                         </button>
-                        <button
-                            onClick={() => handleDeleteConversation(openConversationMenuId)}
-                            className="w-full border-t border-gray-100 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                            Delete
-                        </button>
-                    </div>
-                ) : null}
-            </div>
-
-            <div className="flex min-h-0 flex-1">
-                <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3">
-                        {messages.map((msg) => (
+                        {conversationList.map((conversation) => (
                             <div
-                                key={msg.id}
-                                className={`mb-4 ${msg.role === "user" ? "text-right" : "text-left"}`}
+                                key={conversation.id}
+                                data-conversation-menu="true"
+                                className={`relative shrink-0 flex max-w-[170px] items-center rounded-full transition-colors sm:max-w-[190px] ${
+                                    activeConversationId === conversation.id
+                                        ? "bg-[#eefbd9] text-[#446b00]"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
                             >
-                                {msg.role === "user" ? (
-                                    <div className="inline-block max-w-[86%] break-words rounded-2xl bg-blue-500 px-3.5 py-2.5 text-[13px] leading-6 text-white">
-                                        {msg.content}
-                                    </div>
-                                ) : (
-                                    <div className="inline-block max-w-[92%]">
-                                        <div className="break-words px-1 py-1 text-[13px] leading-6 text-gray-900">
-                                            {msg.content}
-                                        </div>
-                                        {msg.attachment?.kind === "download" && (
-                                            <a
-                                                href={msg.attachment.url}
-                                                download={msg.attachment.fileName}
-                                                className="mt-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
-                                            >
-                                                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                    <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
-                                                    <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
-                                                </svg>
-                                                Download PDF
-                                            </a>
-                                        )}
-                                    </div>
-                                )}
+                                <button
+                                    onClick={() => handleSelectConversation(conversation.id)}
+                                    className="min-w-0 max-w-[128px] rounded-l-full px-3 py-2 text-[11px] font-medium sm:max-w-[148px] sm:px-3.5 sm:text-xs"
+                                >
+                                    <span className="block truncate">{conversation.title}</span>
+                                </button>
+                                <button
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleToggleConversationMenu(conversation.id, event.currentTarget);
+                                    }}
+                                    className="shrink-0 rounded-r-full pr-2.5 text-gray-500 hover:text-gray-700"
+                                    aria-label={`Chat options for ${conversation.title}`}
+                                >
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                        <circle cx="6" cy="12" r="1.8" />
+                                        <circle cx="12" cy="12" r="1.8" />
+                                        <circle cx="18" cy="12" r="1.8" />
+                                    </svg>
+                                </button>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-hidden py-0">
+                    <div className="h-full overflow-y-auto pt-1 pb-3 pr-1 sm:py-4 lg:py-8 lg:pr-2">
+                        {isEmptyConversation ? (
+                            <div className="mx-auto flex h-full min-h-[20rem] max-w-3xl items-center justify-center py-6 text-center lg:min-h-[24rem]">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">
+                                        Page-aware assistant for {currentPageProfile.label}
+                                    </p>
+                                    <h3 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f1f1f] sm:text-4xl">
+                                        What do you want to work on?
+                                    </h3>
+                                    <p className="mt-4 text-sm leading-7 text-gray-500 sm:text-[15px]">
+                                        {currentModule.greeting} I stay inside this page now, keep your horizontal chat history,
+                                        and can still execute cross-page tasks when needed.
+                                    </p>
+                                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                        {currentModule.examples.map((example) => (
+                                            <button
+                                                key={example}
+                                                type="button"
+                                                onClick={() => handleExampleClick(example)}
+                                                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                                            >
+                                                {example.replace(/^"(.*)"$/, "$1")}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
+                                {visibleMessages.map((msg) => (
+                                    <div
+                                        key={msg.id}
+                                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                    >
+                                        {msg.role === "user" ? (
+                                            <div className="max-w-[min(100%,42rem)] rounded-[28px] bg-gray-200 px-4 py-2.5 text-[14px] leading-6 text-gray-800">
+                                                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                                            </div>
+                                        ) : (
+                                            <div className="max-w-[min(100%,46rem)]">
+                                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                                    Bace AI
+                                                </div>
+                                                <div className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[#1f2328] sm:leading-7">
+                                                    {msg.content}
+                                                </div>
+                                                {msg.attachment?.kind === "download" && (
+                                                    <a
+                                                        href={msg.attachment.url}
+                                                        download={msg.attachment.fileName}
+                                                        className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#d7f4a6] bg-[#eefbd9] px-4 py-2 text-xs font-semibold text-[#446b00] transition-colors hover:bg-[#e6f7c5]"
+                                                    >
+                                                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                            <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
+                                                            <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+                                                        </svg>
+                                                        Download PDF
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {isLoading && (
-                            <div className="mb-4">
-                                <div className="flex gap-1">
+                            <div className="mx-auto mt-6 flex max-w-4xl justify-start">
+                                <div className="flex items-center gap-1 rounded-full bg-gray-100 px-4 py-2">
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "0ms" }} />
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "150ms" }} />
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "300ms" }} />
@@ -1967,154 +1483,103 @@ _Ask me anything about bank reconciliation!_`;
                         )}
                         <div ref={chatEndRef} />
                     </div>
+                </div>
 
-                    <div className="border-t border-gray-100 px-3 py-3">
-                        <div className="flex items-end gap-2 rounded-[24px] bg-gray-100 px-2 py-2">
-                            <button
-                                onClick={handleStartNewChat}
-                                title="New chat"
-                                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-200"
-                            >
-                                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                </svg>
-                            </button>
-
+                <div className="sticky bottom-0 bg-[var(--app-bg)]/96 pt-14 pb-0 backdrop-blur-md sm:py-3">
+                    <div className="mx-auto max-w-4xl">
+                        <div className="rounded-[30px] border border-gray-200 bg-white px-3 pb-3 pt-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
                             <textarea
                                 ref={textareaRef}
                                 rows={1}
                                 placeholder={currentModule.placeholder}
-                                className="min-h-[38px] flex-1 resize-none border-none bg-transparent py-2 text-[13px] text-gray-700 placeholder:text-gray-400 focus:outline-none"
+                                className="min-h-[48px] w-full resize-none border-none bg-transparent px-1.5 py-1.5 text-[15px] leading-7 text-[#1f2328] placeholder:text-gray-400 focus:outline-none"
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
                             />
 
-                            <button className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-200">
-                                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                </svg>
-                            </button>
-
-                            <button
-                                onClick={isAgentPerforming ? handleStopAgent : handleSend}
-                                disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
-                                className={`flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-all ${isAgentPerforming
-                                    ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                    : "bg-white text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                    }`}
-                                title={isAgentPerforming ? "Stop agent" : "Send"}
-                            >
-                                {isAgentPerforming ? (
-                                    <span className="h-3.5 w-3.5 rounded-full bg-red-500" />
-                                ) : inputValue.trim() ? (
-                                    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                                    </svg>
-                                ) : (
-                                    <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                    </svg>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </>
-    );
-
-    return (
-        <>
-            {!isModalOpen && (
-                <>
-                    <button
-                        onClick={openChat}
-                        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-300 hover:scale-105 hover:shadow-xl lg:hidden"
-                        aria-label="Open chat"
-                    >
-                        {clarificationData && (
-                            <div className="absolute -right-1 -top-1 z-50 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs font-bold text-white shadow-sm animate-bounce">
-                                1
-                            </div>
-                        )}
-                        <GoogleChatMark />
-                        <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
-                    </button>
-
-                    <div className="hidden lg:block">
-                        <button
-                            onClick={openChat}
-                            className="group fixed bottom-8 right-8 z-40 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(34,100,255,0.32)]"
-                            aria-label="Open chat"
-                        >
-                            {clarificationData && (
-                                <div className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 text-[10px] font-bold text-white shadow-sm">
-                                    1
+                            <div className="mt-3 px-1 pt-1">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleStartNewChat}
+                                        className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-200 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+                                    >
+                                        <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        New chat
+                                    </button>
+                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1.5 sm:gap-2 sm:px-3 sm:py-2">
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:text-[11px]">
+                                            {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setAgentChatMode((prev) =>
+                                                    prev === "response-only" ? "full-agentic" : "response-only"
+                                                )
+                                            }
+                                            role="switch"
+                                            aria-checked={agentChatMode === "full-agentic"}
+                                            className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors sm:h-6 sm:w-10"
+                                            style={{ background: agentChatMode === "full-agentic" ? "#8fff00" : "#d1d5db" }}
+                                            aria-label="Toggle assistant mode"
+                                            title="Toggle assistant mode"
+                                        >
+                                            <span
+                                                className={`inline-flex h-4 w-4 rounded-full bg-white transition-transform duration-300 sm:h-[18px] sm:w-[18px] ${agentChatMode === "full-agentic" ? "translate-x-4 sm:translate-x-5" : "translate-x-1"}`}
+                                            />
+                                        </button>
+                                    </div>
+                                    </div>
+                                    <button
+                                        onClick={isAgentPerforming ? handleStopAgent : handleSend}
+                                        disabled={isAgentPerforming ? false : !inputValue.trim() || isLoading}
+                                        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all sm:h-11 sm:w-11 ${
+                                            isAgentPerforming
+                                                ? "bg-red-50 text-red-600 hover:bg-red-100"
+                                                : "bg-[#8fff00] text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] hover:bg-[#7fe000] disabled:cursor-not-allowed disabled:bg-[#d8d3cb] disabled:text-white/75 disabled:shadow-none"
+                                        }`}
+                                        title={isAgentPerforming ? "Stop agent" : "Send"}
+                                    >
+                                        {isAgentPerforming ? (
+                                            <span className="h-3.5 w-3.5 rounded-sm bg-red-500" />
+                                        ) : (
+                                            <svg className="h-4.5 w-4.5 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                                            </svg>
+                                        )}
+                                    </button>
                                 </div>
-                            )}
-                            <GoogleChatMark size="desktop" />
-                            <span className="pr-0.5 text-[15px] font-semibold tracking-tight">
-                                Chat
-                            </span>
-                        </button>
-                    </div>
-                </>
-            )}
-
-            {isModalOpen && (
-                <div
-                    className="fixed inset-0 z-[100] flex flex-col lg:hidden"
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setIsModalOpen(false);
-                    }}
-                >
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-
-                    <div className="relative pointer-events-auto mt-auto mb-0 max-h-[85vh] overflow-hidden rounded-t-[28px] rounded-b-none bg-blue-100/70 p-[2px] shadow-2xl sm:mx-2 sm:mb-4 sm:rounded-[28px]">
-                        <div
-                            className="absolute inset-0 rounded-t-[28px] rounded-b-none pointer-events-none sm:rounded-[28px]"
-                            style={{
-                                background: "conic-gradient(from 90deg, rgba(59, 130, 246, 0.12) 0deg, rgba(59, 130, 246, 0.16) 120deg, rgba(37, 99, 235, 0.98) 170deg, rgba(147, 197, 253, 0.82) 200deg, rgba(37, 99, 235, 0.2) 245deg, rgba(59, 130, 246, 0.12) 360deg)",
-                                animation: "spinBorder 3s linear infinite",
-                                transformOrigin: "center",
-                                willChange: "transform",
-                            }}
-                        />
-                        <div
-                            className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-t-[26px] rounded-b-none bg-white sm:rounded-[26px]"
-                        >
-                            {chatPanelContent}
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
 
-            {isModalOpen && (
-                <div
-                    className="hidden lg:flex fixed inset-0 z-[100] items-start justify-end p-6"
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setIsModalOpen(false);
-                    }}
-                >
-                    <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" />
+                {openConversationMenuId && mobileConversationMenuPosition ? (
                     <div
-                        className={`relative flex h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] ${isDesktopResizing ? "select-none" : ""
-                            }`}
-                        style={{ width: `${desktopModalWidth}px` }}
+                        data-conversation-menu="true"
+                        className="fixed z-[160] min-w-[132px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]"
+                        style={{ top: mobileConversationMenuPosition.top, left: mobileConversationMenuPosition.left }}
                     >
                         <button
-                            type="button"
-                            aria-label="Resize chat modal"
-                            onPointerDown={handleDesktopResizeStart}
-                            className="absolute inset-y-0 left-0 z-20 flex w-4 cursor-ew-resize touch-none items-center justify-center"
+                            onClick={() => handleRenameConversation(openConversationMenuId)}
+                            className="w-full px-3 py-2.5 text-left text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                         >
-                            <span className="h-14 w-1 rounded-full bg-gray-200 transition-colors hover:bg-blue-300" />
+                            Rename chat
                         </button>
-                        {chatPanelContent}
+                        <button
+                            onClick={() => handleDeleteConversation(openConversationMenuId)}
+                            className="w-full border-t border-gray-100 px-3 py-2.5 text-left text-xs font-medium text-[#cf3f3f] transition-colors hover:bg-[#fff2f2]"
+                        >
+                            Delete
+                        </button>
                     </div>
-                </div>
-            )}
-        </>
+                ) : null}
+            </div>
+        </section>
     );
 }

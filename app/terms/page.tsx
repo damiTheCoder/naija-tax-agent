@@ -5,7 +5,7 @@ export default function TermsPage() {
     <main className="mx-auto max-w-4xl px-6 py-14">
       <h1 className="text-3xl font-bold text-slate-900">Terms of Use</h1>
       <p className="mt-3 text-slate-600">
-        These terms summarize expected use of Atom Ledger and its financial tooling.
+        These terms summarize expected use of Bace and its financial tooling.
       </p>
 
       <section className="mt-8 grid gap-4">
@@ -30,7 +30,7 @@ export default function TermsPage() {
       </section>
 
       <div className="mt-8">
-        <Link href="/privacy" className="text-sm font-semibold text-[#2264ff]">
+        <Link href="/privacy" className="text-sm font-semibold text-[#446b00]">
           Read Privacy Policy
         </Link>
       </div>

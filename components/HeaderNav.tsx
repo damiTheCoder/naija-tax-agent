@@ -30,18 +30,18 @@ export default function HeaderNav() {
     <header className="sticky top-0 z-50 bg-[#fafafa]/90 backdrop-blur-xl">
       <div className="max-w-5xl mx-auto px-6 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative w-9 h-9 overflow-hidden rounded-full transition-all">
-            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" priority />
+          <div className="relative w-9 h-9 overflow-hidden rounded-xl transition-all">
+            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Atom Ledger</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-[#0a0a0a]">Bace</h1>
             <p className="hidden text-xs text-[#666666] sm:block">Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities</p>
           </div>
         </Link>
 
         <div className="relative">
           <button
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#0a0a0a] hover:bg-[#2264ff]/30 transition-colors bg-gray-200"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#0a0a0a] hover:bg-[#8fff00]/30 transition-colors bg-gray-200"
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label="Toggle navigation menu"
             aria-expanded={isMenuOpen}
@@ -59,14 +59,14 @@ export default function HeaderNav() {
               />
               <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-[#e0e0e0]/30 bg-white shadow-xl p-2 space-y-1 z-50 overflow-hidden">
                 {/* Colorful blur circles */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#2264ff]/40 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#8fff00]/40 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-[#818cf8]/30 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute top-1/2 right-1/4 w-20 h-20 bg-[#ec4899]/20 rounded-full blur-3xl pointer-events-none"></div>
 
                 {TAX_NAV_ITEMS.map((item) => (
                   <button
                     key={item.href}
-                    className="relative w-full text-left px-4 py-3 rounded-xl hover:bg-[#2264ff]/20 text-sm font-medium flex items-center gap-3 text-[#0a0a0a] transition-colors z-10"
+                    className="relative w-full text-left px-4 py-3 rounded-xl hover:bg-[#8fff00]/20 text-sm font-medium flex items-center gap-3 text-[#0a0a0a] transition-colors z-10"
                     onClick={() => handleNavSelect(item.href)}
                   >
                     <NavIconBadge icon={item.icon} />

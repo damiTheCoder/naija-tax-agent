@@ -130,7 +130,7 @@ export default function UserRegisterPage() {
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2264ff] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
               placeholder="Your name"
               autoComplete="name"
             />
@@ -141,7 +141,7 @@ export default function UserRegisterPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2264ff] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -152,7 +152,7 @@ export default function UserRegisterPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2264ff] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
               placeholder="At least 8 characters"
               autoComplete="new-password"
             />
@@ -163,7 +163,7 @@ export default function UserRegisterPage() {
               type="password"
               value={passwordConfirm}
               onChange={(event) => setPasswordConfirm(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2264ff] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
               placeholder="Repeat your password"
               autoComplete="new-password"
             />
@@ -171,7 +171,7 @@ export default function UserRegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-lg bg-[#2264ff] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a50cc] disabled:opacity-60"
+            className="w-full rounded-lg bg-[#8fff00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00] disabled:opacity-60"
           >
             {isLoading ? "Creating account..." : "Create account"}
           </button>
@@ -205,7 +205,7 @@ export default function UserRegisterPage() {
 
         <p className="mt-5 text-sm text-slate-600">
           Already have an account?{" "}
-          <Link href={`/auth/sign-in?next=${encodeURIComponent(next)}`} className="font-semibold text-[#2264ff]">
+          <Link href={`/auth/sign-in?next=${encodeURIComponent(next)}`} className="font-semibold text-[#446b00]">
             Sign in
           </Link>
         </p>

@@ -6,13 +6,13 @@ export function DesktopModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
   const activeModeLabel = isUser ? "Personal" : "Enterprise";
-  const logoBlue = "#2264ff";
+  const brandAccent = "#8fff00";
 
   return (
     <div className="flex h-8 items-center gap-2">
       <span
         className="text-sm font-semibold tracking-wide leading-none"
-        style={{ color: logoBlue }}
+        style={{ color: brandAccent }}
       >
         {activeModeLabel}
       </span>
@@ -22,7 +22,7 @@ export function DesktopModeToggle() {
         aria-checked={isUser}
         className="relative inline-flex h-8 w-14 items-center rounded-full transition-colors"
         style={{
-          background: logoBlue,
+          background: brandAccent,
           boxShadow: "none",
         }}
         aria-label={isUser ? "Switch to enterprise experience" : "Switch to personal experience"}
@@ -42,7 +42,7 @@ export function DesktopModeToggle() {
 export function MobileModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
-  const logoBlue = "#2264ff";
+  const brandAccent = "#8fff00";
 
   return (
     <button
@@ -51,7 +51,7 @@ export function MobileModeToggle() {
       aria-checked={isUser}
       className="relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
       style={{
-        background: logoBlue,
+        background: brandAccent,
       }}
       aria-label={isUser ? "Switch to enterprise experience" : "Switch to user experience"}
     >

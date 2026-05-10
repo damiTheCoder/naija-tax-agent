@@ -1,27 +1,18 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
-import ModuleButtonBar from "@/components/ModuleButtonBar";
 import DeferredFloatingChat from "@/components/DeferredFloatingChat";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
-import { useEffect } from "react";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
-import { NavIconBadge } from "@/components/NavIconBadge";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import PageSkeleton from "@/components/PageSkeleton";
-
-const MobileBottomNav = dynamic(() => import("@/components/MobileBottomNav"), {
-  ssr: false,
-  loading: () => null,
-});
 
 const ACCOUNTING_MIGRATION_MARKER_KEY = "ql::accounting::migration-v1";
 const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
@@ -30,9 +21,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isPersonalRoute = pathname.startsWith("/personal");
+  const [desktopActionsOpen, setDesktopActionsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { theme } = useTheme();
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const desktopActionsRef = useRef<HTMLDivElement | null>(null);
+  const mobileActionsRef = useRef<HTMLDivElement | null>(null);
+  const { theme, toggleTheme } = useTheme();
   const { mode, mounted } = useMode();
+  const isDark = theme === "dark";
+  const isUser = mode === "user";
   const isModeMismatch =
     mounted &&
     ((mode === "user" && !isPersonalRoute) || (mode === "enterprise" && isPersonalRoute));
@@ -171,6 +168,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => globalThis.clearTimeout(timeoutId);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!desktopActionsOpen && !mobileActionsOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      const clickedDesktopMenu = desktopActionsRef.current?.contains(target);
+      const clickedMobileMenu = mobileActionsRef.current?.contains(target);
+
+      if (!clickedDesktopMenu) {
+        setDesktopActionsOpen(false);
+      }
+
+      if (!clickedMobileMenu) {
+        setMobileActionsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [desktopActionsOpen, mobileActionsOpen]);
+
   if (isModeMismatch) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--app-bg)' }}>
@@ -194,130 +212,228 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="app-shell-content-wrapper lg:ml-[16.25rem] min-h-screen flex flex-col pb-6 sm:pb-8 lg:pb-0">
+      <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-6 sm:pb-8 lg:ml-[25%] lg:w-[75%] lg:pb-0">
         {/* Desktop Header */}
         <header
-          className="app-shell-topbar hidden lg:flex sticky top-0 z-50 px-8 py-3 justify-between items-center pointer-events-none backdrop-blur-xl"
+          className="app-shell-topbar hidden lg:flex sticky top-0 z-50 items-center justify-end px-8 py-3 pointer-events-none backdrop-blur-xl"
           style={{
-            background: theme === "dark" ? "rgba(0,0,0,0.82)" : "rgba(255,255,255,0.92)",
+            background: theme === "dark" ? "rgba(0,0,0,0.82)" : "rgba(253,252,251,0.92)",
           }}
         >
-          {/* Module Buttons - Left Side */}
-          <div className="pointer-events-auto">
-            <ModuleButtonBar />
-          </div>
-          {/* Mode Toggle + Profile - Right Side */}
-          <div className="pointer-events-auto flex items-center gap-2">
-            <DesktopModeToggle />
-            <Link
-              href="/profile"
-              className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+          <div ref={desktopActionsRef} className="pointer-events-auto relative">
+            <button
+              onClick={() => setDesktopActionsOpen((prev) => !prev)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
               style={{
-                background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                color: isDark ? "#f5f5f5" : "#444444",
+                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.03)",
               }}
-              aria-label="Profile"
+              aria-label="Open header menu"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="#2264ff"
-                strokeWidth={1.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="5.5" cy="12" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="18.5" cy="12" r="1.8" />
               </svg>
-            </Link>
+            </button>
+
+            {desktopActionsOpen && (
+              <div
+                className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                style={{
+                  background: isDark ? "rgba(17,17,17,0.96)" : "rgba(255,255,255,0.96)",
+                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                }}
+              >
+                <div className="space-y-1 p-2">
+                  <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />
+                      </svg>
+                    </span>
+                    <span className="flex-1">
+                      <span className="block text-sm font-medium">Switch mode</span>
+                      <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>{isUser ? "Personal" : "Enterprise"}</span>
+                    </span>
+                    <DesktopModeToggle />
+                  </div>
+
+                  <Link
+                    href="/profile"
+                    onClick={() => setDesktopActionsOpen(false)}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.8}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                      </svg>
+                    </span>
+                    <span className="flex-1">
+                      <span className="block font-medium">Profile</span>
+                      <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>Open account settings</span>
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Mobile Header Only */}
         <header
           className="app-shell-topbar sticky top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
-          style={{ background: theme === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' }}
+          style={{ background: isDark ? "rgba(0,0,0,0.8)" : "rgba(253,252,251,0.94)" }}
         >
-          <div className="px-4 py-3 flex items-center justify-between">
-            {/* Logo and Name - Left Side */}
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative w-9 h-9 overflow-hidden rounded-full">
-                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" priority />
-              </div>
-              <span className="text-lg font-semibold" style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>Atom Ledger</span>
-            </Link>
-
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Marketplace Link - Mobile */}
-              <Link
-                href="/marketplace"
-                className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
-                style={{
-                  background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-                }}
-                aria-label="Marketplace"
-              >
-                <NavIconBadge icon="shop" className="w-4 h-4 text-[#2264ff]" />
-              </Link>
-              <MobileModeToggle />
-              {/* Profile Icon - Mobile */}
-              <Link
-                href="/profile"
-                className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
-                style={{
-                  background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-                }}
-                aria-label="Profile"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="#2264ff"
-                  strokeWidth={1.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                </svg>
-              </Link>
-              {/* Mobile Menu Toggle */}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
               <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="w-8 h-8 flex items-center justify-center transition-colors"
-                style={{ color: theme === 'dark' ? '#f5f5f5' : '#333333' }}
-                aria-label="Toggle menu"
+                onClick={() => {
+                  setDesktopActionsOpen(false);
+                  setMobileActionsOpen(false);
+                  setMobileMenuOpen((prev) => !prev);
+                }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors"
+                style={{ color: isDark ? "#f5f5f5" : "#444444" }}
+                aria-label="Open sidebar"
               >
-                {mobileMenuOpen ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M8 12h12M12 18h8" />
-                  </svg>
-                )}
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                  <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                  <path strokeLinecap="round" d="M9 5v14M6 8.5h1.5M6 12h1.5M6 15.5h1.5" />
+                </svg>
               </button>
+
+              <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
+                <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg">
+                  <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
+                </div>
+                <span
+                  className="truncate text-[15px] font-semibold tracking-tight"
+                  style={{ color: isDark ? "#ffffff" : "#1f1f1f" }}
+                >
+                  Bace
+                </span>
+              </Link>
+            </div>
+
+            <div ref={mobileActionsRef} className="relative">
+              <button
+                onClick={() => {
+                  setDesktopActionsOpen(false);
+                  setMobileMenuOpen(false);
+                  setMobileActionsOpen((prev) => !prev);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+                style={{
+                  color: isDark ? "#f5f5f5" : "#444444",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+                }}
+                aria-label="Open quick menu"
+              >
+                <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5.5" cy="12" r="1.8" />
+                  <circle cx="12" cy="12" r="1.8" />
+                  <circle cx="18.5" cy="12" r="1.8" />
+                </svg>
+              </button>
+
+              {mobileActionsOpen && (
+                <div
+                  className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                  style={{
+                    background: isDark ? "rgba(17,17,17,0.96)" : "rgba(255,255,255,0.96)",
+                    borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                  }}
+                >
+                  <div className="space-y-1 p-2">
+                    <Link
+                      href="/profile"
+                      onClick={() => setMobileActionsOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">
+                        <span className="block font-medium">Profile</span>
+                        <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>Open account settings</span>
+                      </span>
+                    </Link>
+
+                    <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75 9.75 9.75 0 018.25 6c0-1.33.266-2.596.748-3.752A9.753 9.753 0 1021.752 15.002z" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">
+                        <span className="block text-sm font-medium">Theme</span>
+                        <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>{isDark ? "Dark mode" : "Light mode"}</span>
+                      </span>
+                      <button
+                        onClick={toggleTheme}
+                        role="switch"
+                        aria-checked={isDark}
+                        className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors"
+                        style={{ background: isDark ? "#8fff00" : "#d9d4cd" }}
+                        aria-label="Toggle theme"
+                      >
+                        <span
+                          className={`inline-flex h-5 w-5 rounded-full bg-white transition-transform duration-300 ${isDark ? "translate-x-6" : "translate-x-1"}`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">
+                        <span className="block text-sm font-medium">Switch mode</span>
+                        <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>{isUser ? "Personal" : "Enterprise"}</span>
+                      </span>
+                      <MobileModeToggle />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="app-shell-content-main flex-1 px-4 sm:px-6 py-4 lg:p-8">
+        <main className="app-shell-content-main flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
           <div className="app-shell-content-container max-w-[1320px] mx-auto w-full min-w-0">
             <Suspense fallback={<PageSkeleton />}>
               {children}
             </Suspense>
+
+            {!isPersonalRoute && (
+              <div className="app-shell-floating-chat">
+                <DeferredFloatingChat />
+              </div>
+            )}
           </div>
         </main>
       </div>
-
-      {/* Mobile Bottom Navigation */}
-      {!isPersonalRoute && (
-        <MobileBottomNav />
-      )}
-
-      {!isPersonalRoute && (
-        <div className="app-shell-floating-chat">
-          <DeferredFloatingChat />
-        </div>
-      )}
-
     </div>
   );
 }

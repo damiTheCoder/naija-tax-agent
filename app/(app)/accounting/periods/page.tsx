@@ -57,7 +57,12 @@ export default function PeriodLocksPage() {
       const res = await fetch(`/api/accounting/period-locks/${encodeURIComponent(period)}/lock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entityId: ENTITY_ID, actor: "owner", reason: reason.trim() || undefined }),
+        body: JSON.stringify({
+          entityId: ENTITY_ID,
+          actor: "owner",
+          actorRole: "owner",
+          reason: reason.trim() || undefined,
+        }),
       });
       const data = (await res.json()) as { success?: boolean; error?: string };
       if (!res.ok || data.success !== true) throw new Error(data.error || "Failed to lock period");
@@ -76,7 +81,12 @@ export default function PeriodLocksPage() {
       const res = await fetch(`/api/accounting/period-locks/${encodeURIComponent(key)}/unlock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entityId: ENTITY_ID, actor: "owner", reason: "manual unlock" }),
+        body: JSON.stringify({
+          entityId: ENTITY_ID,
+          actor: "owner",
+          actorRole: "owner",
+          reason: "manual unlock",
+        }),
       });
       const data = (await res.json()) as { success?: boolean; error?: string };
       if (!res.ok || data.success !== true) throw new Error(data.error || "Failed to unlock period");
@@ -143,7 +153,7 @@ export default function PeriodLocksPage() {
                     </td>
                     <td className="px-3 py-2 text-slate-700">{lock.reason || "-"}</td>
                     <td className="px-3 py-2">
-                      <button onClick={() => void unlockPeriod(lock.period)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs">
+                      <button type="button" onClick={() => void unlockPeriod(lock.period)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs">
                         Unlock
                       </button>
                     </td>

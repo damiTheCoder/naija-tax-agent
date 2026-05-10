@@ -10,23 +10,18 @@ export default function GlobalSpinner() {
     if (!isNavigating) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-sm transition-opacity duration-300 overflow-hidden">
+        <div className="fixed inset-0 z-[100] overflow-hidden bg-[#fdfcfb]/80 dark:bg-[#0a0a0a]/80 backdrop-blur-sm transition-opacity duration-300">
             {/* Sidebar Skeleton - Desktop Only */}
-            <div className="hidden lg:block fixed left-3 top-4 bottom-0 w-60 z-[101]">
-                <div className="h-full overflow-hidden rounded-t-[1rem] shadow-2xl border border-slate-400/25">
+            <div className="fixed left-0 top-0 bottom-0 z-[101] hidden w-1/4 lg:block">
+                <div className="h-full overflow-hidden border-r border-[#f5f1ec] dark:border-slate-400/25">
                     <SidebarSkeleton />
                 </div>
             </div>
 
             {/* Content Area Skeleton */}
-            <div className="w-full h-full lg:ml-[16.25rem] flex flex-col">
+            <div className="flex h-full w-full flex-col lg:ml-[25%] lg:w-[75%]">
                 {/* Simulated Header */}
-                <header className="h-16 w-full flex items-center justify-between px-8 py-3 bg-white/50 dark:bg-black/50 backdrop-blur-md border-b border-gray-100 dark:border-white/5">
-                    <div className="flex gap-3">
-                        {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="h-8 w-24 rounded-lg bg-gray-200/50 dark:bg-white/10 animate-pulse" />
-                        ))}
-                    </div>
+                <header className="flex h-16 w-full items-center justify-end border-b border-[#f6f2ed] bg-[#fdfcfb]/70 px-8 py-3 backdrop-blur-md dark:border-white/5 dark:bg-black/50">
                     <div className="h-8 w-24 rounded-lg bg-gray-200/50 dark:bg-white/10 animate-pulse" />
                 </header>
 

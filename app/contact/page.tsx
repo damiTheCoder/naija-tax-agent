@@ -20,7 +20,7 @@ const contactChannels = [
 export default function ContactPage() {
   return (
     <main className="mx-auto max-w-4xl px-6 py-14">
-      <h1 className="text-3xl font-bold text-slate-900">Contact Atom Ledger</h1>
+      <h1 className="text-3xl font-bold text-slate-900">Contact Bace</h1>
       <p className="mt-3 text-slate-600">
         Choose a channel below based on what you need.
       </p>

@@ -461,6 +461,75 @@ class AccountingEngine {
   }
 
   /**
+   * Mirror a server-persisted journal entry into the browser-local engine so
+   * workspace screens and statements stay in sync with API-driven chat posts.
+   */
+  upsertExternalJournalEntry(entry: {
+    id: string;
+    narration: string;
+    date: string;
+    reference?: string;
+    lines: { accountCode: string; accountName: string; debit: number; credit: number; memo?: string }[];
+    status?: "draft" | "posted" | "voided";
+    source?: string;
+    transactionType?: TransactionType;
+    confidence?: number;
+    reasoning?: string;
+    assumptions?: string[];
+    anomalyFlag?: string;
+    metadata?: Record<string, unknown>;
+  }): JournalEntry {
+    const totalDebits = entry.lines.reduce((sum, line) => sum + (line.debit || 0), 0);
+    const totalCredits = entry.lines.reduce((sum, line) => sum + (line.credit || 0), 0);
+    const validation = validateJournalEntry(entry.lines);
+
+    if (!validation.isBalanced) {
+      throw new Error(`External entry not balanced: DR ${validation.totalDebits} ≠ CR ${validation.totalCredits}`);
+    }
+
+    const now = new Date().toISOString();
+    const mirroredEntry: JournalEntry = {
+      id: entry.id,
+      date: entry.date,
+      narration: entry.narration,
+      reference: entry.reference,
+      lines: entry.lines,
+      isBalanced: true,
+      totalDebits,
+      totalCredits,
+      transactionType: entry.transactionType || "other",
+      createdAt: now,
+      updatedAt: now,
+      postedAt: (entry.status || "posted") === "posted" ? now : undefined,
+      status: entry.status || "posted",
+      source: entry.source || "server-mirror",
+      confidence: entry.confidence,
+      reasoning: entry.reasoning,
+      assumptions: entry.assumptions,
+      anomalyFlag: entry.anomalyFlag,
+      metadata: {
+        ...(entry.metadata || {}),
+        taxSyncStatus: "synced",
+        mirroredFromServer: true,
+        mirroredAt: now,
+      },
+    };
+
+    const existingIndex = this.state.journalEntries.findIndex((journal) => journal.id === entry.id);
+    if (existingIndex >= 0) {
+      this.state.journalEntries[existingIndex] = {
+        ...this.state.journalEntries[existingIndex],
+        ...mirroredEntry,
+      };
+    } else {
+      this.state.journalEntries.push(mirroredEntry);
+    }
+
+    this.rebuildLedger();
+    return mirroredEntry;
+  }
+
+  /**
    * Update an existing journal entry
    * Reverses the old entry from the ledger and posts the new one
    */

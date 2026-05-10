@@ -27,15 +27,15 @@ const glacial = localFont({
   ],
 });
 
-const siteTitle = "Atom Ledger";
+const siteTitle = "Bace";
 const siteDescription =
   "Your Financial operating system, automate your accouting, know your projections, estimate your tax liabilities.";
 
 export const metadata: Metadata = {
   title: siteTitle,
   description: siteDescription,
-  keywords: ["Nigerian tax", "FIRS", "Atom Ledger", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
-  authors: [{ name: "Atom Ledger" }],
+  keywords: ["Nigerian tax", "FIRS", "Bace", "tax calculator", "freelancer tax", "SME tax", "Nigeria"],
+  authors: [{ name: "Bace" }],
   icons: {
     icon: APP_LOGO_ROUNDED_SRC,
     shortcut: APP_LOGO_ROUNDED_SRC,

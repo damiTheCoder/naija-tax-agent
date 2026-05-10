@@ -3,51 +3,53 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function SidebarSkeleton() {
+    const skeletonTone = "from-[#ddd8d2] via-[#ece8e2] to-[#ddd8d2] dark:from-gray-700 dark:via-gray-600 dark:to-gray-700";
+    const mutedTone = "from-[#ebe7e1] via-[#f3f0eb] to-[#ebe7e1] dark:from-gray-800 dark:via-gray-700 dark:to-gray-800";
+
     return (
         <aside
-            className="flex flex-col h-full w-full overflow-hidden"
-            style={{
-                background: 'linear-gradient(180deg, #2f2f33 0%, #18181b 42%, #050505 100%)',
-            }}
+            className="flex h-full w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#fffefd_0%,#fcfaf8_100%)] dark:bg-[linear-gradient(180deg,#2f2f33_0%,#18181b_42%,#050505_100%)]"
         >
-            {/* Logo Section */}
-            <div className="px-4 py-6 flex items-center gap-3">
-                <Skeleton className="w-9 h-9 rounded-full bg-white/10" />
-                <Skeleton className="h-5 w-32 bg-white/10" />
-            </div>
+            <div className="flex h-full w-full flex-col p-3">
+                {/* Logo Section */}
+                <div className="flex items-center gap-3 px-2.5 py-2">
+                    <Skeleton className={`h-9 w-9 rounded-full ${skeletonTone}`} />
+                    <Skeleton className={`h-5 w-32 ${skeletonTone}`} />
+                </div>
 
-            {/* Navigation Items Section */}
-            <div className="flex-1 px-4 space-y-4 mt-4 overflow-hidden">
-                <Skeleton className="h-3 w-20 bg-white/5 mb-6" />
+                {/* Navigation Items Section */}
+                <div className="mt-3 flex-1 space-y-4 overflow-hidden">
+                    <Skeleton className={`mb-6 h-3 w-20 ${mutedTone}`} />
 
-                {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 py-1">
-                        <Skeleton className="w-5 h-5 rounded-md bg-white/10" />
-                        <Skeleton className="h-4 w-28 bg-white/10" />
-                    </div>
-                ))}
-
-                <div className="pt-8 space-y-4">
-                    <Skeleton className="h-3 w-24 bg-white/5 mb-4" />
-                    {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="flex items-start gap-3 py-1">
-                            <Skeleton className="w-5 h-5 rounded-md bg-white/10 mt-1" />
-                            <div className="space-y-2 flex-1">
-                                <Skeleton className="h-3 w-full bg-white/10" />
-                                <Skeleton className="h-2 w-2/3 bg-white/5" />
-                            </div>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-2.5 py-2">
+                            <Skeleton className={`h-5 w-5 rounded-md ${skeletonTone}`} />
+                            <Skeleton className={`h-4 w-28 ${skeletonTone}`} />
                         </div>
                     ))}
-                </div>
-            </div>
 
-            {/* Bottom section */}
-            <div className="p-4 mt-auto">
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-                    <Skeleton className="w-8 h-8 rounded-lg bg-white/10" />
-                    <div className="space-y-2 flex-1">
-                        <Skeleton className="h-3 w-20 bg-white/10" />
-                        <Skeleton className="h-2 w-16 bg-white/5" />
+                    <div className="space-y-4 pt-8">
+                        <Skeleton className={`mb-4 h-3 w-24 ${mutedTone}`} />
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="flex items-start gap-3 px-2.5 py-2">
+                                <Skeleton className={`mt-1 h-5 w-5 rounded-md ${skeletonTone}`} />
+                                <div className="flex-1 space-y-2">
+                                    <Skeleton className={`h-3 w-full ${skeletonTone}`} />
+                                    <Skeleton className={`h-2 w-2/3 ${mutedTone}`} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Bottom section */}
+                <div className="mt-auto">
+                    <div className="flex items-center gap-3 rounded-xl border border-[#f5f1ec] bg-white/75 p-3 dark:border-white/10 dark:bg-white/5">
+                        <Skeleton className={`h-8 w-8 rounded-lg ${skeletonTone}`} />
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className={`h-3 w-20 ${skeletonTone}`} />
+                            <Skeleton className={`h-2 w-16 ${mutedTone}`} />
+                        </div>
                     </div>
                 </div>
             </div>

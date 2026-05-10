@@ -607,10 +607,10 @@ export default function TaxCalendarPage() {
                           >
                             <div className="flex items-center justify-between">
                               <span>{cell.day}</span>
-                              {hasEvents && <span className="h-1.5 w-1.5 rounded-full bg-[#2264ff]" />}
+                              {hasEvents && <span className="h-1.5 w-1.5 rounded-full bg-[#8fff00]" />}
                             </div>
                             {hasEvents && (
-                              <div className="mt-0.5 truncate text-[9px] font-semibold text-[#2264ff]">
+                              <div className="mt-0.5 truncate text-[9px] font-semibold text-[#446b00]">
                                 {dayEvents.length}
                               </div>
                             )}

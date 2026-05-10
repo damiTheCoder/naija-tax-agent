@@ -151,9 +151,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       margin: 50,
       info: {
         Title: `${modelName} - Financial Model`,
-        Author: "Atom Ledger",
+        Author: "Bace",
         Subject: "Financial Modelling Export",
-        Creator: "Atom Ledger",
+        Creator: "Bace",
       },
     });
 
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .font(fonts.bold)
       .fontSize(22)
       .fillColor("#0f172a")
-      .text("Atom Ledger", { align: "left" });
+      .text("Bace", { align: "left" });
 
     doc
       .moveDown(0.25)

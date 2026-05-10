@@ -14,6 +14,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 const THEME_STORAGE_KEY = "theme";
 const THEME_CHANGE_EVENT = "app-theme-change";
+const LIGHT_THEME_BACKGROUND = "#fdfcfb";
 const noopSubscribe = () => () => {};
 const getServerTheme = () => "light" as const;
 
@@ -80,12 +81,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
         // Keep browser UI/theme controls in sync and prevent Chrome auto-adjust drift.
         root.style.colorScheme = theme;
-        body.style.backgroundColor = theme === "dark" ? "#000000" : "#ffffff";
+        body.style.backgroundColor = theme === "dark" ? "#000000" : LIGHT_THEME_BACKGROUND;
         body.style.color = theme === "dark" ? "#ffffff" : "#0a0a0a";
 
         document
             .querySelectorAll('meta[name="theme-color"]')
-            .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff"));
+            .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : LIGHT_THEME_BACKGROUND));
     }, [theme]);
 
     const toggleTheme = () => {

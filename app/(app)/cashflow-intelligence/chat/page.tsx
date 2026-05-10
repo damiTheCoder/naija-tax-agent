@@ -28,6 +28,8 @@ import type { AgentConversationMessage } from "@/lib/agent/unifiedTypes";
 // TYPES
 // =============================================================================
 
+const CASH_ACCOUNT_CODES = new Set(["1000", "1010", "1020", "1021"]);
+
 type ChatMessage = {
     id: string;
     role: "user" | "assistant";
@@ -280,26 +282,39 @@ export default function CashflowChatPage() {
     const chatEndRef = useRef<HTMLDivElement | null>(null);
     const monthPickerRef = useRef<HTMLDivElement | null>(null);
 
-    // Load data
-    const loadData = useCallback(() => {
-        setLoading(true);
-
-        // Load automation engine
-        automationEngine.load();
-        setAutomationState(automationEngine.getState());
-
-        // Load analytics from accounting
+    const syncAccountingData = useCallback((reload = false) => {
         try {
-            accountingEngine.load();
+            if (reload) {
+                accountingEngine.load();
+            }
+
             const accountingState = accountingEngine.getState();
-            setJournalEntries(accountingState.journalEntries.filter((entry) => entry.status === "posted"));
-            const statements = accountingEngine.generateStatements();
-            const cashBalance = statements.assets || 0;
-            const monthlyInflow = statements.revenue || 0;
-            const monthlyOutflow = (statements.costOfSales || 0) + (statements.operatingExpenses || 0);
+            const postedEntries = accountingState.journalEntries.filter((entry) => entry.status === "posted");
+            setJournalEntries(postedEntries);
+
+            let cashBalance = 0;
+            CASH_ACCOUNT_CODES.forEach((code) => {
+                const account = accountingState.ledgerAccounts.get(code);
+                cashBalance += account?.closingBalance || 0;
+            });
 
             const today = new Date();
-            const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+            today.setHours(23, 59, 59, 999);
+            const monthAgo = new Date(today);
+            monthAgo.setHours(0, 0, 0, 0);
+            monthAgo.setDate(monthAgo.getDate() - 29);
+
+            let monthlyInflow = 0;
+            let monthlyOutflow = 0;
+            postedEntries.forEach((entry) => {
+                const entryDate = new Date(`${entry.date}T00:00:00`);
+                if (entryDate < monthAgo || entryDate > today) return;
+                entry.lines.forEach((line) => {
+                    if (!CASH_ACCOUNT_CODES.has(line.accountCode)) return;
+                    if (line.debit > 0) monthlyInflow += line.debit;
+                    if (line.credit > 0) monthlyOutflow += line.credit;
+                });
+            });
 
             const result = calculateCashflowAnalytics(
                 cashBalance,
@@ -310,11 +325,22 @@ export default function CashflowChatPage() {
             );
             setAnalytics(result);
         } catch {
+            setJournalEntries([]);
             setAnalytics(calculateCashflowAnalytics(0, 0, 0, "", ""));
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
     }, []);
+
+    // Load data
+    const loadData = useCallback(() => {
+        setLoading(true);
+
+        // Load automation engine
+        automationEngine.load();
+        setAutomationState(automationEngine.getState());
+        syncAccountingData(true);
+    }, [syncAccountingData]);
 
     useEffect(() => {
         // Defer load
@@ -337,10 +363,32 @@ export default function CashflowChatPage() {
 
     useEffect(() => {
         const unsubscribe = accountingEngine.subscribe((state) => {
-            setJournalEntries(state.journalEntries.filter((entry) => entry.status === "posted"));
+            void state;
+            syncAccountingData();
         });
-        return () => unsubscribe();
-    }, []);
+
+        const handleAccountingUpdate = () => {
+            syncAccountingData(true);
+        };
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === "insight::accounting-engine") {
+                syncAccountingData(true);
+            }
+        };
+
+        if (typeof window !== "undefined") {
+            window.addEventListener("accounting-update", handleAccountingUpdate);
+            window.addEventListener("storage", handleStorage);
+        }
+
+        return () => {
+            unsubscribe();
+            if (typeof window === "undefined") return;
+            window.removeEventListener("accounting-update", handleAccountingUpdate);
+            window.removeEventListener("storage", handleStorage);
+        };
+    }, [syncAccountingData]);
 
     // Auto-expand textarea
     useEffect(() => {
@@ -548,7 +596,7 @@ export default function CashflowChatPage() {
                             <div>
                                 <p className="text-xs font-medium text-gray-500 mb-0.5">{cashMetricLabelMap[cashMetricMode]}</p>
                                 <div className="flex items-center gap-2">
-                                    <p className="text-2xl font-bold text-blue-500" style={{ color: "#2264ff" }} title={formatNaira(displayedCashMetric)}>
+                                    <p className="text-2xl font-bold text-blue-500" style={{ color: "#446b00" }} title={formatNaira(displayedCashMetric)}>
                                         {formatNairaCompact(displayedCashMetric)}
                                     </p>
                                     <div className="relative" ref={monthPickerRef}>
@@ -581,7 +629,7 @@ export default function CashflowChatPage() {
                                                     type="month"
                                                     value={selectedMonth}
                                                     onChange={(event) => setSelectedMonth(event.target.value || getCurrentMonthKey())}
-                                                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#2264ff]/30"
+                                                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#8fff00]/30"
                                                 />
                                                 <div className="mt-3 flex items-center justify-between">
                                                     <button
@@ -608,7 +656,7 @@ export default function CashflowChatPage() {
                             <button
                                 type="button"
                                 onClick={cycleCashMetricMode}
-                                className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-sm transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40"
+                                className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00] text-white shadow-sm transition hover:bg-[#6fcc00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/40"
                                 aria-label="Toggle cash metric"
                                 title="Switch between Inflow, Outflow and Balance"
                             >

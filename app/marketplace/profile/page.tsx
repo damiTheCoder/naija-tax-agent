@@ -17,7 +17,7 @@ export default function ProfessionalProfilePage() {
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-white mb-3">Professional Listing</h1>
                     <p className="text-gray-400">
-                        Manage your professional profile and WhatsApp link to connect with businesses on Atom Ledger.
+                        Manage your professional profile and WhatsApp link to connect with businesses on Bace.
                     </p>
                 </div>
 
@@ -88,7 +88,7 @@ export default function ProfessionalProfilePage() {
                         <div className="pt-4 flex flex-col md:flex-row items-center gap-4">
                             <button
                                 type="submit"
-                                className="w-full md:w-auto px-10 py-4 bg-[#2264ff] hover:bg-[#1e56db] text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                                className="w-full md:w-auto px-10 py-4 bg-[#8fff00] hover:bg-[#6fcc00] text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                             >
                                 Save Changes
                             </button>
@@ -114,7 +114,7 @@ export default function ProfessionalProfilePage() {
                         <div>
                             <h4 className="font-bold text-blue-300 mb-1 text-sm">Visibility Note</h4>
                             <p className="text-blue-400/70 text-xs leading-relaxed">
-                                Once you save your profile, it will be visible to all businesses using Atom Ledger. Make sure your WhatsApp link is correct so they can reach you directly.
+                                Once you save your profile, it will be visible to all businesses using Bace. Make sure your WhatsApp link is correct so they can reach you directly.
                             </p>
                         </div>
                     </div>

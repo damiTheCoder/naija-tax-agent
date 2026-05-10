@@ -680,7 +680,7 @@ export default function BankConnectionsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#8fff00] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -691,7 +691,7 @@ export default function BankConnectionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bank Connections</h1>
           <p className="text-sm text-gray-500 mt-1">Connect bank accounts, sync transactions, and keep treasury records in one place.</p>
-          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#446b00] hover:text-[#446b00]">
             Open Accounting Workspace
           </Link>
         </div>
@@ -719,7 +719,7 @@ export default function BankConnectionsPage() {
           )}
           <button
             onClick={() => setShowConnectModal(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-[#2264ff] text-white hover:bg-[#1a50cc]"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-[#8fff00] text-white hover:bg-[#6fcc00]"
           >
             {icons.plus}
             Connect Bank
@@ -805,7 +805,7 @@ export default function BankConnectionsPage() {
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={() => setShowConnectModal(true)}
-                className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
+                className="inline-flex items-center gap-2 bg-[#8fff00] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#6fcc00] transition-colors"
               >
                 {icons.plus}
                 Connect Bank
@@ -1116,7 +1116,7 @@ export default function BankConnectionsPage() {
                   <p className="text-gray-900 font-medium mb-2">Connecting to {selectedBank.name}...</p>
                   <p className="text-sm text-gray-500">Establishing secure connection</p>
                   <div className="mt-6 flex justify-center">
-                    <div className="w-8 h-8 border-2 border-[#2264ff] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-2 border-[#8fff00] border-t-transparent rounded-full animate-spin" />
                   </div>
                 </div>
               )}
@@ -1188,7 +1188,7 @@ export default function BankConnectionsPage() {
                 <select
                   value={uploadBankCode}
                   onChange={(e) => setUploadBankCode(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-[#2264ff] outline-none bg-white"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-[#8fff00] outline-none bg-white"
                 >
                   <option value="">Select a bank...</option>
                   {SUPPORTED_BANKS.filter(b => b.supported).map((bank) => (
@@ -1207,7 +1207,7 @@ export default function BankConnectionsPage() {
                   placeholder="e.g. 0123456789"
                   value={uploadAccountNumber}
                   onChange={(e) => setUploadAccountNumber(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-[#2264ff] outline-none"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-[#8fff00] outline-none"
                 />
               </div>
 
@@ -1290,7 +1290,7 @@ export default function BankConnectionsPage() {
                 <button
                   onClick={handleUpload}
                   disabled={!uploadFile || !uploadBankCode || isUploading}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#2264ff] rounded-lg hover:bg-[#1a50cc] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#8fff00] rounded-lg hover:bg-[#6fcc00] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                 >
                   {isUploading ? (
                     <>

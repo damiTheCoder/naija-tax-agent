@@ -311,7 +311,7 @@ export function calculateTaxForNigeria(profile: UserProfile, inputs: TaxInputs):
     const effectiveRate = taxableIncome > 0 ? totalTaxDue / taxableIncome : 0;
 
     // Add disclaimer
-    notes.push("Auditable computation generated via Atom Ledger Tax Engine V2.");
+    notes.push("Auditable computation generated via Bace Tax Engine V2.");
 
     return {
         taxpayerType: profile.taxpayerType,

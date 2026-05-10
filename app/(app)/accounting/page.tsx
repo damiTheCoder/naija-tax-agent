@@ -1590,7 +1590,7 @@ export default function AccountingPage() {
                       {activeCashHeadlineMetric.label}
                     </p>
                     <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold" style={{ color: "#2264ff" }} title={formatFullNaira(cashHeadlineValue)}>
+                      <p className="text-2xl font-bold" style={{ color: "#446b00" }} title={formatFullNaira(cashHeadlineValue)}>
                         ₦{formatCompactNaira(cashHeadlineValue)}
                       </p>
                       <div className="relative" ref={cashDatePickerRef}>
@@ -1621,7 +1621,7 @@ export default function AccountingPage() {
                                       onClick={() => setCashHeadlineSection(section.key)}
                                       className={`rounded-full border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
                                         isActive
-                                          ? "border-[#2264ff] bg-[#2264ff] text-white"
+                                          ? "border-[#8fff00] bg-[#8fff00] text-white"
                                           : theme === "dark"
                                             ? "border-gray-700 text-gray-300 hover:bg-gray-800"
                                             : "border-gray-300 text-gray-600 hover:bg-gray-100"
@@ -1637,7 +1637,7 @@ export default function AccountingPage() {
                               type="month"
                               value={cashHeadlineMonth}
                               onChange={(event) => setCashHeadlineMonth(event.target.value || getCurrentMonthKey())}
-                              className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#2264ff]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
+                              className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#8fff00]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
                             />
                             <div className="mt-3 flex items-center justify-between">
                               <button
@@ -1666,7 +1666,7 @@ export default function AccountingPage() {
                   <button
                     type="button"
                     onClick={cycleCashHeadlineMetric}
-                    className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2264ff] text-white shadow-sm transition hover:bg-[#1a50cc] focus:outline-none focus:ring-2 focus:ring-[#2264ff]/40"
+                    className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00] text-white shadow-sm transition hover:bg-[#6fcc00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/40"
                     aria-label={`Toggle ${activeCashHeadlineSection.label} metric`}
                     title={`Switch ${activeCashHeadlineSection.label} metrics`}
                   >

@@ -63,7 +63,7 @@ export default function AccountingAssetsPage() {
           </div>
           <Link
             href="/accounting/depreciation"
-            className="inline-flex items-center justify-center rounded-lg bg-[#2264ff] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a50cc]"
+            className="inline-flex items-center justify-center rounded-lg bg-[#8fff00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00]"
           >
             Open Depreciation Page
           </Link>
@@ -81,7 +81,7 @@ export default function AccountingAssetsPage() {
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Net Book Value</p>
-          <p className="mt-2 text-2xl font-bold text-[#2264ff]">{formatCurrency(totals.netBookValue)}</p>
+          <p className="mt-2 text-2xl font-bold text-[#446b00]">{formatCurrency(totals.netBookValue)}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Auto Annual Depreciation</p>
@@ -125,7 +125,7 @@ export default function AccountingAssetsPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-gray-900">{formatCurrency(row.grossCost)}</td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-gray-700">{formatCurrency(row.accumulatedDepreciation)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-mono font-semibold text-[#2264ff]">{formatCurrency(row.netBookValue)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-mono font-semibold text-[#446b00]">{formatCurrency(row.netBookValue)}</td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-emerald-700">{formatCurrency(row.additionsYtd)}</td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-rose-700">{formatCurrency(row.disposalsYtd)}</td>
                     <td className="px-4 py-3 text-center text-sm text-gray-700">{row.rate > 0 ? `${row.rate}%` : "—"}</td>

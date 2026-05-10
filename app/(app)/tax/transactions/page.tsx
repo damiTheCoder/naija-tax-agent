@@ -572,7 +572,7 @@ export default function TaxTransactionsPage() {
             type="button"
             onClick={applyBulkEdit}
             disabled={selectedCount === 0}
-            className="h-10 px-4 rounded-lg bg-[#2264ff] text-white text-sm font-medium disabled:opacity-50"
+            className="h-10 px-4 rounded-lg bg-[#8fff00] text-white text-sm font-medium disabled:opacity-50"
           >
             Apply to selected
           </button>

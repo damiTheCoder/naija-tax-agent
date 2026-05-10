@@ -127,7 +127,7 @@ export default function FinancialRatiosPage() {
           <h1 className="text-2xl font-bold text-gray-900">Financial Ratios Dashboard</h1>
           <p className="text-gray-500 mt-2">Record transactions in Accounting first. Ratios will auto-populate from your ledgers.</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/accounting" className="px-4 py-2 rounded-lg bg-[#2264ff] text-white text-sm font-semibold hover:bg-[#1a50cc]">
+            <Link href="/accounting" className="px-4 py-2 rounded-lg bg-[#8fff00] text-white text-sm font-semibold hover:bg-[#6fcc00]">
               Go to Accounting Chat
             </Link>
             <Link href="/accounting/workspace" className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -145,7 +145,7 @@ export default function FinancialRatiosPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Ratios Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">Key profitability, efficiency, and solvency ratios derived from your live statements.</p>
-          <Link href="/cashflow-intelligence" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+          <Link href="/cashflow-intelligence" className="mt-2 inline-flex text-sm font-medium text-[#446b00] hover:text-[#446b00]">
             Back to Financial Management
           </Link>
         </div>

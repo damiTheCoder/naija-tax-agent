@@ -267,7 +267,7 @@ export default function ClassificationWidget({
                   <button
                     key={idx}
                     onClick={() => onEditClassification?.(suggestion)}
-                    className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:border-[#2264ff] hover:text-[#2264ff] transition-colors"
+                    className="px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:border-[#8fff00] hover:text-[#446b00] transition-colors"
                   >
                     {suggestion}
                   </button>
@@ -291,7 +291,7 @@ export default function ClassificationWidget({
           {/* Edit Button */}
           <button
             onClick={() => onEditClassification?.(classification.accountCode)}
-            className="flex items-center gap-2 text-sm text-[#2264ff] hover:text-[#2264ff] font-medium"
+            className="flex items-center gap-2 text-sm text-[#446b00] hover:text-[#446b00] font-medium"
           >
             <Edit3 className="w-4 h-4" />
             Edit Classification

@@ -19,7 +19,7 @@ This document describes the backend architecture for the **Inventory Intelligenc
 
 ## Overview
 
-Inventory Intelligence is a standalone module within the Atom Ledger application that provides:
+Inventory Intelligence is a standalone module within the Bace application that provides:
 
 - **Multi-location inventory tracking** (warehouse + branches)
 - **Purchase Order management** with receiving workflow

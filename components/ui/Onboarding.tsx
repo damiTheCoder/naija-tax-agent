@@ -97,9 +97,9 @@ export function Onboarding({ onComplete, forceShow = false }: OnboardingProps) {
                 {/* Header with logo */}
                 <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-8 text-center">
                     <div className="w-16 h-16 mx-auto bg-white rounded-2xl flex items-center justify-center shadow-lg mb-4">
-                        <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={48} height={48} className="rounded-xl" />
+                        <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} width={48} height={48} className="rounded-2xl object-contain" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white">Welcome to Atom Ledger</h2>
+                    <h2 className="text-2xl font-bold text-white">Welcome to Bace</h2>
                     <p className="text-blue-100 text-sm mt-1">Your AI-powered financial operating system</p>
                 </div>
 

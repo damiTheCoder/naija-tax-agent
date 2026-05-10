@@ -81,6 +81,12 @@ const normalizeBillStatus = (status?: string) => {
   return "draft";
 };
 
+const normalizeOptionalRelationId = (value?: string | null): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
 const mapJournalToTax = (journal: {
   id: string;
   date: Date;
@@ -292,6 +298,9 @@ export const accountingJournalRepo = {
     const baseCurrency = normalizeCurrency(input.baseCurrency || "NGN");
     const exchangeRate = Number.isFinite(input.exchangeRate) ? Number(input.exchangeRate) : 1;
     const journalId = input.journalId || generateDeterministicId("jnl", [entityId, input.narration, date.toISOString(), totalDebits]);
+    const approvalRequestId = normalizeOptionalRelationId(input.approvalRequestId);
+    const trackingClassId = normalizeOptionalRelationId(input.trackingClassId);
+    const trackingLocationId = normalizeOptionalRelationId(input.trackingLocationId);
 
     const journalHash = fingerprintObject({
       entityId,
@@ -321,9 +330,9 @@ export const accountingJournalRepo = {
               baseCurrency,
               exchangeRate,
               approvalStatus: input.approvalStatus || "approved",
-              approvalRequestId: input.approvalRequestId,
-              trackingClassId: input.trackingClassId,
-              trackingLocationId: input.trackingLocationId,
+              approvalRequestId,
+              trackingClassId,
+              trackingLocationId,
               journalHash,
               metadata: safeJsonStringify(input.metadata || {}),
             },
@@ -342,9 +351,9 @@ export const accountingJournalRepo = {
               baseCurrency,
               exchangeRate,
               approvalStatus: input.approvalStatus || "approved",
-              approvalRequestId: input.approvalRequestId,
-              trackingClassId: input.trackingClassId,
-              trackingLocationId: input.trackingLocationId,
+              approvalRequestId,
+              trackingClassId,
+              trackingLocationId,
               journalHash,
               metadata: safeJsonStringify(input.metadata || {}),
             },
@@ -362,8 +371,8 @@ export const accountingJournalRepo = {
           sourceAmount: round2(Math.max(line.debit, line.credit)),
           baseAmount: round2(Math.max(line.debit, line.credit) * (baseCurrency === sourceCurrency ? 1 : exchangeRate)),
           metadata: safeJsonStringify({
-            trackingClassId: input.trackingClassId,
-            trackingLocationId: input.trackingLocationId,
+            trackingClassId,
+            trackingLocationId,
           }),
         })),
       });
@@ -387,8 +396,8 @@ export const accountingJournalRepo = {
             baseCurrency,
             exchangeRate,
             approvalStatus: input.approvalStatus || "approved",
-            trackingClassId: input.trackingClassId,
-            trackingLocationId: input.trackingLocationId,
+            trackingClassId,
+            trackingLocationId,
             ...input.metadata,
           }),
           updatedAt: new Date(),
@@ -411,8 +420,8 @@ export const accountingJournalRepo = {
             baseCurrency,
             exchangeRate,
             approvalStatus: input.approvalStatus || "approved",
-            trackingClassId: input.trackingClassId,
-            trackingLocationId: input.trackingLocationId,
+            trackingClassId,
+            trackingLocationId,
             ...input.metadata,
           }),
           createdAt: new Date(),

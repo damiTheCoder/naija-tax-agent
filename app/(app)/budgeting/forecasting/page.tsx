@@ -19,7 +19,7 @@ function ForecastSpark({ values }: { values: number[] }) {
 
   return (
     <svg viewBox="0 0 100 100" className="h-40 w-full rounded-xl bg-gray-50 p-2">
-      <polyline fill="none" stroke="#2563eb" strokeWidth="2" points={points} />
+      <polyline fill="none" stroke="#8fff00" strokeWidth="2" points={points} />
     </svg>
   );
 }

@@ -28,7 +28,7 @@ const icons = {
 };
 
 // Color palette for charts
-const CHART_COLORS = ["#2264ff", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
+const CHART_COLORS = ["#8fff00", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
 const MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY = "ql::mobile-projections-entry";
 const MOBILE_PROJECTIONS_ENTRY_EVENT = "ql:mobile-projections-entry-change";
 
@@ -136,7 +136,7 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
               className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 relative group"
               style={{
                 height: Math.max(barHeight, 4),
-                background: item.value > 0 ? `linear-gradient(180deg, #2264ff 0%, #1a50cc 100%)` : '#e5e7eb',
+                background: item.value > 0 ? `linear-gradient(180deg, #8fff00 0%, #6fcc00 100%)` : '#e5e7eb',
                 minWidth: "20px",
               }}
             >
@@ -179,7 +179,7 @@ function EmptyState() {
       </p>
       <Link
         href="/accounting"
-        className="inline-flex items-center gap-2 bg-[#2264ff] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1a50cc] transition-colors"
+        className="inline-flex items-center gap-2 bg-[#8fff00] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#6fcc00] transition-colors"
       >
         Go to Accounting Studio
         {icons.arrowRight}
@@ -531,7 +531,7 @@ export default function DashboardPage() {
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
             <button
               type="button"
-              className="rounded-full bg-[#2264ff] px-3 py-1.5 text-xs font-semibold text-white"
+              className="rounded-full bg-[#8fff00] px-3 py-1.5 text-xs font-semibold text-white"
               aria-label="Accounting dashboard view"
             >
               Accounting Dashboard
@@ -551,7 +551,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
-          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#2264ff] hover:text-[#1a50cc]">
+          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#446b00] hover:text-[#446b00]">
             Open Accounting Workspace
           </Link>
         </div>
@@ -586,7 +586,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-500">Revenue trend by month</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="w-3 h-3 rounded-full bg-[#2264ff]"></span>
+                  <span className="w-3 h-3 rounded-full bg-[#8fff00]"></span>
                   <span className="text-gray-500">Revenue (₦)</span>
                 </div>
               </div>

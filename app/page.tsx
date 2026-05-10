@@ -18,7 +18,7 @@ const trustLogos = [
 ];
 
 const heroAvatars = [
-  { src: "/j1.jpeg", alt: "Happy customer using Atom Ledger" },
+  { src: "/j1.jpeg", alt: "Happy customer using Bace" },
   { src: "/j2.jpeg", alt: "Business owner smiling" },
   { src: "/j3.jpeg", alt: "Satisfied entrepreneur" },
   { src: "/j1.jpeg", alt: "Business owner testimonial" },
@@ -30,28 +30,28 @@ const cashosFeatures = [
     title: "Close your books without the busywork",
     description: "Automatically prepare clean accounting records and keep every transaction organized.",
     imageSrc: "/A.jpeg",
-    imageAlt: "Atom Ledger accounting dashboard overview",
+    imageAlt: "Bace accounting dashboard overview",
   },
   {
     eyebrow: "Cash Flow Visibility",
     title: "See profit, costs, and cash flow clearly",
     description: "Track margin, monitor spend, and understand where money is moving in real time.",
     imageSrc: "/B.jpeg",
-    imageAlt: "Atom Ledger cash flow and order performance widgets",
+    imageAlt: "Bace cash flow and order performance widgets",
   },
   {
     eyebrow: "Tax Workspace",
     title: "Stay ahead of taxes before deadlines hit",
     description: "Calculate liabilities early, surface issues quickly, and stay filing-ready before penalties arrive.",
     imageSrc: "/A.jpeg",
-    imageAlt: "Atom Ledger tax and finance dashboard workflow",
+    imageAlt: "Bace tax and finance dashboard workflow",
   },
   {
     eyebrow: "AI Finance Copilot",
     title: "Ask questions and get plain-language answers",
     description: "Chat with your numbers and turn accounting data into clear next steps for the business.",
     imageSrc: "/B.jpeg",
-    imageAlt: "Atom Ledger AI-guided finance insights interface",
+    imageAlt: "Bace AI-guided finance insights interface",
   },
 ];
 
@@ -65,10 +65,10 @@ export default function LandingPage() {
         <ScrollNav>
           <div className="nav-inner">
             <Link href="/" className="nav-brand">
-              <div className="relative w-7 h-7 overflow-hidden rounded-full">
-                <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="28px" />
+              <div className="relative w-7 h-7 overflow-hidden rounded-lg">
+                <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="28px" />
               </div>
-              <span className="nav-brand-text">Atom Ledger</span>
+              <span className="nav-brand-text">Bace</span>
             </Link>
 
             <div className="nav-links-modern">
@@ -96,11 +96,6 @@ export default function LandingPage() {
           </div>
 
           <div className="hero-content-centered">
-            <div className="hero-badge-modern">
-              <span className="badge-dot"></span>
-              The AI-Powered Cash Operating System for SMEs
-            </div>
-
             <h1 className="hero-title-modern">
               Your Business
               <br />
@@ -113,7 +108,7 @@ export default function LandingPage() {
               Know your numbers. Control your cash. Run your business with confidence.
             </p>
 
-            <div className="hero-avatar-row" aria-label="Happy business owners using Atom Ledger">
+            <div className="hero-avatar-row" aria-label="Happy business owners using Bace">
               {heroAvatars.map((avatar, index) => (
                 <div key={`${avatar.src}-${index}`} className="hero-avatar-item">
                   <img src={avatar.src} alt={avatar.alt} className="hero-avatar-image" width={48} height={48} loading="lazy" />
@@ -240,17 +235,6 @@ export default function LandingPage() {
 
                 <p className="why-matters-intro">Without financial clarity:</p>
               </div>
-
-              {/* Hero Image */}
-              <div className="why-matters-image">
-                <div className="why-matters-avatar-cluster" aria-label="Business owners using Atom Ledger">
-                  {heroAvatars.map((avatar, index) => (
-                    <div key={`why-matters-${avatar.src}-${index}`} className="why-matters-avatar-item">
-                      <img src={avatar.src} alt={avatar.alt} className="why-matters-avatar-image" width={88} height={88} loading="lazy" />
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             <div className="why-matters-list">
@@ -295,37 +279,36 @@ export default function LandingPage() {
               <h2 className="section-title-modern">
                 Introducing
                 <br />
-                <span className="title-highlight">Atom Ledger</span>
+                <span className="title-highlight">Bace</span>
               </h2>
             </div>
           </div>
 
           {/* CashOS Features Grid */}
           <div className="cashos-features-section section-container">
-            <h2 className="cashos-brand-title">Atom Ledger</h2>
+            <h2 className="cashos-brand-title">Bace</h2>
             <p className="cashos-intro">
               is an AI-powered financial operating system that helps business owners:
             </p>
+            <div className="cashos-intro-image-shell">
+              <Image
+                src="/B3.png"
+                alt="Bace product preview"
+                className="cashos-intro-image"
+                width={1600}
+                height={900}
+                sizes="100vw"
+              />
+            </div>
             <div className="cashos-feature-grid">
               {cashosFeatures.map((feature) => (
                 <article key={feature.title} className="cashos-feature-card">
-                  <div className="cashos-feature-media">
-                    <div className="cashos-feature-image-shell">
-                      <Image
-                        src={feature.imageSrc}
-                        alt={feature.imageAlt}
-                        className="cashos-feature-image"
-                        width={800}
-                        height={800}
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                      />
-                    </div>
-                  </div>
-
                   <div className="cashos-feature-content">
                     <span className="cashos-feature-eyebrow">{feature.eyebrow}</span>
-                    <h3 className="cashos-feature-title">{feature.title}</h3>
-                    <p className="cashos-feature-description">{feature.description}</p>
+                    <div className="cashos-feature-copy">
+                      <h3 className="cashos-feature-title">{feature.title}</h3>
+                      <p className="cashos-feature-description">{feature.description}</p>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -412,7 +395,7 @@ export default function LandingPage() {
                 Stop guessing. <span className="title-highlight">Start knowing.</span>
               </h2>
               <p className="final-cta-subtitle">
-                Join thousands of SMEs building financial clarity with Atom Ledger.
+                Join thousands of SMEs building financial clarity with Bace.
               </p>
               <Link href="/accounting" className="final-cta-btn">
                 Get Started
@@ -428,10 +411,10 @@ export default function LandingPage() {
             <div className="footer-main-modern">
               <div className="footer-brand-modern">
                 <Link href="/" className="footer-brand-link">
-                  <div className="relative w-9 h-9 overflow-hidden rounded-full">
-                    <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" />
+                  <div className="relative w-9 h-9 overflow-hidden rounded-xl">
+                    <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" />
                   </div>
-                  <span>Atom Ledger</span>
+                  <span>Bace</span>
                 </Link>
                 <p className="footer-tagline">AI Accounting for Nigerian Businesses</p>
               </div>
@@ -459,7 +442,7 @@ export default function LandingPage() {
             </div>
 
             <div className="footer-bottom-modern">
-              <p>© {currentYear} Atom Ledger. Built with ❤️ for Nigerian businesses.</p>
+              <p>© {currentYear} Bace. Built with ❤️ for Nigerian businesses.</p>
               <div className="footer-socials">
                 <Link href="/contact#x" aria-label="Twitter">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>

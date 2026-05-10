@@ -37,7 +37,7 @@ const FILE_GROUPS: FileGroup[] = [
     id: "accounting",
     label: "Accounting Stack",
     icon: "📒",
-    accent: "#2563eb",
+    accent: "#8fff00",
     nodes: [
       {
         id: "ledger",
@@ -133,7 +133,7 @@ const QUICK_PROMPTS = [
 ];
 
 const CONNECTED_APPS = [
-  { name: "Zenith Business", type: "Bank feed", status: "Streaming", accent: "#2264ff", impact: "+₦4.8M inflow", initial: "Z" },
+  { name: "Zenith Business", type: "Bank feed", status: "Streaming", accent: "#8fff00", impact: "+₦4.8M inflow", initial: "Z" },
   { name: "RiseVest", type: "Investment rail", status: "Smart ladder", accent: "#0ead69", impact: "₦9.4M deployed", initial: "R" },
   { name: "Wave Payroll", type: "Payroll", status: "Tomorrow 9:00am", accent: "#a162f7", impact: "-₦3.4M forecast", initial: "W" },
   { name: "QuickInvoice", type: "Revenue ops", status: "4 open invoices", accent: "#f97316", impact: "₦2.1M collectible", initial: "Q" },
@@ -264,7 +264,7 @@ export default function UserModeExperience() {
               {/* Net Worth Summary */}
               <div>
                 <p className={`text-xs font-medium mb-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Net Worth</p>
-                <p className="text-2xl font-bold" style={{ color: '#2264ff' }}>
+                <p className="text-2xl font-bold" style={{ color: '#446b00' }}>
                   ₦{totalNetWorth.toLocaleString()}M
                   <span className={`text-sm font-normal ml-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>total</span>
                 </p>
@@ -416,7 +416,7 @@ export default function UserModeExperience() {
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                           <div className={`max-w-lg rounded-2xl px-4 py-3 text-sm space-y-1.5 ${message.role === "assistant"
                               ? isDark ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-100'
-                              : isDark ? 'bg-gray-800 border border-gray-700' : 'bg-blue-50 border border-blue-100'
+                              : isDark ? 'bg-gray-800 border border-gray-700' : 'bg-[#eefbd9] border border-[#d7f4a6]'
                             }`}>
                             <p className={`whitespace-pre-wrap leading-relaxed ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                               {message.content}
@@ -474,7 +474,7 @@ export default function UserModeExperience() {
                           }}
                           placeholder="Message your finances..."
                           rows={1}
-                          className={`w-full resize-none rounded-2xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2264ff] ${isDark
+                          className={`w-full resize-none rounded-2xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8fff00] ${isDark
                               ? 'border-gray-700 bg-gray-900 text-gray-200 placeholder-gray-500'
                               : 'border-gray-200 bg-white text-gray-900 placeholder-gray-400'
                             }`}
@@ -482,9 +482,9 @@ export default function UserModeExperience() {
                       </div>
                       <button
                         onClick={() => sendMessage()}
-                        className="px-5 py-3 rounded-2xl text-sm font-semibold transition-all text-white"
+                        className="px-5 py-3 rounded-2xl text-sm font-semibold transition-all text-[#101010]"
                         style={{
-                          background: composer.trim() ? "linear-gradient(135deg,#2264ff,#7c3aed)" : isDark ? "rgba(75,85,99,0.4)" : "rgba(148,163,184,0.4)",
+                          background: composer.trim() ? "linear-gradient(135deg,#8fff00,#6fcc00)" : isDark ? "rgba(75,85,99,0.4)" : "rgba(148,163,184,0.4)",
                           opacity: composer.trim() ? 1 : 0.6,
                         }}
                         disabled={!composer.trim()}

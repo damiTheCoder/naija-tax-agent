@@ -14,6 +14,8 @@ import {
     PAYROLL_NAV_ITEMS,
     PERSONAL_NAV_ITEMS,
     AppMode,
+    NavIcon,
+    ProjectionsModuleOwner,
     isNavItemActive,
     isProjectionsRoute,
     getStoredProjectionsModuleOwner,
@@ -42,7 +44,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
     const { mode } = useMode();
     const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
     const [expandedModule, setExpandedModule] = useState<AppMode | null>(null);
-    const projectionsOwner = useSyncExternalStore(
+    const projectionsOwner = useSyncExternalStore<ProjectionsModuleOwner>(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
         getServerProjectionsModuleOwnerSnapshot
@@ -59,19 +61,19 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         ? "personal"
         : resolveModuleForPath(pathname, projectionsOwner);
 
-    const modules: { id: AppMode; label: string; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
+    const modules: { id: AppMode; label: string; icon: NavIcon; items: typeof TAX_NAV_ITEMS }[] = mode === "user"
         ? [
-            { id: "personal", label: "Personal OS", items: PERSONAL_NAV_ITEMS }
+            { id: "personal", label: "Personal OS", icon: "chat", items: PERSONAL_NAV_ITEMS }
         ]
         : [
-            { id: "accounting", label: "Accounting", items: ACCOUNTING_NAV_ITEMS },
-            { id: "budgeting", label: "Budgeting", items: BUDGETING_NAV_ITEMS },
-            { id: "payroll", label: "Payroll & Compliance", items: PAYROLL_NAV_ITEMS },
-            { id: "tax", label: "Tax Manager", items: TAX_NAV_ITEMS },
-            { id: "intelligence", label: "Financial Management", items: INTELLIGENCE_NAV_ITEMS },
-            { id: "wallet", label: "Wallet", items: WALLET_NAV_ITEMS },
-            { id: "supersheet", label: "SuperSheet", items: SUPERSHEET_NAV_ITEMS },
-            { id: "marketplace", label: "Marketplace", items: MARKETPLACE_NAV_ITEMS },
+            { id: "accounting", label: "Accounting", icon: "chart", items: ACCOUNTING_NAV_ITEMS },
+            { id: "budgeting", label: "Budgeting", icon: "ledger", items: BUDGETING_NAV_ITEMS },
+            { id: "payroll", label: "Payroll & Compliance", icon: "users", items: PAYROLL_NAV_ITEMS },
+            { id: "tax", label: "Tax Manager", icon: "shield", items: TAX_NAV_ITEMS },
+            { id: "intelligence", label: "Financial Management", icon: "intelligence", items: INTELLIGENCE_NAV_ITEMS },
+            { id: "wallet", label: "Wallet", icon: "wallet", items: WALLET_NAV_ITEMS },
+            { id: "supersheet", label: "SuperSheet", icon: "spreadsheet", items: SUPERSHEET_NAV_ITEMS },
+            { id: "marketplace", label: "Marketplace", icon: "shop", items: MARKETPLACE_NAV_ITEMS },
         ];
 
     return (
@@ -94,10 +96,10 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 relative">
                     <Link href="/" className="flex items-center gap-2" onClick={onClose}>
-                        <div className="relative w-9 h-9 overflow-hidden rounded-full">
-                            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-cover" sizes="36px" />
+                        <div className="relative w-9 h-9 overflow-hidden rounded-xl">
+                            <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" />
                         </div>
-                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>Atom Ledger</span>
+                        <span className="text-base font-bold" style={{ color: isDark ? '#ffffff' : '#000000' }}>Bace</span>
                     </Link>
                     <button
                         onClick={onClose}
@@ -119,9 +121,14 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                 <button
                                     onClick={() => toggleModule(module.id)}
                                     className="w-full flex items-center justify-between px-5 py-4 text-left text-sm font-semibold transition-colors"
-                                    style={{ color: isExpanded ? '#2264ff' : (isDark ? '#ffffff' : '#000000') }}
+                                    style={{ color: isExpanded ? '#446b00' : (isDark ? '#ffffff' : '#000000') }}
                                 >
-                                    <span>{module.label}</span>
+                                    <span className="flex items-center gap-3">
+                                        <span className="flex h-5 w-5 items-center justify-center">
+                                            <NavIconBadge icon={module.icon} className="w-4 h-4" />
+                                        </span>
+                                        <span>{module.label}</span>
+                                    </span>
                                     <svg
                                         className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -156,11 +163,11 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                                                     className={`
                                                         w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all
                                                         hover:bg-gray-100 dark:hover:bg-white/10
-                                                        ${isActive ? "bg-[#2264ff]/10 font-medium" : ""}
+                                                        ${isActive ? "bg-[#8fff00]/10 font-medium" : ""}
                                                     `}
                                                     style={{
                                                         color: isActive
-                                                            ? '#2264ff'
+                                                            ? '#446b00'
                                                             : (isDark ? '#e5e5e5' : '#000000')
                                                     }}
                                                 >
@@ -187,7 +194,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     {/* Top Border */}
                     <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: isDark ? '#333333' : '#e5e5e5' }} />
                     <p className="text-xs text-center" style={{ color: isDark ? '#a0a0a0' : '#9ca3af' }}>
-                        © 2025 Atom Ledger
+                        © 2025 Bace
                     </p>
                 </div>
             </div>

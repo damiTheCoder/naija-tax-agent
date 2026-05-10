@@ -62,8 +62,8 @@ const WALLET_CHAT_INTRO: ChatMessage = {
 function CashAppCard({ card, onRemove }: { card: LinkedCard; onRemove?: () => void }) {
     // Different background colors for different card networks
     const networkStyles: Record<string, { bg: string; logo: string; name: string }> = {
-        visa: { bg: "linear-gradient(135deg, #2264ff 0%, #0066cc 100%)", logo: "VISA", name: "VISA" },
-        mastercard: { bg: "linear-gradient(135deg, #2264ff 0%, #1a50cc 100%)", logo: "mastercard", name: "Mastercard" },
+        visa: { bg: "linear-gradient(135deg, #8fff00 0%, #6fcc00 100%)", logo: "VISA", name: "VISA" },
+        mastercard: { bg: "linear-gradient(135deg, #8fff00 0%, #6fcc00 100%)", logo: "mastercard", name: "Mastercard" },
         verve: { bg: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)", logo: "verve", name: "Verve" },
     };
 

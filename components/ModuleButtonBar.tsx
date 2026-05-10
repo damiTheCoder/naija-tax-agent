@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { AppMode, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
+import { AppMode, ProjectionsModuleOwner, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { useMode } from "@/lib/ModeContext";
@@ -89,7 +89,7 @@ export default function ModuleButtonBar() {
     const { theme } = useTheme();
     const { mode: experienceMode } = useMode();
     const isDark = theme === 'dark';
-    const projectionsOwner = useSyncExternalStore(
+    const projectionsOwner = useSyncExternalStore<ProjectionsModuleOwner>(
         subscribeToProjectionsModuleOwner,
         getStoredProjectionsModuleOwner,
         getServerProjectionsModuleOwnerSnapshot
@@ -150,8 +150,8 @@ export default function ModuleButtonBar() {
                                 ${isNavigating ? 'cursor-wait' : 'cursor-pointer'}
                             `}
                             style={{
-                                backgroundColor: isActive ? '#2264ff' : (isDark ? '#0a0a0a' : '#e5e5e5'),
-                                color: isActive ? '#ffffff' : (isDark ? '#d1d5db' : '#374151'),
+                                backgroundColor: isActive ? '#8fff00' : (isDark ? '#0a0a0a' : '#e5e5e5'),
+                                color: isActive ? '#101010' : (isDark ? '#d1d5db' : '#374151'),
                             }}
                         >
                             <span>{module.label}</span>

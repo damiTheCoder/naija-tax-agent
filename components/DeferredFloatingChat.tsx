@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 
 const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 
@@ -28,21 +28,21 @@ export default function DeferredFloatingChat() {
   const pendingOpenRef = useRef<ChatModalOpenDetail | null>(null);
   const hasStartedLoadingRef = useRef(false);
 
-  const loadFloatingChat = async () => {
+  const loadFloatingChat = useCallback(async () => {
     if (FloatingChat || hasStartedLoadingRef.current) return;
 
     hasStartedLoadingRef.current = true;
     setIsLoading(true);
 
     try {
-      const module = await import("@/components/FloatingChatButton");
-      setFloatingChat(() => module.default);
+      const loadedModule = await import("@/components/FloatingChatButton");
+      setFloatingChat(() => loadedModule.default);
     } catch {
       hasStartedLoadingRef.current = false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [FloatingChat]);
 
   useEffect(() => {
     const handleExternalChatOpen = (event: Event) => {
@@ -60,7 +60,7 @@ export default function DeferredFloatingChat() {
       window.removeEventListener(CHAT_MODAL_OPEN_EVENT, handleExternalChatOpen as EventListener);
       cancelIdleLoad();
     };
-  }, [FloatingChat]);
+  }, [loadFloatingChat]);
 
   useEffect(() => {
     if (!FloatingChat || !pendingOpenRef.current) return;
@@ -75,50 +75,46 @@ export default function DeferredFloatingChat() {
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          pendingOpenRef.current = { newChat: true };
-          void loadFloatingChat();
-        }}
-        onPointerEnter={() => {
-          void loadFloatingChat();
-        }}
-        aria-label="Open assistant"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-40 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-transform duration-200 hover:scale-[1.03] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/25 lg:hidden"
-      >
-        {isLoading ? (
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-        ) : (
-          <img src="/google-logo.jpg" alt="Google" className="h-8 w-8 rounded-full object-cover ring-2 ring-white/95" />
-        )}
-        <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
-      </button>
+    <section className="sticky top-[4.75rem] scroll-mt-24 lg:top-24">
+      <div className="flex h-[calc(100dvh-7.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-8rem)]">
+        <div className="px-0 py-5">
+          <div className="h-3 w-28 rounded-full bg-gray-200" />
+          <div className="mt-4 h-8 w-56 rounded-full bg-gray-100" />
+          <div className="mt-3 h-4 w-full max-w-xl rounded-full bg-gray-100" />
+        </div>
 
-      <div className="hidden lg:block">
-        <button
-          type="button"
-          onClick={() => {
-            pendingOpenRef.current = { newChat: true };
-            void loadFloatingChat();
-          }}
-          onPointerEnter={() => {
-            void loadFloatingChat();
-          }}
-          aria-label="Open assistant"
-          className="group fixed bottom-8 right-8 z-40 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#2264ff] to-[#1a4fd6] px-2.5 py-1.5 text-white shadow-[0_16px_34px_rgba(34,100,255,0.28)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(34,100,255,0.32)] focus:outline-none focus:ring-4 focus:ring-[#2264ff]/15"
-        >
-          <span className="flex items-center">
-            {isLoading ? (
-              <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/35 border-t-white" />
-            ) : (
-              <img src="/google-logo.jpg" alt="Google" className="h-8 w-8 rounded-full object-cover ring-2 ring-white/95" />
-            )}
-          </span>
-          <span className="pr-0.5 text-[15px] font-semibold tracking-tight">Chat</span>
-        </button>
+        <div className="px-0 py-3">
+          <div className="flex gap-2 overflow-hidden">
+            <div className="h-9 w-24 rounded-full bg-gray-100" />
+            <div className="h-9 w-32 rounded-full bg-gray-100" />
+            <div className="h-9 w-28 rounded-full bg-gray-100" />
+          </div>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center py-10 lg:py-0 text-center">
+          <div className="mx-auto max-w-2xl">
+            <h3 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]">
+              Preparing the assistant
+            </h3>
+            <p className="mt-3 text-sm leading-7 text-gray-500">
+              The chat now loads inline inside the page. Your conversation history and page context will appear here in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                pendingOpenRef.current = { newChat: true };
+                void loadFloatingChat();
+              }}
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#8fff00] px-4 py-2.5 text-sm font-semibold text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] transition-colors hover:bg-[#7fe000]"
+            >
+              {isLoading ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              ) : null}
+              Open assistant
+            </button>
+          </div>
+        </div>
       </div>
-    </>
+    </section>
   );
 }

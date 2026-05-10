@@ -46,7 +46,7 @@ function subscribeToMode(onStoreChange: () => void) {
 }
 
 export function ModeProvider({ children }: { children: ReactNode }) {
-  const mode = useSyncExternalStore(subscribeToMode, readModeSnapshot, getServerModeSnapshot);
+  const mode = useSyncExternalStore<ExperienceMode>(subscribeToMode, readModeSnapshot, getServerModeSnapshot);
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const setMode = (nextMode: ExperienceMode) => {

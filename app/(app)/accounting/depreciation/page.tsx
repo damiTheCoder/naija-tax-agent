@@ -68,7 +68,7 @@ export default function AccountingDepreciationPage() {
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Auto Monthly Charge</p>
-          <p className="mt-2 text-2xl font-bold text-[#2264ff]">{formatCurrency(summary.totals.monthlyDepreciation)}</p>
+          <p className="mt-2 text-2xl font-bold text-[#446b00]">{formatCurrency(summary.totals.monthlyDepreciation)}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <p className="text-xs uppercase tracking-wider text-gray-500">Posted Depreciation (YTD)</p>
@@ -117,7 +117,7 @@ export default function AccountingDepreciationPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-gray-900">{formatCurrency(row.grossCost)}</td>
                     <td className="px-4 py-3 text-right text-sm font-mono text-gray-700">{formatCurrency(row.accumulatedDepreciation)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-mono text-[#2264ff]">{formatCurrency(row.netBookValue)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-mono text-[#446b00]">{formatCurrency(row.netBookValue)}</td>
                     <td className="px-4 py-3 text-center text-sm text-gray-700">{row.rate > 0 ? `${row.rate}%` : "—"}</td>
                     <td className="px-4 py-3 text-center text-sm capitalize text-gray-700">{row.method === "none" ? "—" : row.method.replace("-", " ")}</td>
                     <td className="px-4 py-3 text-right text-sm font-mono font-semibold text-gray-900">{formatCurrency(row.annualDepreciation)}</td>

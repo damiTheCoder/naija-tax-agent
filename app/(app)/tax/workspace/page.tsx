@@ -1169,7 +1169,7 @@ export default function TaxWorkspacePage() {
       {/* Stats Summary Deck */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="p-4 rounded-xl border bg-white border-gray-200/60">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#2264ff]">VAT Payable</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#446b00]">VAT Payable</p>
           <p className="mt-2 text-xl font-bold text-gray-900" title={formatCurrencyFull(taxDashboardV2?.vatPayable ?? 0)}>
             {formatCurrency(taxDashboardV2?.vatPayable ?? 0)}
           </p>
@@ -1307,7 +1307,7 @@ export default function TaxWorkspacePage() {
           <div className="mt-4">
             <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
               <div
-                className="h-full bg-[#2264ff] rounded-full"
+                className="h-full bg-[#8fff00] rounded-full"
                 style={{ width: `${workspaceInsights.completionRate}%` }}
               />
             </div>
@@ -1378,7 +1378,7 @@ export default function TaxWorkspacePage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
             >
               {availableYears.map((year) => (
                 <option key={year} value={year}>{year}</option>
@@ -1391,7 +1391,7 @@ export default function TaxWorkspacePage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -1400,7 +1400,7 @@ export default function TaxWorkspacePage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2264ff] focus:border-transparent"
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
             />
           </div>
           {(dateFrom || dateTo) && (
@@ -1426,7 +1426,7 @@ export default function TaxWorkspacePage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap rounded-t-md ${activeTab === tab.id
-                  ? "border-[#2264ff] text-[#2264ff] bg-[#E8F4FF]"
+                  ? "border-[#8fff00] text-[#446b00] bg-[#E8F4FF]"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
             >
