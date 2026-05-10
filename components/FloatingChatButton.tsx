@@ -1405,7 +1405,7 @@ export default function FloatingChatButton() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-hidden py-0">
-                    <div className="h-full overflow-y-auto pt-1 pb-3 pr-1 sm:py-4 lg:py-8 lg:pr-2">
+                    <div className="h-full overflow-y-auto pt-0 pb-2 pr-1 sm:py-4 lg:py-8 lg:pr-2">
                         {isEmptyConversation ? (
                             <div className="mx-auto flex h-full min-h-[20rem] max-w-3xl items-center justify-center py-6 text-center lg:min-h-[24rem]">
                                 <div>
@@ -1434,7 +1434,7 @@ export default function FloatingChatButton() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
+                            <div className="mx-auto -mt-2 max-w-4xl space-y-5 sm:mt-0 sm:space-y-8">
                                 {visibleMessages.map((msg) => (
                                     <div
                                         key={msg.id}
@@ -1485,9 +1485,9 @@ export default function FloatingChatButton() {
                     </div>
                 </div>
 
-                <div className="sticky bottom-0 bg-[var(--app-bg)]/96 pt-14 pb-0 backdrop-blur-md sm:py-3">
+                <div className="sticky bottom-0 bg-[var(--app-bg)]/96 pt-5 pb-0 backdrop-blur-md sm:py-3">
                     <div className="mx-auto max-w-4xl">
-                        <div className="rounded-[30px] border border-gray-200 bg-white px-3 pb-3 pt-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
+                        <div className="rounded-[30px] border border-gray-200 bg-white px-3 pb-3 pt-5">
                             <textarea
                                 ref={textareaRef}
                                 rows={1}

@@ -24,6 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [desktopActionsOpen, setDesktopActionsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [mobileViewportOffsetTop, setMobileViewportOffsetTop] = useState(0);
   const desktopActionsRef = useRef<HTMLDivElement | null>(null);
   const mobileActionsRef = useRef<HTMLDivElement | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -189,6 +190,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [desktopActionsOpen, mobileActionsOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+
+    const viewport = window.visualViewport;
+
+    const syncMobileViewportOffset = () => {
+      if (window.innerWidth >= 1024) {
+        setMobileViewportOffsetTop(0);
+        return;
+      }
+
+      setMobileViewportOffsetTop(Math.max(0, Math.round(viewport.offsetTop)));
+    };
+
+    syncMobileViewportOffset();
+
+    viewport.addEventListener("resize", syncMobileViewportOffset);
+    viewport.addEventListener("scroll", syncMobileViewportOffset);
+    window.addEventListener("resize", syncMobileViewportOffset);
+
+    return () => {
+      viewport.removeEventListener("resize", syncMobileViewportOffset);
+      viewport.removeEventListener("scroll", syncMobileViewportOffset);
+      window.removeEventListener("resize", syncMobileViewportOffset);
+    };
+  }, []);
+
   if (isModeMismatch) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--app-bg)' }}>
@@ -289,8 +317,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Header Only */}
         <header
-          className="app-shell-topbar sticky top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
-          style={{ background: isDark ? "rgba(0,0,0,0.8)" : "rgba(253,252,251,0.94)" }}
+          className="app-shell-topbar fixed inset-x-0 top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
+          style={{
+            background: isDark ? "rgba(0,0,0,0.8)" : "rgba(253,252,251,0.94)",
+            transform: `translateY(${mobileViewportOffsetTop}px)`,
+          }}
         >
           <div className="flex items-center justify-between px-5 py-4">
             <div className="flex min-w-0 items-center gap-3">
@@ -420,7 +451,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <main className="app-shell-content-main flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
+        <main className="app-shell-content-main flex-1 px-4 pb-4 pt-[5rem] sm:px-6 sm:pb-4 sm:pt-[5rem] lg:px-8 lg:py-8">
           <div className="app-shell-content-container max-w-[1320px] mx-auto w-full min-w-0">
             <Suspense fallback={<PageSkeleton />}>
               {children}
