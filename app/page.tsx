@@ -277,18 +277,15 @@ export default function LandingPage() {
             <div className="section-header-modern">
               <span className="section-badge">The Solution</span>
               <h2 className="section-title-modern">
-                Introducing
-                <br />
-                <span className="title-highlight">Bace</span>
+                Introducing <span className="title-highlight">Bace</span>
               </h2>
             </div>
           </div>
 
           {/* CashOS Features Grid */}
           <div className="cashos-features-section section-container">
-            <h2 className="cashos-brand-title">Bace</h2>
             <p className="cashos-intro">
-              is an AI-powered financial operating system that helps business owners:
+              Bace is an AI-powered financial operating system that helps business owners:
             </p>
             <div className="cashos-intro-image-shell">
               <Image

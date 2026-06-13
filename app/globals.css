@@ -4034,6 +4034,22 @@ tr:hover td {
   background: #d2f36a;
 }
 
+.hero-modern::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: clamp(7rem, 16vw, 11rem);
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.18) 38%,
+      rgba(255, 255, 255, 0.72) 76%,
+      #ffffff 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .hero-bg-decorations {
   position: absolute;
   inset: 0;
@@ -4671,6 +4687,13 @@ tr:hover td {
   margin-bottom: 0;
 }
 
+.introducing-section .section-title-modern {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
 /* CashOS Features - Grid Layout */
 .cashos-features-section.section-container {
   margin-top: 2rem;
@@ -4702,31 +4725,6 @@ tr:hover td {
   width: 100%;
   height: auto;
   border-radius: 24px;
-}
-
-.cashos-brand-title {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 0.75rem 1.8rem;
-  border-radius: 999px;
-  border: 2px solid var(--primary);
-  background: rgba(239, 251, 217, 0.88);
-  box-shadow: none;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  font-size: clamp(1.45rem, 2vw, 1.9rem);
-  font-weight: 700;
-  color: var(--primary-ink);
-  margin: 0 0 1rem;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.cashos-brand-name {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--primary-ink);
 }
 
 .cashos-feature-grid {
@@ -4887,16 +4885,19 @@ tr:hover td {
 }
 
 @media (max-width: 768px) {
+  .introducing-section {
+    padding: 1.5rem 1rem 4rem;
+  }
+
+  .introducing-section .section-title-modern {
+    gap: 0.3rem;
+    font-size: clamp(1.85rem, 8vw, 2.65rem);
+    line-height: 1.08;
+  }
+
   .cashos-features-section.section-container {
     margin: 1.5rem 0 0;
     padding: 0 1rem;
-  }
-
-  .cashos-brand-title {
-    font-size: 1.3rem;
-    padding: 0.65rem 1.15rem;
-    border-radius: 999px;
-    border-width: 1.5px;
   }
 
   .cashos-intro {
@@ -5854,6 +5855,41 @@ tr:hover td {
   color: #fff;
 }
 
+/* Landing page header + hero text override */
+.landing-modern .nav-brand-text,
+.landing-modern .nav-link-modern,
+.landing-modern .nav-cta-modern,
+.landing-modern .nav-cta-modern svg,
+.landing-modern .hero-title-modern,
+.landing-modern .hero-title-accent,
+.landing-modern .hero-subtitle-modern,
+.landing-modern .hero-trust-strip,
+.landing-modern .hero-trust-strip span,
+.landing-modern .hero-trust-strip svg {
+  color: #ffffff !important;
+}
+
+.landing-modern .nav-link-modern {
+  opacity: 0.95;
+}
+
+.landing-modern .nav-link-modern:hover {
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+.landing-modern .hero-title-modern {
+  color: #ffffff !important;
+}
+
+.landing-modern .hero-subtitle-modern {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.landing-modern .hero-title-accent::after {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9));
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .hero-content-modern {
@@ -5977,6 +6013,11 @@ tr:hover td {
 
   .hero-avatar-item+.hero-avatar-item {
     margin-left: -12px;
+  }
+
+  /* Hide trust strip on mobile */
+  .landing-modern .hero-trust-strip {
+    display: none !important;
   }
 
   .hiw-steps-modern {
