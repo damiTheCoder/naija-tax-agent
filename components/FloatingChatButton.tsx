@@ -630,6 +630,7 @@ export default function FloatingChatButton() {
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
     const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+    const [isHistoryDropdownOpen, setIsHistoryDropdownOpen] = useState(false);
     const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
     const [mobileConversationMenuPosition, setMobileConversationMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -753,6 +754,7 @@ export default function FloatingChatButton() {
     const handleStartNewChat = useCallback(() => {
         revokeBlobUrls();
         setActiveConversationId(null);
+        setIsHistoryDropdownOpen(false);
         setOpenConversationMenuId(null);
         setMobileConversationMenuPosition(null);
         setMessages([createIntroMessage(currentModule, pathname)]);
@@ -765,6 +767,7 @@ export default function FloatingChatButton() {
     const handleSelectConversation = useCallback(async (conversationId: string) => {
         const conversation = (await getChatConversationAsync(conversationId)) || getChatConversation(conversationId);
         if (!conversation) return;
+        setIsHistoryDropdownOpen(false);
         setOpenConversationMenuId(null);
         setMobileConversationMenuPosition(null);
         if (conversation.route && conversation.route !== pathname) {
@@ -782,6 +785,7 @@ export default function FloatingChatButton() {
     const handleToggleConversationMenu = useCallback((conversationId: string, trigger?: HTMLElement | null) => {
         const menuWidth = 132;
         const viewportPadding = 8;
+        setIsHistoryDropdownOpen(false);
         setOpenConversationMenuId((current) => {
             const next = current === conversationId ? null : conversationId;
             if (!next) {
@@ -861,6 +865,7 @@ export default function FloatingChatButton() {
         const run = async () => {
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
+            setIsHistoryDropdownOpen(false);
             setOpenConversationMenuId(null);
             revokeBlobUrls();
             const selected = consumeSelectedChatHistory({ pathname });
@@ -936,6 +941,7 @@ export default function FloatingChatButton() {
             const shouldStartNewChat = detail.newChat === true;
 
             setCurrentModule(resolvedModule);
+            setIsHistoryDropdownOpen(false);
             setOpenConversationMenuId(null);
 
             if (shouldStartNewChat) {
@@ -964,6 +970,7 @@ export default function FloatingChatButton() {
 
             const activeModule = getModuleFromPath(pathname);
             setCurrentModule(activeModule);
+            setIsHistoryDropdownOpen(false);
             void refreshConversationList();
 
             if (selected.conversationId) {
@@ -1020,19 +1027,20 @@ export default function FloatingChatButton() {
     }, [pathname, refreshConversationList]);
 
     useEffect(() => {
-        if (!openConversationMenuId) return;
+        if (!openConversationMenuId && !isHistoryDropdownOpen) return;
 
         const handlePointerDown = (event: MouseEvent) => {
             const target = event.target as HTMLElement | null;
             if (target?.closest("[data-conversation-menu='true']")) return;
             setOpenConversationMenuId(null);
+            setIsHistoryDropdownOpen(false);
         };
 
         document.addEventListener("mousedown", handlePointerDown);
         return () => {
             document.removeEventListener("mousedown", handlePointerDown);
         };
-    }, [openConversationMenuId]);
+    }, [isHistoryDropdownOpen, openConversationMenuId]);
 
     useEffect(() => {
         if (!openConversationMenuId) {
@@ -1130,7 +1138,7 @@ export default function FloatingChatButton() {
     const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload): ChatMessage => ({
         id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role,
-        content,
+        content: role === "assistant" ? toPlainChatText(content) : content,
         timestamp: Date.now(),
         attachment,
     }), []);
@@ -1359,53 +1367,83 @@ export default function FloatingChatButton() {
     };
 
     return (
-        <section ref={chatSectionRef} className="sticky top-[4.75rem] scroll-mt-24 lg:top-24">
-            <div className="flex h-[calc(100dvh-7.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-8rem)]">
-                <div className="px-0 pt-1 pb-2 sm:py-3">
-                    <div className="flex items-center gap-2 overflow-x-auto overflow-y-visible pb-1 hide-scrollbar">
+        <section ref={chatSectionRef} className="sticky top-3 scroll-mt-4 lg:top-4">
+            <div className="relative flex h-[calc(100dvh-1.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-2rem)]">
+                <div className="absolute left-0 top-0 z-[140]" data-conversation-menu="true">
+                    <div className="flex items-center justify-start">
                         <button
-                            onClick={handleStartNewChat}
-                            className="shrink-0 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100"
+                            type="button"
+                            onClick={() => {
+                                setOpenConversationMenuId(null);
+                                setMobileConversationMenuPosition(null);
+                                setIsHistoryDropdownOpen((current) => !current);
+                            }}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#8fff00] px-3.5 py-2 text-xs font-semibold text-[#101010] shadow-[0_10px_24px_rgba(143,255,0,0.18)] transition-colors hover:bg-[#7fe000]"
+                            aria-expanded={isHistoryDropdownOpen}
+                            aria-haspopup="menu"
                         >
-                            New chat
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                            Chat history
                         </button>
-                        {conversationList.map((conversation) => (
-                            <div
-                                key={conversation.id}
-                                data-conversation-menu="true"
-                                className={`relative shrink-0 flex max-w-[170px] items-center rounded-full transition-colors sm:max-w-[190px] ${
-                                    activeConversationId === conversation.id
-                                        ? "bg-[#eefbd9] text-[#446b00]"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                }`}
-                            >
-                                <button
-                                    onClick={() => handleSelectConversation(conversation.id)}
-                                    className="min-w-0 max-w-[128px] rounded-l-full px-3 py-2 text-[11px] font-medium sm:max-w-[148px] sm:px-3.5 sm:text-xs"
-                                >
-                                    <span className="block truncate">{conversation.title}</span>
-                                </button>
-                                <button
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleToggleConversationMenu(conversation.id, event.currentTarget);
-                                    }}
-                                    className="shrink-0 rounded-r-full pr-2.5 text-gray-500 hover:text-gray-700"
-                                    aria-label={`Chat options for ${conversation.title}`}
-                                >
-                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                        <circle cx="6" cy="12" r="1.8" />
-                                        <circle cx="12" cy="12" r="1.8" />
-                                        <circle cx="18" cy="12" r="1.8" />
-                                    </svg>
-                                </button>
-                            </div>
-                        ))}
                     </div>
+
+                    {isHistoryDropdownOpen ? (
+                        <div className="absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                            <button
+                                type="button"
+                                onClick={handleStartNewChat}
+                                className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                            >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                New chat
+                            </button>
+                            <div className="max-h-72 overflow-y-auto border-t border-gray-200">
+                                {conversationList.length === 0 ? (
+                                    <div className="px-4 py-3 text-xs text-gray-500">No chat history yet</div>
+                                ) : (
+                                    conversationList.map((conversation) => (
+                                        <div
+                                            key={conversation.id}
+                                            className={`flex items-center border-t border-gray-200 first:border-t-0 transition-colors ${
+                                                activeConversationId === conversation.id
+                                                    ? "bg-[#eefbd9] text-[#446b00]"
+                                                    : "text-gray-700 hover:bg-gray-50"
+                                            }`}
+                                        >
+                                            <button
+                                                onClick={() => handleSelectConversation(conversation.id)}
+                                                className="min-w-0 flex-1 px-4 py-3 text-left text-xs font-medium"
+                                            >
+                                                <span className="block truncate">{conversation.title}</span>
+                                            </button>
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleToggleConversationMenu(conversation.id, event.currentTarget);
+                                                }}
+                                                className="shrink-0 px-3 py-3 text-gray-500 hover:text-gray-700"
+                                                aria-label={`Chat options for ${conversation.title}`}
+                                            >
+                                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                    <circle cx="6" cy="12" r="1.8" />
+                                                    <circle cx="12" cy="12" r="1.8" />
+                                                    <circle cx="18" cy="12" r="1.8" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-hidden py-0">
-                    <div className="h-full overflow-y-auto pt-0 pb-2 pr-1 sm:py-4 lg:py-8 lg:pr-2">
+                    <div className="hide-scrollbar h-full overflow-y-auto pt-12 pb-[12rem] pr-1 sm:pt-12 sm:pb-[13rem] lg:pt-14 lg:pb-[13rem] lg:pr-2">
                         {isEmptyConversation ? (
                             <div className="mx-auto flex h-full min-h-[20rem] max-w-3xl items-center justify-center py-6 text-center lg:min-h-[24rem]">
                                 <div>
@@ -1435,40 +1473,43 @@ export default function FloatingChatButton() {
                             </div>
                         ) : (
                             <div className="mx-auto -mt-2 max-w-4xl space-y-5 sm:mt-0 sm:space-y-8">
-                                {visibleMessages.map((msg) => (
-                                    <div
-                                        key={msg.id}
-                                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                                    >
-                                        {msg.role === "user" ? (
-                                            <div className="max-w-[min(100%,42rem)] rounded-[28px] bg-gray-200 px-4 py-2.5 text-[14px] leading-6 text-gray-800">
-                                                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-                                            </div>
-                                        ) : (
-                                            <div className="max-w-[min(100%,46rem)]">
-                                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
-                                                    Bace AI
+                                {visibleMessages.map((msg) => {
+                                    const displayContent = msg.role === "assistant" ? toPlainChatText(msg.content) : msg.content;
+                                    return (
+                                        <div
+                                            key={msg.id}
+                                            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                        >
+                                            {msg.role === "user" ? (
+                                                <div className="max-w-[min(100%,42rem)] rounded-[28px] bg-gray-200 px-4 py-2.5 text-[14px] leading-6 text-gray-800">
+                                                    <div className="whitespace-pre-wrap break-words">{displayContent}</div>
                                                 </div>
-                                                <div className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[#1f2328] sm:leading-7">
-                                                    {msg.content}
+                                            ) : (
+                                                <div className="max-w-[min(100%,46rem)]">
+                                                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                                                        Bace AI
+                                                    </div>
+                                                    <div className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[#1f2328] sm:leading-7">
+                                                        {displayContent}
+                                                    </div>
+                                                    {msg.attachment?.kind === "download" && (
+                                                        <a
+                                                            href={msg.attachment.url}
+                                                            download={msg.attachment.fileName}
+                                                            className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#d7f4a6] bg-[#eefbd9] px-4 py-2 text-xs font-semibold text-[#446b00] transition-colors hover:bg-[#e6f7c5]"
+                                                        >
+                                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                                <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
+                                                                <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
+                                                            </svg>
+                                                            Download PDF
+                                                        </a>
+                                                    )}
                                                 </div>
-                                                {msg.attachment?.kind === "download" && (
-                                                    <a
-                                                        href={msg.attachment.url}
-                                                        download={msg.attachment.fileName}
-                                                        className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#d7f4a6] bg-[#eefbd9] px-4 py-2 text-xs font-semibold text-[#446b00] transition-colors hover:bg-[#e6f7c5]"
-                                                    >
-                                                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                            <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
-                                                            <path d="M3 14a1 1 0 011 1v1h12v-1a1 1 0 112 0v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 011-1z" />
-                                                        </svg>
-                                                        Download PDF
-                                                    </a>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -1485,20 +1526,20 @@ export default function FloatingChatButton() {
                     </div>
                 </div>
 
-                <div className="sticky bottom-0 bg-[var(--app-bg)]/96 pt-5 pb-0 backdrop-blur-md sm:py-3">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[130] bg-transparent pt-2 pb-0 sm:pt-2 sm:pb-0">
                     <div className="mx-auto max-w-4xl">
-                        <div className="rounded-[30px] border border-gray-200 bg-white px-3 pb-3 pt-5">
+                        <div className="pointer-events-auto rounded-[26px] border border-gray-200 bg-white px-3 pb-2.5 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
                             <textarea
                                 ref={textareaRef}
                                 rows={1}
                                 placeholder={currentModule.placeholder}
-                                className="min-h-[48px] w-full resize-none border-none bg-transparent px-1.5 py-1.5 text-[15px] leading-7 text-[#1f2328] placeholder:text-gray-400 focus:outline-none"
+                                className="min-h-[38px] w-full resize-none border-none bg-transparent px-1.5 py-1 text-[15px] leading-6 text-[#1f2328] placeholder:text-gray-400 focus:outline-none"
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
                             />
 
-                            <div className="mt-3 px-1 pt-1">
+                            <div className="mt-2 px-1 pt-0">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                                     <button

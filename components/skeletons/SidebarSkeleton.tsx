@@ -8,7 +8,7 @@ export default function SidebarSkeleton() {
 
     return (
         <aside
-            className="flex h-full w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#fffefd_0%,#fcfaf8_100%)] dark:bg-[linear-gradient(180deg,#2f2f33_0%,#18181b_42%,#050505_100%)]"
+            className="flex h-full w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#fffefd_0%,#fcfaf8_100%)] dark:bg-black"
         >
             <div className="flex h-full w-full flex-col p-3">
                 {/* Logo Section */}
@@ -44,7 +44,7 @@ export default function SidebarSkeleton() {
 
                 {/* Bottom section */}
                 <div className="mt-auto">
-                    <div className="flex items-center gap-3 rounded-xl border border-[#f5f1ec] bg-white/75 p-3 dark:border-white/10 dark:bg-white/5">
+                    <div className="flex items-center gap-3 rounded-xl border border-[#f5f1ec] bg-white/75 p-3 dark:border-white/10 dark:bg-black">
                         <Skeleton className={`h-8 w-8 rounded-lg ${skeletonTone}`} />
                         <div className="flex-1 space-y-2">
                             <Skeleton className={`h-3 w-20 ${skeletonTone}`} />

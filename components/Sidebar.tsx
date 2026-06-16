@@ -89,7 +89,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className="fixed left-0 top-0 bottom-0 z-50 hidden w-1/4 overflow-hidden lg:flex"
         style={{
           background: isDark
-            ? "linear-gradient(180deg, #2f2f33 0%, #18181b 42%, #050505 100%)"
+            ? "#000000"
             : "linear-gradient(180deg, #fffefd 0%, #fcfaf8 100%)",
           borderRight: isDark ? "1px solid rgba(148, 163, 184, 0.28)" : "1px solid #f5f1ec",
         }}

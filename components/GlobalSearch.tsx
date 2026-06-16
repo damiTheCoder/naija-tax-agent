@@ -224,7 +224,7 @@ export default function GlobalSearch() {
                 onClick={() => setIsOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-full transition-colors"
                 style={{
-                    background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                    background: isDark ? "#000000" : "rgba(0,0,0,0.06)",
                     color: isDark ? "#9ca3af" : "#6b7280"
                 }}
                 aria-label="Search"
@@ -247,7 +247,7 @@ export default function GlobalSearch() {
                     {/* Search Panel */}
                     <div
                         className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
-                        style={{ background: isDark ? "#1a1a1a" : "white" }}
+                        style={{ background: isDark ? "#000000" : "white" }}
                     >
                         {/* Input */}
                         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: isDark ? "#333" : "#e5e7eb" }}>
@@ -311,7 +311,7 @@ export default function GlobalSearch() {
                                             <div
                                                 className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                                                 style={{
-                                                    background: isDark ? "#333" : "#f3f4f6",
+                                                    background: isDark ? "#000000" : "#f3f4f6",
                                                     color: isDark ? "#9ca3af" : "#6b7280"
                                                 }}
                                             >

@@ -36,12 +36,12 @@
   color-scheme: only dark;
   --background: #000000;
   --foreground: #ffffff;
-  --card-bg: #1a1a1a;
-  --card-bg-light: #2a2a2a;
+  --card-bg: #000000;
+  --card-bg-light: #000000;
   --border: #333333;
   --muted: #b0b0b0;
-  --soft-gray: #252525;
-  --cream: #0a0a0a;
+  --soft-gray: #000000;
+  --cream: #000000;
   --app-bg: #000000;
   --border-color: #333333;
   --primary-ink: #d8ffae;
@@ -78,17 +78,47 @@ html.dark {
 .dark [class*="bg-[#fafafa"],
 .dark [class*="bg-[#f5f5"],
 .dark [class*="bg-gray-50"],
-.dark [class*="bg-gray-100"] {
-  background-color: #111111 !important;
-}
-
+.dark [class*="bg-gray-100"],
 .dark [class*="bg-gray-200"],
 .dark [class*="bg-gray-300"],
+.dark [class*="bg-gray-400"],
+.dark [class*="bg-gray-500"],
+.dark [class*="bg-gray-600"],
+.dark [class*="bg-gray-700"],
+.dark [class*="bg-gray-800"],
+.dark [class*="bg-gray-900"],
+.dark [class*="bg-slate-"],
+.dark [class*="bg-zinc-"],
+.dark [class*="bg-neutral-"],
+.dark [class*="bg-stone-"],
 .dark [class*="bg-[#e0e0"],
 .dark [class*="bg-[#e8e8"],
 .dark [class*="bg-[#e5e5e5]"],
-.dark [class*="bg-[#f5f5f7]"] {
-  background-color: #1f1f1f !important;
+.dark [class*="bg-[#f5f5f7]"],
+.dark [class*="bg-[#0a0a0a]"],
+.dark [class*="bg-[#0b0f19]"],
+.dark [class*="bg-[#0c111a]"],
+.dark [class*="bg-[#111111]"],
+.dark [class*="bg-[#111827]"],
+.dark [class*="bg-[#18181b]"],
+.dark [class*="bg-[#1a1a1a]"],
+.dark [class*="bg-[#1f1f1f]"],
+.dark [class*="bg-[#2a2a2a]"],
+.dark [class*="bg-[#2f2f33]"],
+.dark [class*="bg-[#333333]"],
+.dark [class*="bg-[#374151]"] {
+  background-color: #000000 !important;
+}
+
+/* Card-like content with borders -> grey surface, no border */
+.dark [class*="border-gray"][class*="bg-white"],
+.dark [class*="border-gray"][class*="bg-gray-50"],
+.dark [class*="border-gray"][class*="bg-gray-100"],
+.dark [class*="border-gray"][class*="bg-[#fff"],
+.dark [class*="border-gray"][class*="bg-[#fafafa"],
+.dark [class*="border-gray"][class*="bg-[#f5f5"] {
+  background-color: #1a1a1a !important;
+  border-color: transparent !important;
 }
 
 /* Borders/dividers should stay visible, not removed */
@@ -174,23 +204,23 @@ html.dark {
 
 /* Tables */
 .dark table {
-  background-color: #111111 !important;
+  background-color: #000000 !important;
 }
 
 .dark th {
-  background-color: #1a1a1a !important;
+  background-color: #000000 !important;
   color: #f3f4f6 !important;
   border-color: #333333 !important;
 }
 
 .dark td {
-  background-color: #111111 !important;
+  background-color: #000000 !important;
   color: #e5e7eb !important;
   border-color: #333333 !important;
 }
 
 .dark tr:hover td {
-  background-color: #1f1f1f !important;
+  background-color: #000000 !important;
 }
 
 /* Menus/dialogs */
@@ -198,7 +228,7 @@ html.dark {
 .dark [role="listbox"],
 .dark [role="menu"],
 .dark [role="dialog"] {
-  background-color: #111111 !important;
+  background-color: #000000 !important;
   border-color: #333333 !important;
 }
 
@@ -208,8 +238,24 @@ html.dark {
 .dark [style*="background: #fff"],
 .dark [style*="background-color: #fff"],
 .dark [style*="background: rgb(255"],
-.dark [style*="background-color: rgb(255"] {
-  background-color: #111111 !important;
+.dark [style*="background-color: rgb(255"],
+.dark [style*="background: rgb(17, 17, 17"],
+.dark [style*="background-color: rgb(17, 17, 17"],
+.dark [style*="background: rgb(26, 26, 26"],
+.dark [style*="background-color: rgb(26, 26, 26"],
+.dark [style*="background: rgb(31, 31, 31"],
+.dark [style*="background-color: rgb(31, 31, 31"],
+.dark [style*="background: rgb(42, 42, 42"],
+.dark [style*="background-color: rgb(42, 42, 42"],
+.dark [style*="background: rgb(47, 47, 51"],
+.dark [style*="background-color: rgb(47, 47, 51"],
+.dark [style*="background: rgb(51, 51, 51"],
+.dark [style*="background-color: rgb(51, 51, 51"],
+.dark [style*="background: rgb(17, 24, 39"],
+.dark [style*="background-color: rgb(17, 24, 39"],
+.dark [style*="background: rgb(12, 17, 26"],
+.dark [style*="background-color: rgb(12, 17, 26"] {
+  background-color: #000000 !important;
 }
 
 /* Legacy brand-blue normalization */
@@ -377,6 +423,28 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Content cards inside the main content area: use gray surfaces instead of visible borders */
+.app-shell-content-wrapper article[class*="border"],
+.app-shell-content-wrapper section[class*="border"],
+.app-shell-content-wrapper div[class*="rounded"][class*="border"] {
+  border-color: transparent !important;
+}
+
+.app-shell-content-wrapper article[class*="bg-white"],
+.app-shell-content-wrapper section[class*="bg-white"],
+.app-shell-content-wrapper div[class*="rounded"][class*="bg-white"],
+.app-shell-content-wrapper article[class*="bg-gray-50"],
+.app-shell-content-wrapper section[class*="bg-gray-50"],
+.app-shell-content-wrapper div[class*="rounded"][class*="bg-gray-50"],
+.app-shell-content-wrapper article[class*="bg-gray-100"],
+.app-shell-content-wrapper section[class*="bg-gray-100"],
+.app-shell-content-wrapper div[class*="rounded"][class*="bg-gray-100"],
+.app-shell-content-wrapper article[class*="bg-slate-50"],
+.app-shell-content-wrapper section[class*="bg-slate-50"],
+.app-shell-content-wrapper div[class*="rounded"][class*="bg-slate-50"] {
+  background-color: #f3f4f6 !important;
 }
 
 /* Landing page font override */

@@ -108,7 +108,7 @@ export default function InvestmentDashboardPage() {
                                             <Tooltip
                                                 formatter={(value) => formatNaira(Number(value ?? 0))}
                                                 contentStyle={{
-                                                    backgroundColor: isDark ? "#111827" : "#ffffff",
+                                                    backgroundColor: isDark ? "#000000" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
                                                     borderRadius: "12px",
                                                     fontSize: "12px"
@@ -142,7 +142,7 @@ export default function InvestmentDashboardPage() {
                                             <Tooltip
                                                 formatter={(value) => formatNaira(Number(value ?? 0))}
                                                 contentStyle={{
-                                                    backgroundColor: isDark ? "#111827" : "#ffffff",
+                                                    backgroundColor: isDark ? "#000000" : "#ffffff",
                                                     borderColor: isDark ? "#374151" : "#e5e7eb",
                                                     borderRadius: "12px",
                                                     fontSize: "12px"

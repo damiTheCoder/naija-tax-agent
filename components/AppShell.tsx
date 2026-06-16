@@ -254,7 +254,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
               style={{
                 color: isDark ? "#f5f5f5" : "#444444",
-                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.03)",
+                background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
               }}
               aria-label="Open header menu"
             >
@@ -269,7 +269,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
                 style={{
-                  background: isDark ? "rgba(17,17,17,0.96)" : "rgba(255,255,255,0.96)",
+                  background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
                   borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
                 }}
               >
@@ -364,7 +364,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
                 style={{
                   color: isDark ? "#f5f5f5" : "#444444",
-                  background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+                  background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
                 }}
                 aria-label="Open quick menu"
               >
@@ -379,7 +379,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <div
                   className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
                   style={{
-                    background: isDark ? "rgba(17,17,17,0.96)" : "rgba(255,255,255,0.96)",
+                    background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
                     borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
                   }}
                 >

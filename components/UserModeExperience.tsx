@@ -482,9 +482,10 @@ export default function UserModeExperience() {
                       </div>
                       <button
                         onClick={() => sendMessage()}
-                        className="px-5 py-3 rounded-2xl text-sm font-semibold transition-all text-[#101010]"
+                        className="px-5 py-3 rounded-2xl text-sm font-semibold transition-all"
                         style={{
-                          background: composer.trim() ? "linear-gradient(135deg,#8fff00,#6fcc00)" : isDark ? "rgba(75,85,99,0.4)" : "rgba(148,163,184,0.4)",
+                          background: composer.trim() ? "linear-gradient(135deg,#8fff00,#6fcc00)" : isDark ? "#000000" : "rgba(148,163,184,0.4)",
+                          color: composer.trim() ? "#101010" : isDark ? "#ffffff" : "#101010",
                           opacity: composer.trim() ? 1 : 0.6,
                         }}
                         disabled={!composer.trim()}

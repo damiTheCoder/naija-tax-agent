@@ -64,25 +64,21 @@ function subscribeToSystemTheme(onStoreChange: () => void) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const storedTheme = useSyncExternalStore(subscribeToStoredTheme, readStoredTheme, () => null);
-    const systemTheme = useSyncExternalStore(subscribeToSystemTheme, readSystemTheme, getServerTheme);
+    // Force single light theme for the whole app.
+    const storedTheme = null;
+    const systemTheme = "light" as const;
     const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
-    const theme = storedTheme ?? systemTheme;
+    const theme: Theme = "light";
 
     // Apply theme class to document
     useEffect(() => {
         const root = document.documentElement;
         const body = document.body;
-        if (theme === "dark") {
-            root.classList.add("dark");
-        } else {
-            root.classList.remove("dark");
-        }
-
-        // Keep browser UI/theme controls in sync and prevent Chrome auto-adjust drift.
-        root.style.colorScheme = theme;
-        body.style.backgroundColor = theme === "dark" ? "#000000" : LIGHT_THEME_BACKGROUND;
-        body.style.color = theme === "dark" ? "#ffffff" : "#0a0a0a";
+        // Ensure the `dark` class is never present and force light appearance.
+        root.classList.remove("dark");
+        root.style.colorScheme = "light";
+        body.style.backgroundColor = LIGHT_THEME_BACKGROUND;
+        body.style.color = "#0a0a0a";
 
         document
             .querySelectorAll('meta[name="theme-color"]')
@@ -90,16 +86,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }, [theme]);
 
     const toggleTheme = () => {
-        if (typeof window === "undefined") return;
-        const nextTheme = theme === "light" ? "dark" : "light";
-        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+        // Theme switching disabled — keep no-op to preserve callers.
+        return;
     };
 
     const setTheme = (nextTheme: Theme) => {
-        if (typeof window === "undefined") return;
-        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+        // Disabled: do not change theme; keep function for compatibility.
+        return;
     };
 
     // Render children always, but with suppressed hydration warning div wrapper

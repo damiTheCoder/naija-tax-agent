@@ -1778,10 +1778,10 @@ export default function AccountingPage() {
                     }}
                     data-agent-target="open-post-journal-entry"
                     className={`
-                      w-full rounded-2xl border transition-all p-5 group
+                      w-full rounded-2xl transition-all p-5 group
                       ${theme === 'dark'
-                        ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
-                        : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
+                        ? 'bg-[#1a1a1a] hover:bg-[#222222]'
+                        : 'bg-gray-100 hover:bg-gray-200'
                       } flex items-center justify-center gap-3
                     `}
                   >
@@ -1816,10 +1816,10 @@ export default function AccountingPage() {
                   <Link
                     href="/accounting/reconciliation"
                     className={`
-                      w-full rounded-2xl border transition-all p-5 group
+                      w-full rounded-2xl transition-all p-5 group
                       ${theme === 'dark'
-                        ? 'border-gray-600 bg-[#0a0a0a] hover:bg-[#1a1a1a] hover:border-gray-500'
-                        : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400'
+                        ? 'bg-[#1a1a1a] hover:bg-[#222222]'
+                        : 'bg-gray-100 hover:bg-gray-200'
                       } flex items-center justify-center gap-3
                     `}
                   >
