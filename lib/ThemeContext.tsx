@@ -15,7 +15,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 const THEME_STORAGE_KEY = "theme";
 const THEME_CHANGE_EVENT = "app-theme-change";
 const LIGHT_THEME_BACKGROUND = "#fdfcfb";
-const noopSubscribe = () => () => {};
+const noopSubscribe = () => () => { };
 const getServerTheme = () => "light" as const;
 
 function readStoredTheme(): Theme | null {
@@ -30,7 +30,7 @@ function readSystemTheme(): Theme {
 }
 
 function subscribeToStoredTheme(onStoreChange: () => void) {
-    if (typeof window === "undefined") return () => {};
+    if (typeof window === "undefined") return () => { };
 
     const handleStorage = (event: StorageEvent) => {
         if (event.key && event.key !== THEME_STORAGE_KEY) return;
@@ -49,7 +49,7 @@ function subscribeToStoredTheme(onStoreChange: () => void) {
 }
 
 function subscribeToSystemTheme(onStoreChange: () => void) {
-    if (typeof window === "undefined") return () => {};
+    if (typeof window === "undefined") return () => { };
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => onStoreChange();

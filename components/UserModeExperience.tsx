@@ -415,8 +415,8 @@ export default function UserModeExperience() {
                       <div key={message.id} className={`px-3 md:px-5 py-3 ${isDark ? 'hover:bg-gray-900/30' : 'hover:bg-gray-50/50'} transition-colors`}>
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                           <div className={`max-w-lg rounded-2xl px-4 py-3 text-sm space-y-1.5 ${message.role === "assistant"
-                              ? isDark ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-100'
-                              : isDark ? 'bg-gray-800 border border-gray-700' : 'bg-[#eefbd9] border border-[#d7f4a6]'
+                            ? isDark ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-100'
+                            : isDark ? 'bg-gray-800 border border-gray-700' : 'bg-[#eefbd9] border border-[#d7f4a6]'
                             }`}>
                             <p className={`whitespace-pre-wrap leading-relaxed ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                               {message.content}
@@ -452,8 +452,8 @@ export default function UserModeExperience() {
                           key={prompt}
                           onClick={() => sendMessage(prompt)}
                           className={`text-[11px] px-3 py-1 rounded-full border transition-colors ${isDark
-                              ? 'border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-gray-600'
-                              : 'border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300'
+                            ? 'border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-gray-600'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300'
                             }`}
                         >
                           {prompt}
@@ -475,8 +475,8 @@ export default function UserModeExperience() {
                           placeholder="Message your finances..."
                           rows={1}
                           className={`w-full resize-none rounded-2xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8fff00] ${isDark
-                              ? 'border-gray-700 bg-gray-900 text-gray-200 placeholder-gray-500'
-                              : 'border-gray-200 bg-white text-gray-900 placeholder-gray-400'
+                            ? 'border-gray-700 bg-gray-900 text-gray-200 placeholder-gray-500'
+                            : 'border-gray-200 bg-white text-gray-900 placeholder-gray-400'
                             }`}
                         />
                       </div>
@@ -531,8 +531,8 @@ export default function UserModeExperience() {
                           key={node.id}
                           onClick={() => setSelectedNode(node)}
                           className={`w-full px-3 md:px-5 py-4 text-left transition-colors group ${isSelected
-                              ? isDark ? 'bg-blue-900/10' : 'bg-blue-50/50'
-                              : isDark ? 'hover:bg-gray-900/30' : 'hover:bg-gray-50/50'
+                            ? isDark ? 'bg-blue-900/10' : 'bg-blue-50/50'
+                            : isDark ? 'hover:bg-gray-900/30' : 'hover:bg-gray-50/50'
                             }`}
                         >
                           <div className="flex items-start justify-between gap-3 mb-2">
@@ -613,8 +613,8 @@ export default function UserModeExperience() {
                           </p>
                         </div>
                         <span className={`text-sm font-semibold font-mono ${item.value.startsWith('+') ? 'text-emerald-500'
-                            : item.value.startsWith('-') ? (isDark ? 'text-red-400' : 'text-red-600')
-                              : (isDark ? 'text-amber-400' : 'text-amber-600')
+                          : item.value.startsWith('-') ? (isDark ? 'text-red-400' : 'text-red-600')
+                            : (isDark ? 'text-amber-400' : 'text-amber-600')
                           }`}>
                           {item.value}
                         </span>
