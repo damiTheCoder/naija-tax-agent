@@ -75,8 +75,8 @@ export default function DeferredFloatingChat() {
   }
 
   return (
-    <section className="sticky top-3 w-full max-w-full scroll-mt-24 overflow-hidden lg:top-0">
-      <div className="mx-auto flex h-[min(680px,calc(100dvh-5rem))] min-h-[24rem] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
+    <section className="relative w-full max-w-full scroll-mt-24 overflow-visible lg:sticky lg:top-0 lg:overflow-hidden">
+      <div className="mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
         <div className="px-0 py-5">
           <div className="h-3 w-28 rounded-full bg-gray-200" />
           <div className="mt-4 h-8 w-56 rounded-full bg-gray-100" />

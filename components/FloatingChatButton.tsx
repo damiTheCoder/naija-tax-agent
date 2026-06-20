@@ -950,7 +950,8 @@ export default function FloatingChatButton() {
         if (typeof window === "undefined") return;
         const behavior = options?.behavior ?? "smooth";
         window.requestAnimationFrame(() => {
-            chatSectionRef.current?.scrollIntoView({ behavior, block: "start" });
+            const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+            chatSectionRef.current?.scrollIntoView({ behavior, block: isMobile ? "nearest" : "start" });
         });
         if (options?.focus) {
             focusComposer(180);
@@ -1705,9 +1706,9 @@ export default function FloatingChatButton() {
     };
 
     return (
-        <section ref={chatSectionRef} className="sticky top-3 w-full max-w-full scroll-mt-4 overflow-hidden lg:top-0">
-            <div className="relative mx-auto flex h-[min(680px,calc(100dvh-5rem))] min-h-[24rem] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
-                <div className="absolute left-0 top-0 z-[140]" data-conversation-menu="true">
+        <section ref={chatSectionRef} className="relative w-full max-w-full scroll-mt-4 overflow-visible lg:sticky lg:top-0 lg:overflow-hidden">
+            <div className="relative mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
+                <div className="sticky left-0 top-3 z-[140] w-fit lg:absolute lg:top-0" data-conversation-menu="true">
                     <div className="flex items-center justify-start">
                         <button
                             type="button"
@@ -1778,8 +1779,8 @@ export default function FloatingChatButton() {
                     ) : null}
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-hidden py-0">
-                    <div className="hide-scrollbar h-full overflow-y-auto pt-12 pb-[11.5rem] sm:pt-12 sm:pb-[13rem] lg:pt-14 lg:pb-[13rem] lg:pr-2">
+                <div className="min-h-0 flex-1 py-0 lg:overflow-hidden">
+                    <div className="hide-scrollbar h-auto overflow-visible pt-5 pb-4 sm:pt-6 sm:pb-5 lg:h-full lg:overflow-y-auto lg:pt-14 lg:pb-[13rem] lg:pr-2">
                         {isEmptyConversation ? (
                             <div className="mx-auto flex h-full min-h-[16rem] max-w-3xl items-center justify-center px-1 py-4 text-center sm:min-h-[20rem] lg:min-h-[24rem]">
                                 <div className="min-w-0">
@@ -1865,7 +1866,7 @@ export default function FloatingChatButton() {
                     </div>
                 </div>
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[130] bg-transparent pt-2 pb-1 sm:pt-2 sm:pb-0">
+                <div className="pointer-events-none sticky inset-x-0 bottom-2 z-[130] bg-transparent pt-2 pb-2 sm:pt-2 lg:absolute lg:bottom-0 lg:pb-0">
                     <div className="mx-auto w-full max-w-4xl">
                         <div className="pointer-events-auto rounded-[22px] bg-[#eef0f3] px-2.5 pb-2.5 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:rounded-[26px] sm:px-3">
                             <textarea
