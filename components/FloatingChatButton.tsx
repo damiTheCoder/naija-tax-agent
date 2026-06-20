@@ -957,6 +957,50 @@ export default function FloatingChatButton() {
         }
     }, [focusComposer]);
 
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return;
+        const target = chatSectionRef.current;
+        if (!target) return;
+
+        const mobileQuery = window.matchMedia("(max-width: 1023px)");
+        const setChatVisible = (isVisible: boolean) => {
+            document.body.classList.toggle("mobile-chat-section-visible", mobileQuery.matches && isVisible);
+        };
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setChatVisible(Boolean(entry?.isIntersecting));
+            },
+            {
+                threshold: 0.35,
+                rootMargin: "-64px 0px -20% 0px",
+            }
+        );
+
+        observer.observe(target);
+
+        const handleViewportChange = () => {
+            if (!mobileQuery.matches) {
+                document.body.classList.remove("mobile-chat-section-visible");
+                return;
+            }
+            const rect = target.getBoundingClientRect();
+            const isVisible = rect.top < window.innerHeight * 0.75 && rect.bottom > 96;
+            setChatVisible(isVisible);
+        };
+
+        mobileQuery.addEventListener("change", handleViewportChange);
+        window.addEventListener("scroll", handleViewportChange, { passive: true });
+        handleViewportChange();
+
+        return () => {
+            observer.disconnect();
+            mobileQuery.removeEventListener("change", handleViewportChange);
+            window.removeEventListener("scroll", handleViewportChange);
+            document.body.classList.remove("mobile-chat-section-visible");
+        };
+    }, []);
+
     const refreshConversationList = useCallback(async () => {
         const conversations = await loadChatConversationsAsync();
         setConversationList(conversations);

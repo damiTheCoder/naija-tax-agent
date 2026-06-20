@@ -514,6 +514,17 @@ body {
   }
 }
 
+@media (max-width: 1023px) {
+  body.mobile-chat-section-visible .sidebar-subnav-row {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(-8px);
+  }
+}
+
 /* Subtle scrollbar that appears on hover */
 .subtle-scrollbar {
   scrollbar-width: thin;
