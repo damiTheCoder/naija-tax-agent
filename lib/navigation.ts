@@ -55,15 +55,17 @@ export function subscribeToProjectionsModuleOwner(onStoreChange: () => void): ()
 }
 
 export function resolveModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner = "accounting"): AppMode {
-  if (pathname.startsWith("/personal")) return "personal";
-  if (pathname.startsWith("/marketplace")) return "marketplace";
-  if (pathname.startsWith("/supersheet")) return "supersheet";
-  if (pathname.startsWith("/wallet")) return "wallet";
-  if (pathname.startsWith("/cashflow-intelligence")) return "intelligence";
   if (pathname.startsWith("/budgeting")) return "budgeting";
-  if (pathname.startsWith("/accounting/employees") || pathname.startsWith("/accounting/payroll")) return "payroll";
   if (isProjectionsRoute(pathname)) return projectionsOwner;
-  if (pathname.startsWith("/accounting") || pathname.startsWith("/dashboard")) return "accounting";
+  if (
+    pathname.startsWith("/accounting") ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/personal") ||
+    pathname.startsWith("/marketplace") ||
+    pathname.startsWith("/supersheet") ||
+    pathname.startsWith("/wallet") ||
+    pathname.startsWith("/cashflow-intelligence")
+  ) return "accounting";
   return "tax";
 }
 
@@ -370,149 +372,5 @@ export const BUDGETING_NAV_ITEMS: TaxNavItem[] = [
     icon: "chat",
     description: "AI guidance for optimization and budgeting decisions",
     mode: "budgeting",
-  },
-];
-
-// Payroll & Compliance navigation
-export const PAYROLL_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Staff List",
-    href: "/accounting/employees",
-    icon: "users",
-    description: "Manage employee records",
-    mode: "payroll",
-  },
-  {
-    label: "Run Payroll",
-    href: "/accounting/payroll",
-    icon: "report",
-    description: "Process monthly salaries",
-    mode: "payroll",
-  },
-];
-
-
-// Intelligence/Cash Management navigation (standalone)
-export const INTELLIGENCE_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Financial Management",
-    href: "/cashflow-intelligence",
-    icon: "intelligence",
-    description: "Cashflow analytics, treasury movement, and investment tools",
-    mode: "intelligence",
-  },
-  {
-    label: "Financial Projections",
-    href: "/accounting/projections",
-    icon: "trend",
-    description: "Forecast revenue, expenses, and cash position",
-    mode: "intelligence",
-  },
-  {
-    label: "Financial Modelling",
-    href: "/accounting/projections/modelling",
-    icon: "spreadsheet",
-    description: "Build assumptions, scenarios, and AI-native forecast models",
-    mode: "intelligence",
-  },
-  {
-    label: "Financial Ratios",
-    href: "/cashflow-intelligence/ratios",
-    icon: "report",
-    description: "Profitability, liquidity, and solvency ratios",
-    mode: "intelligence",
-  },
-  {
-    label: "Cashflow Chat",
-    href: "/cashflow-intelligence/chat",
-    icon: "chat",
-    description: "Set up automations and track returns",
-    mode: "intelligence",
-  },
-];
-
-// Wallet/Fintech navigation
-export const WALLET_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Wallet Home",
-    href: "/wallet",
-    icon: "wallet",
-    description: "Send, receive, and manage money",
-    mode: "wallet",
-  },
-  {
-    label: "Transaction History",
-    href: "/wallet/history",
-    icon: "receipt",
-    description: "View all your transactions",
-    mode: "wallet",
-  },
-  {
-    label: "Linked Cards",
-    href: "/wallet/cards",
-    icon: "bank",
-    description: "Manage payment cards",
-    mode: "wallet",
-  },
-  {
-    label: "Settings",
-    href: "/wallet/settings",
-    icon: "chart",
-    description: "Wallet preferences and security",
-    mode: "wallet",
-  },
-];
-
-// SuperSheet navigation
-export const SUPERSHEET_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "SuperSheet",
-    href: "/supersheet",
-    icon: "spreadsheet",
-    description: "AI-powered spreadsheet for calculations and analysis",
-    mode: "supersheet",
-  },
-];
-
-// Marketplace navigation
-export const MARKETPLACE_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Browse Professionals",
-    href: "/marketplace",
-    icon: "shop",
-    description: "Find accountants and tax consultants",
-    mode: "marketplace",
-  },
-  {
-    label: "My Profile",
-    href: "/marketplace/profile",
-    icon: "shop",
-    description: "Manage your professional listing",
-    mode: "marketplace",
-  },
-];
-
-// Personal OS navigation
-export const PERSONAL_NAV_ITEMS: TaxNavItem[] = [
-  {
-    label: "Chat",
-    href: "/personal",
-    icon: "chat",
-    description: "Talk to your finances",
-    mode: "personal",
-  },
-  {
-    label: "Dashboard",
-    href: "/personal/dashboard",
-    icon: "chart",
-    description: "Investment and portfolio metrics",
-    mode: "personal",
-  },
-  {
-    label: "Connected Apps",
-    href: "/personal/apps",
-    icon: "bank",
-    description: "Manage linked financial services",
-    mode: "personal",
   },
 ];

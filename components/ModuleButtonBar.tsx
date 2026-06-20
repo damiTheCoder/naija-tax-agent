@@ -41,46 +41,6 @@ const MODULES: {
                 </svg>
             ),
         },
-        {
-            mode: "intelligence",
-            label: "Financial Management",
-            icon: (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-            ),
-        },
-        {
-            mode: "wallet",
-            label: "Wallet",
-            icon: (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-            ),
-        },
-        {
-            mode: "marketplace",
-            label: "Marketplace",
-            icon: (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" />
-                </svg>
-            ),
-        },
-        {
-            mode: "payroll",
-            label: "Payroll",
-            icon: (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-            ),
-        },
-
-
     ];
 
 export default function ModuleButtonBar() {
@@ -108,10 +68,6 @@ export default function ModuleButtonBar() {
     const getModuleHref = (targetMode: AppMode) => {
         if (targetMode === "tax") return "/tax/workspace";
         if (targetMode === "budgeting") return "/budgeting/dashboard";
-        if (targetMode === "intelligence") return "/cashflow-intelligence";
-        if (targetMode === "wallet") return "/wallet";
-        if (targetMode === "marketplace") return "/marketplace";
-        if (targetMode === "payroll") return "/accounting/employees";
         return "/accounting";
     };
 
@@ -150,8 +106,8 @@ export default function ModuleButtonBar() {
                                 ${isNavigating ? 'cursor-wait' : 'cursor-pointer'}
                             `}
                             style={{
-                                backgroundColor: isActive ? '#8fff00' : (isDark ? '#0a0a0a' : '#e5e5e5'),
-                                color: isActive ? '#101010' : (isDark ? '#d1d5db' : '#374151'),
+                                backgroundColor: 'transparent',
+                                color: isActive ? '#5fa800' : (isDark ? '#d1d5db' : '#374151'),
                             }}
                         >
                             <span>{module.label}</span>

@@ -18,10 +18,10 @@ function resolveModuleFallbackRoute(currentRoute?: string, moduleHint?: string):
   const moduleLower = (moduleHint || "").toLowerCase();
   if ((currentRoute || "").startsWith("/tax") || moduleLower.includes("tax")) return "/tax/workspace";
   if ((currentRoute || "").startsWith("/accounting") || moduleLower.includes("accounting")) return "/accounting";
-  if ((currentRoute || "").startsWith("/wallet") || moduleLower.includes("wallet")) return "/wallet";
   if ((currentRoute || "").startsWith("/budgeting") || moduleLower.includes("budget")) return "/budgeting";
-  if ((currentRoute || "").startsWith("/cashflow-intelligence") || moduleLower.includes("cashflow")) {
-    return "/cashflow-intelligence";
+  if (moduleLower.includes("wallet") || moduleLower.includes("payment")) return "/accounting";
+  if (moduleLower.includes("cashflow") || moduleLower.includes("cash flow")) {
+    return "/accounting/projections";
   }
   return null;
 }

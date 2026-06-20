@@ -9,7 +9,6 @@
  *   2. TAX         — Converts the journal to a ComplianceTransaction and runs
  *                    tax classification (VAT, WHT, CIT, CGT, Stamp)
  *   3. BUDGETING   — Records a BudgetImpact so budget-vs-actual tracking updates
- *   4. CASHFLOW    — Refreshes the CashflowEngine metrics/runway/forecast
  *
  * Each module is called independently so a failure in one doesn't block the rest.
  */
@@ -19,7 +18,6 @@ import type { RawTransaction } from "@/lib/accounting/types";
 import type { JournalEntry } from "@/lib/accounting/doubleEntry";
 import { mapJournalEntriesToCompliance } from "@/lib/tax/compliance/adapters";
 import { runTaxComputation } from "@/lib/tax/compliance/engine";
-import { cashflowEngine } from "@/lib/cashflow/cashflowEngine";
 import type {
     InboundBankTransaction,
     ClassificationResult,
@@ -198,24 +196,6 @@ function routeToBudgeting(
 }
 
 // =============================================================================
-// 4. CASHFLOW INTELLIGENCE MODULE
-// =============================================================================
-
-function routeToCashflow(): { updated: boolean; error?: string } {
-    try {
-        // Refresh cashflow calculations from the updated accounting state
-        const accountingState = accountingEngine.getState();
-        cashflowEngine.refresh(accountingState);
-        return { updated: true };
-    } catch (err) {
-        return {
-            updated: false,
-            error: err instanceof Error ? err.message : "Cashflow update failed",
-        };
-    }
-}
-
-// =============================================================================
 // UNIFIED ROUTER
 // =============================================================================
 
@@ -265,14 +245,7 @@ export function routeTransaction(
         budgeting = routeToBudgeting(classification);
     }
 
-    // ── 4. CASHFLOW ────────────────────────────────────────────────────
-    let cashflow: PipelineResult["cashflow"] = { updated: false };
-    if (options.updateCashflow !== false) {
-        cashflow = routeToCashflow();
-        if (!cashflow.updated && cashflow.error) {
-            warnings.push(`Cashflow: ${cashflow.error}`);
-        }
-    }
+    const cashflow: PipelineResult["cashflow"] = { updated: false };
 
     // Low confidence warning
     if (classification.confidence < 0.7) {

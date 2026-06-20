@@ -1,13 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import MobileMenu from "@/components/MobileMenu";
 import DeferredFloatingChat from "@/components/DeferredFloatingChat";
-import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
@@ -22,18 +19,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isPersonalRoute = pathname.startsWith("/personal");
   const [desktopActionsOpen, setDesktopActionsOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const [mobileViewportOffsetTop, setMobileViewportOffsetTop] = useState(0);
   const desktopActionsRef = useRef<HTMLDivElement | null>(null);
   const mobileActionsRef = useRef<HTMLDivElement | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { mode, mounted } = useMode();
   const isDark = theme === "dark";
   const isUser = mode === "user";
-  const isModeMismatch =
-    mounted &&
-    ((mode === "user" && !isPersonalRoute) || (mode === "enterprise" && isPersonalRoute));
+  const isModeMismatch = mounted && isPersonalRoute;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -122,15 +115,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Keep route aligned with experience mode to avoid cross-mode UI bleed.
+  // Personal mode routes have been removed; keep legacy links from stranding users.
   useEffect(() => {
     if (!mounted) return;
-    if (mode === "user") {
-      if (!pathname.startsWith("/personal")) router.replace("/personal");
-    } else if (pathname.startsWith("/personal")) {
+    if (pathname.startsWith("/personal")) {
       router.replace("/accounting");
     }
-  }, [mode, mounted, pathname, router]);
+  }, [mounted, pathname, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -190,33 +181,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [desktopActionsOpen, mobileActionsOpen]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
-
-    const viewport = window.visualViewport;
-
-    const syncMobileViewportOffset = () => {
-      if (window.innerWidth >= 1024) {
-        setMobileViewportOffsetTop(0);
-        return;
-      }
-
-      setMobileViewportOffsetTop(Math.max(0, Math.round(viewport.offsetTop)));
-    };
-
-    syncMobileViewportOffset();
-
-    viewport.addEventListener("resize", syncMobileViewportOffset);
-    viewport.addEventListener("scroll", syncMobileViewportOffset);
-    window.addEventListener("resize", syncMobileViewportOffset);
-
-    return () => {
-      viewport.removeEventListener("resize", syncMobileViewportOffset);
-      viewport.removeEventListener("scroll", syncMobileViewportOffset);
-      window.removeEventListener("resize", syncMobileViewportOffset);
-    };
-  }, []);
-
   if (isModeMismatch) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--app-bg)' }}>
@@ -229,160 +193,121 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell-root min-h-screen transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
-      {/* Sidebar - Desktop Only (always visible on desktop, mobile overlay disabled) */}
-      <div className="app-shell-sidebar">
-        <Sidebar isOpen={false} onClose={() => { }} />
-      </div>
+      <div className="min-h-screen lg:grid lg:grid-cols-12">
+        <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-8" : "lg:col-span-12"}`}>
+          <Sidebar isOpen={false} onClose={() => { }} />
 
-      {/* Mobile Menu Dropdown */}
-      <div className="app-shell-mobile-menu">
-        <MobileMenu isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
-      </div>
-
-      {/* Main Content Area - offset by sidebar width on desktop */}
-      <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-6 sm:pb-8 lg:ml-[25%] lg:w-[75%] lg:pb-0">
-        {/* Desktop Header */}
-        <header
-          className="app-shell-topbar hidden lg:flex sticky top-0 z-50 items-center justify-end px-8 py-3 pointer-events-none backdrop-blur-xl"
-          style={{
-            background: theme === "dark" ? "rgba(0,0,0,0.82)" : "rgba(253,252,251,0.92)",
-          }}
-        >
-          <div ref={desktopActionsRef} className="pointer-events-auto relative">
-            <button
-              onClick={() => setDesktopActionsOpen((prev) => !prev)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+          <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-6 sm:pb-8 lg:pb-0">
+            {/* Desktop Header */}
+            <header
+              className="app-shell-topbar fixed right-4 top-3 z-50 hidden items-center justify-end pointer-events-none lg:right-[calc(33.333333%+1rem)] lg:flex"
               style={{
-                color: isDark ? "#f5f5f5" : "#444444",
-                background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
+                background: "transparent",
               }}
-              aria-label="Open header menu"
             >
-              <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="5.5" cy="12" r="1.8" />
-                <circle cx="12" cy="12" r="1.8" />
-                <circle cx="18.5" cy="12" r="1.8" />
-              </svg>
-            </button>
-
-            {desktopActionsOpen && (
-              <div
-                className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
-                style={{
-                  background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
-                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
-                }}
-              >
-                <div className="space-y-1 p-2">
-                  <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />
-                      </svg>
-                    </span>
-                    <span className="flex-1">
-                      <span className="block text-sm font-medium">Switch mode</span>
-                      <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>{isUser ? "Personal" : "Enterprise"}</span>
-                    </span>
-                    <DesktopModeToggle />
-                  </div>
-
-                  <Link
-                    href="/profile"
-                    onClick={() => setDesktopActionsOpen(false)}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
-                      <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.8}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                      </svg>
-                    </span>
-                    <span className="flex-1">
-                      <span className="block font-medium">Profile</span>
-                      <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>Open account settings</span>
-                    </span>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-        </header>
-
-        {/* Mobile Header Only */}
-        <header
-          className="app-shell-topbar fixed inset-x-0 top-0 z-40 lg:hidden transition-colors duration-300 backdrop-blur-xl"
-          style={{
-            background: isDark ? "rgba(0,0,0,0.8)" : "rgba(253,252,251,0.94)",
-            transform: `translateY(${mobileViewportOffsetTop}px)`,
-          }}
-        >
-          <div className="flex items-center justify-between px-5 py-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <button
-                onClick={() => {
-                  setDesktopActionsOpen(false);
-                  setMobileActionsOpen(false);
-                  setMobileMenuOpen((prev) => !prev);
-                }}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors"
-                style={{ color: isDark ? "#f5f5f5" : "#444444" }}
-                aria-label="Open sidebar"
-              >
-                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-                  <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-                  <path strokeLinecap="round" d="M9 5v14M6 8.5h1.5M6 12h1.5M6 15.5h1.5" />
-                </svg>
-              </button>
-
-              <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg">
-                  <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
-                </div>
-                <span
-                  className="truncate text-[15px] font-semibold tracking-tight"
-                  style={{ color: isDark ? "#ffffff" : "#1f1f1f" }}
-                >
-                  Bace
-                </span>
-              </Link>
-            </div>
-
-            <div ref={mobileActionsRef} className="relative">
-              <button
-                onClick={() => {
-                  setDesktopActionsOpen(false);
-                  setMobileMenuOpen(false);
-                  setMobileActionsOpen((prev) => !prev);
-                }}
-                className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-                style={{
-                  color: isDark ? "#f5f5f5" : "#444444",
-                  background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
-                }}
-                aria-label="Open quick menu"
-              >
-                <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="5.5" cy="12" r="1.8" />
-                  <circle cx="12" cy="12" r="1.8" />
-                  <circle cx="18.5" cy="12" r="1.8" />
-                </svg>
-              </button>
-
-              {mobileActionsOpen && (
-                <div
-                  className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+              <div ref={desktopActionsRef} className="pointer-events-auto relative">
+                <button
+                  onClick={() => setDesktopActionsOpen((prev) => !prev)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
                   style={{
-                    background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
-                    borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                    color: isDark ? "#f5f5f5" : "#444444",
+                    background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
                   }}
+                  aria-label="Open header menu"
                 >
+                  <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="5.5" cy="12" r="1.8" />
+                    <circle cx="12" cy="12" r="1.8" />
+                    <circle cx="18.5" cy="12" r="1.8" />
+                  </svg>
+                </button>
+
+                {desktopActionsOpen && (
+                  <div
+                    className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                    style={{
+                      background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
+                      borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                    }}
+                  >
+                    <div className="space-y-1 p-2">
+                      <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />
+                          </svg>
+                        </span>
+                        <span className="flex-1">
+                          <span className="block text-sm font-medium">Switch mode</span>
+                          <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>{isUser ? "Personal" : "Enterprise"}</span>
+                        </span>
+                        <DesktopModeToggle />
+                      </div>
+
+                      <Link
+                        href="/profile"
+                        onClick={() => setDesktopActionsOpen(false)}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
+                      >
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={1.8}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                          </svg>
+                        </span>
+                        <span className="flex-1">
+                          <span className="block font-medium">Profile</span>
+                          <span className={`block text-xs ${isDark ? "text-white/45" : "text-[#8a8680]"}`}>Open account settings</span>
+                        </span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </header>
+
+            {/* Mobile Header Only */}
+            <header
+              className="app-shell-topbar fixed right-4 top-3 z-50 lg:hidden"
+              style={{
+                background: "transparent",
+              }}
+            >
+              <div className="flex items-center justify-end">
+                <div ref={mobileActionsRef} className="relative">
+                  <button
+                    onClick={() => {
+                      setDesktopActionsOpen(false);
+                      setMobileActionsOpen((prev) => !prev);
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+                    style={{
+                      color: isDark ? "#f5f5f5" : "#444444",
+                      background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
+                    }}
+                    aria-label="Open quick menu"
+                  >
+                    <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="5.5" cy="12" r="1.8" />
+                      <circle cx="12" cy="12" r="1.8" />
+                      <circle cx="18.5" cy="12" r="1.8" />
+                    </svg>
+                  </button>
+
+                  {mobileActionsOpen && (
+                    <div
+                      className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                      style={{
+                        background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
+                        borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                      }}
+                    >
                   <div className="space-y-1 p-2">
                     <Link
                       href="/profile"
@@ -444,26 +369,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <MobileModeToggle />
                     </div>
                   </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Page Content */}
-        <main className="app-shell-content-main flex-1 px-4 pb-4 pt-[5rem] sm:px-6 sm:pb-4 sm:pt-[5rem] lg:px-8 lg:py-8">
-          <div className="app-shell-content-container max-w-[1320px] mx-auto w-full min-w-0">
-            <Suspense fallback={<PageSkeleton />}>
-              {children}
-            </Suspense>
-
-            {!isPersonalRoute && (
-              <div className="app-shell-floating-chat">
-                <DeferredFloatingChat />
               </div>
-            )}
+            </header>
+
+            {/* Page Content */}
+            <main className="app-shell-content-main flex-1 px-4 pb-4 pt-6 sm:px-6 sm:pb-4 lg:px-8 lg:py-8">
+              <div className="app-shell-content-container mx-auto w-full min-w-0">
+                <Suspense fallback={<PageSkeleton />}>
+                  {children}
+                </Suspense>
+              </div>
+            </main>
           </div>
-        </main>
+        </div>
+
+        {!isPersonalRoute ? (
+          <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-0 lg:col-span-4 lg:h-screen lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:py-4" aria-label="AI assistant">
+            <DeferredFloatingChat />
+          </aside>
+        ) : null}
       </div>
     </div>
   );

@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
 import { taxEngine } from "@/lib/tax/taxEngine";
-import { walletEngine } from "@/lib/wallet/walletEngine";
-import { calculateCashPosition, calculateCashflowMetrics } from "@/lib/cashflow/cashflowEngine";
 import { loadBudgetingState } from "@/lib/budgeting/store";
 import { payrollEngine } from "@/lib/payroll/payrollEngine";
 import {
@@ -74,6 +73,9 @@ function toPlainChatText(content: string): string {
         .replace(/__(.*?)__/g, "$1")
         .replace(/(^|[\s(])\*(?!\s)([^*]+?)\*(?=[\s).,!?]|$)/g, "$1$2")
         .replace(/(^|[\s(])_(?!\s)([^_]+?)_(?=[\s).,!?]|$)/g, "$1$2")
+        .replace(/(^|[\s([{])_+(?=\S)/g, "$1")
+        .replace(/(\S)_+(?=([\s)\]},.:;!?]|$))/g, "$1")
+        .replace(/\*\*/g, "")
         .replace(/^\s*>\s?/gm, "")
         .replace(/[ \t]+\n/g, "\n")
         .replace(/\n{3,}/g, "\n\n")
@@ -96,6 +98,7 @@ type ChatMessage = {
     content: string;
     timestamp: number;
     attachment?: ChatAttachmentDownload;
+    rich?: RichChatPayload;
 };
 
 type AgentChatMode = "response-only" | "full-agentic";
@@ -104,6 +107,23 @@ type ChatAttachmentDownload = {
     fileName: string;
     url: string;
     mimeType?: string;
+};
+type RichChartDataset = {
+    label: string;
+    color: string;
+    values: number[];
+};
+type RichChatPayload = {
+    kind: "projection_chart";
+    title: string;
+    subtitle: string;
+    insight?: string;
+    metrics: Array<{ label: string; value: string; tone?: "positive" | "negative" | "neutral" }>;
+    chart: {
+        labels: string[];
+        datasets: RichChartDataset[];
+    };
+    links: Array<{ label: string; href: string; description: string }>;
 };
 
 function toConversationMessages(messages: ChatMessage[]): ChatConversationMessage[] {
@@ -180,19 +200,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "blue"
     },
-    "cashflow-intelligence": {
-        id: "cashflow",
-        name: "Cashflow",
-        title: "Cashflow Assistant",
-        placeholder: "Ask about cash flow...",
-        greeting: "Hi! I can help you understand your cash flow metrics and runway.",
-        examples: [
-            '"What\'s my current runway?"',
-            '"How much did I spend this week?"',
-            '"What\'s my burn rate?"'
-        ],
-        color: "emerald"
-    },
     "tax-tools": {
         id: "tax",
         name: "Tax",
@@ -219,19 +226,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
         ],
         color: "blue"
     },
-    wallet: {
-        id: "wallet",
-        name: "Wallet",
-        title: "Wallet Assistant",
-        placeholder: "Ask about your wallet...",
-        greeting: "Hi! I can help you with your fintech wallet, savings, and investments.",
-        examples: [
-            '"What\'s my wallet balance?"',
-            '"How much have I saved?"',
-            '"Show my recent transfers"'
-        ],
-        color: "indigo"
-    },
     budgeting: {
         id: "budgeting",
         name: "Budgeting",
@@ -242,32 +236,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
             '"Create a monthly marketing budget"',
             '"Show budget vs actual for this month"',
             '"Open variance analysis"'
-        ],
-        color: "blue"
-    },
-    marketplace: {
-        id: "marketplace",
-        name: "Marketplace",
-        title: "Marketplace Assistant",
-        placeholder: "Ask about integrations and products...",
-        greeting: "Hi! I can help you navigate products and integrations in the marketplace.",
-        examples: [
-            '"Open my marketplace profile"',
-            '"Show available integrations"',
-            '"Connect a new service"'
-        ],
-        color: "blue"
-    },
-    personal: {
-        id: "personal",
-        name: "Personal",
-        title: "Personal AI Assistant",
-        placeholder: "Ask about your personal finances...",
-        greeting: "Hi! I can chat naturally and also execute actions across your personal finance workflows.",
-        examples: [
-            '"Post salary income of ₦350,000"',
-            '"Send ₦25,000 to John"',
-            '"Analyze my cashflow and runway"'
         ],
         color: "blue"
     },
@@ -283,19 +251,6 @@ const moduleConfigs: Record<string, ModuleConfig> = {
             '"What\'s my profit margin?"'
         ],
         color: "gray"
-    },
-    supersheet: {
-        id: "supersheet",
-        name: "SuperSheet",
-        title: "Spreadsheet Assistant",
-        placeholder: "Ask about your spreadsheet...",
-        greeting: "Hi! I can help you with formulas, data analysis, and spreadsheet operations.",
-        examples: [
-            '"How do I sum a column?"',
-            '"Create an IF formula"',
-            '"Analyze my data"'
-        ],
-        color: "green"
     },
     default: {
         id: "general",
@@ -335,10 +290,6 @@ function getModuleFromPath(pathname: string): ModuleConfig {
     if (firstSegment.startsWith('tax')) {
         return moduleConfigs['tax-tools'];
     }
-    if (firstSegment.includes('cash') || firstSegment.includes('flow')) {
-        return moduleConfigs['cashflow-intelligence'];
-    }
-
     return moduleConfigs.default;
 }
 
@@ -385,7 +336,7 @@ function getPageAssistantProfile(pathname: string): PageAssistantProfile {
         return {
             label: "Accounting Workspace",
             guidance: "Post journal entries, manage ledgers, and keep statements accurate.",
-            crossPagePolicy: "Handle accounting actions directly and use tax/wallet actions when explicitly requested.",
+            crossPagePolicy: "Handle accounting actions directly and keep tax and budgeting context in sync when relevant.",
         };
     }
     if (route.startsWith("/tax")) {
@@ -393,13 +344,6 @@ function getPageAssistantProfile(pathname: string): PageAssistantProfile {
             label: "Tax Workspace",
             guidance: "Compute liabilities, track filings, schedules, and compliance data.",
             crossPagePolicy: "If user gives accounting transaction instructions, post to accounting logic and keep tax computation in sync.",
-        };
-    }
-    if (route.startsWith("/wallet")) {
-        return {
-            label: "Wallet",
-            guidance: "Handle funding, transfers, and wallet balance activity.",
-            crossPagePolicy: "If user gives accounting or tax requests, run those module actions in background while preserving wallet context.",
         };
     }
     const pageDefinition = findWorkspacePageByRoute(route);
@@ -444,14 +388,6 @@ function buildGlobalDataSnapshot(): string {
         // Ignore tax load failures
     }
 
-    try {
-        if (window.localStorage.getItem("naija-wallet-state")) {
-            walletEngine.load();
-        }
-    } catch {
-        // Ignore wallet load failures
-    }
-
     const lines: string[] = ["Cross-module live data snapshot:"];
 
     try {
@@ -479,26 +415,6 @@ function buildGlobalDataSnapshot(): string {
         );
     } catch {
         lines.push("Tax: unavailable");
-    }
-
-    try {
-        const walletState = walletEngine.getState();
-        lines.push(
-            `Wallet: balance=${formatSnapshotNaira(walletState.balance || 0)}, transactions=${walletState.transactions?.length || 0}, cards=${walletState.cards?.length || 0}`
-        );
-    } catch {
-        lines.push("Wallet: unavailable");
-    }
-
-    try {
-        const accountingState = accountingEngine.getState();
-        const cashPosition = calculateCashPosition(accountingState);
-        const cashMetrics = calculateCashflowMetrics(accountingState, 30);
-        lines.push(
-            `Cashflow: availableCash=${formatSnapshotNaira(cashPosition.availableCash)}, receivables=${formatSnapshotNaira(cashPosition.receivables)}, payables=${formatSnapshotNaira(cashPosition.payables)}, burnRate30d=${formatSnapshotNaira(cashMetrics.burnRate)}, runwayDays=${cashMetrics.runwayDays}, status=${cashMetrics.status}`
-        );
-    } catch {
-        lines.push("Cashflow: unavailable");
     }
 
     try {
@@ -615,6 +531,376 @@ function extractDownloadAttachment(data: unknown): ChatAttachmentDownload | null
         url,
         mimeType,
     };
+}
+
+function shouldBuildAccountingProjectionCard(message: string): boolean {
+    const lower = message.toLowerCase();
+    const wantsInsight = /\b(show|what|how|analy[sz]e|compare|projection|forecast|trend|chart|graph)\b/.test(lower);
+    const wantsFinancialMetric = /\b(profit|net income|margin|revenue|sales|p&l|pnl|income statement|price|prices)\b/.test(lower);
+    return wantsInsight && wantsFinancialMetric;
+}
+
+function monthLabel(monthOffset: number): string {
+    const date = new Date();
+    date.setMonth(date.getMonth() + monthOffset);
+    return date.toLocaleString("en-NG", { month: "short" });
+}
+
+function createCsvDownload(fileName: string, rows: string[][]): ChatAttachmentDownload | undefined {
+    if (typeof window === "undefined") return undefined;
+    const csv = rows
+        .map((row) =>
+            row
+                .map((cell) => {
+                    const escaped = cell.replace(/"/g, '""');
+                    return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
+                })
+                .join(",")
+        )
+        .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    return {
+        kind: "download",
+        fileName,
+        url: URL.createObjectURL(blob),
+        mimeType: "text/csv",
+    };
+}
+
+type MonthlyAccountingPoint = {
+    key: string;
+    label: string;
+    revenue: number;
+    costOfSales: number;
+    operatingExpenses: number;
+    grossProfit: number;
+    netProfit: number;
+};
+
+function monthKeyFromDate(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 7);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabelFromKey(key: string): string {
+    const [year, month] = key.split("-").map(Number);
+    if (!year || !month) return key;
+    return new Date(year, month - 1, 1).toLocaleString("en-NG", { month: "short" });
+}
+
+function buildMonthlyAccountingPoints(): MonthlyAccountingPoint[] {
+    const points = new Map<string, MonthlyAccountingPoint>();
+    const state = accountingEngine.getState();
+
+    const getPoint = (key: string): MonthlyAccountingPoint => {
+        const existing = points.get(key);
+        if (existing) return existing;
+        const point: MonthlyAccountingPoint = {
+            key,
+            label: monthLabelFromKey(key),
+            revenue: 0,
+            costOfSales: 0,
+            operatingExpenses: 0,
+            grossProfit: 0,
+            netProfit: 0,
+        };
+        points.set(key, point);
+        return point;
+    };
+
+    state.journalEntries
+        .filter((entry) => entry.status !== "voided")
+        .forEach((entry) => {
+            const point = getPoint(monthKeyFromDate(entry.date));
+            entry.lines.forEach((line) => {
+                const amount = Math.max(line.credit || 0, line.debit || 0);
+                if (amount <= 0) return;
+
+                if (line.accountCode.startsWith("4")) {
+                    point.revenue += (line.credit || 0) - (line.debit || 0);
+                } else if (line.accountCode.startsWith("50")) {
+                    point.costOfSales += (line.debit || 0) - (line.credit || 0);
+                } else if (line.accountCode.startsWith("5") || line.accountCode.startsWith("6") || line.accountCode.startsWith("7")) {
+                    point.operatingExpenses += (line.debit || 0) - (line.credit || 0);
+                }
+            });
+        });
+
+    return Array.from(points.values())
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((point) => {
+            const grossProfit = point.revenue - point.costOfSales;
+            return {
+                ...point,
+                grossProfit,
+                netProfit: grossProfit - point.operatingExpenses,
+            };
+        });
+}
+
+function calculateChangePercent(startValue: number, endValue: number): number | null {
+    if (startValue === 0) return endValue === 0 ? 0 : null;
+    return ((endValue - startValue) / Math.abs(startValue)) * 100;
+}
+
+function buildRevenueTrendCard(message: string): { content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null {
+    const lower = message.toLowerCase();
+    const wantsRevenue = /\b(revenue|sales|price|prices)\b/.test(lower);
+    const wantsProjection = /\b(projection|forecast)\b/.test(lower);
+    if (!wantsRevenue || wantsProjection) return null;
+
+    const monthlyPoints = buildMonthlyAccountingPoints().filter((point) => point.revenue !== 0).slice(-6);
+    if (monthlyPoints.length < 2) return null;
+
+    const first = monthlyPoints[0];
+    const last = monthlyPoints[monthlyPoints.length - 1];
+    const changePercent = calculateChangePercent(first.revenue, last.revenue);
+    const totalRevenue = monthlyPoints.reduce((sum, point) => sum + point.revenue, 0);
+    const averageRevenue = totalRevenue / monthlyPoints.length;
+    const bestMonth = monthlyPoints.reduce((best, point) => (point.revenue > best.revenue ? point : best), first);
+    const changeText = changePercent === null ? "changed from a zero baseline" : `${changePercent >= 0 ? "up" : "down"} ${Math.abs(changePercent).toFixed(1)}%`;
+    const sincePriceText = /\b(price|prices|raised|increase|increased)\b/.test(lower)
+        ? "I do not have an exact price-change date saved, so I compared the earliest and latest revenue months in the ledger."
+        : "I compared the earliest and latest revenue months available in the ledger.";
+    const insight = `Revenue is ${changeText} from ${first.label} to ${last.label}.`;
+
+    const content = `${sincePriceText}\n\n${insight} Latest monthly revenue is ${formatSnapshotNaira(last.revenue)}, with ${bestMonth.label} as the strongest month at ${formatSnapshotNaira(bestMonth.revenue)}.`;
+    const rich: RichChatPayload = {
+        kind: "projection_chart",
+        title: "Revenue Trend",
+        subtitle: `Actual ledger revenue: ${first.label} to ${last.label}`,
+        insight,
+        metrics: [
+            { label: "Latest revenue", value: formatSnapshotNaira(last.revenue), tone: last.revenue >= averageRevenue ? "positive" : "neutral" },
+            { label: "Change", value: changePercent === null ? "New baseline" : `${changePercent.toFixed(1)}%`, tone: changePercent === null || changePercent >= 0 ? "positive" : "negative" },
+            { label: "Average / month", value: formatSnapshotNaira(averageRevenue), tone: "neutral" },
+            { label: "Best month", value: `${bestMonth.label} ${formatSnapshotNaira(bestMonth.revenue)}`, tone: "positive" },
+        ],
+        chart: {
+            labels: monthlyPoints.map((point) => point.label),
+            datasets: [
+                { label: "Revenue", color: "#0891b2", values: monthlyPoints.map((point) => Math.round(point.revenue)) },
+                { label: "Net profit", color: "#16a34a", values: monthlyPoints.map((point) => Math.round(point.netProfit)) },
+            ],
+        },
+        links: [
+            {
+                label: "Open reports",
+                href: "/accounting/workspace",
+                description: "Review the statements and journal entries behind this trend.",
+            },
+            {
+                label: "Open projections",
+                href: "/accounting/projections",
+                description: "Turn this trend into a forward forecast.",
+            },
+        ],
+    };
+
+    const attachment = createCsvDownload("revenue-trend.csv", [
+        ["Month", "Revenue", "Gross Profit", "Net Profit"],
+        ...monthlyPoints.map((point) => [
+            point.label,
+            String(Math.round(point.revenue)),
+            String(Math.round(point.grossProfit)),
+            String(Math.round(point.netProfit)),
+        ]),
+    ]);
+
+    return { content, rich, attachment };
+}
+
+function buildAccountingProjectionCard(message: string): { content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null {
+    if (!shouldBuildAccountingProjectionCard(message)) return null;
+
+    try {
+        if (typeof window !== "undefined" && window.localStorage.getItem("insight::accounting-engine")) {
+            accountingEngine.load();
+        }
+    } catch {
+        // Keep the in-memory engine as fallback.
+    }
+
+    const trendCard = buildRevenueTrendCard(message);
+    if (trendCard) return trendCard;
+
+    const state = accountingEngine.getState();
+    const statements = accountingEngine.generateStatements();
+    const revenue = Math.max(0, statements.revenue || 0);
+    const costOfSales = Math.max(0, statements.costOfSales || 0);
+    const operatingExpenses = Math.max(0, statements.operatingExpenses || 0);
+    const netIncome = statements.netIncome || 0;
+    const cogsRatio = revenue > 0 ? Math.min(0.9, Math.max(0, costOfSales / revenue)) : 0.35;
+    const monthlyRevenueGrowth = revenue > 0 && netIncome >= 0 ? 0.03 : 0.01;
+    const monthlyOpexGrowth = 0.01;
+
+    const labels = Array.from({ length: 6 }, (_, index) => monthLabel(index + 1));
+    const revenueSeries: number[] = [];
+    const grossProfitSeries: number[] = [];
+    const netProfitSeries: number[] = [];
+
+    labels.forEach((_, index) => {
+        const revenueProjection = revenue * Math.pow(1 + monthlyRevenueGrowth, index + 1);
+        const projectedCostOfSales = revenueProjection * cogsRatio;
+        const projectedGrossProfit = revenueProjection - projectedCostOfSales;
+        const projectedOpex = operatingExpenses * Math.pow(1 + monthlyOpexGrowth, index + 1);
+        const projectedNetProfit = projectedGrossProfit - projectedOpex;
+        revenueSeries.push(Math.round(revenueProjection));
+        grossProfitSeries.push(Math.round(projectedGrossProfit));
+        netProfitSeries.push(Math.round(projectedNetProfit));
+    });
+
+    const projectedNetProfitTotal = netProfitSeries.reduce((sum, value) => sum + value, 0);
+    const projectedRevenueTotal = revenueSeries.reduce((sum, value) => sum + value, 0);
+    const projectedMargin = projectedRevenueTotal > 0 ? (projectedNetProfitTotal / projectedRevenueTotal) * 100 : 0;
+    const finalMonthNetProfit = netProfitSeries[netProfitSeries.length - 1] || 0;
+
+    const content =
+        state.journalEntries.length === 0
+            ? "I can show the projection view, but there are no posted accounting entries yet. Add revenue and expense entries first for a meaningful profit forecast."
+            : `Here is a 6-month profit projection based on your current accounting ledger. I used current revenue, cost of sales ratio, and operating expenses as the baseline, then applied a conservative ${Math.round(monthlyRevenueGrowth * 100)}% monthly revenue growth assumption.`;
+
+    const rich: RichChatPayload = {
+        kind: "projection_chart",
+        title: "Profit Projection",
+        subtitle: "Next 6 months from current accounting statements",
+        metrics: [
+            { label: "Current revenue", value: formatSnapshotNaira(revenue), tone: "neutral" },
+            { label: "Current net income", value: formatSnapshotNaira(netIncome), tone: netIncome >= 0 ? "positive" : "negative" },
+            {
+                label: "Projected 6M net profit",
+                value: formatSnapshotNaira(projectedNetProfitTotal),
+                tone: projectedNetProfitTotal >= 0 ? "positive" : "negative",
+            },
+            { label: "Projected margin", value: `${projectedMargin.toFixed(1)}%`, tone: projectedMargin >= 0 ? "positive" : "negative" },
+        ],
+        chart: {
+            labels,
+            datasets: [
+                { label: "Revenue", color: "#2563eb", values: revenueSeries },
+                { label: "Gross profit", color: "#8b5cf6", values: grossProfitSeries },
+                { label: "Net profit", color: finalMonthNetProfit >= 0 ? "#16a34a" : "#dc2626", values: netProfitSeries },
+            ],
+        },
+        links: [
+            {
+                label: "Open projections",
+                href: "/accounting/projections",
+                description: "Work with full assumptions and scenario modelling.",
+            },
+            {
+                label: "Financial reporting",
+                href: "/accounting/workspace",
+                description: "Review statements behind this projection.",
+            },
+        ],
+    };
+
+    const attachment = createCsvDownload("profit-projection.csv", [
+        ["Month", "Revenue", "Gross Profit", "Net Profit"],
+        ...labels.map((label, index) => [
+            label,
+            String(revenueSeries[index] || 0),
+            String(grossProfitSeries[index] || 0),
+            String(netProfitSeries[index] || 0),
+        ]),
+    ]);
+
+    return { content, rich, attachment };
+}
+
+function ProjectionChartCard({ payload }: { payload: RichChatPayload }) {
+    const width = 420;
+    const height = 170;
+    const padding = 24;
+    const allValues = payload.chart.datasets.flatMap((dataset) => dataset.values);
+    const minValue = Math.min(0, ...allValues);
+    const maxValue = Math.max(1, ...allValues);
+    const valueRange = maxValue - minValue || 1;
+    const xStep = payload.chart.labels.length > 1 ? (width - padding * 2) / (payload.chart.labels.length - 1) : 0;
+    const yForValue = (value: number) => height - padding - ((value - minValue) / valueRange) * (height - padding * 2);
+    const xForIndex = (index: number) => padding + index * xStep;
+
+    const linePath = (values: number[]) =>
+        values
+            .map((value, index) => `${index === 0 ? "M" : "L"} ${xForIndex(index).toFixed(1)} ${yForValue(value).toFixed(1)}`)
+            .join(" ");
+
+    return (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+            <div className="border-b border-gray-100 px-4 py-3">
+                <h4 className="text-sm font-semibold text-[#1f2328]">{payload.title}</h4>
+                <p className="mt-1 text-xs text-gray-500">{payload.subtitle}</p>
+                {payload.insight ? (
+                    <p className="mt-2 text-sm font-medium text-[#1f2328]">{payload.insight}</p>
+                ) : null}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-2 sm:px-4">
+                {payload.metrics.map((metric) => (
+                    <div key={metric.label} className="rounded-xl bg-gray-50 px-3 py-2">
+                        <p className="text-[11px] font-medium text-gray-500">{metric.label}</p>
+                        <p
+                            className={`mt-1 text-sm font-semibold ${
+                                metric.tone === "positive"
+                                    ? "text-[#446b00]"
+                                    : metric.tone === "negative"
+                                        ? "text-red-600"
+                                        : "text-[#1f2328]"
+                            }`}
+                        >
+                            {metric.value}
+                        </p>
+                    </div>
+                ))}
+            </div>
+
+            <div className="px-3 pb-3 sm:px-4">
+                <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full rounded-xl bg-[#f8fafc] sm:h-44" role="img" aria-label={payload.title}>
+                    {[0, 1, 2, 3].map((line) => {
+                        const y = padding + ((height - padding * 2) / 3) * line;
+                        return <line key={line} x1={padding} x2={width - padding} y1={y} y2={y} stroke="#e5e7eb" strokeWidth="1" />;
+                    })}
+                    {payload.chart.datasets.map((dataset) => (
+                        <g key={dataset.label}>
+                            <path d={linePath(dataset.values)} fill="none" stroke={dataset.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            {dataset.values.map((value, index) => (
+                                <circle key={`${dataset.label}-${index}`} cx={xForIndex(index)} cy={yForValue(value)} r="3" fill={dataset.color} />
+                            ))}
+                        </g>
+                    ))}
+                    {payload.chart.labels.map((label, index) => (
+                        <text key={label} x={xForIndex(index)} y={height - 6} textAnchor="middle" className="fill-gray-500 text-[10px]">
+                            {label}
+                        </text>
+                    ))}
+                </svg>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {payload.chart.datasets.map((dataset) => (
+                        <span key={dataset.label} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: dataset.color }} />
+                            {dataset.label}
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-gray-100 px-4 py-3">
+                {payload.links.map((link) => (
+                    <a
+                        key={link.href}
+                        href={link.href}
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-[#8fff00] hover:text-[#446b00]"
+                        title={link.description}
+                    >
+                        {link.label}
+                    </a>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 export default function FloatingChatButton() {
@@ -1135,21 +1421,22 @@ export default function FloatingChatButton() {
         setClarificationData(null);
     }, [clarificationData, queueAutoScroll, revealChatSection]);
 
-    const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload): ChatMessage => ({
+    const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload): ChatMessage => ({
         id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role,
         content: role === "assistant" ? toPlainChatText(content) : content,
         timestamp: Date.now(),
         attachment,
+        rich,
     }), []);
 
-    const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload) => {
+    const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload) => {
         if (attachment?.url && attachment.url.startsWith("blob:")) {
             blobUrlsRef.current.push(attachment.url);
         }
         setMessages(prev => [
             ...prev,
-            buildChatMessage(role, content, attachment),
+            buildChatMessage(role, content, attachment, rich),
         ]);
     }, [buildChatMessage]);
 
@@ -1221,12 +1508,12 @@ export default function FloatingChatButton() {
             workingConversationId = savedAfterUser;
         }
 
-        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload) => {
+        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload) => {
             if (attachment?.url && attachment.url.startsWith("blob:")) {
                 blobUrlsRef.current.push(attachment.url);
             }
             const cleanContent = toPlainChatText(content);
-            const assistantMessage = buildChatMessage("assistant", cleanContent, attachment);
+            const assistantMessage = buildChatMessage("assistant", cleanContent, attachment, rich);
             workingMessages = [...workingMessages, assistantMessage];
             setMessages(workingMessages);
             const savedConversationId = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
@@ -1239,6 +1526,13 @@ export default function FloatingChatButton() {
             const conversation = toConversationMessages(workingMessages)
                 .slice(-12)
                 .map((msg) => ({ role: msg.role, content: msg.content }));
+
+            const localProjectionCard = buildAccountingProjectionCard(trimmed);
+            if (localProjectionCard) {
+                await appendAssistantAndPersist(localProjectionCard.content, localProjectionCard.attachment, localProjectionCard.rich);
+                setPlanSource("fast-path");
+                return;
+            }
 
             if (agentChatMode === "response-only") {
                 const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
@@ -1367,8 +1661,8 @@ export default function FloatingChatButton() {
     };
 
     return (
-        <section ref={chatSectionRef} className="sticky top-3 scroll-mt-4 lg:top-4">
-            <div className="relative flex h-[calc(100dvh-1.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-2rem)]">
+        <section ref={chatSectionRef} className="sticky top-3 w-full max-w-full scroll-mt-4 overflow-hidden lg:top-0">
+            <div className="relative mx-auto flex h-[min(680px,calc(100dvh-5rem))] min-h-[24rem] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
                 <div className="absolute left-0 top-0 z-[140]" data-conversation-menu="true">
                     <div className="flex items-center justify-start">
                         <button
@@ -1378,19 +1672,17 @@ export default function FloatingChatButton() {
                                 setMobileConversationMenuPosition(null);
                                 setIsHistoryDropdownOpen((current) => !current);
                             }}
-                            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#8fff00] px-3.5 py-2 text-xs font-semibold text-[#101010] shadow-[0_10px_24px_rgba(143,255,0,0.18)] transition-colors hover:bg-[#7fe000]"
+                            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-transparent px-1 py-1 text-xs font-semibold text-[#101010] transition-colors hover:text-[#446b00]"
                             aria-expanded={isHistoryDropdownOpen}
                             aria-haspopup="menu"
                         >
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
+                            <Image src="/Rex.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" aria-hidden="true" />
                             Chat history
                         </button>
                     </div>
 
                     {isHistoryDropdownOpen ? (
-                        <div className="absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                        <div className="absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
                             <button
                                 type="button"
                                 onClick={handleStartNewChat}
@@ -1443,27 +1735,27 @@ export default function FloatingChatButton() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-hidden py-0">
-                    <div className="hide-scrollbar h-full overflow-y-auto pt-12 pb-[12rem] pr-1 sm:pt-12 sm:pb-[13rem] lg:pt-14 lg:pb-[13rem] lg:pr-2">
+                    <div className="hide-scrollbar h-full overflow-y-auto pt-12 pb-[11.5rem] sm:pt-12 sm:pb-[13rem] lg:pt-14 lg:pb-[13rem] lg:pr-2">
                         {isEmptyConversation ? (
-                            <div className="mx-auto flex h-full min-h-[20rem] max-w-3xl items-center justify-center py-6 text-center lg:min-h-[24rem]">
-                                <div>
+                            <div className="mx-auto flex h-full min-h-[16rem] max-w-3xl items-center justify-center px-1 py-4 text-center sm:min-h-[20rem] lg:min-h-[24rem]">
+                                <div className="min-w-0">
                                     <p className="text-sm font-medium text-gray-500">
                                         Page-aware assistant for {currentPageProfile.label}
                                     </p>
-                                    <h3 className="mt-3 text-3xl font-semibold tracking-tight text-[#1f1f1f] sm:text-4xl">
+                                    <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#1f1f1f] sm:text-4xl">
                                         What do you want to work on?
                                     </h3>
                                     <p className="mt-4 text-sm leading-7 text-gray-500 sm:text-[15px]">
                                         {currentModule.greeting} I stay inside this page now, keep your horizontal chat history,
                                         and can still execute cross-page tasks when needed.
                                     </p>
-                                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                    <div className="mt-5 flex flex-wrap justify-center gap-2 sm:mt-6">
                                         {currentModule.examples.map((example) => (
                                             <button
                                                 key={example}
                                                 type="button"
                                                 onClick={() => handleExampleClick(example)}
-                                                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                                                className="max-w-full rounded-full border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 transition-colors hover:bg-gray-100 sm:px-4 sm:text-sm"
                                             >
                                                 {example.replace(/^"(.*)"$/, "$1")}
                                             </button>
@@ -1472,7 +1764,7 @@ export default function FloatingChatButton() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="mx-auto -mt-2 max-w-4xl space-y-5 sm:mt-0 sm:space-y-8">
+                            <div className="mx-auto -mt-2 w-full max-w-4xl space-y-5 px-0.5 sm:mt-0 sm:space-y-8 sm:px-0">
                                 {visibleMessages.map((msg) => {
                                     const displayContent = msg.role === "assistant" ? toPlainChatText(msg.content) : msg.content;
                                     return (
@@ -1481,17 +1773,20 @@ export default function FloatingChatButton() {
                                             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                         >
                                             {msg.role === "user" ? (
-                                                <div className="max-w-[min(100%,42rem)] rounded-[28px] bg-gray-200 px-4 py-2.5 text-[14px] leading-6 text-gray-800">
+                                                <div className="max-w-[88%] rounded-[24px] bg-gray-200 px-3.5 py-2.5 text-[14px] leading-6 text-gray-800 sm:max-w-[min(100%,42rem)] sm:rounded-[28px] sm:px-4">
                                                     <div className="whitespace-pre-wrap break-words">{displayContent}</div>
                                                 </div>
                                             ) : (
-                                                <div className="max-w-[min(100%,46rem)]">
+                                                <div className="w-full max-w-full sm:max-w-[min(100%,46rem)]">
                                                     <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
                                                         Bace AI
                                                     </div>
                                                     <div className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[#1f2328] sm:leading-7">
                                                         {displayContent}
                                                     </div>
+                                                    {msg.rich?.kind === "projection_chart" && (
+                                                        <ProjectionChartCard payload={msg.rich} />
+                                                    )}
                                                     {msg.attachment?.kind === "download" && (
                                                         <a
                                                             href={msg.attachment.url}
@@ -1515,7 +1810,7 @@ export default function FloatingChatButton() {
 
                         {isLoading && (
                             <div className="mx-auto mt-6 flex max-w-4xl justify-start">
-                                <div className="flex items-center gap-1 rounded-full bg-gray-100 px-4 py-2">
+                                <div className="flex items-center gap-1 rounded-full border border-gray-300/50 bg-gray-100 px-4 py-2">
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "0ms" }} />
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "150ms" }} />
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "300ms" }} />
@@ -1526,34 +1821,34 @@ export default function FloatingChatButton() {
                     </div>
                 </div>
 
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[130] bg-transparent pt-2 pb-0 sm:pt-2 sm:pb-0">
-                    <div className="mx-auto max-w-4xl">
-                        <div className="pointer-events-auto rounded-[26px] border border-gray-200 bg-white px-3 pb-2.5 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[130] bg-transparent pt-2 pb-1 sm:pt-2 sm:pb-0">
+                    <div className="mx-auto w-full max-w-4xl">
+                        <div className="pointer-events-auto rounded-[22px] bg-[#eef0f3] px-2.5 pb-2.5 pt-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:rounded-[26px] sm:px-3">
                             <textarea
                                 ref={textareaRef}
                                 rows={1}
                                 placeholder={currentModule.placeholder}
-                                className="min-h-[38px] w-full resize-none border-none bg-transparent px-1.5 py-1 text-[15px] leading-6 text-[#1f2328] placeholder:text-gray-400 focus:outline-none"
+                                className="min-h-[38px] w-full resize-none border-none bg-transparent px-1.5 py-1 text-[14px] leading-6 text-[#1f2328] placeholder:text-gray-400 focus:outline-none sm:text-[15px]"
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
                             />
 
                             <div className="mt-2 px-1 pt-0">
-                                <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-end justify-between gap-2 sm:items-center sm:gap-3">
                                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                                     <button
                                         type="button"
                                         onClick={handleStartNewChat}
-                                        className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-200 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-gray-300/60 bg-gray-100 px-2.5 py-1.5 text-[10px] font-semibold text-gray-700 transition-colors hover:bg-gray-200 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
                                     >
                                         <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                         </svg>
                                         New chat
                                     </button>
-                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1.5 sm:gap-2 sm:px-3 sm:py-2">
-                                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600 sm:text-[11px]">
+                                    <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-300/60 bg-gray-100 px-2.5 py-1.5 sm:gap-2 sm:px-3 sm:py-2">
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-gray-600 sm:text-[11px] sm:tracking-[0.12em]">
                                             {agentChatMode === "full-agentic" ? "Agentic" : "Response"}
                                         </span>
                                         <button

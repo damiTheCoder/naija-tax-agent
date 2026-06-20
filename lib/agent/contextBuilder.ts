@@ -25,7 +25,7 @@ const MODULE_PROFILES: ModuleProfile[] = [
     description: "Core accounting, ledger, transaction posting, and balance operations.",
     relevantEntities: ["Transaction", "JournalEntry", "Ledger", "Account", "Balance"],
     databaseEntities: ["transactions", "journal_entries", "ledger_accounts", "chart_of_accounts"],
-    routes: ["/accounting", "/accounting/workspace", "/accounting/reconciliation", "/dashboard", "/personal", "/personal/dashboard"],
+    routes: ["/accounting", "/accounting/workspace", "/accounting/reconciliation", "/dashboard"],
   },
   {
     domain: "reporting",
@@ -37,7 +37,6 @@ const MODULE_PROFILES: ModuleProfile[] = [
       "/accounting/reports",
       "/accounting/projections",
       "/accounting/projections/modelling",
-      "/cashflow-intelligence",
       "/budgeting",
       "/dashboard",
     ],
@@ -53,18 +52,18 @@ const MODULE_PROFILES: ModuleProfile[] = [
   {
     domain: "payment",
     label: "Payment Module",
-    description: "Wallet operations, fund movement, recipients, and payment execution.",
+    description: "Payment records and accounting-side settlement workflows.",
     relevantEntities: ["Wallet", "Transfer", "Recipient", "PaymentInstruction"],
     databaseEntities: ["wallet_transactions", "wallet_balances", "payment_recipients"],
-    routes: ["/wallet", "/wallet/history", "/wallet/cards"],
+    routes: ["/accounting", "/accounting/banks"],
   },
   {
     domain: "operations",
     label: "Operational/System Module",
-    description: "Tax, treasury, compliance, and system workflow operations.",
+    description: "Tax, compliance, budgeting, and system workflow operations.",
     relevantEntities: ["TaxRecord", "ComplianceTask", "RunwayMetric", "SystemAction"],
     databaseEntities: ["tax_transactions", "compliance_records", "system_events"],
-    routes: ["/tax", "/tax-tools", "/cashflow-intelligence/chat", "/marketplace", "/profile", "/supersheet", "/personal/apps"],
+    routes: ["/tax", "/tax-tools", "/budgeting", "/profile"],
   },
 ];
 
@@ -103,7 +102,7 @@ function findProfileByModule(module?: string): ModuleProfile | null {
     return MODULE_PROFILES.find((profile) => profile.domain === "customer") || null;
   }
   if (["wallet", "payment", "payments"].includes(normalized)) {
-    return MODULE_PROFILES.find((profile) => profile.domain === "payment") || null;
+    return MODULE_PROFILES.find((profile) => profile.domain === "financial") || null;
   }
 
   return MODULE_PROFILES.find((profile) => profile.domain === "operations") || null;

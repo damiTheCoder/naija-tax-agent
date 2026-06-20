@@ -13,7 +13,6 @@
  *         → Accounting (double-entry journal)
  *         → Tax compliance (VAT/WHT/CIT classification)
  *         → Budgeting (budget-vs-actual tracking)
- *         → Cashflow intelligence (metrics refresh)
  *     → Pipeline result with full audit trail
  *
  * Usage:
@@ -27,7 +26,6 @@
  */
 
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
-import { cashflowEngine } from "@/lib/cashflow/cashflowEngine";
 import { classifyBankTransaction, classifyBankTransactionWithAI } from "./aiClassifier";
 import { routeTransaction } from "./crossModuleRouter";
 import type {
@@ -177,10 +175,7 @@ export async function processTransactionWithAI(
  * Process a batch of bank transactions (from sync or statement upload).
  *
  * Transactions are sorted by date (oldest first) and processed sequentially
- * so that running balances, cashflow metrics, and tax computations are
- * computed in chronological order.
- *
- * Cashflow is refreshed once at the end, not per-transaction, for efficiency.
+ * so that running balances and tax computations are computed in chronological order.
  */
 export function processTransactions(
     transactions: InboundBankTransaction[],
@@ -237,15 +232,6 @@ export function processTransactions(
     }
 
     // Now refresh cashflow once after all transactions are posted
-    if (options.updateCashflow !== false) {
-        try {
-            const accountingState = accountingEngine.getState();
-            cashflowEngine.refresh(accountingState);
-        } catch {
-            // Non-critical — cashflow will refresh on next dashboard load
-        }
-    }
-
     return {
         total: transactions.length,
         processed: results.filter((r) => r.success).length,
@@ -288,10 +274,7 @@ export async function processTransactionsWithAI(
     let whtDeducted = 0;
 
     for (const tx of sorted) {
-        const result = await processTransactionWithAI(tx, {
-            ...options,
-            updateCashflow: false,
-        });
+        const result = await processTransactionWithAI(tx, options);
 
         results.push(result);
 
@@ -318,15 +301,6 @@ export async function processTransactionsWithAI(
         }
         if (result.classification.tax.whtApplicable) {
             whtDeducted += result.classification.tax.whtAmount;
-        }
-    }
-
-    if (options.updateCashflow !== false) {
-        try {
-            const accountingState = accountingEngine.getState();
-            cashflowEngine.refresh(accountingState);
-        } catch {
-            // Non-critical — cashflow will refresh on next dashboard load
         }
     }
 

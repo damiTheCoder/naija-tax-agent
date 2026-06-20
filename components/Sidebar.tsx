@@ -5,303 +5,161 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
-import { TAX_NAV_ITEMS, ACCOUNTING_NAV_ITEMS, BUDGETING_NAV_ITEMS, INTELLIGENCE_NAV_ITEMS, WALLET_NAV_ITEMS, SUPERSHEET_NAV_ITEMS, MARKETPLACE_NAV_ITEMS, PAYROLL_NAV_ITEMS, PERSONAL_NAV_ITEMS, AppMode, NavIcon, ProjectionsModuleOwner, isNavItemActive, isProjectionsRoute, getStoredProjectionsModuleOwner, getServerProjectionsModuleOwnerSnapshot, setStoredProjectionsModuleOwner, subscribeToProjectionsModuleOwner, resolveModuleForPath } from "@/lib/navigation";
+import {
+  ACCOUNTING_NAV_ITEMS,
+  AppMode,
+  BUDGETING_NAV_ITEMS,
+  NavIcon,
+  ProjectionsModuleOwner,
+  TAX_NAV_ITEMS,
+  getServerProjectionsModuleOwnerSnapshot,
+  getStoredProjectionsModuleOwner,
+  isNavItemActive,
+  isProjectionsRoute,
+  resolveModuleForPath,
+  setStoredProjectionsModuleOwner,
+  subscribeToProjectionsModuleOwner,
+} from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
 import { NavIconBadge } from "./NavIconBadge";
 import { useTheme } from "@/lib/ThemeContext";
-import { useMode } from "@/lib/ModeContext";
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+const MODULES: { id: AppMode; label: string; icon: NavIcon; href: string; items: typeof TAX_NAV_ITEMS }[] = [
+  { id: "accounting", label: "Accounting", icon: "chart", href: "/accounting", items: ACCOUNTING_NAV_ITEMS },
+  { id: "tax", label: "Tax Manager", icon: "shield", href: "/tax/workspace", items: TAX_NAV_ITEMS },
+  { id: "budgeting", label: "Budgeting", icon: "ledger", href: "/budgeting/dashboard", items: BUDGETING_NAV_ITEMS },
+];
+
+function getModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner) {
+  const resolved = resolveModuleForPath(pathname, projectionsOwner);
+  return MODULES.find((module) => module.id === resolved) ?? MODULES[0];
+}
+
+export default function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname();
   const { navigateTo, prefetchTo } = useNavigation();
   const { theme } = useTheme();
-  const { mode: experienceMode } = useMode();
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
-  const [expandedModule, setExpandedModule] = useState<AppMode | null>(null);
   const projectionsOwner = useSyncExternalStore<ProjectionsModuleOwner>(
     subscribeToProjectionsModuleOwner,
     getStoredProjectionsModuleOwner,
     getServerProjectionsModuleOwnerSnapshot
   );
   const isDark = theme === "dark";
+  const currentModule = getModuleForPath(pathname, projectionsOwner);
 
-  // Determine initial mode based on current path
-  const getInitialMode = (): AppMode => {
-    return resolveModuleForPath(pathname, projectionsOwner);
+  const handleModuleSelect = (module: (typeof MODULES)[number]) => {
+    onClose();
+    if (module.id === currentModule.id) return;
+    setNavigatingTo(module.href);
+    navigateTo(module.href);
   };
 
-  const currentModule = getInitialMode();
-  const currentNavItems = currentModule === "personal"
-    ? PERSONAL_NAV_ITEMS
-    : currentModule === "tax"
-      ? TAX_NAV_ITEMS
-      : currentModule === "intelligence"
-        ? INTELLIGENCE_NAV_ITEMS
-        : currentModule === "budgeting"
-          ? BUDGETING_NAV_ITEMS
-          : currentModule === "wallet"
-            ? WALLET_NAV_ITEMS
-            : currentModule === "supersheet"
-              ? SUPERSHEET_NAV_ITEMS
-              : currentModule === "marketplace"
-                ? MARKETPLACE_NAV_ITEMS
-                : currentModule === "payroll"
-                  ? PAYROLL_NAV_ITEMS
-                  : ACCOUNTING_NAV_ITEMS;
+  const handleNavSelect = (href: string) => {
+    onClose();
+    if (pathname === href) {
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
 
-  const defaultExpandedModule: AppMode = experienceMode === "user" ? "personal" : currentModule;
-  const modules: { id: AppMode; label: string; icon: NavIcon; items: typeof TAX_NAV_ITEMS }[] = experienceMode === "user"
-    ? [
-      { id: "personal", label: "Personal OS", icon: "chat", items: PERSONAL_NAV_ITEMS },
-    ]
-    : [
-      { id: "accounting", label: "Accounting", icon: "chart", items: ACCOUNTING_NAV_ITEMS },
-      { id: "budgeting", label: "Budgeting", icon: "ledger", items: BUDGETING_NAV_ITEMS },
-      { id: "payroll", label: "Payroll & Compliance", icon: "users", items: PAYROLL_NAV_ITEMS },
-      { id: "tax", label: "Tax Manager", icon: "shield", items: TAX_NAV_ITEMS },
-      { id: "intelligence", label: "Financial Management", icon: "intelligence", items: INTELLIGENCE_NAV_ITEMS },
-      { id: "wallet", label: "Wallet", icon: "wallet", items: WALLET_NAV_ITEMS },
-      { id: "supersheet", label: "SuperSheet", icon: "spreadsheet", items: SUPERSHEET_NAV_ITEMS },
-      { id: "marketplace", label: "Marketplace", icon: "shop", items: MARKETPLACE_NAV_ITEMS },
-    ];
-
-  const toggleModule = (moduleId: AppMode) => {
-    setExpandedModule((current) => (current === moduleId ? null : moduleId));
+    if (isProjectionsRoute(href)) {
+      setStoredProjectionsModuleOwner("accounting");
+    }
+    setNavigatingTo(href);
+    navigateTo(href);
   };
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+    <nav
+      className="sticky top-0 z-40 backdrop-blur-xl"
+      style={{
+        background: isDark ? "rgba(0,0,0,0.88)" : "rgba(253,252,251,0.94)",
+      }}
+      aria-label="Primary module navigation"
+    >
+      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-2 px-4 py-2.5 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center pr-12 sm:pr-14 lg:pr-16">
+          <Link href="/" className="flex shrink-0 items-center gap-2" onClick={onClose}>
+            <div className="relative h-8 w-8 overflow-hidden rounded-xl sm:h-9 sm:w-9">
+              <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
+            </div>
+            <span className={`text-base font-semibold tracking-tight sm:text-lg ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+              Bace
+            </span>
+          </Link>
+        </div>
 
-      {/* Sidebar - Desktop (left) */}
-      <aside
-        className="fixed left-0 top-0 bottom-0 z-50 hidden w-1/4 overflow-hidden lg:flex"
-        style={{
-          background: isDark
-            ? "#000000"
-            : "linear-gradient(180deg, #fffefd 0%, #fcfaf8 100%)",
-          borderRight: isDark ? "1px solid rgba(148, 163, 184, 0.28)" : "1px solid #f5f1ec",
-        }}
-      >
-        <div className="flex h-full w-full flex-col p-3">
-          {/* Logo Section */}
-          <div className="space-y-2">
-            <Link
-              href="/"
-              className={`group flex items-center gap-3 rounded-md px-2.5 py-2 transition-colors ${isDark ? "hover:bg-white/5" : "hover:bg-white/70"}`}
-            >
-              <div className="relative h-9 w-9 overflow-hidden rounded-xl transition-all">
-                <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
-              </div>
-              <h1 className={`text-lg font-semibold tracking-tight ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>Bace</h1>
-            </Link>
-          </div>
-
-          {/* Navigation Items */}
-          <nav className="sidebar-nav-scrollbar mt-3 flex-1 space-y-1 overflow-y-auto">
-            {modules.map((module) => {
-              const isExpanded = (expandedModule ?? defaultExpandedModule) === module.id;
-              const isCurrentModule = currentModule === module.id;
+        <div className="sidebar-nav-scrollbar -mr-4 flex min-w-0 items-center gap-2 overflow-x-auto pr-16 sm:pr-20 lg:pr-24">
+            {MODULES.map((module) => {
+              const isActive = module.id === currentModule.id;
+              const isNavigating = navigatingTo === module.href && pathname !== module.href;
 
               return (
-                <div key={module.id} className="space-y-1">
-                  <button
-                    onClick={() => toggleModule(module.id)}
-                    className={`
-                      flex w-full items-center justify-between rounded-xl px-2.5 py-2.5 text-left text-sm font-semibold transition-colors
-                      ${isCurrentModule
-                        ? isDark
-                          ? "bg-white/5 text-white"
-                          : "bg-white/85 text-[#446b00]"
-                        : isDark
-                          ? "text-white/72 hover:bg-white/5 hover:text-white"
-                          : "text-[#2f2f2f] hover:bg-white/65"}
-                    `}
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className={`flex h-5 w-5 items-center justify-center ${isCurrentModule ? "opacity-100" : isDark ? "opacity-80" : "opacity-75"}`}>
-                        <NavIconBadge icon={module.icon} className="h-4 w-4" />
-                      </span>
-                      <span>{module.label}</span>
-                    </span>
-                    <svg
-                      className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-
-                  <div
-                    className={`
-                      overflow-hidden rounded-xl transition-all duration-300 ease-in-out
-                      ${isExpanded ? "max-h-[32rem] opacity-100" : "max-h-0 opacity-0"}
-                      ${isDark ? "bg-white/5" : "bg-white/55"}
-                    `}
-                  >
-                    <div className="space-y-1 px-1.5 py-1.5">
-                      {module.items.map((item) => {
-                        const isActive = isNavItemActive(pathname, item.href);
-                        const isNavigating = navigatingTo === item.href && pathname !== item.href;
-
-                        return (
-                          <button
-                            key={item.href}
-                            onMouseEnter={() => prefetchTo(item.href)}
-                            onFocus={() => prefetchTo(item.href)}
-                            onClick={() => {
-                              if (pathname !== item.href) {
-                                if (isProjectionsRoute(item.href)) {
-                                  setStoredProjectionsModuleOwner(module.id === "intelligence" ? "intelligence" : "accounting");
-                                }
-                                setNavigatingTo(item.href);
-                                navigateTo(item.href);
-                              }
-                            }}
-                            className={`
-                              flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-all
-                              ${isActive
-                                ? isDark
-                                  ? "bg-white/10 text-white font-medium"
-                                  : "bg-[#8fff00]/10 text-[#446b00] font-medium"
-                                : isDark
-                                  ? "text-white/68 hover:bg-white/6 hover:text-white"
-                                  : "text-[#5f5a54] hover:bg-white/70 hover:text-[#1f1f1f]"}
-                            `}
-                          >
-                            {isNavigating ? (
-                              <div className={`h-4 w-4 rounded-full animate-pulse ${isDark ? "bg-white/30" : "bg-[#cfc9c1]"}`} />
-                            ) : (
-                              <NavIconBadge icon={item.icon} className="h-4 w-4" />
-                            )}
-                            <span className="truncate">{item.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
+                <button
+                  key={module.id}
+                  type="button"
+                  onMouseEnter={() => prefetchTo(module.href)}
+                  onFocus={() => prefetchTo(module.href)}
+                  onTouchStart={() => prefetchTo(module.href)}
+                  onClick={() => handleModuleSelect(module)}
+                  className={`flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-semibold transition-colors sm:h-10 sm:px-3.5 sm:text-sm ${
+                    isActive
+                      ? "text-[#5fa800]"
+                      : isDark
+                        ? "text-white/80 hover:text-white"
+                        : "text-[#303030] hover:text-[#5fa800]"
+                  }`}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  {isNavigating ? (
+                    <span className="h-3.5 w-3.5 rounded-full bg-current/25 animate-pulse" />
+                  ) : (
+                    <NavIconBadge icon={module.icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  )}
+                  <span className="whitespace-nowrap">{module.label}</span>
+                </button>
               );
             })}
-          </nav>
-        </div>
-      </aside>
-
-      {/* Mobile Slide Panel */}
-      <div className={`
-        fixed top-0 right-0 h-screen w-72 flex flex-col z-50 overflow-hidden border-l border-white/10
-        transition-transform duration-300 ease-in-out lg:hidden
-        ${isOpen ? "translate-x-0" : "translate-x-full"}
-      `}
-        style={{
-          background: isDark
-            ? "linear-gradient(180deg, #2f2f33 0%, #18181b 42%, #050505 100%)"
-            : "#fdfcfb",
-          borderColor: isDark ? "rgba(255,255,255,0.1)" : "#f5f1ec",
-        }}
-      >
-        {/* Decorative gradient blurs */}
-        {isDark && (
-          <>
-            <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#8fff00]/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-20 -left-10 w-32 h-32 bg-[#818cf8]/15 rounded-full blur-3xl pointer-events-none"></div>
-          </>
-        )}
-
-        {/* Close button */}
-        <div className="flex items-center justify-end p-5">
-          <button
-            onClick={onClose}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${isDark ? "bg-white/10 text-white hover:bg-white/20" : "bg-white/80 text-[#1f1f1f] hover:bg-white"}`}
-            aria-label="Close menu"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="sidebar-nav-scrollbar flex-1 p-4 space-y-2 overflow-y-auto">
-          <p className={`px-3 py-2 text-xs font-semibold uppercase tracking-wider ${isDark ? "text-white/40" : "text-[#8a8680]"}`}>
-            {currentModule === "personal" ? "Personal OS" : currentModule === "tax" ? "Tax Tools" : currentModule === "budgeting" ? "Budgeting" : currentModule === "intelligence" ? "Financial Management" : currentModule === "wallet" ? "Wallet" : currentModule === "supersheet" ? "SuperSheet" : currentModule === "marketplace" ? "Marketplace" : currentModule === "payroll" ? "Payroll & Compliance" : "Accounting"}
-          </p>
-          <button
-            onClick={() => {
-              if (!pathname.startsWith("/marketplace")) {
-                setNavigatingTo("/marketplace");
-                navigateTo("/marketplace");
-              }
-              onClose();
-            }}
-            className={`
-              relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
-              ${pathname.startsWith("/marketplace")
-                ? "bg-[#8fff00] text-[#0a0a0a]"
-                : isDark
-                  ? "text-white/70 hover:bg-white/10 hover:text-white"
-                  : "text-[#5f5a54] hover:bg-white/70 hover:text-[#1f1f1f]"}
-            `}
-          >
-            <span className="w-5 h-5 flex items-center justify-center">
-              <NavIconBadge icon="shop" className="w-4 h-4" />
-            </span>
-            <span>Marketplace</span>
-          </button>
-          {currentNavItems.map((item) => {
+        <div className="sidebar-nav-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          {currentModule.items.map((item) => {
             const isActive = isNavItemActive(pathname, item.href);
             const isNavigating = navigatingTo === item.href && pathname !== item.href;
 
             return (
               <button
                 key={item.href}
+                type="button"
+                onMouseEnter={() => prefetchTo(item.href)}
+                onFocus={() => prefetchTo(item.href)}
                 onTouchStart={() => prefetchTo(item.href)}
-                onClick={() => {
-                  if (pathname !== item.href) {
-                    if (isProjectionsRoute(item.href)) {
-                      setStoredProjectionsModuleOwner(currentModule === "intelligence" ? "intelligence" : "accounting");
-                    }
-                    setNavigatingTo(item.href);
-                    navigateTo(item.href);
-                  }
-                  onClose();
-                }}
-                className={`
-                  relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 w-full text-left
-                  ${isActive
-                    ? "bg-[#8fff00] text-[#0a0a0a]"
+                onClick={() => handleNavSelect(item.href)}
+                className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:h-9 sm:gap-2 sm:px-3 sm:text-sm ${
+                  isActive
+                    ? "bg-[#8fff00] text-[#101010]"
                     : isDark
-                      ? "text-white/70 hover:bg-white/10 hover:text-white"
-                      : "text-[#5f5a54] hover:bg-white/70 hover:text-[#1f1f1f]"
-                  }
-                `}
+                      ? "bg-white/5 text-white/72 hover:bg-white/10 hover:text-white"
+                      : "bg-[#f3f4f6] text-[#5f5a54] hover:bg-[#e9ecef] hover:text-[#1f1f1f]"
+                }`}
+                aria-current={isActive ? "page" : undefined}
               >
-                {isNavigating && (
-                  <div className={`w-5 h-5 rounded-full animate-pulse ${isDark ? "bg-white/30" : "bg-[#cfc9c1]"}`} />
+                {isNavigating ? (
+                  <span className="h-3.5 w-3.5 rounded-full bg-current/25 animate-pulse" />
+                ) : (
+                  <NavIconBadge icon={item.icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 )}
-                <span>{item.label}</span>
-                {isNavigating && (
-                  <span className={`ml-auto h-2 w-12 rounded-full animate-pulse ${isDark ? "bg-white/20" : "bg-[#ddd8d2]"}`} />
-                )}
+                <span className="whitespace-nowrap">{item.label}</span>
               </button>
             );
           })}
-        </nav>
+        </div>
       </div>
-    </>
+    </nav>
   );
 }

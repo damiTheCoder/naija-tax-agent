@@ -93,15 +93,14 @@ function shouldApplyFpaProtocol(context: BuiltModuleContext): boolean {
   const route = (context.route || "").toLowerCase();
   return (
     context.module === "reporting" ||
-    route.startsWith("/accounting/projections") ||
-    route.startsWith("/cashflow-intelligence")
+    route.startsWith("/accounting/projections")
   );
 }
 
 function buildSystemInstruction(context: BuiltModuleContext): string {
   const baseInstruction = [
     "You are the AI assistant embedded inside a financial operating system.",
-    "You have access to financial records, reporting systems, customer/payment modules, and operational workflows.",
+    "You have access to accounting records, reporting systems, tax workflows, and budgeting workflows.",
     `Active module: ${context.moduleLabel} (${context.module}).`,
     `Module capabilities: ${context.moduleDescription}`,
     "You must ground your response in provided context, available functions, and entities.",

@@ -447,6 +447,24 @@ body {
   background-color: #f3f4f6 !important;
 }
 
+.app-shell-root:has(.reporting-workspace-page),
+.app-shell-content-wrapper:has(.reporting-workspace-page),
+.app-shell-content-main:has(.reporting-workspace-page),
+.app-shell-content-container:has(.reporting-workspace-page),
+.reporting-workspace-page,
+.reporting-period-panel,
+.reporting-period-card,
+.reporting-period-filters,
+.reporting-period-control {
+  background-color: #ffffff !important;
+}
+
+.reporting-period-panel,
+.reporting-period-card,
+.reporting-period-control {
+  border-color: #e5e7eb !important;
+}
+
 /* Landing page font override */
 .landing-modern,
 .landing-modern * {
@@ -481,6 +499,19 @@ body {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none !important;
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none !important;
+  }
 }
 
 /* Subtle scrollbar that appears on hover */

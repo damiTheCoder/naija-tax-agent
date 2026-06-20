@@ -23,12 +23,6 @@ import {
   reconcile_tax as reconcileTaxReport,
 } from "@/lib/tax/compliance/agent";
 import type { TaxType as ComplianceTaxType } from "@/lib/tax/compliance/types";
-import {
-  walletEngine,
-  generateFundingResponse,
-  generateTransferResponse,
-  formatNaira as formatWalletNaira,
-} from "@/lib/wallet/walletEngine";
 import type {
   AgentConversationMessage,
   UnifiedActionExecutionResult,
@@ -1191,7 +1185,6 @@ function ensureEnginesLoaded(): void {
   if (enginesLoaded || typeof window === "undefined") return;
   accountingEngine.load();
   taxEngine.load();
-  walletEngine.load();
   enginesLoaded = true;
 }
 
@@ -2538,9 +2531,6 @@ async function executeWalletSend(action: UnifiedAgentAction): Promise<UnifiedAct
   const payload = action.payload || {};
   const amount = Math.abs(toNumber(payload.amount));
   const recipient = toText(payload.recipient);
-  const provider = toText(payload.provider);
-  const recipientTypeRaw = toText(payload.recipientType, "phone");
-  const recipientType = recipientTypeRaw === "email" || recipientTypeRaw === "account" ? recipientTypeRaw : "phone";
 
   if (!recipient || amount <= 0) {
     return {
@@ -2550,27 +2540,11 @@ async function executeWalletSend(action: UnifiedAgentAction): Promise<UnifiedAct
     };
   }
 
-  try {
-    const txn = await walletEngine.sendMoney({
-      amount,
-      recipient,
-      provider: provider || undefined,
-      type: recipientType,
-    });
-    window.dispatchEvent(new StorageEvent("storage", { key: "naija-wallet-state" }));
-    return {
-      type: "wallet.sendMoney",
-      success: true,
-      message: generateTransferResponse(txn),
-      data: txn,
-    };
-  } catch (error) {
-    return {
-      type: "wallet.sendMoney",
-      success: false,
-      message: `Unable to send wallet transfer: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
+  return {
+    type: "wallet.sendMoney",
+    success: false,
+    message: "Wallet transfers are unavailable because the wallet module has been removed.",
+  };
 }
 
 async function executeWalletFund(action: UnifiedAgentAction): Promise<UnifiedActionExecutionResult> {
@@ -2584,32 +2558,11 @@ async function executeWalletFund(action: UnifiedAgentAction): Promise<UnifiedAct
     };
   }
 
-  const state = walletEngine.getState();
-  const defaultCard = state.cards.find((card) => card.isDefault) || state.cards[0];
-  if (!defaultCard) {
-    return {
-      type: "wallet.fund",
-      success: false,
-      message: "Cannot fund wallet because no linked card exists yet.",
-    };
-  }
-
-  try {
-    const txn = await walletEngine.fundWallet(amount, defaultCard.id);
-    window.dispatchEvent(new StorageEvent("storage", { key: "naija-wallet-state" }));
-    return {
-      type: "wallet.fund",
-      success: true,
-      message: generateFundingResponse(txn),
-      data: txn,
-    };
-  } catch (error) {
-    return {
-      type: "wallet.fund",
-      success: false,
-      message: `Unable to fund wallet: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
+  return {
+    type: "wallet.fund",
+    success: false,
+    message: "Wallet funding is unavailable because the wallet module has been removed.",
+  };
 }
 
 function executeCashflowAnalyze(action: UnifiedAgentAction): UnifiedActionExecutionResult {
@@ -2629,7 +2582,7 @@ function executeCashflowAnalyze(action: UnifiedAgentAction): UnifiedActionExecut
       success: true,
       message: `From your current records, runway is ${
         runwayMonths === 999 ? "healthy and sustainable" : `${runwayMonths} months`
-      }. Cash on hand is ${formatWalletNaira(cashBalance)} and monthly burn is about ${formatWalletNaira(monthlyOutflow)}.`,
+      }. Cash on hand is ${formatCompactNaira(cashBalance)} and monthly burn is about ${formatCompactNaira(monthlyOutflow)}.`,
     };
   }
 
@@ -2637,7 +2590,7 @@ function executeCashflowAnalyze(action: UnifiedAgentAction): UnifiedActionExecut
     return {
       type: "cashflow.analyze",
       success: true,
-      message: `Your burn rate is about ${formatWalletNaira(Math.round(burnPerDay))} per day, with monthly outflow around ${formatWalletNaira(
+      message: `Your burn rate is about ${formatCompactNaira(Math.round(burnPerDay))} per day, with monthly outflow around ${formatCompactNaira(
         monthlyOutflow
       )}.`,
     };
@@ -2647,11 +2600,11 @@ function executeCashflowAnalyze(action: UnifiedAgentAction): UnifiedActionExecut
   return {
     type: "cashflow.analyze",
     success: true,
-    message: `Quick read: you brought in ${formatWalletNaira(monthlyInflow)} and spent ${formatWalletNaira(
+    message: `Quick read: you brought in ${formatCompactNaira(monthlyInflow)} and spent ${formatCompactNaira(
       monthlyOutflow
-    )}, so net cashflow is ${netDirection} at ${net >= 0 ? "+" : "-"}${formatWalletNaira(
+    )}, so net cashflow is ${netDirection} at ${net >= 0 ? "+" : "-"}${formatCompactNaira(
       Math.abs(net)
-    )}. Current cash balance is ${formatWalletNaira(cashBalance)}.`,
+    )}. Current cash balance is ${formatCompactNaira(cashBalance)}.`,
   };
 }
 

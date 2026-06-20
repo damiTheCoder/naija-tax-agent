@@ -519,16 +519,21 @@ const WORKSPACE_PAGES: WorkspacePageDefinition[] = [
   },
 ];
 
-const MODULE_HOME_ROUTE: Record<WorkspaceModuleId, string> = {
+const ACTIVE_WORKSPACE_PAGES = WORKSPACE_PAGES.filter(
+  (page) =>
+    page.module === "accounting" ||
+    page.module === "tax" ||
+    page.module === "budgeting" ||
+    page.module === "dashboard" ||
+    page.module === "profile" ||
+    page.module === "general"
+);
+
+const MODULE_HOME_ROUTE: Partial<Record<WorkspaceModuleId, string>> = {
   accounting: "/accounting",
   tax: "/tax/workspace",
-  wallet: "/wallet",
   budgeting: "/budgeting",
-  cashflow: "/cashflow-intelligence",
-  marketplace: "/marketplace",
-  personal: "/personal",
   dashboard: "/dashboard",
-  supersheet: "/supersheet",
   profile: "/profile",
   general: "/",
 };
@@ -554,13 +559,11 @@ function normalizeModuleHint(moduleHint?: string): WorkspaceModuleId | null {
 
   if (["accounting", "financial", "reconciliation", "projections"].includes(normalized)) return "accounting";
   if (["tax", "tax-tools"].includes(normalized)) return "tax";
-  if (["wallet", "payment", "payments"].includes(normalized)) return "wallet";
   if (["budgeting", "budget"].includes(normalized)) return "budgeting";
-  if (["cashflow", "cashflow-intelligence"].includes(normalized)) return "cashflow";
-  if (["marketplace"].includes(normalized)) return "marketplace";
-  if (["personal"].includes(normalized)) return "personal";
+  if (["wallet", "payment", "payments", "cashflow", "cashflow-intelligence", "personal"].includes(normalized)) {
+    return "accounting";
+  }
   if (["dashboard"].includes(normalized)) return "dashboard";
-  if (["supersheet", "sheet", "spreadsheet"].includes(normalized)) return "supersheet";
   if (["profile"].includes(normalized)) return "profile";
 
   return null;
@@ -591,14 +594,14 @@ function scoreIntentAgainstPage(params: {
 }
 
 export function getWorkspacePages(): WorkspacePageDefinition[] {
-  return WORKSPACE_PAGES.slice();
+  return ACTIVE_WORKSPACE_PAGES.slice();
 }
 
 export function findWorkspacePageByRoute(route?: string): WorkspacePageDefinition | null {
   const normalized = (route || "").trim();
   if (!normalized) return null;
 
-  const matches = WORKSPACE_PAGES.filter((page) => normalized === page.route || normalized.startsWith(`${page.route}/`));
+  const matches = ACTIVE_WORKSPACE_PAGES.filter((page) => normalized === page.route || normalized.startsWith(`${page.route}/`));
   if (matches.length === 0) return null;
   return matches.sort((a, b) => b.route.length - a.route.length)[0] || null;
 }
@@ -608,9 +611,9 @@ export function buildWorkspaceRouteCatalogText(options?: {
   maxItems?: number;
 }): string {
   const moduleFilter = normalizeModuleHint(typeof options?.moduleFilter === "string" ? options.moduleFilter : "");
-  const maxItems = Number.isFinite(options?.maxItems) ? Math.max(1, Number(options?.maxItems)) : WORKSPACE_PAGES.length;
+  const maxItems = Number.isFinite(options?.maxItems) ? Math.max(1, Number(options?.maxItems)) : ACTIVE_WORKSPACE_PAGES.length;
 
-  const filtered = moduleFilter ? WORKSPACE_PAGES.filter((page) => page.module === moduleFilter) : WORKSPACE_PAGES;
+  const filtered = moduleFilter ? ACTIVE_WORKSPACE_PAGES.filter((page) => page.module === moduleFilter) : ACTIVE_WORKSPACE_PAGES;
   return filtered
     .slice(0, maxItems)
     .map((page) => `${page.route} | ${page.label} | ${page.purpose} | actions: ${page.keyFunctions.slice(0, 2).join(", ")}`)
@@ -634,7 +637,7 @@ export function resolveWorkspacePageFromIntent(
   let best: WorkspacePageDefinition | null = null;
   let bestScore = 0;
 
-  for (const page of WORKSPACE_PAGES) {
+  for (const page of ACTIVE_WORKSPACE_PAGES) {
     const score = scoreIntentAgainstPage({
       intentText,
       currentRoute,
@@ -659,4 +662,3 @@ export function resolveWorkspacePageFromIntent(
 
   return null;
 }
-

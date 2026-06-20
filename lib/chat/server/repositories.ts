@@ -22,10 +22,8 @@ const normalizeRoute = (route: string | undefined, module: string): string => {
   if (cleaned) return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
   if (module === "accounting") return "/accounting";
   if (module === "tax") return "/tax/workspace";
-  if (module === "cashflow") return "/cashflow-intelligence";
-  if (module === "wallet") return "/wallet";
-  if (module === "supersheet") return "/supersheet";
-  if (module === "personal") return "/personal";
+  if (module === "budgeting") return "/budgeting/dashboard";
+  if (module === "cashflow" || module === "wallet" || module === "supersheet" || module === "personal") return "/accounting";
   return "/dashboard";
 };
 

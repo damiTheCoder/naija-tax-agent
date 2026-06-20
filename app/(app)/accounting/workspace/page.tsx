@@ -432,9 +432,11 @@ export default function WorkspacePage() {
       ),
     },
   ];
+  const selectedYearEntries = entriesByYear[selectedYear] || [];
+  const selectedYearStatement = yearlyStatements[selectedYear];
 
   return (
-    <div className="space-y-6 px-2 md:px-0">
+    <div className="reporting-workspace-page space-y-6 bg-white px-2 md:px-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -449,83 +451,115 @@ export default function WorkspacePage() {
       </div>
 
       {/* Date Search & Year Filter */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
+      <div className="reporting-period-panel overflow-hidden rounded-[22px] border border-gray-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#101010] text-white shadow-sm">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5m4 14v-7m4 7V8m4 11v-4m4 4V3" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-400">Activity / Financial Reporting</p>
+              <h2 className="truncate text-base font-semibold text-gray-950">Reporting period {selectedYear}</h2>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-            <span className="text-sm font-medium text-gray-700">Filter by:</span>
+            <span className="rounded-full bg-[#8fff00] px-2.5 py-1 text-[11px] font-semibold text-[#101010]">
+                Active
+            </span>
+            <span className="hidden text-sm text-gray-400 sm:inline">
+              {selectedYearEntries.length} entries
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[1.05fr_1fr]">
+          <div className="reporting-period-card rounded-[18px] border border-gray-200 bg-white p-4">
+            <p className="text-xs font-medium text-gray-500">Reporting period</p>
+            <div className="mt-3 flex flex-wrap items-end gap-2.5">
+              <p className="text-4xl font-semibold leading-none tracking-tight text-gray-950">{selectedYear}</p>
+              <p className="pb-1 text-sm text-gray-500">
+                {availableYears.length} year{availableYears.length === 1 ? "" : "s"} of records
+              </p>
+            </div>
+            <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-white">
+              <span className="w-2/3 rounded-full bg-[#ff6b1a]" />
+              <span className="w-1/6 bg-[#101010]" />
+            </div>
+            <p className="mt-3 text-xs text-gray-500">
+              {selectedYearEntries.length} entries for this period
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-500">Year:</label>
+          <div className="reporting-period-card rounded-[18px] border border-gray-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500">Yearly result</p>
+                <p className={`mt-3 text-3xl font-semibold tracking-tight ${selectedYearStatement && selectedYearStatement.netIncome < 0 ? "text-red-600" : "text-gray-950"}`}>
+                  {selectedYearStatement ? `₦${Math.abs(selectedYearStatement.netIncome).toLocaleString("en-NG")}` : "₦0"}
+                </p>
+              </div>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700">
+                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-4 h-8 rounded-lg bg-[repeating-linear-gradient(90deg,#ff6b1a_0_3px,transparent_3px_8px)] opacity-80" />
+            <p className="mt-3 text-xs text-gray-500">
+              Net income from posted accounting records
+            </p>
+          </div>
+        </div>
+
+        <div className="reporting-period-filters grid gap-2.5 border-t border-gray-100 bg-white px-4 py-4 sm:px-5 md:grid-cols-4">
+          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <span className="block text-xs font-medium text-gray-500">Year</span>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
+              className="mt-1.5 w-full bg-transparent text-lg font-semibold text-gray-950 outline-none focus:ring-0"
             >
               {availableYears.map((year) => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
-          </div>
+          </label>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-500">From:</label>
+          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <span className="block text-xs font-medium text-gray-500">From</span>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
+              className="mt-1.5 w-full bg-transparent text-sm font-semibold text-gray-950 outline-none focus:ring-0"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-500">To:</label>
+          </label>
+
+          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <span className="block text-xs font-medium text-gray-500">To</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#8fff00] focus:border-transparent"
+              className="mt-1.5 w-full bg-transparent text-sm font-semibold text-gray-950 outline-none focus:ring-0"
             />
-          </div>
+          </label>
 
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => { setDateFrom(""); setDateTo(""); }}
-              className="text-sm text-gray-500 hover:text-gray-700 underline"
-            >
-              Clear dates
-            </button>
-          )}
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <p className="text-xs uppercase tracking-wider text-gray-400 mb-3">Yearly Records Summary</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {availableYears.map((year) => {
-              const yearEntries = entriesByYear[year] || [];
-              const yearStatement = yearlyStatements[year];
-              const isSelected = year === selectedYear;
-              return (
-                <button
-                  key={year}
-                  onClick={() => setSelectedYear(year)}
-                  className={`p-3 rounded-lg border text-left transition-all ${isSelected
-                    ? 'border-gray-200 bg-gray-100'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
-                    }`}
-                >
-                  <p className="text-lg font-bold text-gray-900">{year}</p>
-                  <p className="text-xs text-gray-500">{yearEntries.length} entries</p>
-                  {yearStatement && (
-                    <p className={`text-xs mt-1 font-medium ${yearStatement.netIncome >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
-                      ₦{Math.abs(yearStatement.netIncome).toLocaleString("en-NG")}
-                    </p>
-                  )}
-                </button>
-              );
-            })}
+          <div className="reporting-period-control flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <div>
+              <p className="text-xs font-medium text-gray-500">Records</p>
+              <p className="mt-1.5 text-lg font-semibold text-gray-950">{selectedYearEntries.length}</p>
+            </div>
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>

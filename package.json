@@ -14,7 +14,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp:server": "tsx scripts/mcp-financial-server.ts",
-    "mcp:assistant": "tsx scripts/mcp-personal-assistant-server.ts",
     "pb:init": "tsx scripts/pocketbase-init.ts",
     "pb:repair:local": "tsx scripts/pocketbase-backfill-local-timestamps.ts",
     "pb:up": "docker compose -f docker-compose.pocketbase.yml up -d",
@@ -28,6 +27,9 @@
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "postcss": "^8.5.15"
   },
   "dependencies": {
     "@google/genai": "^1.43.0",

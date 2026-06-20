@@ -37,9 +37,6 @@ export default function ModeSelector() {
     const getModeHref = (targetMode: AppMode) => {
         if (targetMode === "tax") return "/tax/workspace";
         if (targetMode === "budgeting") return "/budgeting/dashboard";
-        if (targetMode === "intelligence") return "/cashflow-intelligence";
-        if (targetMode === "wallet") return "/wallet";
-        if (targetMode === "marketplace") return "/marketplace";
         return "/accounting";
     };
 
@@ -52,11 +49,8 @@ export default function ModeSelector() {
     const getModeLabel = (m: AppMode) => {
         switch (m) {
             case "tax": return "Tax Manager";
-            case "intelligence": return "Financial Management";
             case "budgeting": return "Budgeting";
             case "accounting": return "Accounting";
-            case "wallet": return "Wallet";
-            case "marketplace": return "Marketplace";
             default: return "Tax Manager";
         }
     };
@@ -108,28 +102,6 @@ export default function ModeSelector() {
                             onHover={() => prefetchTo(getModeHref("budgeting"))}
                             onClick={() => handleModeSwitch("budgeting")}
                         />
-                        <ModeOption
-                            mode="intelligence"
-                            label="Financial Management"
-                            currentMode={mode}
-                            onHover={() => prefetchTo(getModeHref("intelligence"))}
-                            onClick={() => handleModeSwitch("intelligence")}
-                        />
-                        <ModeOption
-                            mode="wallet"
-                            label="Wallet"
-                            currentMode={mode}
-                            onHover={() => prefetchTo(getModeHref("wallet"))}
-                            onClick={() => handleModeSwitch("wallet")}
-                        />
-                        <ModeOption
-                            mode="marketplace"
-                            label="Marketplace"
-                            currentMode={mode}
-                            onHover={() => prefetchTo(getModeHref("marketplace"))}
-                            onClick={() => handleModeSwitch("marketplace")}
-                        />
-
                     </div>
                 </div>
             )}

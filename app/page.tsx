@@ -6,7 +6,7 @@ import { ScrollNav, ScrollAnimator } from "./LandingClient";
 const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
-  { label: "Marketplace", href: "/marketplace" },
+  { label: "Tax", href: "/tax/workspace" },
   { label: "About", href: "#about" },
 ];
 

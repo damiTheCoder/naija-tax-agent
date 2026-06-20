@@ -11,9 +11,9 @@ const contactChannels = [
   {
     id: "partnerships",
     name: "Partnerships",
-    detail: "Reach out through the app and include your organization name and integration goals.",
-    ctaLabel: "Go to Marketplace",
-    ctaHref: "/marketplace",
+    detail: "Reach out through the app and include your organization name and finance operations goals.",
+    ctaLabel: "Open Tax Workspace",
+    ctaHref: "/tax/workspace",
   },
 ];
 

@@ -75,8 +75,8 @@ export default function DeferredFloatingChat() {
   }
 
   return (
-    <section className="sticky top-[4.75rem] scroll-mt-24 lg:top-24">
-      <div className="flex h-[calc(100dvh-7.5rem)] min-h-[26rem] flex-col lg:h-[calc(100vh-8rem)]">
+    <section className="sticky top-3 w-full max-w-full scroll-mt-24 overflow-hidden lg:top-0">
+      <div className="mx-auto flex h-[min(680px,calc(100dvh-5rem))] min-h-[24rem] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
         <div className="px-0 py-5">
           <div className="h-3 w-28 rounded-full bg-gray-200" />
           <div className="mt-4 h-8 w-56 rounded-full bg-gray-100" />
@@ -91,9 +91,9 @@ export default function DeferredFloatingChat() {
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-center py-10 lg:py-0 text-center">
-          <div className="mx-auto max-w-2xl">
-            <h3 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]">
+        <div className="flex flex-1 items-center justify-center py-8 text-center lg:py-0">
+          <div className="mx-auto max-w-2xl px-2">
+            <h3 className="text-xl font-semibold tracking-tight text-[#1f1f1f] sm:text-2xl">
               Preparing the assistant
             </h3>
             <p className="mt-3 text-sm leading-7 text-gray-500">
