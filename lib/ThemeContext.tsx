@@ -82,7 +82,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
         document
             .querySelectorAll('meta[name="theme-color"]')
-            .forEach((meta) => meta.setAttribute("content", theme === "dark" ? "#000000" : LIGHT_THEME_BACKGROUND));
+            .forEach((meta) => meta.setAttribute("content", LIGHT_THEME_BACKGROUND));
     }, [theme]);
 
     const toggleTheme = () => {
