@@ -30,6 +30,9 @@ import type {
   UnifiedAgentRequest,
   UnifiedAgentResponse,
 } from "@/lib/agent/unifiedTypes";
+import { appendAIAuditEvent } from "@/lib/agent/auditLog";
+import { evaluatePlanPolicies } from "@/lib/agent/policy";
+import { parseUnifiedAgentResponse } from "@/lib/agent/schemas";
 
 let enginesLoaded = false;
 const PLAN_TIMEOUT_MS = 30000;
@@ -171,6 +174,7 @@ interface UiStepPayload {
 interface PendingUiApproval {
   actions: UnifiedAgentAction[];
   planSource: AgentPlanSource;
+  reasons?: string[];
 }
 
 interface AgentMemoryEntry {
@@ -196,6 +200,16 @@ function normalizeModuleId(moduleId?: string): string {
 
 function memoryKey(moduleId?: string): string {
   return `ql::agent-memory::${normalizeModuleId(moduleId)}`;
+}
+
+function sanitizeAgentMemoryText(value: string, maxLength: number): string {
+  return value
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[email]")
+    .replace(/\b(?:\+?234|0)?\d{10}\b/g, "[phone]")
+    .replace(/\b\d{8,}\b/g, "[number]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function loadAgentMemory(moduleId?: string): AgentMemoryEntry[] {
@@ -224,7 +238,13 @@ function loadAgentMemory(moduleId?: string): AgentMemoryEntry[] {
 function appendAgentMemory(moduleId: string, entry: AgentMemoryEntry): void {
   if (typeof window === "undefined") return;
   const existing = loadAgentMemory(moduleId);
-  const next = [...existing, entry].slice(-AGENT_MEMORY_MAX_ITEMS);
+  const sanitized: AgentMemoryEntry = {
+    ...entry,
+    objective: sanitizeAgentMemoryText(entry.objective, 180),
+    observation: sanitizeAgentMemoryText(entry.observation, 240),
+    actionTypes: entry.actionTypes.slice(0, 8),
+  };
+  const next = [...existing, sanitized].slice(-AGENT_MEMORY_MAX_ITEMS);
   window.localStorage.setItem(memoryKey(moduleId), JSON.stringify(next));
 }
 
@@ -2802,6 +2822,7 @@ export async function executeUnifiedAgentActions(
     customActionExecutor?: UnifiedCustomActionExecutor;
     shouldStop?: () => boolean;
     rollbackOnStop?: boolean;
+    approvalGranted?: boolean;
   }
 ): Promise<UnifiedActionExecutionResult[]> {
   ensureEnginesLoaded();
@@ -2819,6 +2840,21 @@ export async function executeUnifiedAgentActions(
   };
 
   for (const action of actions || []) {
+    const policyDecision = evaluatePlanPolicies([action], { approvalGranted: options?.approvalGranted === true });
+    if (policyDecision.blockedActions.length > 0 || policyDecision.approvalActions.length > 0) {
+      appendAIAuditEvent({
+        eventType: "execution.blocked",
+        actions: [action],
+        reasons: policyDecision.reasons,
+      });
+      results.push({
+        type: action.type,
+        success: false,
+        message: `Action blocked by AI policy: ${policyDecision.reasons.join(" ")}`,
+      });
+      continue;
+    }
+
     if (options?.shouldStop?.()) {
       results.push({
         type: action.type,
@@ -2837,6 +2873,10 @@ export async function executeUnifiedAgentActions(
     }
 
     try {
+      appendAIAuditEvent({
+        eventType: "execution.started",
+        actions: [action],
+      });
       if (action.type === "accounting.postTransaction") {
         results.push(await executeAccountingPost(action));
       } else if (action.type === "accounting.createBill") {
@@ -2904,6 +2944,12 @@ export async function executeUnifiedAgentActions(
         message: `Action failed (${action.type}): ${error instanceof Error ? error.message : "Unknown error"}`,
       });
     }
+
+    appendAIAuditEvent({
+      eventType: "execution.finished",
+      actions: [action],
+      results: results.slice(-1),
+    });
 
     if (options?.shouldStop?.()) {
       break;
@@ -2998,7 +3044,7 @@ export async function requestUnifiedAgentPlan(
       return buildChatApiFallback(`Endpoint status ${response.status}`);
     }
 
-    const data = (await response.json()) as UnifiedAgentResponse;
+    const data = parseUnifiedAgentResponse(await response.json(), serviceErrorPlan);
     const remoteActions = Array.isArray(data.actions) ? data.actions : [];
     const localActions = Array.isArray(localFallbackPlan.actions) ? localFallbackPlan.actions : [];
     const hasLocalReportDownload = localActions.some((action) => action.type === "report.downloadPdf");
@@ -3044,6 +3090,10 @@ export async function requestUnifiedAgentPlan(
           : data.planSource === "gemini" || data.planSource === "fallback"
           ? data.planSource
           : "fallback",
+      requiresApproval: shouldPromoteLocalActions ? undefined : data.requiresApproval,
+      approvalReasons: shouldPromoteLocalActions ? undefined : data.approvalReasons,
+      validationErrors: data.validationErrors,
+      auditId: data.auditId,
     };
   } catch (error) {
     console.warn("[Unified Agent] Planner request failed:", error);
@@ -3181,6 +3231,15 @@ export async function runUnifiedAgentMessage(params: {
   }
 
   if (executionMode === "interactive" && pendingUiApproval && isCancelMessage(trimmedMessage)) {
+    appendAIAuditEvent({
+      eventType: "approval.cancelled",
+      module: moduleId,
+      route: params.route,
+      message: objective,
+      planSource: pendingUiApproval.planSource,
+      actions: pendingUiApproval.actions,
+      reasons: pendingUiApproval.reasons,
+    });
     pendingUiApproval = null;
     return {
       finalReply: "Cancelled. I did not run the pending on-screen action.",
@@ -3200,9 +3259,20 @@ export async function runUnifiedAgentMessage(params: {
       customActionExecutor: params.customActionExecutor,
       shouldStop: params.shouldStop,
       rollbackOnStop: params.rollbackOnStop,
+      approvalGranted: true,
     });
     const navigateTo = execution.find((result) => result.navigateTo)?.navigateTo;
     const observation = buildObservation(execution, navigateTo);
+    appendAIAuditEvent({
+      eventType: "approval.confirmed",
+      module: moduleId,
+      route: params.route,
+      message: objective,
+      planSource: approval.planSource,
+      actions: approval.actions,
+      results: execution,
+      reasons: approval.reasons,
+    });
     appendAgentMemory(moduleId, {
       timestamp: Date.now(),
       module: moduleId,
@@ -3236,6 +3306,7 @@ export async function runUnifiedAgentMessage(params: {
           customActionExecutor: params.customActionExecutor,
           shouldStop: params.shouldStop,
           rollbackOnStop: params.rollbackOnStop,
+          approvalGranted: true,
         });
         const navigateTo = execution.find((result) => result.navigateTo)?.navigateTo;
         const observation = buildObservation(execution, navigateTo);
@@ -3338,7 +3409,65 @@ export async function runUnifiedAgentMessage(params: {
       break;
     }
 
-    const signature = actionSignature(normalizedActions);
+    const policy = evaluatePlanPolicies(normalizedActions);
+    if (policy.blockedActions.length > 0) {
+      latestReply = `${latestReply}\n\nI blocked ${policy.blockedActions.length} action(s) because they failed AI policy validation: ${policy.reasons.join(" ")}`;
+      appendAIAuditEvent({
+        eventType: "execution.blocked",
+        module: moduleId,
+        route: params.route,
+        message: objective,
+        planSource: latestPlanSource,
+        actions: policy.blockedActions,
+        reasons: policy.reasons,
+      });
+    }
+
+    if (executionMode === "interactive" && policy.approvalActions.length > 0) {
+      const approvalActions = [...policy.executableActions, ...policy.approvalActions];
+      pendingUiApproval = {
+        actions: approvalActions,
+        planSource: latestPlanSource,
+        reasons: policy.reasons,
+      };
+      latestReply = `${latestReply}\n\nThis AI plan needs human approval before it changes data. Reply "confirm" to run it, or "cancel" to skip it.\n\nReview notes: ${policy.reasons.join(" ")}`;
+      appendAIAuditEvent({
+        eventType: "approval.requested",
+        module: moduleId,
+        route: params.route,
+        message: objective,
+        planSource: latestPlanSource,
+        confidence: plan.confidence,
+        actions: approvalActions,
+        reasons: policy.reasons,
+      });
+      break;
+    }
+
+    if (executionMode === "background" && policy.approvalActions.length > 0) {
+      pendingUiApproval = null;
+      latestReply = `${latestReply}\n\nThis AI plan needs human approval before it changes data. Run it in interactive Agentic mode so you can review and confirm it. Review notes: ${policy.reasons.join(" ")}`;
+      appendAIAuditEvent({
+        eventType: "approval.requested",
+        module: moduleId,
+        route: params.route,
+        message: objective,
+        planSource: latestPlanSource,
+        confidence: plan.confidence,
+        actions: policy.approvalActions,
+        reasons: policy.reasons,
+      });
+      break;
+    }
+
+    if (policy.blockedActions.length > 0 && policy.executableActions.length === 0) {
+      pendingUiApproval = null;
+      break;
+    }
+
+    const policyFilteredActions = policy.executableActions;
+
+    const signature = actionSignature(policyFilteredActions);
     if (seenSignatures.has(signature)) {
       latestReply = `${latestReply}\n\nI reached the same step again, so I’m stopping here to avoid looping.`;
       pendingUiApproval = null;
@@ -3346,8 +3475,8 @@ export async function runUnifiedAgentMessage(params: {
     }
     seenSignatures.add(signature);
 
-    const uiActions = normalizedActions.filter((action) => action.type === "ui.operate");
-    const nonUiActions = normalizedActions.filter((action) => action.type !== "ui.operate");
+    const uiActions = policyFilteredActions.filter((action) => action.type === "ui.operate");
+    const nonUiActions = policyFilteredActions.filter((action) => action.type !== "ui.operate");
     const requiresUiApproval = params.autoApproveUiActions ? false : uiActions.some(uiActionNeedsConfirmation);
     const actionsToExecute = requiresUiApproval ? nonUiActions : normalizedActions;
 
@@ -3375,8 +3504,18 @@ export async function runUnifiedAgentMessage(params: {
     workingConversation.push({ role: "assistant", content: `${plan.reply}\nObservation: ${observation}` });
 
     if (requiresUiApproval && uiActions.length > 0) {
-      pendingUiApproval = { actions: uiActions, planSource: latestPlanSource };
+      pendingUiApproval = { actions: uiActions, planSource: latestPlanSource, reasons: ["UI operation needs confirmation."] };
       latestReply = `${latestReply}\n\nI found an on-screen action that may be sensitive. Reply "confirm" to run it, or "cancel" to skip it.`;
+      appendAIAuditEvent({
+        eventType: "approval.requested",
+        module: moduleId,
+        route: params.route,
+        message: objective,
+        planSource: latestPlanSource,
+        confidence: plan.confidence,
+        actions: uiActions,
+        reasons: ["UI operation needs confirmation."],
+      });
       break;
     }
 

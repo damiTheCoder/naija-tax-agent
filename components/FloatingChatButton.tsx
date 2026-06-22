@@ -1706,8 +1706,8 @@ export default function FloatingChatButton() {
     };
 
     return (
-        <section ref={chatSectionRef} className="relative w-full max-w-full scroll-mt-4 overflow-visible lg:sticky lg:top-0 lg:overflow-hidden">
-            <div className="relative mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-full flex-col lg:h-[calc(100vh-2rem)] lg:min-h-[26rem]">
+        <section ref={chatSectionRef} className="relative h-full w-full max-w-full scroll-mt-4 overflow-visible lg:overflow-hidden">
+            <div className="relative mx-auto flex min-h-[calc(100dvh-5rem)] w-full max-w-full flex-col lg:h-full lg:min-h-0">
                 <div className="sticky left-0 top-3 z-[140] w-fit lg:absolute lg:top-0" data-conversation-menu="true">
                     <div className="flex items-center justify-start">
                         <button

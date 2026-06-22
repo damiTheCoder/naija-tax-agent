@@ -4,6 +4,8 @@ import { AIService, type GeminiPlannerResponse } from "@/lib/agent/aiService";
 import { GeminiClient } from "@/lib/agent/geminiClient";
 import { getToolByName, type ToolRequest } from "@/lib/agent/toolRegistry";
 import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
+import { appendAIAuditEvent } from "@/lib/agent/auditLog";
+import { evaluatePlanPolicies } from "@/lib/agent/policy";
 
 type ProjectionAssumptionMeta = {
   key: string;
@@ -705,21 +707,40 @@ export class AIOrchestrator {
     }
 
     const context = buildModuleContext(request);
+    const auditBase = {
+      module: context.module,
+      route: context.route,
+      message,
+    };
 
     if (!this.aiService.isConfigured()) {
       const deterministic = buildDeterministicToolRequests(message, context);
+      const actions = this.aiService.toActions(deterministic);
+      const policy = evaluatePlanPolicies(actions);
+      const audit = appendAIAuditEvent({
+        ...auditBase,
+        eventType: policy.reasons.length > 0 ? "approval.requested" : "plan.validated",
+        planSource: "fallback",
+        confidence: deterministic.length > 0 ? 0.62 : 0,
+        actions,
+        reasons: policy.reasons,
+      });
       return {
         reply:
           deterministic.length > 0
             ? buildExecutionReplyForAction(deterministic[0])
             : buildDeterministicConversationalReply(message, context),
-        actions: this.aiService.toActions(deterministic),
+        actions: policy.blockedActions.length > 0 ? policy.executableActions : actions,
         confidence: deterministic.length > 0 ? 0.62 : 0,
         reasoning:
           deterministic.length > 0
             ? "Gemini API key missing; deterministic action compiler produced executable action."
             : "Gemini API key missing; deterministic conversational fallback used.",
         planSource: "fallback",
+        requiresApproval: policy.approvalActions.length > 0,
+        approvalReasons: policy.approvalActions.length > 0 ? policy.reasons : undefined,
+        validationErrors: policy.blockedActions.length > 0 ? policy.reasons : undefined,
+        auditId: audit.id,
       };
     }
 
@@ -731,12 +752,25 @@ export class AIOrchestrator {
       });
     } catch (error) {
       const deterministic = buildDeterministicToolRequests(message, context);
+      const actions = this.aiService.toActions(deterministic);
+      const policy = evaluatePlanPolicies(actions);
+      const audit = appendAIAuditEvent({
+        ...auditBase,
+        eventType: policy.reasons.length > 0 ? "approval.requested" : "plan.validated",
+        planSource: "fallback",
+        confidence: deterministic.length > 0 ? 0.6 : 0,
+        actions,
+        reasons: [
+          error instanceof Error ? error.message : "Unknown Gemini error",
+          ...policy.reasons,
+        ],
+      });
       return {
         reply:
           deterministic.length > 0
             ? buildExecutionReplyForAction(deterministic[0])
             : buildDeterministicConversationalReply(message, context),
-        actions: this.aiService.toActions(deterministic),
+        actions: policy.blockedActions.length > 0 ? policy.executableActions : actions,
         confidence: deterministic.length > 0 ? 0.6 : 0,
         reasoning:
           deterministic.length > 0
@@ -747,6 +781,10 @@ export class AIOrchestrator {
               ? error.message
               : "Unknown Gemini error",
         planSource: "fallback",
+        requiresApproval: policy.approvalActions.length > 0,
+        approvalReasons: policy.approvalActions.length > 0 ? policy.reasons : undefined,
+        validationErrors: policy.blockedActions.length > 0 ? policy.reasons : undefined,
+        auditId: audit.id,
       };
     }
 
@@ -769,6 +807,26 @@ export class AIOrchestrator {
 
     const safeReply = (enrichedPlan.reply || initialPlan.reply || "").trim();
 
+    const actions = this.aiService.toActions(finalActionRequests);
+    const policy = evaluatePlanPolicies(actions);
+    const audit = appendAIAuditEvent({
+      ...auditBase,
+      eventType: policy.reasons.length > 0 ? "approval.requested" : "plan.validated",
+      planSource: usedDeterministicFallback ? "fallback" : "gemini",
+      confidence: usedDeterministicFallback
+        ? Math.max(
+            0.58,
+            ...finalActionRequests.map((requestItem) =>
+              typeof requestItem.confidence === "number" && Number.isFinite(requestItem.confidence)
+                ? requestItem.confidence
+                : 0.58
+            )
+          )
+        : enrichedPlan.confidence,
+      actions,
+      reasons: policy.reasons,
+    });
+
     return {
       reply:
         usedDeterministicFallback && finalActionRequests.length > 0
@@ -787,8 +845,12 @@ export class AIOrchestrator {
       reasoning: usedDeterministicFallback
         ? `${enrichedPlan.reasoning} | Deterministic action compiler injected executable tool request.`
         : enrichedPlan.reasoning,
-      actions: this.aiService.toActions(finalActionRequests),
+      actions: policy.blockedActions.length > 0 ? policy.executableActions : actions,
       planSource: usedDeterministicFallback ? "fallback" : "gemini",
+      requiresApproval: policy.approvalActions.length > 0,
+      approvalReasons: policy.approvalActions.length > 0 ? policy.reasons : undefined,
+      validationErrors: policy.blockedActions.length > 0 ? policy.reasons : undefined,
+      auditId: audit.id,
     };
   }
 }

@@ -193,14 +193,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell-root min-h-screen transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
+      <Sidebar isOpen={false} onClose={() => { }} />
+
       <div className="min-h-screen lg:grid lg:grid-cols-12">
         <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-8" : "lg:col-span-12"}`}>
-          <Sidebar isOpen={false} onClose={() => { }} />
-
           <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-6 sm:pb-8 lg:pb-0">
             {/* Desktop Header */}
             <header
-              className="app-shell-topbar fixed right-4 top-3 z-50 hidden items-center justify-end pointer-events-none lg:right-[calc(33.333333%+1rem)] lg:flex"
+              className="app-shell-topbar fixed right-4 top-3 z-50 hidden items-center justify-end pointer-events-none lg:flex"
               style={{
                 background: "transparent",
               }}
@@ -387,7 +387,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {!isPersonalRoute ? (
-          <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-0 lg:col-span-4 lg:h-screen lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:py-4" aria-label="AI assistant">
+          <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-[9.5rem] lg:col-span-4 lg:h-[calc(100vh-9.5rem)] lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:pb-4 lg:pt-0" aria-label="AI assistant">
             <DeferredFloatingChat />
           </aside>
         ) : null}

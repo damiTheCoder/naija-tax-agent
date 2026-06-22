@@ -9,7 +9,6 @@ import {
   ACCOUNTING_NAV_ITEMS,
   AppMode,
   BUDGETING_NAV_ITEMS,
-  NavIcon,
   ProjectionsModuleOwner,
   TAX_NAV_ITEMS,
   getServerProjectionsModuleOwnerSnapshot,
@@ -29,10 +28,31 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const MODULES: { id: AppMode; label: string; icon: NavIcon; href: string; items: typeof TAX_NAV_ITEMS }[] = [
-  { id: "accounting", label: "Accounting", icon: "chart", href: "/accounting", items: ACCOUNTING_NAV_ITEMS },
-  { id: "tax", label: "Tax Manager", icon: "shield", href: "/tax/workspace", items: TAX_NAV_ITEMS },
-  { id: "budgeting", label: "Budgeting", icon: "ledger", href: "/budgeting/dashboard", items: BUDGETING_NAV_ITEMS },
+const MODULES: { id: AppMode; label: string; iconSrc: string; activeColor: string; href: string; items: typeof TAX_NAV_ITEMS }[] = [
+  {
+    id: "accounting",
+    label: "Accounting",
+    iconSrc: "/accounting.jpeg",
+    activeColor: "#4f8f00",
+    href: "/accounting",
+    items: ACCOUNTING_NAV_ITEMS,
+  },
+  {
+    id: "tax",
+    label: "Tax Manager",
+    iconSrc: "/tax.jpeg",
+    activeColor: "#3157d5",
+    href: "/tax/workspace",
+    items: TAX_NAV_ITEMS,
+  },
+  {
+    id: "budgeting",
+    label: "Budgeting",
+    iconSrc: "/budgeting.jpeg",
+    activeColor: "#d05a00",
+    href: "/budgeting/dashboard",
+    items: BUDGETING_NAV_ITEMS,
+  },
 ];
 
 function getModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner) {
@@ -107,19 +127,25 @@ export default function Sidebar({ onClose }: SidebarProps) {
                   onFocus={() => prefetchTo(module.href)}
                   onTouchStart={() => prefetchTo(module.href)}
                   onClick={() => handleModuleSelect(module)}
-                  className={`flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-semibold transition-colors sm:h-10 sm:px-3.5 sm:text-sm ${
-                    isActive
-                      ? "text-[#5fa800]"
-                      : isDark
-                        ? "text-white/80 hover:text-white"
-                        : "text-[#303030] hover:text-[#5fa800]"
+                  className={`group flex h-10 shrink-0 items-center gap-2.5 rounded-full px-2.5 pr-3.5 text-xs font-semibold transition-colors sm:h-11 sm:px-3 sm:pr-4 sm:text-sm ${
+                    isDark && !isActive ? "text-white/80 hover:text-white" : !isActive ? "text-[#303030]" : ""
                   }`}
+                  style={isActive ? { color: module.activeColor } : undefined}
                   aria-current={isActive ? "page" : undefined}
                 >
                   {isNavigating ? (
-                    <span className="h-3.5 w-3.5 rounded-full bg-current/25 animate-pulse" />
+                    <span className="h-7 w-7 rounded-2xl bg-current/25 animate-pulse" />
                   ) : (
-                    <NavIconBadge icon={module.icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <Image
+                      src={module.iconSrc}
+                      alt=""
+                      width={32}
+                      height={32}
+                      className={`h-7 w-7 shrink-0 object-contain transition-transform duration-200 ${
+                        isActive ? "scale-110" : "group-hover:scale-110"
+                      }`}
+                      aria-hidden="true"
+                    />
                   )}
                   <span className="whitespace-nowrap">{module.label}</span>
                 </button>

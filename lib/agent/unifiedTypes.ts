@@ -54,6 +54,10 @@ export interface UnifiedAgentResponse {
   confidence?: number;
   reasoning?: string;
   planSource?: "fast-path" | "gemini" | "fallback";
+  requiresApproval?: boolean;
+  approvalReasons?: string[];
+  validationErrors?: string[];
+  auditId?: string;
 }
 
 export interface UnifiedActionExecutionResult {
