@@ -921,13 +921,10 @@ export default function FloatingChatButton() {
     const [mobileConversationMenuPosition, setMobileConversationMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatSectionRef = useRef<HTMLElement>(null);
-    const chatScrollRef = useRef<HTMLDivElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const stopAgentRef = useRef(false);
     const blobUrlsRef = useRef<string[]>([]);
     const shouldAutoScrollRef = useRef(false);
-    const touchStartYRef = useRef<number | null>(null);
-    const chatVisibilitySuppressedUntilRef = useRef(0);
 
     const revokeBlobUrls = useCallback(() => {
         for (const url of blobUrlsRef.current) {
@@ -968,10 +965,6 @@ export default function FloatingChatButton() {
 
         const mobileQuery = window.matchMedia("(max-width: 1023px)");
         const setChatVisible = (isVisible: boolean) => {
-            if (Date.now() < chatVisibilitySuppressedUntilRef.current) {
-                document.body.classList.remove("mobile-chat-section-visible");
-                return;
-            }
             document.body.classList.toggle("mobile-chat-section-visible", mobileQuery.matches && isVisible);
         };
 
@@ -1006,66 +999,6 @@ export default function FloatingChatButton() {
             mobileQuery.removeEventListener("change", handleViewportChange);
             window.removeEventListener("scroll", handleViewportChange);
             document.body.classList.remove("mobile-chat-section-visible");
-        };
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === "undefined" || typeof document === "undefined") return;
-
-        const mobileQuery = window.matchMedia("(max-width: 1023px)");
-
-        const exitChatModeToMainPage = () => {
-            if (!mobileQuery.matches) return;
-            if (!document.body.classList.contains("mobile-chat-section-visible")) return;
-
-            chatVisibilitySuppressedUntilRef.current = Date.now() + 900;
-            document.body.classList.remove("mobile-chat-section-visible");
-
-            window.requestAnimationFrame(() => {
-                const mainContent = document.querySelector(".app-shell-content-main");
-                if (mainContent instanceof HTMLElement) {
-                    mainContent.scrollIntoView({ behavior: "smooth", block: "start" });
-                } else {
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                }
-            });
-        };
-
-        const canExitFromChatTop = () => {
-            const scroller = chatScrollRef.current;
-            return !scroller || scroller.scrollTop <= 4;
-        };
-
-        const handleWheel = (event: WheelEvent) => {
-            if (event.deltaY < -16 && canExitFromChatTop()) {
-                exitChatModeToMainPage();
-            }
-        };
-
-        const handleTouchStart = (event: TouchEvent) => {
-            touchStartYRef.current = event.touches[0]?.clientY ?? null;
-        };
-
-        const handleTouchMove = (event: TouchEvent) => {
-            const startY = touchStartYRef.current;
-            const currentY = event.touches[0]?.clientY;
-            if (startY === null || typeof currentY !== "number") return;
-
-            const pulledDown = currentY - startY > 28;
-            if (pulledDown && canExitFromChatTop()) {
-                touchStartYRef.current = currentY;
-                exitChatModeToMainPage();
-            }
-        };
-
-        window.addEventListener("wheel", handleWheel, { passive: true });
-        window.addEventListener("touchstart", handleTouchStart, { passive: true });
-        window.addEventListener("touchmove", handleTouchMove, { passive: true });
-
-        return () => {
-            window.removeEventListener("wheel", handleWheel);
-            window.removeEventListener("touchstart", handleTouchStart);
-            window.removeEventListener("touchmove", handleTouchMove);
         };
     }, []);
 
@@ -1847,7 +1780,7 @@ export default function FloatingChatButton() {
                 </div>
 
                 <div className="min-h-0 flex-1 py-0 lg:overflow-hidden">
-                    <div ref={chatScrollRef} className="hide-scrollbar h-auto overflow-visible pt-5 pb-4 sm:pt-6 sm:pb-5 lg:h-full lg:overflow-y-auto lg:pt-14 lg:pb-[13rem] lg:pr-2">
+                    <div className="hide-scrollbar h-auto overflow-visible pt-5 pb-4 sm:pt-6 sm:pb-5 lg:h-full lg:overflow-y-auto lg:pt-14 lg:pb-[13rem] lg:pr-2">
                         {isEmptyConversation ? (
                             <div className="mx-auto flex h-full min-h-[16rem] max-w-3xl items-center justify-center px-1 py-4 text-center sm:min-h-[20rem] lg:min-h-[24rem]">
                                 <div className="min-w-0">
