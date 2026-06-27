@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState, useTransition, ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, useTransition, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 interface NavigationContextType {
@@ -17,32 +17,21 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     const [, startTransition] = useTransition();
     const pathname = usePathname();
     const router = useRouter();
-    const prefetchedRoutes = useRef<Set<string>>(new Set());
     const resolvedPendingPath = pendingPath === pathname ? null : pendingPath;
     const isNavigating = Boolean(resolvedPendingPath);
 
     const prefetchTo = useCallback((href: string) => {
-        if (!href || href === pathname || prefetchedRoutes.current.has(href)) {
-            return;
-        }
-
-        prefetchedRoutes.current.add(href);
-        try {
-            void router.prefetch(href);
-        } catch {
-            prefetchedRoutes.current.delete(href);
-        }
-    }, [pathname, router]);
+        void href;
+    }, []);
 
     const navigateTo = useCallback((href: string) => {
         if (href === pathname) return;
 
-        prefetchTo(href);
         setPendingPath(href);
         startTransition(() => {
             router.push(href);
         });
-    }, [pathname, prefetchTo, router, startTransition]);
+    }, [pathname, router, startTransition]);
 
     return (
         <NavigationContext.Provider value={{ isNavigating, navigateTo, prefetchTo, pendingPath: resolvedPendingPath }}>

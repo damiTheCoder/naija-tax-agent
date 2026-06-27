@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import DeferredFloatingChat from "@/components/DeferredFloatingChat";
@@ -13,6 +14,7 @@ import PageSkeleton from "@/components/PageSkeleton";
 
 const ACCOUNTING_MIGRATION_MARKER_KEY = "ql::accounting::migration-v1";
 const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
+const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,13 +22,70 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isPersonalRoute = pathname.startsWith("/personal");
   const [desktopActionsOpen, setDesktopActionsOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
+  const [isChatWaveAnimating, setIsChatWaveAnimating] = useState(false);
   const desktopActionsRef = useRef<HTMLDivElement | null>(null);
   const mobileActionsRef = useRef<HTMLDivElement | null>(null);
+  const chatWaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { mode, mounted } = useMode();
   const isDark = theme === "dark";
   const isUser = mode === "user";
   const isModeMismatch = mounted && isPersonalRoute;
+
+  const closeMobileChat = useCallback(() => {
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("mobile-chat-section-visible");
+    }
+    setIsMobileChatOpen(false);
+    setIsChatWaveAnimating(false);
+    if (chatWaveTimeoutRef.current) {
+      clearTimeout(chatWaveTimeoutRef.current);
+      chatWaveTimeoutRef.current = null;
+    }
+    if (chatRevealTimeoutRef.current) {
+      clearTimeout(chatRevealTimeoutRef.current);
+      chatRevealTimeoutRef.current = null;
+    }
+  }, []);
+
+  const cleanupMobileChatShell = useCallback(() => {
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("mobile-chat-section-visible");
+    }
+    if (chatWaveTimeoutRef.current) {
+      clearTimeout(chatWaveTimeoutRef.current);
+      chatWaveTimeoutRef.current = null;
+    }
+    if (chatRevealTimeoutRef.current) {
+      clearTimeout(chatRevealTimeoutRef.current);
+      chatRevealTimeoutRef.current = null;
+    }
+  }, []);
+
+  const openMobileChat = useCallback(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    setMobileActionsOpen(false);
+    setIsMobileChatOpen(true);
+    setIsChatWaveAnimating(true);
+
+    if (chatWaveTimeoutRef.current) {
+      clearTimeout(chatWaveTimeoutRef.current);
+    }
+    if (chatRevealTimeoutRef.current) {
+      clearTimeout(chatRevealTimeoutRef.current);
+    }
+    chatRevealTimeoutRef.current = setTimeout(() => {
+      document.body.classList.add("mobile-chat-section-visible");
+      window.dispatchEvent(new CustomEvent(CHAT_MODAL_OPEN_EVENT));
+      chatRevealTimeoutRef.current = null;
+    }, 820);
+    chatWaveTimeoutRef.current = setTimeout(() => {
+      setIsChatWaveAnimating(false);
+      chatWaveTimeoutRef.current = null;
+    }, 1120);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -180,6 +239,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [desktopActionsOpen, mobileActionsOpen]);
+
+  useEffect(() => {
+    cleanupMobileChatShell();
+  }, [pathname, cleanupMobileChatShell]);
+
+  useEffect(() => {
+    return () => {
+      cleanupMobileChatShell();
+    };
+  }, [cleanupMobileChatShell]);
+
+  useEffect(() => {
+    if (!isMobileChatOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMobileChat();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [closeMobileChat, isMobileChatOpen]);
 
   if (isModeMismatch) {
     return (
@@ -388,10 +470,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {!isPersonalRoute ? (
           <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-[9.5rem] lg:col-span-4 lg:h-[calc(100vh-9.5rem)] lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:pb-4 lg:pt-0" aria-label="AI assistant">
+            <button
+              type="button"
+              onClick={closeMobileChat}
+              className="mobile-chat-modal-close"
+              aria-label="Close chat"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
             <DeferredFloatingChat />
           </aside>
         ) : null}
       </div>
+
+      {!isPersonalRoute ? (
+        <>
+          {isChatWaveAnimating ? <div className="mobile-chat-wave" aria-hidden="true" /> : null}
+          <button
+            type="button"
+            onClick={openMobileChat}
+            className={`mobile-floating-chat-button ${isChatWaveAnimating ? "is-chat-triggering" : ""}`}
+            aria-label="Open chat"
+            aria-expanded={isMobileChatOpen}
+          >
+            <Image src="/chatgpt.jpg" alt="" width={34} height={34} className="h-8 w-8 rounded-full object-cover" aria-hidden="true" />
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -501,6 +501,12 @@ body {
   display: none !important;
 }
 
+.mobile-floating-chat-button,
+.mobile-chat-modal-close,
+.mobile-chat-wave {
+  display: none;
+}
+
 @media (max-width: 767px) {
   html,
   body {
@@ -515,6 +521,120 @@ body {
 }
 
 @media (max-width: 1023px) {
+  .app-shell-floating-chat {
+    display: none;
+  }
+
+  .mobile-floating-chat-button {
+    position: fixed;
+    right: 1.25rem;
+    bottom: calc(1.35rem + env(safe-area-inset-bottom));
+    z-index: 55;
+    display: inline-flex;
+    height: 3.45rem;
+    width: 3.45rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 9999px;
+    background: #8fff00;
+    color: #101010;
+    box-shadow: 0 18px 36px rgba(24, 36, 10, 0.2);
+    transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  }
+
+  .mobile-floating-chat-button img {
+    display: block;
+    height: 2.25rem;
+    width: 2.25rem;
+    object-fit: cover;
+  }
+
+  .mobile-floating-chat-button.is-chat-triggering {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.88);
+  }
+
+  .mobile-floating-chat-button:active {
+    transform: scale(0.95);
+    box-shadow: 0 10px 22px rgba(24, 36, 10, 0.18);
+  }
+
+  .mobile-chat-modal-close {
+    position: fixed;
+    right: 1rem;
+    top: calc(0.9rem + env(safe-area-inset-top));
+    z-index: 120;
+    display: none;
+    height: 2.75rem;
+    width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 9999px;
+    background: rgba(16, 16, 16, 0.07);
+    color: #101010;
+    backdrop-filter: blur(10px);
+  }
+
+  .mobile-chat-wave {
+    position: fixed;
+    left: 50%;
+    bottom: calc(-42vw + env(safe-area-inset-bottom));
+    z-index: 70;
+    display: block;
+    height: 118vw;
+    width: 118vw;
+    border-radius: 9999px 9999px 0 0;
+    background:
+      radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.86), transparent 26%),
+      linear-gradient(145deg, rgba(219, 244, 255, 0.94) 0%, rgba(129, 209, 255, 0.8) 52%, rgba(42, 146, 255, 0.72) 100%);
+    pointer-events: none;
+    transform: translateX(-50%) scale(0.12);
+    transform-origin: center bottom;
+    overflow: hidden;
+    box-shadow:
+      inset 0 30px 60px rgba(255, 255, 255, 0.6),
+      0 -16px 80px rgba(104, 190, 255, 0.42);
+    animation: mobile-chat-wave-rise 1120ms cubic-bezier(0.18, 0.9, 0.2, 1) forwards;
+  }
+
+  .mobile-chat-wave::before,
+  .mobile-chat-wave::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -12%;
+    border-radius: 9999px 9999px 0 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+    animation: mobile-chat-wave-swell 1120ms ease-in-out forwards;
+  }
+
+  .mobile-chat-wave::before {
+    height: 78%;
+    width: 78%;
+    background:
+      radial-gradient(circle at 36% 22%, rgba(255, 255, 255, 0.78), transparent 25%),
+      linear-gradient(145deg, rgba(227, 249, 255, 0.92) 0%, rgba(151, 223, 255, 0.76) 58%, rgba(67, 169, 255, 0.62) 100%);
+    box-shadow: inset 0 18px 44px rgba(255, 255, 255, 0.52);
+  }
+
+  .mobile-chat-wave::after {
+    height: 42%;
+    width: 42%;
+    background:
+      radial-gradient(circle at 38% 20%, rgba(255, 255, 255, 0.84), transparent 28%),
+      linear-gradient(145deg, rgba(232, 255, 255, 0.9) 0%, rgba(146, 230, 255, 0.68) 62%, rgba(65, 176, 255, 0.56) 100%);
+    opacity: 0.92;
+    animation-delay: 60ms;
+  }
+
+  body.mobile-chat-section-visible {
+    overflow: hidden;
+  }
+
   body.mobile-chat-section-visible .sidebar-module-row,
   body.mobile-chat-section-visible .sidebar-subnav-row {
     max-height: 0 !important;
@@ -539,8 +659,46 @@ body {
   }
 
   body.mobile-chat-section-visible .app-shell-floating-chat {
-    min-height: calc(100dvh - 4.5rem);
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: block;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: var(--app-bg);
     padding-top: 0.75rem !important;
+    padding-right: 0.85rem !important;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)) !important;
+    padding-left: 0.85rem !important;
+    animation: mobile-chat-modal-rise 420ms cubic-bezier(0.2, 0.86, 0.22, 1) both;
+  }
+
+  body.mobile-chat-section-visible .app-shell-floating-chat > section {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body.mobile-chat-section-visible .app-shell-floating-chat > section > div {
+    height: 100%;
+    min-height: 0;
+  }
+
+  body.mobile-chat-section-visible .chat-modal-scroll-area {
+    height: calc(100dvh - 11.5rem);
+    overflow-y: auto !important;
+    padding-top: 5.6rem !important;
+    padding-bottom: 2rem !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.mobile-chat-section-visible .mobile-floating-chat-button {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(1rem) scale(0.9);
+  }
+
+  body.mobile-chat-section-visible .mobile-chat-modal-close {
+    display: inline-flex;
   }
 
   body.mobile-chat-section-visible .sidebar-logo-row {
@@ -548,7 +706,53 @@ body {
   }
 
   body.mobile-chat-section-visible [data-conversation-menu="true"] {
-    top: 4.25rem !important;
+    position: fixed !important;
+    left: 1rem !important;
+    top: calc(0.9rem + env(safe-area-inset-top)) !important;
+    z-index: 121 !important;
+  }
+
+  @keyframes mobile-chat-wave-rise {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(16%) scale(0.12);
+    }
+    12% {
+      opacity: 0.96;
+    }
+    72% {
+      opacity: 0.98;
+      transform: translateX(-50%) translateY(-22%) scale(1.03);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-34%) scale(1.16);
+    }
+  }
+
+  @keyframes mobile-chat-wave-swell {
+    0% {
+      transform: translateX(-50%) translateY(10%) scale(0.94);
+    }
+    50% {
+      transform: translateX(-50%) translateY(-2%) scale(1.02);
+    }
+    100% {
+      transform: translateX(-50%) translateY(-8%) scale(1.08);
+    }
+  }
+
+  @keyframes mobile-chat-modal-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(18%);
+      clip-path: circle(12% at calc(100% - 3.75rem) calc(100% - 3.75rem));
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+      clip-path: circle(150% at calc(100% - 3.75rem) calc(100% - 3.75rem));
+    }
   }
 }
 

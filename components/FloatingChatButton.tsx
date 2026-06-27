@@ -925,6 +925,9 @@ export default function FloatingChatButton() {
     const stopAgentRef = useRef(false);
     const blobUrlsRef = useRef<string[]>([]);
     const shouldAutoScrollRef = useRef(false);
+    const touchLastYRef = useRef<number | null>(null);
+    const chatExitPullDistanceRef = useRef(0);
+    const chatVisibilitySuppressedUntilRef = useRef(0);
 
     const revokeBlobUrls = useCallback(() => {
         for (const url of blobUrlsRef.current) {
@@ -965,6 +968,10 @@ export default function FloatingChatButton() {
 
         const mobileQuery = window.matchMedia("(max-width: 1023px)");
         const setChatVisible = (isVisible: boolean) => {
+            if (Date.now() < chatVisibilitySuppressedUntilRef.current) {
+                document.body.classList.remove("mobile-chat-section-visible");
+                return;
+            }
             document.body.classList.toggle("mobile-chat-section-visible", mobileQuery.matches && isVisible);
         };
 
@@ -999,6 +1006,80 @@ export default function FloatingChatButton() {
             mobileQuery.removeEventListener("change", handleViewportChange);
             window.removeEventListener("scroll", handleViewportChange);
             document.body.classList.remove("mobile-chat-section-visible");
+        };
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return;
+
+        const mobileQuery = window.matchMedia("(max-width: 1023px)");
+
+        const isChatOnlyMode = () => mobileQuery.matches && document.body.classList.contains("mobile-chat-section-visible");
+
+        const isChatAtTop = () => {
+            const rect = chatSectionRef.current?.getBoundingClientRect();
+            if (!rect) return false;
+            return rect.top >= -12 && rect.top <= 120;
+        };
+
+        const exitChatModeToMainPage = () => {
+            if (!isChatOnlyMode()) return;
+            chatVisibilitySuppressedUntilRef.current = Date.now() + 1200;
+            document.body.classList.remove("mobile-chat-section-visible");
+            chatExitPullDistanceRef.current = 0;
+            touchLastYRef.current = null;
+
+            window.requestAnimationFrame(() => {
+                const mainContent = document.querySelector(".app-shell-content-main");
+                if (mainContent instanceof HTMLElement) {
+                    mainContent.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+            });
+        };
+
+        const handleTouchStart = (event: TouchEvent) => {
+            touchLastYRef.current = event.touches[0]?.clientY ?? null;
+            chatExitPullDistanceRef.current = 0;
+        };
+
+        const handleTouchMove = (event: TouchEvent) => {
+            if (!isChatOnlyMode() || !isChatAtTop()) return;
+
+            const currentY = event.touches[0]?.clientY;
+            const lastY = touchLastYRef.current;
+            if (typeof currentY !== "number" || lastY === null) return;
+
+            const deltaY = currentY - lastY;
+            touchLastYRef.current = currentY;
+
+            if (deltaY > 0) {
+                chatExitPullDistanceRef.current += deltaY;
+            } else {
+                chatExitPullDistanceRef.current = Math.max(0, chatExitPullDistanceRef.current + deltaY * 1.5);
+            }
+
+            if (chatExitPullDistanceRef.current >= 240) {
+                exitChatModeToMainPage();
+            }
+        };
+
+        const handleTouchEnd = () => {
+            touchLastYRef.current = null;
+            chatExitPullDistanceRef.current = 0;
+        };
+
+        window.addEventListener("touchstart", handleTouchStart, { passive: true });
+        window.addEventListener("touchmove", handleTouchMove, { passive: true });
+        window.addEventListener("touchend", handleTouchEnd, { passive: true });
+        window.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+
+        return () => {
+            window.removeEventListener("touchstart", handleTouchStart);
+            window.removeEventListener("touchmove", handleTouchMove);
+            window.removeEventListener("touchend", handleTouchEnd);
+            window.removeEventListener("touchcancel", handleTouchEnd);
         };
     }, []);
 
@@ -1780,7 +1861,7 @@ export default function FloatingChatButton() {
                 </div>
 
                 <div className="min-h-0 flex-1 py-0 lg:overflow-hidden">
-                    <div className="hide-scrollbar h-auto overflow-visible pt-5 pb-4 sm:pt-6 sm:pb-5 lg:h-full lg:overflow-y-auto lg:pt-14 lg:pb-[13rem] lg:pr-2">
+                    <div className="chat-modal-scroll-area hide-scrollbar h-auto overflow-visible pt-5 pb-4 sm:pt-6 sm:pb-5 lg:h-full lg:overflow-y-auto lg:pt-14 lg:pb-[13rem] lg:pr-2">
                         {isEmptyConversation ? (
                             <div className="mx-auto flex h-full min-h-[16rem] max-w-3xl items-center justify-center px-1 py-4 text-center sm:min-h-[20rem] lg:min-h-[24rem]">
                                 <div className="min-w-0">
