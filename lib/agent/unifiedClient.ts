@@ -261,10 +261,25 @@ function summarizeAgentMemory(moduleId?: string, limit = 6): string {
 }
 
 function extractAmount(text: string): number | null {
-  const match = text.match(/(?:₦|ngn|naira)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
+  const match = text.match(/(?:₦|\$|usd|ngn|naira)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
   if (!match) return null;
   const value = Number(match[1].replace(/,/g, ""));
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function looksLikeAmountLedTransaction(text: string, amount: number | null): boolean {
+  if (!amount) return false;
+  const lower = normalizeIntentText(text);
+  const withoutAmount = lower
+    .replace(/(?:₦|\$|usd|ngn|naira)?\s*[0-9][0-9,]*(?:\.[0-9]+)?/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!withoutAmount || withoutAmount.length < 3) return false;
+  if (/[?]/.test(text)) return false;
+  if (/\b(balance|runway|burn|cashflow|cash flow|report|statement|download|export|show|list|how much|how many)\b/.test(lower)) {
+    return false;
+  }
+  return /[a-z]/i.test(withoutAmount);
 }
 
 function detectRecipient(text: string): string | null {
@@ -766,7 +781,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
   const transactionIntent =
     /\b(sold|sale|invoice|received|receipt|paid|rent|salary|buy|bought|purchase|expense|transaction|journal|post)\b/.test(
       lower
-    );
+    ) || looksLikeAmountLedTransaction(message, amount);
   const taxIntent = /\b(vat|wht|cgt|tax|firs|stamp|withholding)\b/.test(lower);
   const cashflowIntent = /\b(cashflow|cash flow|runway|burn)\b/.test(lower);
   const reportIntent = isReportActionIntent(message, moduleId);
@@ -788,6 +803,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     .slice(-6)
     .map((item) => item.content)
     .join("\n");
+  const transactionContext = [recentConversation, message].filter(Boolean).join("\n").trim();
   const routeSuggestion = resolveWorkspaceRouteFromText(
     `${message}\n${recentConversation}`,
     request.route,
@@ -891,7 +907,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     actions.push({
       type: "accounting.postTransaction",
       payload: {
-        description: message,
+        description: transactionContext || message,
         amount,
       },
       confidence: 0.67,

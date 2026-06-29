@@ -329,6 +329,8 @@ const testCases: TestCase[] = [
     { id: 198, input: "security deposit 200000", expectedType: "expense", expectedAmount: 200000, expectedCategory: "expense", description: "Security deposit" },
     { id: 199, input: "caution fee 50000", expectedType: "expense", expectedAmount: 50000, expectedCategory: "expense", description: "Caution fee" },
     { id: 200, input: "agreement fee 30000", expectedType: "expense", expectedAmount: 30000, expectedCategory: "expense", description: "Agreement fee" },
+    { id: 201, input: "$100 A plate of Rice", expectedType: "sale", expectedAmount: 100, expectedCategory: "sales", description: "Amount-led sale shorthand" },
+    { id: 202, input: "Context: restaurant sales\n$100 A plate of Rice", expectedType: "sale", expectedAmount: 100, expectedCategory: "sales", description: "Contextual amount-led transaction shorthand" },
 ];
 
 // ============================================================================

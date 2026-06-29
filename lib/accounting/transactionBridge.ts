@@ -4024,6 +4024,8 @@ function extractAmountFromMessage(message: string): number {
 
   const currencyPatterns = [
     /₦\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
+    /\$\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
+    /usd\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
     /ngn\s*([\d,]+(?:\.\d+)?\s*[kmb]?)/gi,
     /([\d,]+(?:\.\d+)?\s*[kmb]?)\s*naira\b/gi,
   ];
@@ -4790,22 +4792,47 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
   }
 
   // ==========================================================================
-  // STEP 5: AMOUNT-ONLY FALLBACK (Low confidence)
+  // STEP 5: AMOUNT + NARRATION FALLBACK (Low confidence)
   // ==========================================================================
+  const compactNarration = lowerMsg
+    .replace(/(?:₦|\$|usd|ngn|naira)?\s*\d[\d,]*(?:\.\d+)?\s*[kmb]?/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const hasNarration = /[a-z]/i.test(compactNarration) && compactNarration.length >= 3;
   const fallbackPaymentMethod = detectPaymentMethod(lowerMsg);
+  const fallbackParsedType: ParsedTransactionType =
+    hasNarration && /\b(paid|pay|bought|buy|purchase|purchased|expense|rent|salary|transport|fuel|utility|subscription|fee)\b/i.test(lowerMsg)
+      ? 'expense'
+      : hasNarration
+        ? 'sale'
+        : 'other';
+  const fallbackCategory =
+    fallbackParsedType === 'sale'
+      ? /\b(service|consulting|consultancy|professional)\b/i.test(lowerMsg)
+        ? 'service'
+        : 'sales'
+      : fallbackParsedType === 'expense'
+        ? /\brent\b/i.test(lowerMsg)
+          ? 'rent'
+          : /\b(salary|salaries|wages)\b/i.test(lowerMsg)
+            ? 'salary'
+            : /\b(transport|fuel|petrol|diesel|uber|bolt|taxi)\b/i.test(lowerMsg)
+              ? 'transport'
+              : 'expense'
+        : 'other';
   const fallbackAccounts = inferAccountsFromClassification(
-    'other',
-    'other',
+    fallbackParsedType,
+    fallbackCategory,
     fallbackPaymentMethod,
     lowerMsg
   );
   return {
     description: msg.substring(0, 150),
     amount,
-    category: 'other',
+    category: fallbackCategory,
     paymentMethod: fallbackPaymentMethod,
-    confidence: 0.40,
-    parsedType: 'other',
+    confidence: hasNarration ? 0.58 : 0.40,
+    parsedType: fallbackParsedType,
     debitAccount: fallbackAccounts.debitAccount,
     creditAccount: fallbackAccounts.creditAccount,
   };

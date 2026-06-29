@@ -111,10 +111,25 @@ function mergeActionToolRequests(...groups: ToolRequest[][]): ToolRequest[] {
 }
 
 function extractAmount(message: string): number | null {
-  const match = message.match(/(?:₦|ngn|naira)?\s*([0-9][0-9,]*(?:\.\d+)?)/i);
+  const match = message.match(/(?:₦|\$|usd|ngn|naira)?\s*([0-9][0-9,]*(?:\.\d+)?)/i);
   if (!match?.[1]) return null;
   const parsed = Number(match[1].replace(/,/g, ""));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function looksLikeAmountLedTransaction(message: string, amount: number | null): boolean {
+  if (!amount) return false;
+  const lower = normalizeIntentText(message);
+  const withoutAmount = lower
+    .replace(/(?:₦|\$|usd|ngn|naira)?\s*[0-9][0-9,]*(?:\.\d+)?/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!withoutAmount || withoutAmount.length < 3) return false;
+  if (/[?]/.test(message)) return false;
+  if (/\b(balance|runway|burn|cashflow|cash flow|report|statement|download|export|show|list|how much|how many)\b/.test(lower)) {
+    return false;
+  }
+  return /[a-z]/i.test(withoutAmount);
 }
 
 function extractSignedNumber(message: string): number | null {
@@ -554,7 +569,8 @@ function buildDeterministicToolRequests(message: string, context: BuiltModuleCon
     } else if (
       /\b(sold|sale|invoice|received|receipt|paid|rent|salary|buy|bought|purchase|expense|transaction|journal|post)\b/.test(
         lower
-      )
+      ) ||
+      looksLikeAmountLedTransaction(message, amount)
     ) {
       addRequest({
         name: "createTransaction",
