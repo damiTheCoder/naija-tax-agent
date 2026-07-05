@@ -8269,7 +8269,7 @@ body:has(.landing-modern) {
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 18px;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
   box-shadow: inset 0 1px 26px rgba(255, 255, 255, 0.16), 0 16px 34px rgba(0, 0, 0, 0.18);
@@ -8303,6 +8303,112 @@ body:has(.landing-modern) {
   .landing-arrow-button {
     width: 3.45rem;
     height: 3.45rem;
-    border-radius: 16px;
+    border-radius: 999px;
+  }
+}
+
+/* L5/L6 onboarding backgrounds and Introducing Bace text polish */
+.introducing-section.landing-panel {
+  background-image:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.12) 45%, rgba(0, 0, 0, 0.72) 100%),
+    url("/L4.png") !important;
+}
+
+.pricing-section.landing-panel {
+  background-image:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.12) 45%, rgba(0, 0, 0, 0.72) 100%),
+    url("/L5.png") !important;
+}
+
+.final-cta-section.landing-panel,
+.footer-modern.landing-panel {
+  background-image:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.12) 45%, rgba(0, 0, 0, 0.72) 100%),
+    url("/L6.png") !important;
+}
+
+.introducing-section.landing-panel .section-container,
+.introducing-section.landing-panel .cashos-features-section {
+  width: min(100%, 46rem);
+  max-width: 46rem;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.introducing-section.landing-panel .section-header-modern,
+.introducing-section.landing-panel .section-title-modern,
+.introducing-section.landing-panel .cashos-intro,
+.introducing-section.landing-panel .cashos-tagline {
+  text-align: center !important;
+}
+
+.introducing-section.landing-panel .cashos-intro,
+.introducing-section.landing-panel .cashos-tagline p {
+  font-weight: 400 !important;
+}
+
+.introducing-section.landing-panel .cashos-tagline .tagline-highlight {
+  font-weight: 400 !important;
+}
+
+/* Hide onboarding top brand and hard-center Introducing Bace content */
+.landing-modern .nav-modern {
+  display: none !important;
+}
+
+.introducing-section.landing-panel {
+  align-items: center !important;
+  text-align: center !important;
+}
+
+.introducing-section.landing-panel > .section-container,
+.introducing-section.landing-panel .cashos-features-section {
+  align-self: center !important;
+  width: min(100%, 42rem) !important;
+  max-width: 42rem !important;
+  margin: 0 auto !important;
+  padding-left: 1.25rem !important;
+  padding-right: 1.25rem !important;
+  text-align: center !important;
+}
+
+.introducing-section.landing-panel .section-header-modern {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 auto 0.85rem !important;
+  text-align: center !important;
+}
+
+.introducing-section.landing-panel .section-title-modern {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.introducing-section.landing-panel .title-highlight {
+  display: inline !important;
+}
+
+.introducing-section.landing-panel .cashos-intro,
+.introducing-section.landing-panel .cashos-tagline,
+.introducing-section.landing-panel .cashos-tagline p {
+  width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center !important;
+  font-weight: 400 !important;
+}
+
+@media (max-width: 768px) {
+  .introducing-section.landing-panel > .section-container,
+  .introducing-section.landing-panel .cashos-features-section {
+    width: min(100%, 22rem) !important;
+    max-width: 22rem !important;
+  }
+
+  .introducing-section.landing-panel .section-title-modern {
+    white-space: normal;
   }
 }
