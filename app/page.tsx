@@ -1,13 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
-import { ScrollNav, ScrollAnimator } from "./LandingClient";
+import { ScrollNav, ScrollAnimator, LandingNextButton } from "./LandingClient";
 
 const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
+  { label: "Features", href: "#introducing" },
+  { label: "Why It Matters", href: "#why-matters" },
   { label: "Tax", href: "/tax/workspace" },
-  { label: "About", href: "#about" },
+  { label: "Pricing", href: "#pricing" },
 ];
 
 const trustLogos = [
@@ -78,18 +78,11 @@ export default function LandingPage() {
                 </Link>
               ))}
             </div>
-
-            <Link href="/accounting" className="nav-cta-modern">
-              Get Started
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </Link>
           </div>
         </ScrollNav>
 
         {/* ========== HERO SECTION ========== */}
-        <section className="hero-modern hero-centered">
+        <section className="hero-modern hero-centered landing-panel is-active" id="hero">
           {/* Background - Grid pattern only */}
           <div className="hero-bg-decorations">
             <div className="hero-grid-pattern"></div>
@@ -111,7 +104,7 @@ export default function LandingPage() {
             <div className="hero-avatar-row" aria-label="Happy business owners using Bace">
               {heroAvatars.map((avatar, index) => (
                 <div key={`${avatar.src}-${index}`} className="hero-avatar-item">
-                  <img src={avatar.src} alt={avatar.alt} className="hero-avatar-image" width={48} height={48} loading="lazy" />
+                  <Image src={avatar.src} alt={avatar.alt} className="hero-avatar-image" width={48} height={48} />
                 </div>
               ))}
             </div>
@@ -123,7 +116,7 @@ export default function LandingPage() {
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
               </Link>
-              <Link href="#how-it-works" className="cta-secondary-modern">
+              <Link href="#introducing" className="cta-secondary-modern">
                 Watch Demo
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8 5v14l11-7z" />
@@ -157,7 +150,7 @@ export default function LandingPage() {
         </section>
 
         {/* ========== PROBLEM SECTION ========== */}
-        <section className="problem-section-modern scroll-fade-up" id="problem">
+        <section className="problem-section-modern scroll-fade-up landing-panel" id="problem">
           <div className="section-container">
             <div className="problem-content">
               <span className="section-badge problem-badge">The Problem</span>
@@ -222,7 +215,7 @@ export default function LandingPage() {
         </section>
 
         {/* ========== WHY THIS MATTERS SECTION ========== */}
-        <section className="why-matters-section scroll-fade-up" id="why-matters">
+        <section className="why-matters-section scroll-fade-up landing-panel" id="why-matters">
           <div className="section-container">
             <div className="why-matters-grid">
               <div className="why-matters-content">
@@ -272,7 +265,7 @@ export default function LandingPage() {
         </section>
 
         {/* ========== INTRODUCING CASHOS SECTION ========== */}
-        <section className="introducing-section scroll-drop-in" id="introducing">
+        <section className="introducing-section scroll-drop-in landing-panel" id="introducing">
           <div className="section-container">
             <div className="section-header-modern">
               <span className="section-badge">The Solution</span>
@@ -321,7 +314,7 @@ export default function LandingPage() {
 
 
         {/* ========== PRICING SECTION ========== */}
-        <section className="pricing-section scroll-fade-up" id="pricing">
+        <section className="pricing-section scroll-fade-up landing-panel" id="pricing">
           <div className="section-container">
             <div className="section-header-modern">
               <span className="section-badge">Pricing</span>
@@ -385,7 +378,7 @@ export default function LandingPage() {
         </section>
 
         {/* ========== FINAL CTA SECTION ========== */}
-        <section className="final-cta-section scroll-fade-in">
+        <section className="final-cta-section scroll-fade-in landing-panel" id="final-cta">
           <div className="section-container">
             <div className="final-cta-content">
               <h2 className="final-cta-title">
@@ -403,7 +396,7 @@ export default function LandingPage() {
         </section>
 
         {/* ========== FOOTER ========== */}
-        <footer className="footer-modern">
+        <footer className="footer-modern landing-panel" id="footer">
           <div className="footer-container-modern">
             <div className="footer-main-modern">
               <div className="footer-brand-modern">
@@ -419,13 +412,13 @@ export default function LandingPage() {
               <div className="footer-links-modern">
                 <div className="footer-col">
                   <h4>Product</h4>
-                  <Link href="#features">Features</Link>
-                  <Link href="#how-it-works">How It Works</Link>
+                  <Link href="#introducing">Features</Link>
+                  <Link href="#why-matters">Why It Matters</Link>
                   <Link href="/accounting">Dashboard</Link>
                 </div>
                 <div className="footer-col">
                   <h4>Company</h4>
-                  <Link href="#about">About</Link>
+                  <Link href="#final-cta">About</Link>
                   <Link href="/careers">Careers</Link>
                   <Link href="/contact">Contact</Link>
                 </div>
@@ -454,6 +447,7 @@ export default function LandingPage() {
             </div>
           </div>
         </footer>
+        <LandingNextButton />
       </div>
     </ScrollAnimator>
   );
