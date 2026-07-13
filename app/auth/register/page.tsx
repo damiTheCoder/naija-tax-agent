@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import GoogleMark from "@/components/GoogleMark";
+import { APP_LOGO_ALT, APP_LOGO_SRC } from "@/lib/constants";
 import { getPocketBaseBrowserClient } from "@/lib/pocketbase/browserClient";
 import { ALLOWED_OAUTH_PROVIDERS, POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
 import { STORAGE_KEYS, type UserProfile } from "@/lib/workspace/types";
@@ -113,9 +115,7 @@ export default function UserRegisterPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Registration failed");
       }
-      const user = "user" in data ? (data.user as AuthUser) : null;
-      syncUserToLocalProfile(user);
-      router.replace(next);
+      router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -159,52 +159,63 @@ export default function UserRegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-12">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">Create Account</h1>
-        <p className="mt-1 text-sm text-slate-600">Create your Bace account and save your profile in PocketBase.</p>
+    <div className="min-h-screen bg-white px-4 py-4 text-slate-950">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md items-center justify-center">
+      <section className="w-full rounded-[24px] border border-transparent bg-white p-5 shadow-none sm:p-6">
+        <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#446b00]">Get started</p>
+        <div className="mt-3 flex items-center gap-2.5">
+          <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl sm:h-10 sm:w-10">
+            <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="40px" priority />
+          </span>
+          <h1 className="text-[2rem] font-black leading-none tracking-tight text-[#07091a] sm:text-[2.45rem]">
+            Create account
+          </h1>
+        </div>
+        <p className="mt-3 max-w-sm text-sm leading-6 text-slate-500">
+          Create your Bace account and save your profile in PocketBase.
+        </p>
 
-        <form onSubmit={handleRegister} className="mt-6 space-y-4">
+        <form onSubmit={handleRegister} className="mt-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Full name</label>
+            <label className="block text-xs font-semibold text-slate-700">Full name</label>
             <input
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1.5 w-full rounded-[14px] border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-100"
               placeholder="Your name"
               autoComplete="name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <label className="block text-xs font-semibold text-slate-700">Email</label>
             <input
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1.5 w-full rounded-[14px] border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-100"
               placeholder="you@example.com"
               autoComplete="email"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <label className="block text-xs font-semibold text-slate-700">Password</label>
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1.5 w-full rounded-[14px] border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-100"
               placeholder="At least 8 characters"
               autoComplete="new-password"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Confirm password</label>
+            <label className="block text-xs font-semibold text-slate-700">Confirm password</label>
             <input
               type="password"
               value={passwordConfirm}
               onChange={(event) => setPasswordConfirm(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1.5 w-full rounded-[14px] border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-100"
               placeholder="Repeat your password"
               autoComplete="new-password"
             />
@@ -212,7 +223,7 @@ export default function UserRegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-lg bg-[#8fff00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00] disabled:opacity-60"
+            className="w-full rounded-[15px] bg-[#8fff00] px-4 py-3 text-sm font-black text-[#101010] transition hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? "Creating account..." : "Create account"}
           </button>
@@ -220,7 +231,7 @@ export default function UserRegisterPage() {
 
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-xs uppercase tracking-wide text-slate-500">or</span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">or</span>
           <div className="h-px flex-1 bg-slate-200" />
         </div>
 
@@ -236,7 +247,7 @@ export default function UserRegisterPage() {
                 type="button"
                 onClick={() => handleSocialLogin(provider.name)}
                 disabled={isLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2.5 rounded-[15px] border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <GoogleMark />
                 Continue with {provider.displayName}
@@ -245,18 +256,19 @@ export default function UserRegisterPage() {
           )}
         </div>
 
-        <p className="mt-5 text-sm text-slate-600">
+        <p className="mt-5 text-sm text-slate-500">
           Already have an account?{" "}
-          <Link href={`/auth/login?next=${encodeURIComponent(next)}`} className="font-semibold text-[#446b00]">
+          <Link href={`/auth/login?next=${encodeURIComponent(next)}`} className="font-black text-[#446b00]">
             Sign in
           </Link>
         </p>
 
         {error ? (
-          <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p className="mt-4 rounded-[14px] border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700">
             {error}
           </p>
         ) : null}
+      </section>
       </div>
     </div>
   );

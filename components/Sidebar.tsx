@@ -131,7 +131,9 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 onClick={() => handleNavSelect(item.href)}
                 className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:h-9 sm:gap-2 sm:px-3 sm:text-sm ${
                   isActive
-                    ? "bg-[#8fff00] text-[#101010]"
+                    ? isDark
+                      ? "bg-white/12 text-[#8fff00]"
+                      : "bg-[#e5e7eb] text-[#4f8f00]"
                     : isDark
                       ? "bg-white/5 text-white/72 hover:bg-white/10 hover:text-white"
                       : "bg-[#f3f4f6] text-[#5f5a54] hover:bg-[#e9ecef] hover:text-[#1f1f1f]"
@@ -143,7 +145,11 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 ) : (
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                      isActive ? "bg-[#101010] text-[#8fff00]" : isDark ? "bg-white/10 text-white" : "bg-white text-[#101010]"
+                      isActive
+                        ? "border border-white bg-[#101010] text-white"
+                        : isDark
+                          ? "bg-white/10 text-white"
+                          : "bg-white text-[#101010]"
                     }`}
                   >
                     <NavIconBadge icon={item.icon} className="h-3 w-3" />
