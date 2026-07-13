@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: bace-app
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm start -- -p $PORT
+    healthCheckPath: /api/pocketbase/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+      - key: POCKETBASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_POCKETBASE_URL
+        sync: false
+      - key: POCKETBASE_SUPERUSER_EMAIL
+        sync: false
+      - key: POCKETBASE_SUPERUSER_PASSWORD
+        sync: false
+      - key: POCKETBASE_DEFAULT_ADMIN_EMAIL
+        sync: false
+      - key: POCKETBASE_DEFAULT_ADMIN_PASSWORD
+        sync: false
+      - key: POCKETBASE_DEFAULT_ADMIN_NAME
+        value: Platform Admin
+      - key: AUTH_SESSION_SECRET
+        generateValue: true
+      - key: AI_VALIDATION_PROVIDER
+        value: gemini
+      - key: ENABLE_AI_VALIDATION
+        value: "true"
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: bace-pocketbase
+    runtime: image
+    image: ghcr.io/muchobien/pocketbase:latest
+    plan: starter
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /api/health
+    disk:
+      name: pocketbase-data
+      mountPath: /pb/pb_data
+      sizeGB: 1

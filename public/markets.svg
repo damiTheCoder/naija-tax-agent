@@ -1,0 +1,39 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shell" x1="18" y1="13" x2="80" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#202020"/>
+      <stop offset="0.52" stop-color="#070707"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="bag" x1="25" y1="28" x2="72" y2="77" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFFFBB"/>
+      <stop offset="0.42" stop-color="#8FFF00"/>
+      <stop offset="1" stop-color="#4F8F00"/>
+    </linearGradient>
+    <linearGradient id="face" x1="31" y1="40" x2="64" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B8FF4D"/>
+      <stop offset="1" stop-color="#6FCC00"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="58" y1="14" x2="80" y2="38" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7DF7E6"/>
+      <stop offset="0.52" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+    <filter id="lift" x="8" y="8" width="80" height="84" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="88" height="88" rx="26" fill="url(#shell)"/>
+  <g filter="url(#lift)">
+    <path d="M25 42.5L34 32H65L73 42.5L68.6 75H29.4L25 42.5Z" fill="url(#bag)"/>
+    <path d="M29.4 44H68.9L64.8 68.8C64.3 71.8 61.8 74 58.8 74H35.2C32.2 74 29.7 71.8 29.2 68.8L25.1 44H29.4Z" fill="url(#face)"/>
+    <path d="M36 41C36 34.37 41.37 29 48 29C54.63 29 60 34.37 60 41" stroke="white" stroke-width="5.8" stroke-linecap="round"/>
+    <path d="M36 55H60" stroke="#0A0A0A" stroke-width="5.5" stroke-linecap="round"/>
+    <path d="M33 44L41 34H65L73 44H33Z" fill="white" fill-opacity="0.22"/>
+  </g>
+  <g filter="url(#lift)">
+    <circle cx="70" cy="27" r="13" fill="url(#coin)"/>
+    <path d="M65 27H75" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M70 22V32" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+</svg>

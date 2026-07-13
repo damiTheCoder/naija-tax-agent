@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import GoogleMark from "@/components/GoogleMark";
 import { getPocketBaseBrowserClient } from "@/lib/pocketbase/browserClient";
-import { POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
+import { ALLOWED_OAUTH_PROVIDERS, POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
 
 type Provider = { name: string; displayName: string };
 
@@ -37,7 +38,7 @@ export default function UserSignInPage() {
         const providersData = (await providersResponse.json()) as { success?: boolean; providers?: Provider[] };
         if (!active) return;
         if (providersData.success && Array.isArray(providersData.providers)) {
-          setProviders(providersData.providers);
+          setProviders(providersData.providers.filter((provider) => ALLOWED_OAUTH_PROVIDERS.has(provider.name.toLowerCase())));
         }
       } catch {
         if (active) setProviders([]);
@@ -81,6 +82,11 @@ export default function UserSignInPage() {
   };
 
   const handleSocialLogin = async (provider: string) => {
+    if (!ALLOWED_OAUTH_PROVIDERS.has(provider.toLowerCase())) {
+      setError("Only Google login is enabled.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -155,7 +161,7 @@ export default function UserSignInPage() {
           {loadingProviders ? (
             <p className="text-sm text-slate-500">Loading social providers...</p>
           ) : providers.length === 0 ? (
-            <p className="text-sm text-slate-500">No social providers configured.</p>
+            <p className="text-sm text-slate-500">Google login is not configured in PocketBase.</p>
           ) : (
             providers.map((provider) => (
               <button
@@ -163,8 +169,9 @@ export default function UserSignInPage() {
                 type="button"
                 onClick={() => handleSocialLogin(provider.name)}
                 disabled={isLoading}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
+                <GoogleMark />
                 Continue with {provider.displayName}
               </button>
             ))

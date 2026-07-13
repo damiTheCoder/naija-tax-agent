@@ -1198,6 +1198,7 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
       new CustomEvent(CHAT_MODAL_OPEN_EVENT, {
         detail: {
           module: "projections",
+          newChat: true,
           prompt: `Update ${modelMeta.name} inputs for me.`,
         },
       })

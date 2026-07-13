@@ -6,6 +6,8 @@ const projectRoot = process.cwd();
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   devIndicators: false,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  poweredByHeader: false,
   serverExternalPackages: ["pdfkit"],
   experimental: {
     optimizePackageImports: [

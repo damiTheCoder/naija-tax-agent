@@ -9,6 +9,7 @@ import {
   ACCOUNTING_NAV_ITEMS,
   AppMode,
   BUDGETING_NAV_ITEMS,
+  MARKETS_NAV_ITEMS,
   ProjectionsModuleOwner,
   TAX_NAV_ITEMS,
   getServerProjectionsModuleOwnerSnapshot,
@@ -32,7 +33,7 @@ const MODULES: { id: AppMode; label: string; iconSrc: string; activeColor: strin
   {
     id: "accounting",
     label: "Accounting",
-    iconSrc: "/accounting.jpeg",
+    iconSrc: "/accounting.jpeg?v=20260713-0015",
     activeColor: "#4f8f00",
     href: "/accounting",
     items: ACCOUNTING_NAV_ITEMS,
@@ -53,6 +54,14 @@ const MODULES: { id: AppMode; label: string; iconSrc: string; activeColor: strin
     href: "/budgeting/dashboard",
     items: BUDGETING_NAV_ITEMS,
   },
+  {
+    id: "markets",
+    label: "Markets",
+    iconSrc: "/Market.jpg?v=20260713-1",
+    activeColor: "#0f766e",
+    href: "/markets",
+    items: MARKETS_NAV_ITEMS,
+  },
 ];
 
 function getModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner) {
@@ -72,13 +81,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
   );
   const isDark = theme === "dark";
   const currentModule = getModuleForPath(pathname, projectionsOwner);
-
-  const handleModuleSelect = (module: (typeof MODULES)[number]) => {
-    onClose();
-    if (module.id === currentModule.id) return;
-    setNavigatingTo(module.href);
-    navigateTo(module.href);
-  };
 
   const handleNavSelect = (href: string) => {
     onClose();
@@ -114,46 +116,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
           </Link>
         </div>
 
-        <div className="sidebar-module-row sidebar-nav-scrollbar -mr-4 flex min-w-0 items-center gap-2 overflow-x-auto pr-16 sm:pr-20 lg:pr-24">
-            {MODULES.map((module) => {
-              const isActive = module.id === currentModule.id;
-              const isNavigating = navigatingTo === module.href && pathname !== module.href;
-
-              return (
-                <button
-                  key={module.id}
-                  type="button"
-                  onMouseEnter={() => prefetchTo(module.href)}
-                  onFocus={() => prefetchTo(module.href)}
-                  onTouchStart={() => prefetchTo(module.href)}
-                  onClick={() => handleModuleSelect(module)}
-                  className={`group flex h-10 shrink-0 items-center gap-2.5 rounded-full px-2.5 pr-3.5 text-xs font-semibold transition-colors sm:h-11 sm:px-3 sm:pr-4 sm:text-sm ${
-                    isDark && !isActive ? "text-white/80 hover:text-white" : !isActive ? "text-[#303030]" : ""
-                  }`}
-                  style={isActive ? { color: module.activeColor } : undefined}
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  {isNavigating ? (
-                    <span className="h-7 w-7 rounded-2xl bg-current/25 animate-pulse" />
-                  ) : (
-                    <Image
-                      src={module.iconSrc}
-                      alt=""
-                      width={32}
-                      height={32}
-                      className={`h-7 w-7 shrink-0 object-contain transition-transform duration-200 ${
-                        isActive ? "scale-110" : "group-hover:scale-110"
-                      }`}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="whitespace-nowrap">{module.label}</span>
-                </button>
-              );
-            })}
-        </div>
-
-        <div className="sidebar-subnav-row sidebar-nav-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 transition-all duration-200 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="sidebar-subnav-row sidebar-nav-scrollbar -mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 transition-all duration-200 sm:-mx-6 sm:px-6 lg:-mx-8 lg:flex lg:px-8">
           {currentModule.items.map((item) => {
             const isActive = isNavItemActive(pathname, item.href);
             const isNavigating = navigatingTo === item.href && pathname !== item.href;
@@ -178,7 +141,13 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 {isNavigating ? (
                   <span className="h-3.5 w-3.5 rounded-full bg-current/25 animate-pulse" />
                 ) : (
-                  <NavIconBadge icon={item.icon} className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                      isActive ? "bg-[#101010] text-[#8fff00]" : isDark ? "bg-white/10 text-white" : "bg-white text-[#101010]"
+                    }`}
+                  >
+                    <NavIconBadge icon={item.icon} className="h-3 w-3" />
+                  </span>
                 )}
                 <span className="whitespace-nowrap">{item.label}</span>
               </button>

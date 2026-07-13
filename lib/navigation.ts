@@ -1,6 +1,6 @@
 export type NavIcon = "home" | "shield" | "receipt" | "trend" | "ledger" | "chart" | "calculator" | "folder" | "chat" | "bank" | "report" | "cashflow" | "intelligence" | "wallet" | "spreadsheet" | "users" | "shop" | "message-square";
 
-export type AppMode = "tax" | "accounting" | "budgeting" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
+export type AppMode = "tax" | "accounting" | "budgeting" | "markets" | "intelligence" | "wallet" | "supersheet" | "marketplace" | "payroll" | "personal";
 export type ProjectionsModuleOwner = "accounting" | "intelligence";
 
 export interface TaxNavItem {
@@ -55,6 +55,7 @@ export function subscribeToProjectionsModuleOwner(onStoreChange: () => void): ()
 }
 
 export function resolveModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner = "accounting"): AppMode {
+  if (pathname.startsWith("/markets")) return "markets";
   if (pathname.startsWith("/budgeting")) return "budgeting";
   if (isProjectionsRoute(pathname)) return projectionsOwner;
   if (
@@ -372,5 +373,23 @@ export const BUDGETING_NAV_ITEMS: TaxNavItem[] = [
     icon: "chat",
     description: "AI guidance for optimization and budgeting decisions",
     mode: "budgeting",
+  },
+];
+
+// Markets module navigation
+export const MARKETS_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Market",
+    href: "/markets",
+    icon: "shop",
+    description: "Browse SMEs available for public support",
+    mode: "markets",
+  },
+  {
+    label: "SME Profile",
+    href: "/markets/profile",
+    icon: "wallet",
+    description: "Funding data, reward choices, and batch performance for an SME",
+    mode: "markets",
   },
 ];

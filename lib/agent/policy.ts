@@ -25,9 +25,9 @@ const DEFAULT_POLICY: ActionPolicy = {
 
 const ACTION_POLICIES: Record<UnifiedAgentActionType, ActionPolicy> = {
   "accounting.postTransaction": {
-    risk: "high",
-    approvalRequired: true,
-    minConfidence: 0.7,
+    risk: "medium",
+    approvalRequired: false,
+    minConfidence: 0.55,
     description: "Posts accounting data",
   },
   "accounting.createBill": {

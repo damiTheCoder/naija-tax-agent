@@ -409,7 +409,7 @@ export default function SupportPage() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/auth/sign-in?next=%2Fsupport"
+                  href="/auth/login?next=%2Fsupport"
                   className="rounded-xl bg-[#8fff00] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6fcc00]"
                 >
                   Sign in

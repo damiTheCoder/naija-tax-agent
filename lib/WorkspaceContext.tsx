@@ -140,10 +140,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     // Update profile
     const updateProfile = useCallback((updates: Partial<UserProfile>) => {
-        const updatedProfile = { ...profile, ...updates };
-        setProfile(updatedProfile);
-        localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedProfile));
-    }, [profile]);
+        setProfile((currentProfile) => {
+            const updatedProfile = { ...currentProfile, ...updates };
+            localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedProfile));
+            return updatedProfile;
+        });
+    }, []);
 
     return (
         <WorkspaceContext.Provider

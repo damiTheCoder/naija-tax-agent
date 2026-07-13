@@ -54,10 +54,21 @@ export interface UnifiedAgentResponse {
   confidence?: number;
   reasoning?: string;
   planSource?: "fast-path" | "gemini" | "fallback";
+  phases?: AgentRuntimePhase[];
+  suggestions?: string[];
   requiresApproval?: boolean;
   approvalReasons?: string[];
   validationErrors?: string[];
   auditId?: string;
+}
+
+export type AgentRuntimePhaseName = "understanding" | "plan" | "observations" | "answer" | "suggestions";
+
+export interface AgentRuntimePhase {
+  name: AgentRuntimePhaseName;
+  status: "completed" | "skipped" | "failed";
+  summary: string;
+  detail?: unknown;
 }
 
 export interface UnifiedActionExecutionResult {

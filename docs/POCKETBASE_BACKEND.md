@@ -29,6 +29,10 @@ AUTH_SESSION_SECRET=replace-with-a-long-random-secret
 POCKETBASE_DEFAULT_ADMIN_EMAIL=owner@example.com
 POCKETBASE_DEFAULT_ADMIN_PASSWORD=change-this-admin-password
 POCKETBASE_DEFAULT_ADMIN_NAME=Platform Admin
+
+# Google OAuth for PocketBase social login
+GOOGLE_OAUTH_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-google-oauth-client-secret
 ```
 
 ## 2. Start PocketBase
@@ -99,18 +103,30 @@ To disable the automatic local repair during `pb:init`, set:
 POCKETBASE_AUTO_REPAIR_LOCAL_TIMESTAMPS=0
 ```
 
-## 3. Configure social login providers
+## 3. Configure Google social login
 
-Open PocketBase admin UI at `http://127.0.0.1:8090/_/`.
+This app only exposes Google as a social login provider.
 
-For each OAuth provider (Google/GitHub), configure provider settings under the `users` auth collection.
-Use this redirect URL in provider dashboards:
+1. In Google Cloud Console, create an OAuth 2.0 Client ID for a Web application.
+2. Add this authorized redirect URI for local development:
 
 ```text
 http://127.0.0.1:8090/api/oauth2-redirect
 ```
 
-For production, replace localhost with your production PocketBase domain.
+3. For production, add the same path on your production PocketBase domain:
+
+```text
+https://your-pocketbase-domain.com/api/oauth2-redirect
+```
+
+4. Add the client ID and secret to `.env.local`, then run:
+
+```bash
+npm run pb:oauth:google
+```
+
+The command updates the `users` auth collection in PocketBase and enables only the Google OAuth provider for app login.
 
 ## 4. New routes
 

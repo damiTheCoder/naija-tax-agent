@@ -3110,6 +3110,8 @@ export async function requestUnifiedAgentPlan(
       approvalReasons: shouldPromoteLocalActions ? undefined : data.approvalReasons,
       validationErrors: data.validationErrors,
       auditId: data.auditId,
+      phases: data.phases,
+      suggestions: data.suggestions,
     };
   } catch (error) {
     console.warn("[Unified Agent] Planner request failed:", error);
@@ -3224,6 +3226,7 @@ export async function runUnifiedAgentMessage(params: {
   execution: UnifiedActionExecutionResult[];
   navigateTo?: string;
   planSource: AgentPlanSource;
+  suggestions?: string[];
 }> {
   const trimmedMessage = params.message.trim();
   const moduleId = normalizeModuleId(params.module);
@@ -3264,6 +3267,7 @@ export async function runUnifiedAgentMessage(params: {
       execution: [],
       navigateTo: undefined,
       planSource: "fallback",
+      suggestions: ["Try again", "Start a new request"],
     };
   }
 
@@ -3304,6 +3308,7 @@ export async function runUnifiedAgentMessage(params: {
       execution,
       navigateTo,
       planSource: approval.planSource,
+      suggestions: ["Show me what changed", "Show the audit trail"],
     };
   }
 
@@ -3341,6 +3346,7 @@ export async function runUnifiedAgentMessage(params: {
           execution,
           navigateTo,
           planSource: "fallback",
+          suggestions: ["Show me what changed", "Show the audit trail"],
         };
       }
     }
@@ -3360,6 +3366,7 @@ export async function runUnifiedAgentMessage(params: {
       execution: [],
       navigateTo: undefined,
       planSource: "fallback",
+      suggestions: ["Explain the assumptions", "Run a scenario"],
     };
   }
 
@@ -3373,6 +3380,7 @@ export async function runUnifiedAgentMessage(params: {
 
   let latestReply = "";
   let latestPlanSource: AgentPlanSource = "fallback";
+  let latestSuggestions: string[] | undefined;
   let latestNavigateTo: string | undefined;
   const aggregateActions: UnifiedAgentAction[] = [];
   const aggregateExecution: UnifiedActionExecutionResult[] = [];
@@ -3400,6 +3408,7 @@ export async function runUnifiedAgentMessage(params: {
 
     latestReply = plan.reply;
     latestPlanSource = normalizePlanSource(plan.planSource);
+    latestSuggestions = plan.suggestions;
 
     if (!Array.isArray(plan.actions) || plan.actions.length === 0) {
       pendingUiApproval = null;
@@ -3446,7 +3455,7 @@ export async function runUnifiedAgentMessage(params: {
         planSource: latestPlanSource,
         reasons: policy.reasons,
       };
-      latestReply = `${latestReply}\n\nThis AI plan needs human approval before it changes data. Reply "confirm" to run it, or "cancel" to skip it.\n\nReview notes: ${policy.reasons.join(" ")}`;
+      latestReply = `${latestReply}\n\nI need your confirmation before running the sensitive part of this request. Reply "confirm" to continue, or "cancel" to skip it.`;
       appendAIAuditEvent({
         eventType: "approval.requested",
         module: moduleId,
@@ -3462,7 +3471,7 @@ export async function runUnifiedAgentMessage(params: {
 
     if (executionMode === "background" && policy.approvalActions.length > 0) {
       pendingUiApproval = null;
-      latestReply = `${latestReply}\n\nThis AI plan needs human approval before it changes data. Run it in interactive Agentic mode so you can review and confirm it. Review notes: ${policy.reasons.join(" ")}`;
+      latestReply = `${latestReply}\n\nThis includes a sensitive step, so I did not run that part in background mode. Switch to Agentic mode if you want to review and confirm it.`;
       appendAIAuditEvent({
         eventType: "approval.requested",
         module: moduleId,
@@ -3576,5 +3585,6 @@ export async function runUnifiedAgentMessage(params: {
     execution: aggregateExecution,
     navigateTo: latestNavigateTo,
     planSource: latestPlanSource,
+    suggestions: latestSuggestions,
   };
 }

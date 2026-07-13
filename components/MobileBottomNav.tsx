@@ -1,92 +1,42 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import type { ComponentType } from "react";
 import { useNavigation } from "@/lib/NavigationContext";
-import { NavIconBadge } from "@/components/NavIconBadge";
-import type { NavIcon } from "@/lib/navigation";
-import { useEffect, useState } from "react";
+import { Calculator, FileText, LayoutDashboard, UserRound } from "lucide-react";
 
-type MobileNavItemKey = "home" | "reports" | "projections" | "tax";
+type MobileNavItemKey = "dashboard" | "chat" | "reporting" | "profile";
 
-const MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY = "ql::mobile-projections-entry";
-const MOBILE_PROJECTIONS_ENTRY_EVENT = "ql:mobile-projections-entry-change";
-
-const NAV_ITEMS: Array<{ key: MobileNavItemKey; label: string; href: string; icon: NavIcon }> = [
+const NAV_ITEMS: Array<{ key: MobileNavItemKey; label: string; href: string; icon: ComponentType<{ className?: string; strokeWidth?: number }> }> = [
     {
-        key: "home",
-        label: "Home",
-        href: "/accounting",
-        icon: "home",
-    },
-    {
-        key: "reports",
-        label: "Reports",
-        href: "/accounting/workspace",
-        icon: "report",
-    },
-    {
-        key: "projections",
-        label: "Projections",
+        key: "dashboard",
+        label: "Dashboard",
         href: "/dashboard",
-        icon: "trend",
+        icon: LayoutDashboard,
     },
     {
-        key: "tax",
-        label: "Tax",
-        href: "/tax/workspace",
-        icon: "calculator",
+        key: "chat",
+        label: "Accounting",
+        href: "/accounting",
+        icon: Calculator,
+    },
+    {
+        key: "reporting",
+        label: "Reporting",
+        href: "/accounting/workspace",
+        icon: FileText,
+    },
+    {
+        key: "profile",
+        label: "Profile",
+        href: "/profile",
+        icon: UserRound,
     },
 ];
 
 export default function MobileBottomNav() {
     const pathname = usePathname();
     const { navigateTo, prefetchTo } = useNavigation();
-    const [isProjectionsEntryMode, setIsProjectionsEntryMode] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const readMode = () => {
-            try {
-                setIsProjectionsEntryMode(window.localStorage.getItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY) === "1");
-            } catch {
-                setIsProjectionsEntryMode(false);
-            }
-        };
-
-        const handleModeEvent = (event: Event) => {
-            const customEvent = event as CustomEvent<{ enabled?: boolean }>;
-            if (typeof customEvent.detail?.enabled === "boolean") {
-                setIsProjectionsEntryMode(customEvent.detail.enabled);
-                return;
-            }
-            readMode();
-        };
-
-        readMode();
-        window.addEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleModeEvent as EventListener);
-        window.addEventListener("storage", readMode);
-
-        return () => {
-            window.removeEventListener(MOBILE_PROJECTIONS_ENTRY_EVENT, handleModeEvent as EventListener);
-            window.removeEventListener("storage", readMode);
-        };
-    }, []);
-
-    const updateProjectionsEntryMode = (enabled: boolean) => {
-        if (typeof window === "undefined") return;
-        try {
-            if (enabled) {
-                window.localStorage.setItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY, "1");
-            } else {
-                window.localStorage.removeItem(MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY);
-            }
-        } catch {
-            // no-op
-        }
-        setIsProjectionsEntryMode(enabled);
-        window.dispatchEvent(new CustomEvent(MOBILE_PROJECTIONS_ENTRY_EVENT, { detail: { enabled } }));
-    };
 
     return (
         <nav
@@ -96,28 +46,18 @@ export default function MobileBottomNav() {
         >
             <div className="grid grid-cols-4 px-2 py-1.5">
                 {NAV_ITEMS.map((item) => {
+                    const Icon = item.icon;
                     const isActive =
-                        item.key === "home"
-                            ? pathname === "/accounting" && !isProjectionsEntryMode
-                            : item.key === "projections"
-                                ? pathname.startsWith("/accounting/projections") || (pathname === "/dashboard" && isProjectionsEntryMode)
-                                : pathname.startsWith(item.href);
+                        item.href === "/accounting"
+                            ? pathname === "/accounting"
+                            : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
                     return (
                         <button
                             key={item.key}
                             type="button"
-                            onTouchStart={() => prefetchTo(item.key === "projections" ? "/dashboard" : item.href)}
+                            onTouchStart={() => prefetchTo(item.href)}
                             onClick={() => {
-                                if (item.key === "projections") {
-                                    updateProjectionsEntryMode(true);
-                                    if (pathname !== "/dashboard") {
-                                        navigateTo("/dashboard");
-                                    }
-                                    return;
-                                }
-
-                                updateProjectionsEntryMode(false);
                                 if (pathname !== item.href) navigateTo(item.href);
                             }}
                             className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors ${
@@ -127,7 +67,7 @@ export default function MobileBottomNav() {
                             aria-label={item.label}
                             title={item.label}
                         >
-                            <NavIconBadge icon={item.icon} className="h-[20px] w-[20px]" />
+                            <Icon className="h-[20px] w-[20px]" strokeWidth={isActive ? 2.4 : 2} />
                             <span className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}>
                                 {item.label}
                             </span>

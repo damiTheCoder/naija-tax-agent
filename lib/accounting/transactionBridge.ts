@@ -96,14 +96,33 @@ class AccountingEngine {
     );
   }
 
+  private isRemovedDemoBankSyncEntry(entry: unknown): boolean {
+    if (!entry || typeof entry !== "object") return false;
+    const candidate = entry as { reference?: unknown; matchedBankTransactionId?: unknown; narration?: unknown };
+    const reference = String(candidate.reference || "").toLowerCase();
+    const matchedBankTransactionId = String(candidate.matchedBankTransactionId || "").toLowerCase();
+    const narration = String(candidate.narration || "").toLowerCase();
+
+    return (
+      reference.startsWith("bank-sync-") ||
+      matchedBankTransactionId.startsWith("sync-") ||
+      narration.includes("invoice payment #2026-031") ||
+      narration.includes("shoprite ikeja") ||
+      narration.includes("ikedc prepaid meter recharge") ||
+      narration.includes("salary credit - dec 2025") ||
+      narration.includes("office supplies ltd") ||
+      narration.includes("sms alert charge")
+    );
+  }
+
   /**
-   * Remove only known-corrupted loop-generated entries.
+   * Remove only known-generated entries that should not stay in real user books.
    * Returns number of purged entries.
    */
-  private purgeCorruptedJournalEntries(): number {
+  private purgeGeneratedJournalEntries(): number {
     const before = this.state.journalEntries.length;
     this.state.journalEntries = this.state.journalEntries.filter(
-      (entry) => !this.isCorruptedAgentLoopNarration(entry?.narration)
+      (entry) => !this.isCorruptedAgentLoopNarration(entry?.narration) && !this.isRemovedDemoBankSyncEntry(entry)
     );
     return before - this.state.journalEntries.length;
   }
@@ -259,9 +278,9 @@ class AccountingEngine {
         });
         this.state.lastUpdated = parsed.lastUpdated || new Date().toISOString();
 
-        const purgedEntries = this.purgeCorruptedJournalEntries();
+        const purgedEntries = this.purgeGeneratedJournalEntries();
         if (purgedEntries > 0) {
-          console.warn(`[Load] Purged ${purgedEntries} corrupted loop-generated journal entr${purgedEntries === 1 ? "y" : "ies"}.`);
+          console.warn(`[Load] Purged ${purgedEntries} generated journal entr${purgedEntries === 1 ? "y" : "ies"}.`);
         }
 
         // Auto-rebuild ledger to fix any discrepancies

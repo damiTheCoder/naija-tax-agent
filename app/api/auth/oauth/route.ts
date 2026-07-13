@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import PocketBase from "pocketbase";
 import { getPocketBaseUrl, POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
+import { createPocketBaseAdminClient } from "@/lib/pocketbase/adminClient";
 import { createSession, writeSessionCookie } from "@/lib/pocketbase/session";
 import { normalizePocketBaseUser, type PocketBaseUserRecord } from "@/lib/pocketbase/users";
 
@@ -14,7 +15,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const pb = new PocketBase(getPocketBaseUrl());
     pb.authStore.save(token);
     const refreshed = await pb.collection(POCKETBASE_USER_COLLECTION).authRefresh();
-    const user = normalizePocketBaseUser(refreshed.record as PocketBaseUserRecord);
+    let record = refreshed.record as PocketBaseUserRecord;
+
+    if (!record.role || !record.status || !record.sessionVersion) {
+      const adminPb = await createPocketBaseAdminClient();
+      record = (await adminPb.collection(POCKETBASE_USER_COLLECTION).update(
+        record.id,
+        {
+          role: record.role || "user",
+          status: record.status || "active",
+          sessionVersion: record.sessionVersion || 1,
+        },
+        { requestKey: null },
+      )) as PocketBaseUserRecord;
+    }
+
+    const user = normalizePocketBaseUser(record);
 
     const response = NextResponse.json({ success: true, user });
     const session = createSession({

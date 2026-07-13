@@ -242,6 +242,15 @@ function isBankOriginEntry(entry: JournalEntry): boolean {
   return reference.startsWith("bank-") || typeof entry.matchedBankTransactionId === "string";
 }
 
+function isDemoBankConnection(connection: BankConnection): boolean {
+  return (
+    connection.id === "conn_zenith_001" ||
+    (connection.bankCode === "zenith" &&
+      connection.transactionCount === 847 &&
+      connection.accounts.some((account) => account.accountName === "Acme Technologies Ltd"))
+  );
+}
+
 function buildStableBankTransactionId(
   connectionId: string,
   tx: Pick<InboundBankTransaction, "date" | "amount" | "direction" | "description" | "reference">,
@@ -318,6 +327,7 @@ export default function BankConnectionsPage() {
           const seenIds = new Set<string>();
           const seenBanks = new Set<string>();
           const unique = parsed.filter((c) => {
+            if (isDemoBankConnection(c)) return false;
             if (seenIds.has(c.id) || seenBanks.has(c.bankCode)) return false;
             seenIds.add(c.id);
             seenBanks.add(c.bankCode);

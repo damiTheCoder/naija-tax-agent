@@ -3,10 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { accountingEngine } from "@/lib/accounting/transactionBridge";
-import { taxEngine } from "@/lib/tax/taxEngine";
-import { loadBudgetingState } from "@/lib/budgeting/store";
-import { payrollEngine } from "@/lib/payroll/payrollEngine";
 import {
     runUnifiedAgentMessage,
     type AgentPlanSource,
@@ -61,6 +57,26 @@ type ChatModalOpenDetail = {
     newChat?: boolean;
 };
 
+async function getAccountingEngine() {
+    const accountingModule = await import("@/lib/accounting/transactionBridge");
+    return accountingModule.accountingEngine;
+}
+
+async function getTaxEngine() {
+    const taxModule = await import("@/lib/tax/taxEngine");
+    return taxModule.taxEngine;
+}
+
+async function getBudgetingState() {
+    const budgetingModule = await import("@/lib/budgeting/store");
+    return budgetingModule.loadBudgetingState();
+}
+
+async function getPayrollEngine() {
+    const payrollModule = await import("@/lib/payroll/payrollEngine");
+    return payrollModule.payrollEngine;
+}
+
 function toPlainChatText(content: string): string {
     if (!content) return "";
 
@@ -99,6 +115,7 @@ type ChatMessage = {
     timestamp: number;
     attachment?: ChatAttachmentDownload;
     rich?: RichChatPayload;
+    suggestions?: string[];
 };
 
 type AgentChatMode = "response-only" | "full-agentic";
@@ -367,8 +384,13 @@ function formatSnapshotNaira(value: number): string {
     return `${sign}₦${Math.abs(safe).toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
 }
 
-function buildGlobalDataSnapshot(): string {
+async function buildGlobalDataSnapshot(): Promise<string> {
     if (typeof window === "undefined") return "";
+
+    const [accountingEngine, taxEngine] = await Promise.all([
+        getAccountingEngine(),
+        getTaxEngine(),
+    ]);
 
     try {
         const accountingState = accountingEngine.getState();
@@ -418,7 +440,7 @@ function buildGlobalDataSnapshot(): string {
     }
 
     try {
-        const budgetingState = loadBudgetingState();
+        const budgetingState = await getBudgetingState();
         const budgetedTotal = (budgetingState.budgets || []).reduce((sum, budget) => sum + (budget.totalAmount || 0), 0);
         lines.push(
             `Budgeting: budgets=${budgetingState.budgets?.length || 0}, scenarios=${budgetingState.scenarios?.length || 0}, totalBudgeted=${formatSnapshotNaira(budgetedTotal)}, fiscalStartMonth=${budgetingState.settings?.fiscalYearStartMonth || 1}`
@@ -428,6 +450,7 @@ function buildGlobalDataSnapshot(): string {
     }
 
     try {
+        const payrollEngine = await getPayrollEngine();
         const runs = payrollEngine.getRuns();
         const latest = runs[0];
         lines.push(
@@ -442,7 +465,7 @@ function buildGlobalDataSnapshot(): string {
     return lines.join("\n");
 }
 
-function buildPageContextSnapshot(pathname: string, moduleId: string): string {
+async function buildPageContextSnapshot(pathname: string, moduleId: string): Promise<string> {
     const profile = getPageAssistantProfile(pathname);
     const pageDefinition = findWorkspacePageByRoute(pathname);
     const lines = [
@@ -470,7 +493,7 @@ function buildPageContextSnapshot(pathname: string, moduleId: string): string {
         lines.push("Global route intelligence: full page-function catalog loaded for cross-module execution.");
     }
 
-    const globalDataSnapshot = buildGlobalDataSnapshot();
+    const globalDataSnapshot = await buildGlobalDataSnapshot();
     if (globalDataSnapshot.trim()) {
         lines.push(globalDataSnapshot);
     }
@@ -589,8 +612,9 @@ function monthLabelFromKey(key: string): string {
     return new Date(year, month - 1, 1).toLocaleString("en-NG", { month: "short" });
 }
 
-function buildMonthlyAccountingPoints(): MonthlyAccountingPoint[] {
+async function buildMonthlyAccountingPoints(): Promise<MonthlyAccountingPoint[]> {
     const points = new Map<string, MonthlyAccountingPoint>();
+    const accountingEngine = await getAccountingEngine();
     const state = accountingEngine.getState();
 
     const getPoint = (key: string): MonthlyAccountingPoint => {
@@ -644,13 +668,13 @@ function calculateChangePercent(startValue: number, endValue: number): number | 
     return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
-function buildRevenueTrendCard(message: string): { content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null {
+async function buildRevenueTrendCard(message: string): Promise<{ content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null> {
     const lower = message.toLowerCase();
     const wantsRevenue = /\b(revenue|sales|price|prices)\b/.test(lower);
     const wantsProjection = /\b(projection|forecast)\b/.test(lower);
     if (!wantsRevenue || wantsProjection) return null;
 
-    const monthlyPoints = buildMonthlyAccountingPoints().filter((point) => point.revenue !== 0).slice(-6);
+    const monthlyPoints = (await buildMonthlyAccountingPoints()).filter((point) => point.revenue !== 0).slice(-6);
     if (monthlyPoints.length < 2) return null;
 
     const first = monthlyPoints[0];
@@ -711,8 +735,10 @@ function buildRevenueTrendCard(message: string): { content: string; rich: RichCh
     return { content, rich, attachment };
 }
 
-function buildAccountingProjectionCard(message: string): { content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null {
+async function buildAccountingProjectionCard(message: string): Promise<{ content: string; rich: RichChatPayload; attachment?: ChatAttachmentDownload } | null> {
     if (!shouldBuildAccountingProjectionCard(message)) return null;
+
+    const accountingEngine = await getAccountingEngine();
 
     try {
         if (typeof window !== "undefined" && window.localStorage.getItem("insight::accounting-engine")) {
@@ -722,7 +748,7 @@ function buildAccountingProjectionCard(message: string): { content: string; rich
         // Keep the in-memory engine as fallback.
     }
 
-    const trendCard = buildRevenueTrendCard(message);
+    const trendCard = await buildRevenueTrendCard(message);
     if (trendCard) return trendCard;
 
     const state = accountingEngine.getState();
@@ -1324,13 +1350,6 @@ export default function FloatingChatButton() {
                 return;
             }
 
-            const routeConversations = allConversations.filter((conversation) => conversation.route === pathname);
-            const latestConversation = routeConversations[0];
-            if (latestConversation) {
-                openConversation(latestConversation, activeModule, pathname);
-                return;
-            }
-
             setActiveConversationId(null);
             setMessages([createIntroMessage(activeModule, pathname)]);
             setInputValue("");
@@ -1359,6 +1378,7 @@ export default function FloatingChatButton() {
             if (shouldStartNewChat) {
                 setActiveConversationId(null);
                 setMessages([createIntroMessage(resolvedModule, pathname)]);
+                setInputValue("");
                 setPlanSource("fallback");
             }
 
@@ -1478,14 +1498,6 @@ export default function FloatingChatButton() {
         };
     }, []);
 
-    // Load engines on mount
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            accountingEngine.load();
-            taxEngine.load();
-        }
-    }, []);
-
     useEffect(() => {
         if (typeof window === "undefined") return;
         const savedMode = window.localStorage.getItem(AGENT_CHAT_MODE_STORAGE_KEY);
@@ -1547,22 +1559,23 @@ export default function FloatingChatButton() {
         setClarificationData(null);
     }, [clarificationData, queueAutoScroll, revealChatSection]);
 
-    const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload): ChatMessage => ({
+    const buildChatMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload, suggestions?: string[]): ChatMessage => ({
         id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role,
         content: role === "assistant" ? toPlainChatText(content) : content,
         timestamp: Date.now(),
         attachment,
         rich,
+        suggestions: role === "assistant" ? suggestions?.filter(Boolean).slice(0, 3) : undefined,
     }), []);
 
-    const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload) => {
+    const appendMessage = useCallback((role: ChatMessage["role"], content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload, suggestions?: string[]) => {
         if (attachment?.url && attachment.url.startsWith("blob:")) {
             blobUrlsRef.current.push(attachment.url);
         }
         setMessages(prev => [
             ...prev,
-            buildChatMessage(role, content, attachment, rich),
+            buildChatMessage(role, content, attachment, rich, suggestions),
         ]);
     }, [buildChatMessage]);
 
@@ -1634,12 +1647,12 @@ export default function FloatingChatButton() {
             workingConversationId = savedAfterUser;
         }
 
-        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload) => {
+        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload, suggestions?: string[]) => {
             if (attachment?.url && attachment.url.startsWith("blob:")) {
                 blobUrlsRef.current.push(attachment.url);
             }
             const cleanContent = toPlainChatText(content);
-            const assistantMessage = buildChatMessage("assistant", cleanContent, attachment, rich);
+            const assistantMessage = buildChatMessage("assistant", cleanContent, attachment, rich, suggestions);
             workingMessages = [...workingMessages, assistantMessage];
             setMessages(workingMessages);
             const savedConversationId = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
@@ -1653,7 +1666,7 @@ export default function FloatingChatButton() {
                 .slice(-12)
                 .map((msg) => ({ role: msg.role, content: msg.content }));
 
-            const localProjectionCard = buildAccountingProjectionCard(trimmed);
+            const localProjectionCard = await buildAccountingProjectionCard(trimmed);
             if (localProjectionCard) {
                 await appendAssistantAndPersist(localProjectionCard.content, localProjectionCard.attachment, localProjectionCard.rich);
                 setPlanSource("fast-path");
@@ -1661,7 +1674,7 @@ export default function FloatingChatButton() {
             }
 
             if (agentChatMode === "response-only") {
-                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
+                const runtimeContextSnapshot = await buildPageContextSnapshot(activeRoute, activeModuleId);
                 const result = await runUnifiedAgentMessage({
                     message: trimmed,
                     module: activeModuleId,
@@ -1674,17 +1687,13 @@ export default function FloatingChatButton() {
                     autoApproveUiActions: false,
                 });
                 setPlanSource(result.planSource);
-                await appendAssistantAndPersist(result.finalReply);
+                await appendAssistantAndPersist(result.finalReply, undefined, undefined, result.suggestions);
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
                 for (const attachment of downloadAttachments) {
                     await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
-                }
-                const executedAnyAction = result.execution.some((step) => step.success);
-                if (executedAnyAction) {
-                    await appendAssistantAndPersist("Completed in background.");
                 }
             } else {
                 setIsAgentPerforming(true);
@@ -1707,7 +1716,7 @@ export default function FloatingChatButton() {
                     workingConversationId = savedAfterRouteChange;
                 }
 
-                const runtimeContextSnapshot = buildPageContextSnapshot(activeRoute, activeModuleId);
+                const runtimeContextSnapshot = await buildPageContextSnapshot(activeRoute, activeModuleId);
                 const result = await runUnifiedAgentMessage({
                     message: trimmed,
                     module: activeModuleId,
@@ -1727,7 +1736,7 @@ export default function FloatingChatButton() {
                     router.push(result.navigateTo);
                 }
 
-                await appendAssistantAndPersist(result.finalReply);
+                await appendAssistantAndPersist(result.finalReply, undefined, undefined, result.suggestions);
 
                 const downloadAttachments = result.execution
                     .filter((step) => step.success)
@@ -1737,10 +1746,6 @@ export default function FloatingChatButton() {
                     await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
                 }
 
-                const executedAnyAction = result.execution.some((step) => step.success);
-                if (executedAnyAction && !/reply "confirm"|stopped by user|cancelled/i.test(result.finalReply)) {
-                    await appendAssistantAndPersist("Request complete.");
-                }
             }
         } catch {
             setPlanSource("fallback");
@@ -1783,6 +1788,11 @@ export default function FloatingChatButton() {
     const handleExampleClick = (example: string) => {
         const cleanedExample = example.replace(/^"(.*)"$/, "$1");
         setInputValue(cleanedExample);
+        revealChatSection({ focus: true });
+    };
+
+    const handleSuggestionClick = (suggestion: string) => {
+        setInputValue(suggestion);
         revealChatSection({ focus: true });
     };
 
@@ -1872,8 +1882,7 @@ export default function FloatingChatButton() {
                                         What do you want to work on?
                                     </h3>
                                     <p className="mt-4 text-sm leading-7 text-gray-500 sm:text-[15px]">
-                                        {currentModule.greeting} I stay inside this page now, keep your horizontal chat history,
-                                        and can still execute cross-page tasks when needed.
+                                        {currentModule.greeting} I stay inside this page and can still execute cross-page tasks when needed.
                                     </p>
                                     <div className="mt-5 flex flex-wrap justify-center gap-2 sm:mt-6">
                                         {currentModule.examples.map((example) => (
@@ -1926,6 +1935,20 @@ export default function FloatingChatButton() {
                                                             Download PDF
                                                         </a>
                                                     )}
+                                                    {msg.suggestions && msg.suggestions.length > 0 ? (
+                                                        <div className="mt-4 flex flex-wrap gap-2">
+                                                            {msg.suggestions.map((suggestion) => (
+                                                                <button
+                                                                    key={suggestion}
+                                                                    type="button"
+                                                                    onClick={() => handleSuggestionClick(suggestion)}
+                                                                    className="rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-[#8fff00] hover:bg-[#f4ffe6] hover:text-[#446b00]"
+                                                                >
+                                                                    {suggestion}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                             )}
                                         </div>

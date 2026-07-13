@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { retrieveKnowledge, buildContextSnippet } from "@/lib/agent/rag";
 import type { KnowledgeEntry } from "@/lib/agent/knowledge";
 import { FPA_PROJECTION_MASTER_PROMPT } from "@/lib/agent/fpaProjectionMasterPrompt";
+import { AgentRuntime } from "@/lib/agent/runtime";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -11,6 +12,7 @@ interface ChatMessage {
 interface AgentRequest {
   messages?: ChatMessage[];
   module?: string;
+  route?: string;
   draftReply?: string;
   includeSources?: boolean;
 }
@@ -42,6 +44,8 @@ const MODULE_PERSONAS: Record<string, string> = {
     "You are an executive finance analyst. Summarize what matters, then list key actions.",
   general: "You are a practical enterprise finance assistant for Bace.",
 };
+
+const runtime = new AgentRuntime();
 
 function resolveGeminiApiKey(): string {
   const keys = [
@@ -162,6 +166,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const context = buildContextSnippet(entries);
     const userQuestion = messages[messages.length - 1]?.content || draftReply || "";
     const stylePrompt = buildHumanStyleSystemPrompt(body.module);
+
+    if (!draftReply && messages.length > 0) {
+      const conversation = messages
+        .filter((message): message is { role: "user" | "assistant"; content: string } => message.role === "user" || message.role === "assistant")
+        .map((message) => ({ role: message.role, content: message.content }));
+      const runtimeResponse = await runtime.run({
+        message: userQuestion,
+        module: body.module,
+        route: body.route,
+        conversation,
+        contextSnapshot: context,
+      });
+      return NextResponse.json({
+        answer: runtimeResponse.reply,
+        finalAnswer: runtimeResponse.reply,
+        sources: entries.map((entry) => entry.sources).flat(),
+        phases: runtimeResponse.phases,
+        suggestions: runtimeResponse.suggestions,
+        planSource: runtimeResponse.planSource,
+      });
+    }
 
     const apiKey = resolveGeminiApiKey();
     if (!apiKey) {

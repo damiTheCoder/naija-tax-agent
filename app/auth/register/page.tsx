@@ -3,15 +3,47 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import GoogleMark from "@/components/GoogleMark";
 import { getPocketBaseBrowserClient } from "@/lib/pocketbase/browserClient";
-import { POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
+import { ALLOWED_OAUTH_PROVIDERS, POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
+import { STORAGE_KEYS, type UserProfile } from "@/lib/workspace/types";
 
 type Provider = { name: string; displayName: string };
+type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+};
+
+function syncUserToLocalProfile(user: Partial<AuthUser> | null | undefined) {
+  if (typeof window === "undefined" || !user) return;
+  const id = user.id || "user-1";
+  const name = user.name?.trim() || "User";
+  const email = user.email?.trim() || "";
+
+  try {
+    const currentRaw = window.localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const current = currentRaw ? (JSON.parse(currentRaw) as Partial<UserProfile>) : {};
+    window.localStorage.setItem(
+      STORAGE_KEYS.USER_PROFILE,
+      JSON.stringify({
+        id,
+        name,
+        email,
+        phone: current.phone || "",
+        company: current.company || "",
+        avatar: current.avatar,
+      }),
+    );
+  } catch {
+    window.localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify({ id, name, email }));
+  }
+}
 
 export default function UserRegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = useMemo(() => searchParams.get("next") || "/support", [searchParams]);
+  const next = useMemo(() => searchParams.get("next") || "/profile", [searchParams]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +71,7 @@ export default function UserRegisterPage() {
         const providersData = (await providersResponse.json()) as { success?: boolean; providers?: Provider[] };
         if (!active) return;
         if (providersData.success && Array.isArray(providersData.providers)) {
-          setProviders(providersData.providers);
+          setProviders(providersData.providers.filter((provider) => ALLOWED_OAUTH_PROVIDERS.has(provider.name.toLowerCase())));
         }
       } catch {
         if (active) setProviders([]);
@@ -81,6 +113,8 @@ export default function UserRegisterPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Registration failed");
       }
+      const user = "user" in data ? (data.user as AuthUser) : null;
+      syncUserToLocalProfile(user);
       router.replace(next);
       router.refresh();
     } catch (err) {
@@ -91,6 +125,11 @@ export default function UserRegisterPage() {
   };
 
   const handleSocialLogin = async (provider: string) => {
+    if (!ALLOWED_OAUTH_PROVIDERS.has(provider.toLowerCase())) {
+      setError("Only Google login is enabled.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -108,6 +147,8 @@ export default function UserRegisterPage() {
       if (!response.ok || !result.success) {
         throw new Error(result.error || "Unable to complete social login");
       }
+      const user = "user" in result ? (result.user as AuthUser) : null;
+      syncUserToLocalProfile(user);
       router.replace(next);
       router.refresh();
     } catch (err) {
@@ -121,7 +162,7 @@ export default function UserRegisterPage() {
     <div className="min-h-screen bg-slate-50 px-4 py-12">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold text-slate-900">Create Account</h1>
-        <p className="mt-1 text-sm text-slate-600">Open a support account to track tickets, replies, and resolutions.</p>
+        <p className="mt-1 text-sm text-slate-600">Create your Bace account and save your profile in PocketBase.</p>
 
         <form onSubmit={handleRegister} className="mt-6 space-y-4">
           <div>
@@ -187,7 +228,7 @@ export default function UserRegisterPage() {
           {loadingProviders ? (
             <p className="text-sm text-slate-500">Loading social providers...</p>
           ) : providers.length === 0 ? (
-            <p className="text-sm text-slate-500">No social providers configured.</p>
+            <p className="text-sm text-slate-500">Google login is not configured in PocketBase.</p>
           ) : (
             providers.map((provider) => (
               <button
@@ -195,8 +236,9 @@ export default function UserRegisterPage() {
                 type="button"
                 onClick={() => handleSocialLogin(provider.name)}
                 disabled={isLoading}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
+                <GoogleMark />
                 Continue with {provider.displayName}
               </button>
             ))
@@ -205,15 +247,8 @@ export default function UserRegisterPage() {
 
         <p className="mt-5 text-sm text-slate-600">
           Already have an account?{" "}
-          <Link href={`/auth/sign-in?next=${encodeURIComponent(next)}`} className="font-semibold text-[#446b00]">
+          <Link href={`/auth/login?next=${encodeURIComponent(next)}`} className="font-semibold text-[#446b00]">
             Sign in
-          </Link>
-        </p>
-
-        <p className="mt-2 text-xs text-slate-500">
-          Admin access?{" "}
-          <Link href="/auth/login" className="font-semibold text-slate-700">
-            Use admin login
           </Link>
         </p>
 

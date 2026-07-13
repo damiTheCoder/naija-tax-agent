@@ -1,16 +1,18 @@
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import type { BuiltModuleContext } from "@/lib/agent/contextBuilder";
 import { getToolsForDomain, type ToolRequest, toUnifiedAction } from "@/lib/agent/toolRegistry";
-import { GeminiClient } from "@/lib/agent/geminiClient";
+import type { LLMServiceInterface } from "@/lib/llm";
 import { getPromptDefinition } from "@/lib/agent/promptRegistry";
 import { parsePlannerResponse } from "@/lib/agent/schemas";
 
-export interface GeminiPlannerResponse {
+export interface AgentPlannerResponse {
   reply: string;
   confidence: number;
   reasoning: string;
   toolRequests: ToolRequest[];
 }
+
+export type GeminiPlannerResponse = AgentPlannerResponse;
 
 function stripMarkdownFences(text: string): string {
   return text.replace(/```json/gi, "```").replace(/```/g, "").trim();
@@ -26,17 +28,17 @@ function safeJsonParse(raw: string): unknown {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
-function normalizePlannerResponse(raw: unknown): GeminiPlannerResponse {
+function normalizePlannerResponse(raw: unknown): AgentPlannerResponse {
   const parsed = parsePlannerResponse(raw);
   return parsed;
 }
 
-function normalizeFromRawText(raw: string): GeminiPlannerResponse {
+function normalizeFromRawText(raw: string): AgentPlannerResponse {
   const cleaned = stripMarkdownFences(raw);
   return {
     reply: cleaned || "I reviewed your request but I need a bit more detail to proceed.",
     confidence: 0.45,
-    reasoning: "Gemini returned non-JSON text; using it as conversational reply with no tool requests.",
+    reasoning: "LLM returned non-JSON text; using it as conversational reply with no tool requests.",
     toolRequests: [],
   };
 }
@@ -146,10 +148,10 @@ Rules:
 }
 
 export class AIService {
-  constructor(private readonly geminiClient: GeminiClient) {}
+  constructor(private readonly llmService: LLMServiceInterface) {}
 
   isConfigured(): boolean {
-    return this.geminiClient.isConfigured();
+    return this.llmService.isConfigured();
   }
 
   async generatePlan(params: {
@@ -157,10 +159,11 @@ export class AIService {
     context: BuiltModuleContext;
     forceNoTools?: boolean;
     toolObservations?: Array<{ tool: string; result: string }>;
-  }): Promise<GeminiPlannerResponse> {
+  }): Promise<AgentPlannerResponse> {
     const prompt = buildPlannerPrompt(params);
-    const raw = await this.geminiClient.generateText(prompt, 0.2);
-    let normalized: GeminiPlannerResponse;
+    const result = await this.llmService.generateText({ prompt, temperature: 0.2 });
+    const raw = result.text;
+    let normalized: AgentPlannerResponse;
     try {
       const parsed = safeJsonParse(raw);
       normalized = normalizePlannerResponse(parsed);

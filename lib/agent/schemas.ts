@@ -49,12 +49,21 @@ export const unifiedAgentActionSchema = z.object({
   confidence: confidenceSchema.optional(),
 });
 
+const runtimePhaseSchema = z.object({
+  name: z.enum(["understanding", "plan", "observations", "answer", "suggestions"]),
+  status: z.enum(["completed", "skipped", "failed"]),
+  summary: z.string(),
+  detail: z.unknown().optional(),
+});
+
 export const unifiedAgentResponseSchema = z.object({
   reply: z.string(),
   actions: z.array(unifiedAgentActionSchema).default([]),
   confidence: confidenceSchema.optional(),
   reasoning: z.string().optional(),
   planSource: z.enum(["fast-path", "gemini", "fallback"]).optional(),
+  phases: z.array(runtimePhaseSchema).optional(),
+  suggestions: z.array(z.string()).optional(),
   requiresApproval: z.boolean().optional(),
   approvalReasons: z.array(z.string()).optional(),
   validationErrors: z.array(z.string()).optional(),

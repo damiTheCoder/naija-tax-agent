@@ -3,10 +3,10 @@ import { evaluateActionPolicy, evaluatePlanPolicies } from "@/lib/agent/policy";
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 
 describe("AI action policy", () => {
-  it("requires approval for accounting postings even when confidence is acceptable", () => {
+  it("allows normal accounting postings without approval when payload validation passes", () => {
     const action: UnifiedAgentAction = {
       type: "accounting.postTransaction",
-      confidence: 0.82,
+      confidence: 0.67,
       reason: "User asked to post rent",
       payload: {
         description: "Post rent of NGN 500000",
@@ -16,26 +16,26 @@ describe("AI action policy", () => {
 
     const decision = evaluateActionPolicy(action);
 
-    expect(decision.allowed).toBe(false);
-    expect(decision.approvalRequired).toBe(true);
-    expect(decision.reasons.join(" ")).toContain("requires human approval");
+    expect(decision.allowed).toBe(true);
+    expect(decision.approvalRequired).toBe(false);
+    expect(decision.reasons).toHaveLength(0);
   });
 
-  it("allows approved accounting postings after payload validation passes", () => {
+  it("blocks invalid accounting postings instead of letting them run freely", () => {
     const action: UnifiedAgentAction = {
       type: "accounting.postTransaction",
       confidence: 0.82,
-      reason: "User confirmed posting",
+      reason: "User asked to post rent",
       payload: {
         description: "Post rent of NGN 500000",
-        amount: 500000,
       },
     };
 
-    const decision = evaluateActionPolicy(action, { approvalGranted: true });
+    const decision = evaluateActionPolicy(action);
 
-    expect(decision.allowed).toBe(true);
+    expect(decision.allowed).toBe(false);
     expect(decision.approvalRequired).toBe(false);
+    expect(decision.reasons.join(" ")).toContain("amount");
   });
 
   it("blocks invalid payment payloads instead of putting them in approval", () => {

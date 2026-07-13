@@ -6,6 +6,7 @@ export const POCKETBASE_COMPLAINT_MESSAGES_COLLECTION = "complaint_messages";
 export const POCKETBASE_USAGE_EVENTS_COLLECTION = "usage_events";
 export const POCKETBASE_ADMIN_AUDIT_COLLECTION = "admin_audit_logs";
 export const POCKETBASE_SESSION_COOKIE = "ql_admin_session";
+export const ALLOWED_OAUTH_PROVIDERS = new Set(["google"]);
 
 export const ADMIN_ROLES = new Set([
   "super_admin",

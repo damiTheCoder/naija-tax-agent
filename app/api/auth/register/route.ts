@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import PocketBase from "pocketbase";
 import { getPocketBaseUrl, POCKETBASE_USER_COLLECTION } from "@/lib/pocketbase/config";
+import { createPocketBaseAdminClient } from "@/lib/pocketbase/adminClient";
 import { createSession, writeSessionCookie } from "@/lib/pocketbase/session";
 import { normalizePocketBaseUser, type PocketBaseUserRecord } from "@/lib/pocketbase/users";
 
@@ -32,18 +33,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const pb = new PocketBase(getPocketBaseUrl());
-    await pb.collection(POCKETBASE_USER_COLLECTION).create({
+    const adminPb = await createPocketBaseAdminClient();
+    await adminPb.collection(POCKETBASE_USER_COLLECTION).create({
       name,
+      full_name: name,
       email,
       password,
       passwordConfirm,
       role: "user",
+      platform_role: "user",
       status: "active",
+      onboarding_completed: false,
       sessionVersion: 1,
       verified: true,
     });
 
+    const pb = new PocketBase(getPocketBaseUrl());
     const authData = await pb.collection(POCKETBASE_USER_COLLECTION).authWithPassword(email, password);
     const user = normalizePocketBaseUser(authData.record as PocketBaseUserRecord);
 

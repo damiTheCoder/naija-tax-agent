@@ -1778,18 +1778,18 @@ export default function AccountingPage() {
                     }}
                     data-agent-target="open-post-journal-entry"
                     className={`
-                      w-full rounded-2xl border transition-all p-5 group
+                      w-full rounded-2xl transition-all p-5 group
                       ${theme === 'dark'
-                        ? 'border-gray-700/60 bg-[#1a1a1a] hover:bg-[#222222]'
-                        : 'border-gray-300/60 bg-gray-100 hover:bg-gray-200'
+                        ? 'bg-[#1a1a1a] hover:bg-[#222222]'
+                        : 'bg-gray-100 hover:bg-gray-200'
                       } flex items-center justify-center gap-3
                     `}
                   >
                     <div className={`
-                      w-10 h-10 rounded-xl border flex items-center justify-center transition-colors flex-shrink-0
+                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
                       ${theme === 'dark'
-                        ? 'border-gray-600/60 bg-gray-700 group-hover:bg-gray-600'
-                        : 'border-purple-200/60 bg-purple-100 group-hover:bg-purple-200'
+                        ? 'bg-gray-700 group-hover:bg-gray-600'
+                        : 'bg-purple-100 group-hover:bg-purple-200'
                       }
                     `}>
                       <svg
@@ -1816,18 +1816,18 @@ export default function AccountingPage() {
                   <Link
                     href="/accounting/reconciliation"
                     className={`
-                      w-full rounded-2xl border transition-all p-5 group
+                      w-full rounded-2xl transition-all p-5 group
                       ${theme === 'dark'
-                        ? 'border-gray-700/60 bg-[#1a1a1a] hover:bg-[#222222]'
-                        : 'border-gray-300/60 bg-gray-100 hover:bg-gray-200'
+                        ? 'bg-[#1a1a1a] hover:bg-[#222222]'
+                        : 'bg-gray-100 hover:bg-gray-200'
                       } flex items-center justify-center gap-3
                     `}
                   >
                     <div className={`
-                      w-10 h-10 rounded-xl border flex items-center justify-center transition-colors flex-shrink-0
+                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
                       ${theme === 'dark'
-                        ? 'border-gray-600/60 bg-gray-700 group-hover:bg-gray-600'
-                        : 'border-blue-200/60 bg-blue-100 group-hover:bg-blue-200'
+                        ? 'bg-gray-700 group-hover:bg-gray-600'
+                        : 'bg-blue-100 group-hover:bg-blue-200'
                       }
                     `}>
                       <svg

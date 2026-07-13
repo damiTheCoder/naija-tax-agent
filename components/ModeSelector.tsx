@@ -37,6 +37,7 @@ export default function ModeSelector() {
     const getModeHref = (targetMode: AppMode) => {
         if (targetMode === "tax") return "/tax/workspace";
         if (targetMode === "budgeting") return "/budgeting/dashboard";
+        if (targetMode === "markets") return "/markets";
         return "/accounting";
     };
 
@@ -50,6 +51,7 @@ export default function ModeSelector() {
         switch (m) {
             case "tax": return "Tax Manager";
             case "budgeting": return "Budgeting";
+            case "markets": return "Markets";
             case "accounting": return "Accounting";
             default: return "Tax Manager";
         }
@@ -101,6 +103,13 @@ export default function ModeSelector() {
                             currentMode={mode}
                             onHover={() => prefetchTo(getModeHref("budgeting"))}
                             onClick={() => handleModeSwitch("budgeting")}
+                        />
+                        <ModeOption
+                            mode="markets"
+                            label="Markets"
+                            currentMode={mode}
+                            onHover={() => prefetchTo(getModeHref("markets"))}
+                            onClick={() => handleModeSwitch("markets")}
                         />
                     </div>
                 </div>

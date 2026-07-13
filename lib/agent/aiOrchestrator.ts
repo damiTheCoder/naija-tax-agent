@@ -1,7 +1,7 @@
 import type { UnifiedAgentRequest, UnifiedAgentResponse } from "@/lib/agent/unifiedTypes";
 import { buildModuleContext, type BuiltModuleContext } from "@/lib/agent/contextBuilder";
 import { AIService, type GeminiPlannerResponse } from "@/lib/agent/aiService";
-import { GeminiClient } from "@/lib/agent/geminiClient";
+import { createDefaultLLMService } from "@/lib/llm";
 import { getToolByName, type ToolRequest } from "@/lib/agent/toolRegistry";
 import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
 import { appendAIAuditEvent } from "@/lib/agent/auditLog";
@@ -623,7 +623,7 @@ export class AIOrchestrator {
   private readonly aiService: AIService;
 
   constructor() {
-    this.aiService = new AIService(new GeminiClient());
+    this.aiService = new AIService(createDefaultLLMService());
   }
 
   private executeInternalTool(toolRequest: ToolRequest, context: BuiltModuleContext): string {

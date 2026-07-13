@@ -14,11 +14,25 @@ function scheduleIdleLoad(callback: () => void): () => void {
   if (typeof window === "undefined") return () => undefined;
 
   if ("requestIdleCallback" in window) {
-    const idleId = window.requestIdleCallback(callback, { timeout: 2500 });
-    return () => window.cancelIdleCallback(idleId);
+    const timeoutRef: {
+      current: { kind: "timeout"; id: ReturnType<typeof setTimeout> } | { kind: "idle"; id: number } | null;
+    } = { current: null };
+    const timeoutId = globalThis.setTimeout(() => {
+      const idleId = window.requestIdleCallback(callback, { timeout: 6000 });
+      timeoutRef.current = { kind: "idle", id: idleId };
+    }, 10000);
+    timeoutRef.current = { kind: "timeout", id: timeoutId };
+    return () => {
+      if (!timeoutRef.current) return;
+      if (timeoutRef.current.kind === "idle") {
+        window.cancelIdleCallback(timeoutRef.current.id);
+      } else {
+        globalThis.clearTimeout(timeoutRef.current.id);
+      }
+    };
   }
 
-  const timeoutId = globalThis.setTimeout(callback, 1800);
+  const timeoutId = globalThis.setTimeout(callback, 12000);
   return () => globalThis.clearTimeout(timeoutId);
 }
 
@@ -97,7 +111,7 @@ export default function DeferredFloatingChat() {
               Preparing the assistant
             </h3>
             <p className="mt-3 text-sm leading-7 text-gray-500">
-              The chat now loads inline inside the page. Your conversation history and page context will appear here in a moment.
+              The chat is loading inline with the current page context.
             </p>
             <button
               type="button"

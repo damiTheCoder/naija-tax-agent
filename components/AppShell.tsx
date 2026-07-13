@@ -6,15 +6,80 @@ import Image from "next/image";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import DeferredFloatingChat from "@/components/DeferredFloatingChat";
+import ModuleButtonBar from "@/components/ModuleButtonBar";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { clearAllData } from "@/lib/utils/system";
 import { useTheme } from "@/lib/ThemeContext";
 import { DesktopModeToggle, MobileModeToggle } from "@/components/ModeToggle";
 import { useMode } from "@/lib/ModeContext";
 import PageSkeleton from "@/components/PageSkeleton";
+import { NavIconBadge } from "@/components/NavIconBadge";
+import {
+  ACCOUNTING_NAV_ITEMS,
+  BUDGETING_NAV_ITEMS,
+  MARKETS_NAV_ITEMS,
+  TAX_NAV_ITEMS,
+  resolveModuleForPath,
+  type TaxNavItem,
+} from "@/lib/navigation";
 
 const ACCOUNTING_MIGRATION_MARKER_KEY = "ql::accounting::migration-v1";
 const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
+const BANK_CONNECTIONS_STORAGE_KEY = "insight::bank-connections";
+const DEMO_BANK_CACHE_CLEANUP_KEY = "bace::demo-bank-cache-cleanup-v3";
 const CHAT_MODAL_OPEN_EVENT = "ql:chat-open";
+const MOBILE_PRIMARY_NAV_HREFS = new Set(["/dashboard", "/accounting", "/accounting/workspace", "/profile"]);
+
+function getMobileOverflowNavItems(pathname: string): TaxNavItem[] {
+  const activeModule = resolveModuleForPath(pathname);
+  const items =
+    activeModule === "tax"
+      ? TAX_NAV_ITEMS
+      : activeModule === "budgeting"
+        ? BUDGETING_NAV_ITEMS
+        : activeModule === "markets"
+          ? MARKETS_NAV_ITEMS
+          : ACCOUNTING_NAV_ITEMS;
+
+  return items.filter((item) => !MOBILE_PRIMARY_NAV_HREFS.has(item.href));
+}
+
+function isDemoBankConnectionRecord(record: unknown): boolean {
+  if (!record || typeof record !== "object") return false;
+  const connection = record as {
+    id?: unknown;
+    bankCode?: unknown;
+    transactionCount?: unknown;
+    accounts?: Array<{ accountName?: unknown }>;
+  };
+
+  return (
+    connection.id === "conn_zenith_001" ||
+    (connection.bankCode === "zenith" &&
+      connection.transactionCount === 847 &&
+      Array.isArray(connection.accounts) &&
+      connection.accounts.some((account) => account.accountName === "Acme Technologies Ltd"))
+  );
+}
+
+function isRemovedDemoBankJournalEntry(record: unknown): boolean {
+  if (!record || typeof record !== "object") return false;
+  const entry = record as { reference?: unknown; matchedBankTransactionId?: unknown; narration?: unknown };
+  const reference = String(entry.reference || "").toLowerCase();
+  const matchedBankTransactionId = String(entry.matchedBankTransactionId || "").toLowerCase();
+  const narration = String(entry.narration || "").toLowerCase();
+
+  return (
+    reference.startsWith("bank-sync-") ||
+    matchedBankTransactionId.startsWith("sync-") ||
+    narration.includes("invoice payment #2026-031") ||
+    narration.includes("shoprite ikeja") ||
+    narration.includes("ikedc prepaid meter recharge") ||
+    narration.includes("salary credit - dec 2025") ||
+    narration.includes("office supplies ltd") ||
+    narration.includes("sms alert charge")
+  );
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -33,6 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isDark = theme === "dark";
   const isUser = mode === "user";
   const isModeMismatch = mounted && isPersonalRoute;
+  const mobileOverflowNavItems = getMobileOverflowNavItems(pathname);
 
   const closeMobileChat = useCallback(() => {
     if (typeof document !== "undefined") {
@@ -78,13 +144,63 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     chatRevealTimeoutRef.current = setTimeout(() => {
       document.body.classList.add("mobile-chat-section-visible");
-      window.dispatchEvent(new CustomEvent(CHAT_MODAL_OPEN_EVENT));
+      window.dispatchEvent(new CustomEvent(CHAT_MODAL_OPEN_EVENT, { detail: { newChat: true } }));
       chatRevealTimeoutRef.current = null;
     }, 820);
     chatWaveTimeoutRef.current = setTimeout(() => {
       setIsChatWaveAnimating(false);
       chatWaveTimeoutRef.current = null;
     }, 1120);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(DEMO_BANK_CACHE_CLEANUP_KEY)) return;
+
+    let changedAccounting = false;
+
+    try {
+      const rawConnections = window.localStorage.getItem(BANK_CONNECTIONS_STORAGE_KEY);
+      if (rawConnections) {
+        const parsedConnections = JSON.parse(rawConnections) as unknown;
+        if (Array.isArray(parsedConnections)) {
+          const cleanedConnections = parsedConnections.filter((connection) => !isDemoBankConnectionRecord(connection));
+          if (cleanedConnections.length !== parsedConnections.length) {
+            window.localStorage.setItem(BANK_CONNECTIONS_STORAGE_KEY, JSON.stringify(cleanedConnections));
+          }
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(BANK_CONNECTIONS_STORAGE_KEY);
+    }
+
+    try {
+      const rawAccounting = window.localStorage.getItem(ACCOUNTING_ENGINE_STORAGE_KEY);
+      if (rawAccounting) {
+        const parsedAccounting = JSON.parse(rawAccounting) as { journalEntries?: unknown[]; lastUpdated?: string; [key: string]: unknown };
+        const journalEntries = Array.isArray(parsedAccounting.journalEntries) ? parsedAccounting.journalEntries : [];
+        const cleanedJournals = journalEntries.filter((entry) => !isRemovedDemoBankJournalEntry(entry));
+
+        if (cleanedJournals.length !== journalEntries.length) {
+          window.localStorage.setItem(
+            ACCOUNTING_ENGINE_STORAGE_KEY,
+            JSON.stringify({
+              ...parsedAccounting,
+              journalEntries: cleanedJournals,
+              lastUpdated: new Date().toISOString(),
+            }),
+          );
+          changedAccounting = true;
+        }
+      }
+    } catch {
+      // Leave malformed accounting cache for the accounting engine's own recovery path.
+    }
+
+    window.localStorage.setItem(DEMO_BANK_CACHE_CLEANUP_KEY, new Date().toISOString());
+    if (changedAccounting) {
+      window.dispatchEvent(new CustomEvent("accounting-update", { detail: { source: "demo-bank-cache-cleanup" } }));
+    }
   }, []);
 
   useEffect(() => {
@@ -151,10 +267,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }
     };
 
-    void runMigration();
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(() => {
+        void runMigration();
+      }, { timeout: 6000 });
+      return () => {
+        active = false;
+        window.cancelIdleCallback(idleId);
+      };
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      void runMigration();
+    }, 2500);
 
     return () => {
       active = false;
+      globalThis.clearTimeout(timeoutId);
     };
   }, [pathname]);
 
@@ -279,14 +408,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="min-h-screen lg:grid lg:grid-cols-12">
         <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-8" : "lg:col-span-12"}`}>
-          <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-6 sm:pb-8 lg:pb-0">
+          <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-24 sm:pb-24 lg:pb-0">
             {/* Desktop Header */}
             <header
-              className="app-shell-topbar fixed right-4 top-3 z-50 hidden items-center justify-end pointer-events-none lg:flex"
+              className="app-shell-topbar fixed right-4 top-3 z-50 hidden items-center justify-end gap-2 pointer-events-none lg:flex"
               style={{
                 background: "transparent",
               }}
             >
+              <div className="pointer-events-auto">
+                <ModuleButtonBar />
+              </div>
               <div ref={desktopActionsRef} className="pointer-events-auto relative">
                 <button
                   onClick={() => setDesktopActionsOpen((prev) => !prev)}
@@ -361,7 +493,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 background: "transparent",
               }}
             >
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-end gap-2">
+                <ModuleButtonBar />
                 <div ref={mobileActionsRef} className="relative">
                   <button
                     onClick={() => {
@@ -384,13 +517,50 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                   {mobileActionsOpen && (
                     <div
-                      className="absolute right-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                      className="absolute right-0 top-full z-50 mt-3 max-h-[72vh] w-72 overflow-y-auto rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
                       style={{
                         background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
                         borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
                       }}
                     >
                   <div className="space-y-1 p-2">
+                    {mobileOverflowNavItems.length > 0 ? (
+                      <div className={`border-b pb-2 ${isDark ? "border-white/10" : "border-gray-100"}`}>
+                        <p className={`px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] ${isDark ? "text-white/35" : "text-[#8a8680]"}`}>
+                          More tools
+                        </p>
+                        {mobileOverflowNavItems.map((item) => {
+                          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMobileActionsOpen(false)}
+                              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                                isActive
+                                  ? "bg-[#8fff00] text-[#101010]"
+                                  : isDark
+                                    ? "text-white hover:bg-white/5"
+                                    : "text-[#1f1f1f] hover:bg-[#f8f6f3]"
+                              }`}
+                              aria-current={isActive ? "page" : undefined}
+                            >
+                              <span
+                                className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                                  isActive
+                                    ? "bg-[#101010] text-[#8fff00]"
+                                    : "bg-[#8fff00]/20 text-[#446b00]"
+                                }`}
+                              >
+                                <NavIconBadge icon={item.icon} className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+
                     <Link
                       href="/profile"
                       onClick={() => setMobileActionsOpen(false)}
@@ -488,6 +658,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {!isPersonalRoute ? (
         <>
+          <MobileBottomNav />
           {isChatWaveAnimating ? <div className="mobile-chat-wave" aria-hidden="true" /> : null}
           <button
             type="button"

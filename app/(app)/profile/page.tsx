@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import { useTheme } from "@/lib/ThemeContext";
 
@@ -21,7 +22,16 @@ type SupportComplaintSnapshot = {
   created?: string;
 };
 
+type BackendProfileSnapshot = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+};
+
 export default function ProfilePage() {
+  const router = useRouter();
   const {
     profile,
     updateProfile,
@@ -47,10 +57,12 @@ export default function ProfilePage() {
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
   const [supportLoading, setSupportLoading] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [supportAuthenticated, setSupportAuthenticated] = useState(false);
   const [supportSession, setSupportSession] = useState<SupportSessionSnapshot | null>(null);
   const [recentSupportComplaints, setRecentSupportComplaints] = useState<SupportComplaintSnapshot[]>([]);
   const [supportError, setSupportError] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isDark = mounted ? theme === "dark" : false;
 
@@ -115,6 +127,24 @@ export default function ProfilePage() {
           return;
         }
 
+        const profileResponse = await fetch("/api/auth/profile", { cache: "no-store" });
+        if (!active) return;
+        if (profileResponse.ok) {
+          const profileData = (await profileResponse.json()) as {
+            success?: boolean;
+            profile?: BackendProfileSnapshot;
+          };
+          if (profileData.success && profileData.profile) {
+            updateProfile({
+              id: profileData.profile.id,
+              name: profileData.profile.name || meData.session.name || "User",
+              email: profileData.profile.email || meData.session.email || "",
+              phone: profileData.profile.phone || "",
+              company: profileData.profile.company || "",
+            });
+          }
+        }
+
         const complaintsResponse = await fetch("/api/complaints?page=1&perPage=3", { cache: "no-store" });
         if (!active) return;
 
@@ -147,7 +177,7 @@ export default function ProfilePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [updateProfile]);
 
   const resetEditFormFromProfile = () => {
     setEditName(profile.name);
@@ -156,15 +186,45 @@ export default function ProfilePage() {
     setEditCompany(profile.company || "");
   };
 
-  const handleSaveProfile = () => {
-    updateProfile({
+  const handleSaveProfile = async () => {
+    const nextProfile = {
       name: editName.trim() || "User",
       email: editEmail.trim(),
       phone: editPhone.trim(),
       company: editCompany.trim(),
-    });
-    setIsEditing(false);
-    setStatusMessage("Profile updated.");
+    };
+
+    setIsSavingProfile(true);
+    try {
+      const response = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextProfile),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        profile?: BackendProfileSnapshot;
+      };
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Unable to save profile to PocketBase.");
+      }
+
+      updateProfile({
+        id: data.profile?.id || profile.id,
+        name: data.profile?.name || nextProfile.name,
+        email: data.profile?.email || nextProfile.email,
+        phone: data.profile?.phone || nextProfile.phone,
+        company: data.profile?.company || nextProfile.company,
+      });
+      setIsEditing(false);
+      setStatusMessage("Profile saved to PocketBase.");
+    } catch (error) {
+      updateProfile(nextProfile);
+      setStatusMessage(error instanceof Error ? `${error.message} Local cache updated.` : "Local cache updated.");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleCreateWorkspace = () => {
@@ -185,6 +245,19 @@ export default function ProfilePage() {
     setStatusMessage("Workspace renamed.");
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    setStatusMessage(null);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.replace("/auth/login");
+      router.refresh();
+    } catch {
+      setStatusMessage("Unable to log out right now.");
+      setIsLoggingOut(false);
+    }
+  };
+
   if (!isLoaded) {
     return (
       <div className="space-y-4 pb-24">
@@ -199,31 +272,38 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 pb-24">
-      <section
-        className={`relative overflow-hidden rounded-[28px] border px-5 py-6 sm:px-7 sm:py-8 ${
-          isDark ? "border-gray-700 bg-[#0c111a]" : "border-[#dff3ba] bg-[#fbfff3]"
-        }`}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-[#8fff00]/20 blur-3xl" />
-        <div className="pointer-events-none absolute -left-10 bottom-[-60px] h-44 w-44 rounded-full bg-[#0b0f19]/10 blur-3xl" />
-
+      <section className={`rounded-[28px] border px-5 py-6 sm:px-7 sm:py-8 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
         <div className="relative grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-start">
           <div>
-            <p className={`text-[11px] uppercase tracking-[0.2em] ${isDark ? "text-blue-300" : "text-blue-700"}`}>
-              Profile Command Center
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+              Profile
             </p>
-            <div className="mt-3 flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8fff00] to-[#2c4300] text-xl font-bold text-[#101010] shadow-lg">
-                {initials}
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-bold ${isDark ? "bg-white/10 text-white" : "bg-gray-100 text-[#101010]"}`}>
+                  {initials}
+                </div>
+                <div className="min-w-0">
+                  <h1 className={`truncate text-2xl font-bold sm:text-3xl ${isDark ? "text-white" : "text-[#0b1220]"}`}>
+                    {profile.name || "User"}
+                  </h1>
+                  <p className={`truncate text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+                    {profile.email || "No email added yet"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className={`text-2xl font-bold sm:text-3xl ${isDark ? "text-white" : "text-[#0b1220]"}`}>
-                  {profile.name || "User"}
-                </h1>
-                <p className={`text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
-                  {profile.email || "No email added yet"}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                  isDark
+                    ? "bg-white/10 text-white hover:bg-white/15"
+                    : "bg-gray-100 text-[#101010] hover:bg-gray-200"
+                }`}
+              >
+                {isLoggingOut ? "Logging out..." : "Logout"}
+              </button>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -233,7 +313,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className={`rounded-2xl border p-4 ${isDark ? "border-gray-700 bg-black/30" : "border-white bg-white/80"}`}>
+          <div className={`rounded-2xl border p-4 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
             <p className={`text-xs uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>Environment</p>
             <p className={`mt-1 text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
               Active workspace: {currentWorkspace?.name || "None"}
@@ -244,10 +324,10 @@ export default function ProfilePage() {
                 onClick={() => setTheme("light")}
                 className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                   theme === "light"
-                    ? "border-[#8fff00] bg-[#eefbd9] text-[#446b00]"
+                    ? "border-[#8fff00] text-[#446b00]"
                     : isDark
-                      ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                      ? "border-gray-700 text-gray-200 hover:border-gray-500"
+                      : "border-gray-200 text-gray-700 hover:border-gray-300"
                 }`}
               >
                 Daylight
@@ -256,10 +336,10 @@ export default function ProfilePage() {
                 onClick={() => setTheme("dark")}
                 className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                   theme === "dark"
-                    ? "border-[#8fff00] bg-[#1b2a08] text-[#d8ffae]"
+                    ? "border-[#8fff00] text-[#446b00]"
                     : isDark
-                      ? "border-gray-700 bg-[#111827] text-gray-200 hover:border-gray-500"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                      ? "border-gray-700 text-gray-200 hover:border-gray-500"
+                      : "border-gray-200 text-gray-700 hover:border-gray-300"
                 }`}
               >
                 Night Shift
@@ -270,13 +350,13 @@ export default function ProfilePage() {
       </section>
 
       {statusMessage && (
-        <div className={`rounded-2xl border px-4 py-3 text-sm ${isDark ? "border-gray-700 bg-[#0b1220] text-blue-200" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${isDark ? "border-gray-700 text-gray-200" : "border-gray-200 text-gray-700"}`}>
           {statusMessage}
         </div>
       )}
 
       <div className="grid gap-5 lg:grid-cols-12">
-        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-7 ${isDark ? "border-gray-700 bg-[#0a0a0a]" : "border-gray-200 bg-white"}`}>
+        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-7 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Personal Profile</h2>
@@ -298,15 +378,16 @@ export default function ProfilePage() {
               )}
               <button
                 onClick={() => {
-                  if (isEditing) handleSaveProfile();
+                  if (isEditing) void handleSaveProfile();
                   else {
                     resetEditFormFromProfile();
                     setIsEditing(true);
                   }
                 }}
-                className="rounded-lg bg-[#8fff00] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#6fcc00]"
+                disabled={isSavingProfile}
+                className="rounded-lg bg-[#8fff00] px-3.5 py-1.5 text-xs font-semibold text-[#101010] hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isEditing ? "Save Changes" : "Edit Profile"}
+                {isSavingProfile ? "Saving..." : isEditing ? "Save Changes" : "Edit Profile"}
               </button>
             </div>
           </div>
@@ -327,17 +408,17 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className={`mt-5 rounded-2xl border px-4 py-3 ${isDark ? "border-[#31480c] bg-[#101909]" : "border-[#dff3ba] bg-[#fbfff3]"}`}>
-            <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-blue-300" : "text-blue-700"}`}>
+          <div className={`mt-5 rounded-2xl border px-4 py-3 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>
               Data Isolation
             </p>
-            <p className={`mt-1 text-xs ${isDark ? "text-blue-200/80" : "text-blue-800/80"}`}>
+            <p className={`mt-1 text-xs ${isDark ? "text-gray-300" : "text-gray-600"}`}>
               Each workspace keeps separate accounting, tax, and reporting records.
             </p>
           </div>
         </section>
 
-        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-5 ${isDark ? "border-gray-700 bg-[#0a0a0a]" : "border-gray-200 bg-white"}`}>
+        <section className={`rounded-3xl border p-5 sm:p-6 lg:col-span-5 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
           <div>
             <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Workspace Studio</h2>
             <p className={`mt-1 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
@@ -355,13 +436,13 @@ export default function ProfilePage() {
               }}
               placeholder="New workspace name"
               className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm ${
-                isDark ? "border-gray-600 bg-[#111827] text-white placeholder:text-gray-500" : "border-gray-200 bg-white text-gray-900 placeholder:text-gray-400"
+                isDark ? "border-gray-600 text-white placeholder:text-gray-500" : "border-gray-200 text-gray-900 placeholder:text-gray-400"
               }`}
             />
             <button
               onClick={handleCreateWorkspace}
               disabled={!newWorkspaceName.trim()}
-              className="rounded-xl bg-[#8fff00] px-3 py-2 text-xs font-semibold text-white hover:bg-[#6fcc00] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-[#8fff00] px-3 py-2 text-xs font-semibold text-[#101010] hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create
             </button>
@@ -376,11 +457,11 @@ export default function ProfilePage() {
                   className={`rounded-2xl border p-3 transition ${
                     isCurrent
                       ? isDark
-                        ? "border-[#6fcc00] bg-[#182708]"
-                        : "border-[#d7f4a6] bg-[#f5ffe4]"
+                        ? "border-[#8fff00]"
+                        : "border-[#8fff00]"
                       : isDark
-                        ? "border-gray-700 bg-[#0b0f1a] hover:border-gray-500"
-                        : "border-gray-200 bg-white hover:border-gray-300"
+                        ? "border-gray-700 hover:border-gray-500"
+                        : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -399,13 +480,13 @@ export default function ProfilePage() {
                               }
                             }}
                             className={`min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-xs ${
-                              isDark ? "border-gray-600 bg-[#111827] text-white" : "border-gray-200 bg-white text-gray-900"
+                              isDark ? "border-gray-600 text-white" : "border-gray-200 text-gray-900"
                             }`}
                             autoFocus
                           />
                           <button
                             onClick={() => handleRenameWorkspace(workspace.id)}
-                            className="rounded-lg bg-[#8fff00] px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                            className="rounded-lg bg-[#8fff00] px-2.5 py-1.5 text-[11px] font-semibold text-[#101010]"
                           >
                             Save
                           </button>
@@ -423,7 +504,7 @@ export default function ProfilePage() {
                     </div>
 
                     {isCurrent ? (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? "bg-[#22350a] text-[#d8ffae]" : "bg-[#eefbd9] text-[#446b00]"}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${isDark ? "border-gray-700 text-gray-200" : "border-gray-200 text-[#446b00]"}`}>
                         Active
                       </span>
                     ) : (
@@ -473,7 +554,7 @@ export default function ProfilePage() {
         </section>
       </div>
 
-      <section className={`rounded-3xl border p-5 sm:p-6 ${isDark ? "border-gray-700 bg-[#0a0a0a]" : "border-gray-200 bg-white"}`}>
+      <section className={`rounded-3xl border p-5 sm:p-6 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className={`text-lg font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Support Desk</h2>
@@ -494,19 +575,19 @@ export default function ProfilePage() {
         </div>
 
         {supportError ? (
-          <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${isDark ? "border-rose-900 bg-rose-950/30 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+          <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${isDark ? "border-rose-900 text-rose-200" : "border-rose-200 text-rose-700"}`}>
             {supportError}
           </div>
         ) : null}
 
         {supportLoading ? (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <div className={`h-32 animate-pulse rounded-2xl ${isDark ? "bg-[#111827]" : "bg-slate-100"}`} />
-            <div className={`h-32 animate-pulse rounded-2xl ${isDark ? "bg-[#111827]" : "bg-slate-100"}`} />
+            <div className={`h-32 animate-pulse rounded-2xl border ${isDark ? "border-gray-700" : "border-gray-200"}`} />
+            <div className={`h-32 animate-pulse rounded-2xl border ${isDark ? "border-gray-700" : "border-gray-200"}`} />
           </div>
         ) : supportAuthenticated ? (
           <div className="mt-4 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div className={`rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700 bg-[#0f172a]" : "border-gray-200 bg-[#fafcff]"}`}>
+            <div className={`rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
               <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>Connected Account</p>
               <p className={`mt-2 text-base font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
                 {supportSession?.name || supportSession?.email || "Support user"}
@@ -519,7 +600,7 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <div className={`rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700 bg-[#0f172a]" : "border-gray-200 bg-[#fafcff]"}`}>
+            <div className={`rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
               <div className="flex items-center justify-between gap-3">
                 <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>Recent Tickets</p>
                 <span className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>{recentSupportComplaints.length} loaded</span>
@@ -537,8 +618,8 @@ export default function ProfilePage() {
                       href={`/support?ticket=${encodeURIComponent(complaint.id)}`}
                       className={`block rounded-xl border px-3 py-3 transition ${
                         isDark
-                          ? "border-gray-700 bg-[#0b0f1a] hover:border-gray-500"
-                          : "border-gray-200 bg-white hover:border-gray-300"
+                          ? "border-gray-700 hover:border-gray-500"
+                          : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -561,15 +642,15 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className={`mt-4 rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700 bg-[#0f172a]" : "border-gray-200 bg-[#fafcff]"}`}>
+          <div className={`mt-4 rounded-2xl border px-4 py-4 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
             <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>Support account not connected</p>
             <p className={`mt-1 text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
               Sign in or register to submit complaints, reply to support, and track resolutions directly from the product.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
-                href="/auth/sign-in?next=%2Fsupport"
-                className="rounded-xl bg-[#8fff00] px-3 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00]"
+                href="/auth/login?next=%2Fsupport"
+                className="rounded-xl bg-[#8fff00] px-3 py-2 text-sm font-semibold text-[#101010] hover:bg-[#7be600]"
               >
                 Sign In
               </Link>
@@ -593,7 +674,7 @@ export default function ProfilePage() {
 
 function MetricTile({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
   return (
-    <div className={`rounded-2xl border px-3 py-3 ${isDark ? "border-gray-700 bg-black/30" : "border-white bg-white/75"}`}>
+    <div className={`rounded-2xl border px-3 py-3 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
       <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
       <p className={`mt-1 text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
     </div>
@@ -623,7 +704,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={`w-full rounded-xl border px-3 py-2 text-sm ${
-          isDark ? "border-gray-600 bg-[#111827] text-white placeholder:text-gray-500" : "border-gray-200 bg-white text-gray-900 placeholder:text-gray-400"
+          isDark ? "border-gray-600 text-white placeholder:text-gray-500" : "border-gray-200 text-gray-900 placeholder:text-gray-400"
         }`}
       />
     </div>
@@ -632,7 +713,7 @@ function Field({
 
 function InfoCell({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${isDark ? "border-gray-700 bg-[#0f172a]" : "border-gray-200 bg-[#fafcff]"}`}>
+    <div className={`rounded-xl border px-3 py-2.5 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
       <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
       <p className={`mt-1 truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
     </div>
@@ -659,13 +740,13 @@ function formatComplaintStatus(status?: string): string {
 
 function getProfileStatusBadgeClass(isDark: boolean, status?: string): string {
   const tone = {
-    new: isDark ? "bg-blue-950/40 text-blue-200" : "bg-blue-50 text-blue-700",
-    triaged: isDark ? "bg-indigo-950/40 text-indigo-200" : "bg-indigo-50 text-indigo-700",
-    investigating: isDark ? "bg-amber-950/40 text-amber-200" : "bg-amber-50 text-amber-700",
-    waiting_user: isDark ? "bg-orange-950/40 text-orange-200" : "bg-orange-50 text-orange-700",
-    resolved: isDark ? "bg-emerald-950/40 text-emerald-200" : "bg-emerald-50 text-emerald-700",
-    closed: isDark ? "bg-gray-800 text-gray-200" : "bg-slate-100 text-slate-700",
+    new: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
+    triaged: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
+    investigating: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
+    waiting_user: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
+    resolved: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
+    closed: isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700",
   }[status || "new"];
 
-  return tone || (isDark ? "bg-gray-800 text-gray-200" : "bg-slate-100 text-slate-700");
+  return tone || (isDark ? "border border-gray-700 text-gray-200" : "border border-gray-200 text-gray-700");
 }

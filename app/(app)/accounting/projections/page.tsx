@@ -1292,6 +1292,7 @@ export default function AccountingProjectionsPage() {
       new CustomEvent(CHAT_MODAL_OPEN_EVENT, {
         detail: {
           module: "projections",
+          newChat: true,
           prompt: "Help me run this financial projection model from inputs.",
         },
       })

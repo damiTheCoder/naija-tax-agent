@@ -484,7 +484,7 @@ export default function WorkspacePage() {
               </p>
             </div>
             <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-white">
-              <span className="w-2/3 rounded-full bg-[#ff6b1a]" />
+              <span className="w-2/3 rounded-full bg-[#8fff00]" />
               <span className="w-1/6 bg-[#101010]" />
             </div>
             <p className="mt-3 text-xs text-gray-500">
@@ -496,7 +496,7 @@ export default function WorkspacePage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500">Yearly result</p>
-                <p className={`mt-3 text-3xl font-semibold tracking-tight ${selectedYearStatement && selectedYearStatement.netIncome < 0 ? "text-red-600" : "text-gray-950"}`}>
+                <p className={`mt-3 text-3xl font-semibold tracking-tight ${selectedYearStatement && selectedYearStatement.netIncome < 0 ? "text-[#4f8f00]" : "text-gray-950"}`}>
                   {selectedYearStatement ? `₦${Math.abs(selectedYearStatement.netIncome).toLocaleString("en-NG")}` : "₦0"}
                 </p>
               </div>
@@ -506,7 +506,7 @@ export default function WorkspacePage() {
                 </svg>
               </span>
             </div>
-            <div className="mt-4 h-8 rounded-lg bg-[repeating-linear-gradient(90deg,#ff6b1a_0_3px,transparent_3px_8px)] opacity-80" />
+            <div className="mt-4 h-8 rounded-lg bg-[repeating-linear-gradient(90deg,#8fff00_0_3px,transparent_3px_8px)] opacity-80" />
             <p className="mt-3 text-xs text-gray-500">
               Net income from posted accounting records
             </p>

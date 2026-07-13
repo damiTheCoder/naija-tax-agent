@@ -28,7 +28,7 @@ import { NextRequest, NextResponse } from "next/server";
 // List all bank connections for authenticated user
 // =============================================================================
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // TODO: Get user from session/JWT
     // const user = await getAuthenticatedUser(request);
@@ -39,35 +39,9 @@ export async function GET(request: NextRequest) {
     //   include: { accounts: true }
     // });
 
-    // Mock response for frontend development
-    const mockConnections = [
-      {
-        id: "conn_zenith_001",
-        bankCode: "zenith",
-        bankName: "Zenith Bank Plc",
-        status: "connected",
-        accounts: [
-          {
-            id: "acc_001",
-            accountNumber: "1234567890",
-            accountName: "Acme Technologies Ltd",
-            accountType: "corporate",
-            currency: "NGN",
-            balance: 15750000,
-            lastSynced: new Date().toISOString(),
-            isDefault: true,
-          },
-        ],
-        connectedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        lastSyncAt: new Date().toISOString(),
-        syncFrequency: "hourly",
-        transactionCount: 847,
-      },
-    ];
-
     return NextResponse.json({
       success: true,
-      data: mockConnections,
+      data: [],
     });
   } catch (error) {
     console.error("Failed to list bank connections:", error);
@@ -86,7 +60,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { bankCode, redirectUrl } = body;
+    const { bankCode } = body;
 
     if (!bankCode) {
       return NextResponse.json(
