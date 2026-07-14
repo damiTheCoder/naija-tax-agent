@@ -40,6 +40,7 @@ function syncUserToLocalProfile(user: Partial<AuthUser> | null | undefined) {
   } catch {
     window.localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify({ id, name, email }));
   }
+  window.localStorage.removeItem(STORAGE_KEYS.TEMPORARY_ACCESS);
 }
 
 function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | undefined): string {
@@ -47,6 +48,27 @@ function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | und
     return "/profile";
   }
   return next || "/profile";
+}
+
+function saveTemporaryLocalProfile() {
+  window.localStorage.setItem(STORAGE_KEYS.TEMPORARY_ACCESS, "true");
+  window.localStorage.setItem(
+    STORAGE_KEYS.USER_PROFILE,
+    JSON.stringify({
+      id: "temporary-user",
+      name: "Temporary User",
+      email: "",
+    } satisfies UserProfile),
+  );
+}
+
+async function ensureTemporaryAccess() {
+  const response = await fetch("/api/auth/temporary", { method: "POST" });
+  const result = (await response.json()) as { success?: boolean; error?: string };
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || "Unable to start temporary access.");
+  }
+  saveTemporaryLocalProfile();
 }
 
 export default function LoginPage() {
@@ -64,6 +86,14 @@ export default function LoginPage() {
     let active = true;
     const loadSession = async () => {
       try {
+        if (!next.startsWith("/admin") && window.localStorage.getItem(STORAGE_KEYS.TEMPORARY_ACCESS) === "true") {
+          await ensureTemporaryAccess();
+          if (!active) return;
+          router.replace(next || "/profile");
+          router.refresh();
+          return;
+        }
+
         const response = await fetch("/api/auth/me", { cache: "no-store" });
         if (!response.ok) return;
         const data = (await response.json()) as { authenticated?: boolean; session?: { role?: string } };
@@ -172,6 +202,20 @@ export default function LoginPage() {
     }
   };
 
+  const handleTemporaryLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await ensureTemporaryAccess();
+      router.replace(next.startsWith("/admin") ? "/profile" : next || "/profile");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start temporary access.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white px-4 py-4 text-slate-950">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md items-center justify-center">
@@ -246,6 +290,16 @@ export default function LoginPage() {
                 </button>
               ))
             )}
+            {!next.startsWith("/admin") ? (
+              <button
+                type="button"
+                onClick={handleTemporaryLogin}
+                disabled={isLoading}
+                className="flex w-full items-center justify-center rounded-[15px] border border-slate-200 bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? "Opening..." : "Continue temporarily"}
+              </button>
+            ) : null}
           </div>
 
           <p className="mt-5 text-sm text-slate-500">

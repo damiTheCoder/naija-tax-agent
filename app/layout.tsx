@@ -66,12 +66,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="light dark" />
         <meta name="supported-color-schemes" content="light dark" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(()=>{const r=document.documentElement;for(const a of Array.from(r.attributes)){if(a.name.startsWith('data-scribe'))r.removeAttribute(a.name)}r.classList.remove('brand-refresh')})()",
+          }}
+        />
       </head>
-      <body className={`${glacial.variable} ${inter.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${glacial.variable} ${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

@@ -58,4 +58,5 @@ export const STORAGE_KEYS = {
     WORKSPACES: 'cashos_workspaces',
     CURRENT_WORKSPACE_ID: 'cashos_current_workspace_id',
     USER_PROFILE: 'cashos_user_profile',
+    TEMPORARY_ACCESS: 'cashos_temporary_access',
 } as const;

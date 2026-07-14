@@ -8518,7 +8518,8 @@ body:has(.single-landing-page) {
 }
 
 .single-landing-primary,
-.single-landing-secondary {
+.single-landing-secondary,
+.single-landing-temporary {
   display: inline-flex;
   min-height: 3.2rem;
   width: 100%;
@@ -8545,13 +8546,20 @@ body:has(.single-landing-page) {
   cursor: pointer;
 }
 
+.single-landing-temporary {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  cursor: pointer;
+}
+
 .single-landing-secondary:disabled {
   cursor: wait;
   opacity: 0.72;
 }
 
 .single-landing-primary:active,
-.single-landing-secondary:active {
+.single-landing-secondary:active,
+.single-landing-temporary:active {
   transform: scale(0.985);
 }
 
@@ -8593,7 +8601,8 @@ body:has(.single-landing-page) {
   }
 
   .single-landing-primary,
-  .single-landing-secondary {
+  .single-landing-secondary,
+  .single-landing-temporary {
     min-height: 3.1rem;
   }
 }

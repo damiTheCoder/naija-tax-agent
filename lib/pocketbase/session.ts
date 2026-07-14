@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { TEMPORARY_ACCESS_COOKIE } from "@/lib/auth/temporaryAccess";
 import { POCKETBASE_SESSION_COOKIE, getSessionSecret } from "@/lib/pocketbase/config";
 
 export type AppSession = {
@@ -103,12 +104,30 @@ export function writeSessionCookie(response: NextResponse, session: AppSession):
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
+  response.cookies.set({
+    name: TEMPORARY_ACCESS_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
   return response;
 }
 
 export function clearSessionCookie(response: NextResponse): NextResponse {
   response.cookies.set({
     name: POCKETBASE_SESSION_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set({
+    name: TEMPORARY_ACCESS_COOKIE,
     value: "",
     httpOnly: true,
     sameSite: "lax",
