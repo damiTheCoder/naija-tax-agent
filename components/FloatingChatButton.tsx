@@ -11,6 +11,7 @@ import {
 import type { UnifiedAgentAction } from "@/lib/agent/unifiedTypes";
 import { resolveWorkspaceRouteFromText } from "@/lib/agent/routeResolver";
 import { buildWorkspaceRouteCatalogText, findWorkspacePageByRoute } from "@/lib/agent/workspaceRegistry";
+import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 import {
     ChatConversation,
     ChatConversationMessage,
@@ -943,6 +944,7 @@ export default function FloatingChatButton() {
     const [conversationList, setConversationList] = useState<ChatConversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [isHistoryDropdownOpen, setIsHistoryDropdownOpen] = useState(false);
+    const [historySearchQuery, setHistorySearchQuery] = useState("");
     const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
     const [mobileConversationMenuPosition, setMobileConversationMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1784,6 +1786,9 @@ export default function FloatingChatButton() {
     const visibleMessages = messages.filter((message) => message.id !== "intro");
     const isEmptyConversation = visibleMessages.length === 0;
     const currentPageProfile = getPageAssistantProfile(pathname);
+    const filteredConversationList = conversationList.filter((conversation) =>
+        conversation.title.toLowerCase().includes(historySearchQuery.trim().toLowerCase())
+    );
 
     const handleExampleClick = (example: string) => {
         const cleanedExample = example.replace(/^"(.*)"$/, "$1");
@@ -1812,31 +1817,73 @@ export default function FloatingChatButton() {
                             aria-expanded={isHistoryDropdownOpen}
                             aria-haspopup="menu"
                         >
-                            <Image src="/Rex.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" aria-hidden="true" />
-                            Chat history
+                            <span className="chat-history-panel-icon hidden" aria-hidden="true">
+                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="4" y="5" width="16" height="14" rx="2.25" />
+                                    <path d="M10 5v14" />
+                                </svg>
+                            </span>
+                            <Image src="/Rex.png" alt="" width={32} height={32} className="chat-history-avatar h-8 w-8 rounded-full object-cover" aria-hidden="true" />
+                            <span className="chat-history-label">Chat history</span>
                         </button>
                     </div>
 
                     {isHistoryDropdownOpen ? (
-                        <div className="absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
-                            <button
-                                type="button"
-                                onClick={handleStartNewChat}
-                                className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                            >
-                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                </svg>
-                                New chat
-                            </button>
-                            <div className="max-h-72 overflow-y-auto border-t border-gray-200">
+                        <div className="chat-history-sidebar absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                            <div className="chat-history-sidebar-header flex items-center justify-between px-4 py-4">
+                                <div className="chat-history-sidebar-brand flex min-w-0 items-center gap-2">
+                                    <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
+                                        <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="32px" />
+                                    </span>
+                                    <span className="truncate text-base font-black text-[#1f1f1f]">Bace</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsHistoryDropdownOpen(false)}
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                                    aria-label="Close chat history"
+                                >
+                                    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                                        <path d="M18 6 6 18" />
+                                        <path d="m6 6 12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 px-3 pb-3">
+                                <button
+                                    type="button"
+                                    onClick={handleStartNewChat}
+                                    className="my-2 flex min-h-14 w-full items-center gap-3 rounded-2xl bg-gray-100 px-4 text-left text-base font-medium text-[#101010] transition-colors hover:bg-gray-200"
+                                >
+                                    <svg className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487 19.5 7.125M5 19h3.75L19.125 8.625a1.768 1.768 0 0 0 0-2.5l-1.25-1.25a1.768 1.768 0 0 0-2.5 0L5 15.25V19Z" />
+                                    </svg>
+                                    New chat
+                                </button>
+                                <label className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-4 text-base font-medium text-[#101010] transition-colors focus-within:bg-gray-50">
+                                    <svg className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
+                                    </svg>
+                                    <input
+                                        value={historySearchQuery}
+                                        onChange={(event) => setHistorySearchQuery(event.target.value)}
+                                        placeholder="Search"
+                                        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#101010]"
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="chat-history-sidebar-list max-h-72 overflow-y-auto border-t border-gray-100">
                                 {conversationList.length === 0 ? (
-                                    <div className="px-4 py-3 text-xs text-gray-500">No chat history yet</div>
+                                    <div className="px-4 py-3 text-sm text-gray-500">No chat history yet</div>
+                                ) : filteredConversationList.length === 0 ? (
+                                    <div className="px-4 py-3 text-sm text-gray-500">No matching chats</div>
                                 ) : (
-                                    conversationList.map((conversation) => (
+                                    filteredConversationList.map((conversation) => (
                                         <div
                                             key={conversation.id}
-                                            className={`flex items-center border-t border-gray-200 first:border-t-0 transition-colors ${
+                                            className={`flex items-center transition-colors ${
                                                 activeConversationId === conversation.id
                                                     ? "bg-[#eefbd9] text-[#446b00]"
                                                     : "text-gray-700 hover:bg-gray-50"
