@@ -156,10 +156,10 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
 
 function KpiCard({ metric }: { metric: KpiMetric }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 min-w-0">
-      <p className={`text-xs font-semibold uppercase tracking-wide ${metric.accent}`}>{metric.label}</p>
-      <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900 leading-tight break-words">{metric.value}</p>
-      <p className="text-xs text-gray-500 mt-2">{metric.hint}</p>
+    <div className="min-w-0 rounded-2xl border border-gray-100 bg-white p-3.5 sm:p-5">
+      <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${metric.accent}`}>{metric.label}</p>
+      <p className="mt-2 text-base font-semibold leading-tight break-words text-gray-900 sm:mt-3 sm:text-xl">{metric.value}</p>
+      <p className="mt-1.5 text-[11px] leading-snug text-gray-500 sm:mt-2 sm:text-xs">{metric.hint}</p>
     </div>
   );
 }
@@ -570,7 +570,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             {metrics.map((metric, index) => (
               <KpiCard key={index} metric={metric} />
             ))}

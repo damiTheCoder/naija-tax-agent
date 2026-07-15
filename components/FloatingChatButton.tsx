@@ -17,6 +17,7 @@ import {
     ChatConversationMessage,
     PERSONAL_CHAT_HISTORY_UPDATED_EVENT,
     CHAT_HISTORY_SELECTED_EVENT,
+    clearSelectedChatHistory,
     createChatConversation,
     createChatConversationAsync,
     consumeSelectedChatHistory,
@@ -536,6 +537,16 @@ function resolvePreferredAgentRoute(message: string, currentPath: string): strin
     const resolved = resolveWorkspaceRouteFromText(message, currentPath, getModuleFromPath(currentPath).id);
     if (!resolved || resolved.route === currentPath) return null;
     return resolved.route;
+}
+
+function looksLikeDirectTransactionMessage(message: string): boolean {
+    const lower = message.toLowerCase();
+    const hasAmount = /(?:₦|\$|usd|ngn|naira)?\s*[0-9][0-9,]*(?:\.\d+)?/i.test(message);
+    if (!hasAmount || /[?]/.test(message)) return false;
+    if (/\b(show|list|report|statement|download|export|balance|runway|cash ?flow|how much|how many)\b/.test(lower)) {
+        return false;
+    }
+    return /\b(sold|sale|invoice|received|receipt|paid|rent|salary|buy|bought|purchase|expense|transaction|journal|post)\b/.test(lower);
 }
 
 function extractDownloadAttachment(data: unknown): ChatAttachmentDownload | null {
@@ -1192,6 +1203,7 @@ export default function FloatingChatButton() {
     }, [activeConversationId, refreshConversationList]);
 
     const handleStartNewChat = useCallback(() => {
+        clearSelectedChatHistory();
         revokeBlobUrls();
         setActiveConversationId(null);
         setIsHistoryDropdownOpen(false);
@@ -1704,7 +1716,7 @@ export default function FloatingChatButton() {
                     revealChatSection();
                 };
 
-                const preferredRoute = resolvePreferredAgentRoute(trimmed, pathname);
+                const preferredRoute = looksLikeDirectTransactionMessage(trimmed) ? null : resolvePreferredAgentRoute(trimmed, pathname);
                 if (preferredRoute && preferredRoute !== pathname) {
                     activeRoute = preferredRoute;
                     activeModuleId = getModuleFromPath(preferredRoute).id;

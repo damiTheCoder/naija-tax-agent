@@ -651,8 +651,14 @@ export async function createChatConversationAsync(params: {
   title?: string;
   entityId?: string;
 }): Promise<ChatConversation | null> {
-  const fallback = createChatConversation(params);
-  if (typeof window === "undefined" || !hasFetchApi()) return fallback;
+  if (typeof window === "undefined" || !hasFetchApi()) {
+    return createChatConversation(params);
+  }
+
+  const moduleId = normalizeModule(params.module);
+  const route = normalizeRoute(params.route, moduleId);
+  const now = Date.now();
+  const conversationId = `conv-${now}-${Math.random().toString(36).slice(2, 7)}`;
 
   const data = await fetchJson<{
     success?: boolean;
@@ -661,10 +667,10 @@ export async function createChatConversationAsync(params: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      id: fallback.id,
+      id: conversationId,
       entityId: toServerEntityId(params.entityId),
-      module: normalizeModule(params.module),
-      route: normalizeRoute(params.route, normalizeModule(params.module)),
+      module: moduleId,
+      route,
       title: params.title,
     }),
   });
@@ -674,7 +680,7 @@ export async function createChatConversationAsync(params: {
     mergeAndStoreConversations([normalized]);
     return normalized;
   }
-  return fallback;
+  return createChatConversation(params);
 }
 
 export async function saveChatConversationMessagesAsync(params: {

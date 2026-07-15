@@ -803,7 +803,6 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     .slice(-6)
     .map((item) => item.content)
     .join("\n");
-  const transactionContext = [recentConversation, message].filter(Boolean).join("\n").trim();
   const routeSuggestion = resolveWorkspaceRouteFromText(
     `${message}\n${recentConversation}`,
     request.route,
@@ -907,7 +906,7 @@ function buildLocalFallbackPlan(request: UnifiedAgentRequest): UnifiedAgentRespo
     actions.push({
       type: "accounting.postTransaction",
       payload: {
-        description: transactionContext || message,
+        description: message,
         amount,
       },
       confidence: 0.67,
@@ -3368,6 +3367,70 @@ export async function runUnifiedAgentMessage(params: {
       planSource: "fallback",
       suggestions: ["Explain the assumptions", "Run a scenario"],
     };
+  }
+
+  const directFallbackPlan = buildLocalFallbackPlan({
+    message: trimmedMessage,
+    module: params.module,
+    route: params.route,
+    contextSnapshot: params.contextSnapshot,
+  });
+  const directFallbackActions = Array.isArray(directFallbackPlan.actions) ? directFallbackPlan.actions : [];
+  const shouldUseDirectAccountingFastPath =
+    directFallbackActions.length > 0 &&
+    directFallbackActions.every((action) => action.type === "accounting.postTransaction") &&
+    directFallbackActions.every((action) => (action.confidence || directFallbackPlan.confidence || 0) >= 0.55);
+
+  if (shouldUseDirectAccountingFastPath) {
+    const policy = evaluatePlanPolicies(directFallbackActions);
+    const executableActions =
+      policy.blockedActions.length === 0 && policy.approvalActions.length === 0
+        ? policy.executableActions
+        : [];
+
+    if (executableActions.length > 0) {
+      pendingUiApproval = null;
+      notifyExecutionStart();
+      const execution = await executeUnifiedAgentActions(executableActions, {
+        customActionExecutor: params.customActionExecutor,
+        shouldStop: params.shouldStop,
+        rollbackOnStop: params.rollbackOnStop,
+      });
+      const navigateTo = execution.find((result) => result.navigateTo)?.navigateTo;
+      const observation = buildObservation(execution, navigateTo);
+
+      appendAIAuditEvent({
+        eventType: "execution.finished",
+        module: moduleId,
+        route: params.route,
+        message: objective,
+        planSource: "fast-path",
+        confidence: directFallbackPlan.confidence,
+        actions: executableActions,
+        results: execution,
+        reasons: ["Direct accounting fast-path skipped remote planner."],
+      });
+      appendAgentMemory(moduleId, {
+        timestamp: Date.now(),
+        module: moduleId,
+        objective,
+        actionTypes: executableActions.map((action) => action.type),
+        observation,
+        success: execution.every((result) => result.success),
+      });
+
+      const transactionSucceeded = execution.length > 0 && execution.every((result) => result.success);
+
+      return {
+        finalReply: transactionSucceeded ? "Transaction successful." : buildFinalReplyFromExecution(directFallbackPlan.reply, execution),
+        baseReply: directFallbackPlan.reply,
+        actions: executableActions,
+        execution,
+        navigateTo,
+        planSource: "fast-path",
+        suggestions: ["Show me what changed", "Show the audit trail", "Generate a report"],
+      };
+    }
   }
 
   const uiSnapshot = params.enableUiOperator === false ? "" : captureUiSnapshot();
