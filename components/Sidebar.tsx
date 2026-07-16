@@ -12,6 +12,7 @@ import {
   MARKETS_NAV_ITEMS,
   ProjectionsModuleOwner,
   TAX_NAV_ITEMS,
+  WALLET_NAV_ITEMS,
   getServerProjectionsModuleOwnerSnapshot,
   getStoredProjectionsModuleOwner,
   isNavItemActive,
@@ -61,6 +62,14 @@ const MODULES: { id: AppMode; label: string; iconSrc: string; activeColor: strin
     activeColor: "#0f766e",
     href: "/markets",
     items: MARKETS_NAV_ITEMS,
+  },
+  {
+    id: "wallet",
+    label: "Wallet",
+    iconSrc: "/coin.jpeg",
+    activeColor: "#4f8f00",
+    href: "/wallet",
+    items: WALLET_NAV_ITEMS,
   },
 ];
 

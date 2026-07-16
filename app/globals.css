@@ -462,7 +462,7 @@ body {
 .reporting-period-panel,
 .reporting-period-card,
 .reporting-period-control {
-  border-color: #e5e7eb !important;
+  border-color: transparent !important;
 }
 
 /* Landing page font override */

@@ -451,8 +451,8 @@ export default function WorkspacePage() {
       </div>
 
       {/* Date Search & Year Filter */}
-      <div className="reporting-period-panel overflow-hidden rounded-[22px] border border-gray-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
+      <div className="reporting-period-panel overflow-hidden rounded-[22px] bg-transparent">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#101010] text-white shadow-sm">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -475,7 +475,7 @@ export default function WorkspacePage() {
         </div>
 
         <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[1.05fr_1fr]">
-          <div className="reporting-period-card rounded-[18px] border border-gray-200 bg-white p-4">
+          <div className="reporting-period-card rounded-[18px] bg-transparent p-4">
             <p className="text-xs font-medium text-gray-500">Reporting period</p>
             <div className="mt-3 flex flex-wrap items-end gap-2.5">
               <p className="text-4xl font-semibold leading-none tracking-tight text-gray-950">{selectedYear}</p>
@@ -492,7 +492,7 @@ export default function WorkspacePage() {
             </p>
           </div>
 
-          <div className="reporting-period-card rounded-[18px] border border-gray-200 bg-white p-4">
+          <div className="reporting-period-card rounded-[18px] bg-transparent p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500">Yearly result</p>
@@ -500,7 +500,7 @@ export default function WorkspacePage() {
                   {selectedYearStatement ? `₦${Math.abs(selectedYearStatement.netIncome).toLocaleString("en-NG")}` : "₦0"}
                 </p>
               </div>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-700">
                 <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
@@ -513,8 +513,8 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        <div className="reporting-period-filters grid gap-2.5 border-t border-gray-100 bg-white px-4 py-4 sm:px-5 md:grid-cols-4">
-          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+        <div className="reporting-period-filters grid gap-2.5 px-4 py-4 sm:px-5 md:grid-cols-4">
+          <label className="reporting-period-control block rounded-xl px-3.5 py-2.5">
             <span className="block text-xs font-medium text-gray-500">Year</span>
             <select
               value={selectedYear}
@@ -527,7 +527,7 @@ export default function WorkspacePage() {
             </select>
           </label>
 
-          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+          <label className="reporting-period-control block rounded-xl px-3.5 py-2.5">
             <span className="block text-xs font-medium text-gray-500">From</span>
             <input
               type="date"
@@ -537,7 +537,7 @@ export default function WorkspacePage() {
             />
           </label>
 
-          <label className="reporting-period-control block rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+          <label className="reporting-period-control block rounded-xl px-3.5 py-2.5">
             <span className="block text-xs font-medium text-gray-500">To</span>
             <input
               type="date"
@@ -547,7 +547,7 @@ export default function WorkspacePage() {
             />
           </label>
 
-          <div className="reporting-period-control flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+          <div className="reporting-period-control flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
             <div>
               <p className="text-xs font-medium text-gray-500">Records</p>
               <p className="mt-1.5 text-lg font-semibold text-gray-950">{selectedYearEntries.length}</p>

@@ -39,6 +39,12 @@ const MODULES: {
             iconSrc: "/Market.jpg?v=20260713-1",
             activeColor: "#0f766e",
         },
+        {
+            mode: "wallet",
+            label: "Wallet",
+            iconSrc: "/coin.jpeg",
+            activeColor: "#4f8f00",
+        },
     ];
 
 export default function ModuleButtonBar() {
@@ -67,6 +73,7 @@ export default function ModuleButtonBar() {
         if (targetMode === "tax") return "/tax/workspace";
         if (targetMode === "budgeting") return "/budgeting/dashboard";
         if (targetMode === "markets") return "/markets";
+        if (targetMode === "wallet") return "/wallet";
         return "/accounting";
     };
 

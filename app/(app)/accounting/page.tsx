@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -38,6 +36,23 @@ type ManualTransactionDraft = {
   category: string;
   amount: string;
   type: TransactionType;
+};
+
+type QuickTransactionDraft = {
+  amount: string;
+  description: string;
+};
+
+type QuickAiValidationResult = {
+  parsedType?: string;
+  amount?: number;
+  description?: string;
+  category?: string;
+  confidence?: number;
+  aiReasoning?: string;
+  debitAccount?: { code?: string; name?: string };
+  creditAccount?: { code?: string; name?: string };
+  taxImplications?: { outputVAT?: number; inputVAT?: number };
 };
 
 type ChatMessage = {
@@ -150,6 +165,49 @@ const initialTransaction: ManualTransactionDraft = {
   amount: "",
   type: "income" as const,
 };
+
+const initialQuickTransaction: QuickTransactionDraft = {
+  amount: "",
+  description: "",
+};
+
+function transactionTypeFromParsed(parsedType?: string, category?: string): TransactionType {
+  const normalizedCategory = (category || "").toLowerCase();
+  const normalizedType = (parsedType || "").toLowerCase();
+  const categoryMap: Record<string, TransactionType> = {
+    sales: "income",
+    service: "income",
+    receipt: "income",
+    purchases: "expense",
+    rent: "expense",
+    salary: "expense",
+    utilities: "expense",
+    transport: "expense",
+    expense: "expense",
+    asset: "asset",
+    capital: "equity",
+    drawing: "equity",
+    "loan-received": "liability",
+    "loan-repayment": "liability",
+    "supplier-payment": "liability",
+    payment: "liability",
+    transfer: "asset",
+  };
+  const typeMap: Record<string, TransactionType> = {
+    sale: "income",
+    receipt: "income",
+    purchase: "expense",
+    expense: "expense",
+    payment: "liability",
+    transfer: "asset",
+    asset: "asset",
+    equity: "equity",
+    loan: "liability",
+    other: "expense",
+  };
+
+  return categoryMap[normalizedCategory] || typeMap[normalizedType] || "expense";
+}
 
 function getContextJournalLabel(entry: JournalEntry): string {
   const txType = entry.transactionType;
@@ -286,6 +344,9 @@ export default function AccountingPage() {
   const [documents, setDocuments] = useState<DraftDocumentMeta[]>([]);
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [manualTx, setManualTx] = useState<ManualTransactionDraft>(initialTransaction);
+  const [quickTransaction, setQuickTransaction] = useState<QuickTransactionDraft>(initialQuickTransaction);
+  const [quickTransactionStatus, setQuickTransactionStatus] = useState("");
+  const [isQuickTransactionProcessing, setIsQuickTransactionProcessing] = useState(false);
   const [generatedStatements, setGeneratedStatements] = useState<StatementDraft | null>(null);
   const [auditedPacket, setAuditedPacket] = useState<AuditedStatementPacket | null>(null);
   const [status, setStatus] = useState<string>("");
@@ -987,6 +1048,113 @@ export default function AccountingPage() {
         "Noted. Use the + menu to upload evidence or trigger automations while I prepare the books.",
       );
     }
+  };
+
+  const handleQuickTransactionSubmit = async () => {
+    if (isQuickTransactionProcessing) return;
+    const amount = Number(quickTransaction.amount.replace(/,/g, ""));
+    const description = quickTransaction.description.trim();
+
+    if (!description || !Number.isFinite(amount) || amount <= 0) {
+      setQuickTransactionStatus("Enter a transaction and a valid amount.");
+      return;
+    }
+
+    const transactionText = `${description} ₦${amount}`;
+    setIsQuickTransactionProcessing(true);
+    setQuickTransactionStatus("Analysing...");
+    try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 90000);
+      const response = await fetch("/api/accounting/validate-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionText,
+          amount,
+        }),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`AI validation failed (${response.status})`);
+      }
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        result?: QuickAiValidationResult;
+      };
+      const aiResult = data.success ? data.result : null;
+      const debitAccount = aiResult?.debitAccount;
+      const creditAccount = aiResult?.creditAccount;
+
+      if (!aiResult || !debitAccount?.code || !creditAccount?.code) {
+        throw new Error("AI could not determine both accounts.");
+      }
+
+      const newTransaction: RawTransaction = {
+        id: `quick-ai-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        description: aiResult.description || description,
+        category: aiResult.category || "other",
+        amount: Number(aiResult.amount || amount),
+        type: transactionTypeFromParsed(aiResult.parsedType, aiResult.category),
+      };
+
+      const result = accountingEngine.processTransactionWithAIAccounts(newTransaction, {
+        debitCode: debitAccount.code,
+        debitName: debitAccount.name || debitAccount.code,
+        creditCode: creditAccount.code,
+        creditName: creditAccount.name || creditAccount.code,
+        confidence: typeof aiResult.confidence === "number" ? aiResult.confidence : 0.75,
+        reasoning: aiResult.aiReasoning,
+        parsedType: aiResult.parsedType,
+        taxImplications: aiResult.taxImplications,
+      });
+
+      setTransactions((previous) => [...previous, newTransaction]);
+      syncAccountingState(accountingEngine.getState());
+      setGeneratedStatements(accountingEngine.generateStatements());
+      setQuickTransaction(initialQuickTransaction);
+      setQuickTransactionStatus("Transaction successful.");
+      pushAutomationActivity("AI table transaction", `Posted: ${result.journalEntry.id}`);
+    } catch (err) {
+      const parsed = parseTransactionFromChat(transactionText);
+      if (parsed && parsed.amount && parsed.confidence >= 0.3) {
+        try {
+          const fallbackTransaction: RawTransaction = {
+            id: `quick-local-${Date.now()}`,
+            date: new Date().toISOString().split("T")[0],
+            description: parsed.description || description,
+            category: parsed.category || "other",
+            amount: parsed.amount || amount,
+            type: transactionTypeFromParsed(parsed.parsedType, parsed.category),
+          };
+          const fallbackResult = accountingEngine.processTransactionEnhanced(fallbackTransaction);
+          setTransactions((previous) => [...previous, fallbackTransaction]);
+          syncAccountingState(accountingEngine.getState());
+          setGeneratedStatements(accountingEngine.generateStatements());
+          setQuickTransaction(initialQuickTransaction);
+          setQuickTransactionStatus("Transaction successful.");
+          pushAutomationActivity("Table transaction", `Posted locally: ${fallbackResult.journalEntry.id}`);
+          return;
+        } catch {
+          // Use the AI/local failure message below.
+        }
+      }
+
+      const message = err instanceof Error ? err.message : "Posting failed";
+      setQuickTransactionStatus(message);
+    } finally {
+      setIsQuickTransactionProcessing(false);
+    }
+  };
+
+  const handleQuickTransactionKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    handleQuickTransactionSubmit();
   };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1812,43 +1980,97 @@ export default function AccountingPage() {
                     </div>
                   </button>
 
-                  {/* Bank Reconciliation Button */}
-                  <Link
-                    href="/accounting/reconciliation"
+                  <div
                     className={`
-                      w-full rounded-2xl transition-all p-5 group
+                      w-full rounded-2xl p-4
                       ${theme === 'dark'
-                        ? 'bg-[#1a1a1a] hover:bg-[#222222]'
-                        : 'bg-gray-100 hover:bg-gray-200'
-                      } flex items-center justify-center gap-3
+                        ? 'bg-[#1a1a1a]'
+                        : 'bg-gray-100'
+                      }
                     `}
                   >
-                    <div className={`
-                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
-                      ${theme === 'dark'
-                        ? 'bg-gray-700 group-hover:bg-gray-600'
-                        : 'bg-blue-100 group-hover:bg-blue-200'
-                      }
-                    `}>
-                      <svg
-                        className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-blue-600'}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                          AI Transaction Table
+                        </h3>
+                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                          Enter amount and transaction, then press Enter.
+                        </p>
+                      </div>
+                      {quickTransactionStatus ? (
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            quickTransactionStatus === "Transaction successful."
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {quickTransactionStatus}
+                        </span>
+                      ) : null}
                     </div>
-                    <div className="text-left">
-                      <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Bank Reconciliation
-                      </h3>
-                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-                        Match bank statements with ledger entries
-                      </p>
+                    <div className={`overflow-hidden rounded-xl border ${theme === 'dark' ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-white'}`}>
+                      <table className="w-full table-fixed text-left text-xs">
+                        <thead className={theme === 'dark' ? 'bg-gray-900 text-gray-400' : 'bg-gray-50 text-gray-500'}>
+                          <tr>
+                            <th className="w-28 px-3 py-2 font-semibold">Amount</th>
+                            <th className="px-3 py-2 font-semibold">Transaction</th>
+                            <th className="w-24 px-3 py-2 font-semibold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className={theme === 'dark' ? 'border-t border-gray-800' : 'border-t border-gray-100'}>
+                            <td className="px-3 py-2 align-middle">
+                              <input
+                                value={quickTransaction.amount}
+                                onChange={(event) => setQuickTransaction((current) => ({ ...current, amount: event.target.value }))}
+                                onKeyDown={handleQuickTransactionKeyDown}
+                                inputMode="decimal"
+                                placeholder="50000"
+                                className={`w-full rounded-lg px-2 py-2 outline-none ${
+                                  theme === 'dark'
+                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#8fff00]'
+                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#8fff00]'
+                                }`}
+                              />
+                            </td>
+                            <td className="px-3 py-2 align-middle">
+                              <input
+                                value={quickTransaction.description}
+                                onChange={(event) => setQuickTransaction((current) => ({ ...current, description: event.target.value }))}
+                                onKeyDown={handleQuickTransactionKeyDown}
+                                placeholder="Paid rent"
+                                className={`w-full rounded-lg px-2 py-2 outline-none ${
+                                  theme === 'dark'
+                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#8fff00]'
+                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#8fff00]'
+                                }`}
+                              />
+                            </td>
+                            <td className="px-3 py-2 align-middle">
+                              <button
+                                type="button"
+                                onClick={handleQuickTransactionSubmit}
+                                disabled={isQuickTransactionProcessing}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00] text-[#101010] transition-colors hover:bg-[#7be000] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/40 disabled:cursor-wait disabled:opacity-60"
+                                aria-label="Post transaction"
+                              >
+                                {isQuickTransactionProcessing ? (
+                                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#101010]/25 border-t-[#101010]" aria-hidden="true" />
+                                ) : (
+                                  <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M5 12h14" />
+                                    <path d="m13 6 6 6-6 6" />
+                                  </svg>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                  </Link>
+                  </div>
                 </div>
 
                 {/* Connect Sales POS Section */}

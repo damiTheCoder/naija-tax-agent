@@ -57,6 +57,7 @@ export function subscribeToProjectionsModuleOwner(onStoreChange: () => void): ()
 export function resolveModuleForPath(pathname: string, projectionsOwner: ProjectionsModuleOwner = "accounting"): AppMode {
   if (pathname.startsWith("/markets")) return "markets";
   if (pathname.startsWith("/budgeting")) return "budgeting";
+  if (pathname.startsWith("/wallet")) return "wallet";
   if (isProjectionsRoute(pathname)) return projectionsOwner;
   if (
     pathname.startsWith("/accounting") ||
@@ -64,7 +65,6 @@ export function resolveModuleForPath(pathname: string, projectionsOwner: Project
     pathname.startsWith("/personal") ||
     pathname.startsWith("/marketplace") ||
     pathname.startsWith("/supersheet") ||
-    pathname.startsWith("/wallet") ||
     pathname.startsWith("/cashflow-intelligence")
   ) return "accounting";
   return "tax";
@@ -193,6 +193,13 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     href: "/accounting/banks",
     icon: "bank",
     description: "Connect and sync bank feeds",
+    mode: "accounting",
+  },
+  {
+    label: "Bank Reconciliation",
+    href: "/accounting/reconciliation",
+    icon: "bank",
+    description: "Match bank statements with ledger entries",
     mode: "accounting",
   },
   {
@@ -391,5 +398,15 @@ export const MARKETS_NAV_ITEMS: TaxNavItem[] = [
     icon: "wallet",
     description: "Funding data, reward choices, and batch performance for an SME",
     mode: "markets",
+  },
+];
+
+export const WALLET_NAV_ITEMS: TaxNavItem[] = [
+  {
+    label: "Wallet",
+    href: "/wallet",
+    icon: "wallet",
+    description: "Send, receive, and add money",
+    mode: "wallet",
   },
 ];
