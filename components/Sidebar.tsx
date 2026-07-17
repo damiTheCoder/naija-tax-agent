@@ -22,7 +22,6 @@ import {
   subscribeToProjectionsModuleOwner,
 } from "@/lib/navigation";
 import { useNavigation } from "@/lib/NavigationContext";
-import { NavIconBadge } from "./NavIconBadge";
 import { useTheme } from "@/lib/ThemeContext";
 
 interface SidebarProps {
@@ -138,32 +137,20 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 onFocus={() => prefetchTo(item.href)}
                 onTouchStart={() => prefetchTo(item.href)}
                 onClick={() => handleNavSelect(item.href)}
-                className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors sm:h-9 sm:gap-2 sm:px-3 sm:text-sm ${
+                className={`flex h-8 shrink-0 items-center rounded-full px-2.5 text-xs font-medium transition-colors sm:h-9 sm:px-3 sm:text-sm ${
                   isActive
                     ? isDark
-                      ? "bg-white/12 text-[#8fff00]"
-                      : "bg-[#e5e7eb] text-[#4f8f00]"
+                      ? "text-[#8fff00]"
+                      : "text-[#4f8f00]"
                     : isDark
-                      ? "bg-white/5 text-white/72 hover:bg-white/10 hover:text-white"
-                      : "bg-[#f3f4f6] text-[#5f5a54] hover:bg-[#e9ecef] hover:text-[#1f1f1f]"
+                      ? "text-white/72 hover:text-white"
+                      : "text-[#5f5a54] hover:text-[#1f1f1f]"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
                 {isNavigating ? (
-                  <span className="h-3.5 w-3.5 rounded-full bg-current/25 animate-pulse" />
-                ) : (
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                      isActive
-                        ? "border border-white bg-[#101010] text-white"
-                        : isDark
-                          ? "bg-white/10 text-white"
-                          : "bg-white text-[#101010]"
-                    }`}
-                  >
-                    <NavIconBadge icon={item.icon} className="h-3 w-3" />
-                  </span>
-                )}
+                  <span className="mr-1.5 h-2 w-2 rounded-full bg-current/30 animate-pulse" />
+                ) : null}
                 <span className="whitespace-nowrap">{item.label}</span>
               </button>
             );

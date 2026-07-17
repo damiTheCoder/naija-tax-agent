@@ -1935,7 +1935,7 @@ export default function AccountingPage() {
                 </div>
 
                 {/* Action Buttons Grid - 2 columns on desktop */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
                   {/* Post Journal Entry Button */}
                   <button
                     onClick={() => {
@@ -1946,7 +1946,7 @@ export default function AccountingPage() {
                     }}
                     data-agent-target="open-post-journal-entry"
                     className={`
-                      w-full rounded-2xl transition-all p-5 group
+                      w-full rounded-2xl transition-all p-5 group md:min-h-[8.5rem]
                       ${theme === 'dark'
                         ? 'bg-[#1a1a1a] hover:bg-[#222222]'
                         : 'bg-gray-100 hover:bg-gray-200'
@@ -1980,15 +1980,7 @@ export default function AccountingPage() {
                     </div>
                   </button>
 
-                  <div
-                    className={`
-                      w-full rounded-2xl p-4
-                      ${theme === 'dark'
-                        ? 'bg-[#1a1a1a]'
-                        : 'bg-gray-100'
-                      }
-                    `}
-                  >
+                  <div className="w-full rounded-2xl p-0">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -2010,7 +2002,7 @@ export default function AccountingPage() {
                         </span>
                       ) : null}
                     </div>
-                    <div className={`overflow-hidden rounded-xl border ${theme === 'dark' ? 'border-gray-800 bg-black/20' : 'border-gray-200 bg-white'}`}>
+                    <div className={`overflow-hidden rounded-2xl ${theme === 'dark' ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
                       <table className="w-full table-fixed text-left text-xs">
                         <thead className={theme === 'dark' ? 'bg-gray-900 text-gray-400' : 'bg-gray-50 text-gray-500'}>
                           <tr>
