@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { STORAGE_KEYS } from "@/lib/workspace/types";
 
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
+const DISMISSAL_STORAGE_KEY = "ql::temporary-login-dismissed-permanent";
 
 export default function TemporaryLoginReminder() {
   const [isTemporary, setIsTemporary] = useState(false);
@@ -13,7 +14,13 @@ export default function TemporaryLoginReminder() {
 
   useEffect(() => {
     const syncTemporaryState = () => {
-      setIsTemporary(window.localStorage.getItem(STORAGE_KEYS.TEMPORARY_ACCESS) === "true");
+      const temporary = window.localStorage.getItem(STORAGE_KEYS.TEMPORARY_ACCESS) === "true";
+      setIsTemporary(temporary);
+      if (!temporary) {
+        setIsOpen(false);
+        setReminderCycle(0);
+        window.localStorage.removeItem(DISMISSAL_STORAGE_KEY);
+      }
     };
 
     syncTemporaryState();
@@ -30,7 +37,8 @@ export default function TemporaryLoginReminder() {
     if (!isTemporary || isOpen) return;
 
     const timeoutId = window.setTimeout(() => {
-      setIsOpen(true);
+      const dismissed = window.localStorage.getItem(DISMISSAL_STORAGE_KEY) === "true";
+      if (!dismissed) setIsOpen(true);
     }, REMINDER_INTERVAL_MS);
 
     return () => {
@@ -43,6 +51,7 @@ export default function TemporaryLoginReminder() {
   const continueTemporarily = () => {
     setIsOpen(false);
     setReminderCycle((current) => current + 1);
+    window.localStorage.setItem(DISMISSAL_STORAGE_KEY, "true");
   };
 
   return (
