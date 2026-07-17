@@ -628,7 +628,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </header>
 
             {/* Page Content */}
-            <main className="app-shell-content-main flex-1 px-4 pb-4 pt-6 sm:px-6 sm:pb-4 lg:px-8 lg:py-8">
+            <main className="app-shell-content-main flex-1 px-2 pb-4 pt-6 sm:px-6 sm:pb-4 lg:px-8 lg:py-8">
               <div className="app-shell-content-container mx-auto w-full min-w-0">
                 <Suspense fallback={<PageSkeleton />}>
                   {children}

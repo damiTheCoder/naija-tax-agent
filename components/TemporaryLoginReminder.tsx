@@ -4,13 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { STORAGE_KEYS } from "@/lib/workspace/types";
 
-const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const DISMISSAL_STORAGE_KEY = "ql::temporary-login-dismissed-permanent";
 
 export default function TemporaryLoginReminder() {
   const [isTemporary, setIsTemporary] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [reminderCycle, setReminderCycle] = useState(0);
 
   useEffect(() => {
     const syncTemporaryState = () => {
@@ -18,7 +16,6 @@ export default function TemporaryLoginReminder() {
       setIsTemporary(temporary);
       if (!temporary) {
         setIsOpen(false);
-        setReminderCycle(0);
         window.localStorage.removeItem(DISMISSAL_STORAGE_KEY);
       }
     };
@@ -34,23 +31,18 @@ export default function TemporaryLoginReminder() {
   }, []);
 
   useEffect(() => {
-    if (!isTemporary || isOpen) return;
-
-    const timeoutId = window.setTimeout(() => {
-      const dismissed = window.localStorage.getItem(DISMISSAL_STORAGE_KEY) === "true";
-      if (!dismissed) setIsOpen(true);
-    }, REMINDER_INTERVAL_MS);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [isOpen, isTemporary, reminderCycle]);
+    const dismissed = window.localStorage.getItem(DISMISSAL_STORAGE_KEY) === "true";
+    if (dismissed && isOpen) setIsOpen(false);
+  }, [isOpen]);
 
   if (!isTemporary || !isOpen) return null;
 
   const continueTemporarily = () => {
     setIsOpen(false);
-    setReminderCycle((current) => current + 1);
+    window.localStorage.setItem(DISMISSAL_STORAGE_KEY, "true");
+  };
+
+  const loginTemporarily = () => {
     window.localStorage.setItem(DISMISSAL_STORAGE_KEY, "true");
   };
 
@@ -75,6 +67,7 @@ export default function TemporaryLoginReminder() {
         <div className="mt-6 grid gap-3">
           <Link
             href="/auth/login?next=%2Fprofile"
+            onClick={loginTemporarily}
             className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#8fff00] px-4 text-sm font-black text-black transition hover:bg-[#7be000]"
           >
             Login / signup

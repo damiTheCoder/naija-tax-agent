@@ -306,7 +306,11 @@ export default function ProfilePage() {
               </button>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div
+              className={`mt-5 flex overflow-hidden rounded-2xl border ${
+                isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-gray-100"
+              }`}
+            >
               <MetricTile label="Completion" value={`${profileCompletion}%`} isDark={isDark} />
               <MetricTile label="Workspaces" value={`${workspaces.length}`} isDark={isDark} />
               <MetricTile label="Account Age" value={`${accountAgeDays}d`} isDark={isDark} />
@@ -674,7 +678,11 @@ export default function ProfilePage() {
 
 function MetricTile({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
   return (
-    <div className={`rounded-2xl border px-3 py-3 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
+    <div
+      className={`flex-1 px-3 py-3 text-center ${
+        isDark ? "border-white/10" : "border-gray-200/80"
+      } [&:not(:last-child)]:border-r`}
+    >
       <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
       <p className={`mt-1 text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
     </div>
