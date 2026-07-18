@@ -18,25 +18,16 @@ type AuthUser = {
 
 const NEXT_PATH = "/profile";
 
-function saveTemporaryLocalProfile() {
-  window.localStorage.setItem(STORAGE_KEYS.TEMPORARY_ACCESS, "true");
+function saveAnonymousLocalProfile() {
+  window.localStorage.removeItem(STORAGE_KEYS.TEMPORARY_ACCESS);
   window.localStorage.setItem(
     STORAGE_KEYS.USER_PROFILE,
     JSON.stringify({
-      id: "temporary-user",
-      name: "Temporary User",
+      id: "anonymous-user",
+      name: "Guest",
       email: "",
     } satisfies UserProfile)
   );
-}
-
-async function ensureTemporaryAccess() {
-  const response = await fetch("/api/auth/temporary", { method: "POST" });
-  const result = (await response.json()) as { success?: boolean; error?: string };
-  if (!response.ok || !result.success) {
-    throw new Error(result.error || "Unable to start temporary access.");
-  }
-  saveTemporaryLocalProfile();
 }
 
 function syncUserToLocalProfile(user: Partial<AuthUser> | null | undefined) {
@@ -71,44 +62,31 @@ function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | und
 export default function LandingAuthButtons() {
   const router = useRouter();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isTemporaryLoading, setIsTemporaryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    const restoreTemporaryAccess = async () => {
-      if (window.localStorage.getItem(STORAGE_KEYS.TEMPORARY_ACCESS) !== "true") return;
-
-      setIsTemporaryLoading(true);
-      try {
-        await ensureTemporaryAccess();
-        if (!active) return;
-        router.replace(NEXT_PATH);
-        router.refresh();
-      } catch {
-        if (active) setIsTemporaryLoading(false);
+    const syncExistingProfile = () => {
+      if (!window.localStorage.getItem(STORAGE_KEYS.USER_PROFILE)) {
+        saveAnonymousLocalProfile();
       }
     };
 
-    void restoreTemporaryAccess();
+    void syncExistingProfile();
     return () => {
       active = false;
     };
   }, [router]);
 
-  const handleTemporaryLogin = async () => {
-    setIsTemporaryLoading(true);
-    setError(null);
+  const handleUseApp = async () => {
+    saveAnonymousLocalProfile();
     try {
-      await ensureTemporaryAccess();
-      router.replace(NEXT_PATH);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start temporary access.");
-    } finally {
-      setIsTemporaryLoading(false);
+      await fetch("/api/auth/temporary", { method: "POST" });
+    } catch {
+      // Continue anyway; the local profile enables client-side usage.
     }
+    router.replace(NEXT_PATH);
   };
 
   const handleGoogleLogin = async () => {
@@ -148,25 +126,24 @@ export default function LandingAuthButtons() {
 
   return (
     <div className="single-landing-actions">
-      <Link href={`/auth/login?next=${encodeURIComponent(NEXT_PATH)}`} className="single-landing-primary">
+      <button
+        type="button"
+        className="single-landing-primary"
+        onClick={handleUseApp}
+      >
+        Use app
+      </button>
+      <Link href={`/auth/login?next=${encodeURIComponent(NEXT_PATH)}`} className="single-landing-secondary">
         Login / signup
       </Link>
       <button
         type="button"
-        className="single-landing-secondary"
+        className="single-landing-temporary"
         onClick={handleGoogleLogin}
-        disabled={isGoogleLoading || isTemporaryLoading}
+        disabled={isGoogleLoading}
       >
         <GoogleMark className="h-5 w-5" />
         <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
-      </button>
-      <button
-        type="button"
-        className="single-landing-temporary"
-        onClick={handleTemporaryLogin}
-        disabled={isGoogleLoading || isTemporaryLoading}
-      >
-        {isTemporaryLoading ? "Opening..." : "Temporary login"}
       </button>
       {error ? <p className="single-landing-error">{error}</p> : null}
     </div>
