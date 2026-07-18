@@ -87,7 +87,11 @@ export default function LoginPage() {
     const loadSession = async () => {
       try {
         if (!next.startsWith("/admin") && window.localStorage.getItem(STORAGE_KEYS.TEMPORARY_ACCESS) === "true") {
-          await ensureTemporaryAccess();
+          try {
+            await ensureTemporaryAccess();
+          } catch {
+            // Ignore temporary-access refresh failures; keep the user in temporary mode.
+          }
           if (!active) return;
           router.replace(next || "/profile");
           router.refresh();

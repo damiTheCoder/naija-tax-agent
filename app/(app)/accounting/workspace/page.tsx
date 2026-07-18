@@ -451,7 +451,7 @@ export default function WorkspacePage() {
       </div>
 
       {/* Date Search & Year Filter */}
-      <div className="reporting-period-panel overflow-hidden rounded-[22px] bg-transparent">
+      <div className="reporting-period-panel overflow-hidden rounded-[22px] bg-gray-100">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#101010] text-white shadow-sm">
@@ -475,7 +475,7 @@ export default function WorkspacePage() {
         </div>
 
         <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[1.05fr_1fr]">
-          <div className="reporting-period-card rounded-[18px] bg-transparent p-4">
+          <div className="reporting-period-card rounded-[18px] bg-gray-200 p-4">
             <p className="text-xs font-medium text-gray-500">Reporting period</p>
             <div className="mt-3 flex flex-wrap items-end gap-2.5">
               <p className="text-4xl font-semibold leading-none tracking-tight text-gray-950">{selectedYear}</p>
@@ -492,7 +492,7 @@ export default function WorkspacePage() {
             </p>
           </div>
 
-          <div className="reporting-period-card rounded-[18px] bg-transparent p-4">
+          <div className="reporting-period-card rounded-[18px] bg-gray-200 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500">Yearly result</p>
@@ -555,7 +555,7 @@ export default function WorkspacePage() {
             {(dateFrom || dateTo) && (
               <button
                 onClick={() => { setDateFrom(""); setDateTo(""); }}
-                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+                className="rounded-full border border-gray-400 bg-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-800 transition-colors hover:border-gray-500 hover:bg-gray-400"
               >
                 Clear
               </button>
@@ -584,12 +584,12 @@ export default function WorkspacePage() {
       </div >
 
       {/* Tab Content */}
-      < div className="bg-white rounded-xl border border-gray-200 overflow-hidden" >
+       < div className="bg-gray-100 rounded-xl border border-gray-200 overflow-hidden" >
         {/* General Journal - Now showing real double-entry journal entries */}
         {
           activeTab === "journal" && (
             <div>
-              <div className="px-6 py-4 bg-white flex items-center justify-between">
+              <div className="px-6 py-4 bg-gray-200 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-900">General Journal - {selectedYear}</h2>
                   <p className="text-xs text-gray-500 mt-0.5">{classifiedJournalEntries.length} entries {dateFrom || dateTo ? '(filtered)' : ''} • Classified journal view</p>
@@ -608,7 +608,7 @@ export default function WorkspacePage() {
                   </button>
                 )}
               </div>
-              <div className="px-6 py-3 border-b border-gray-100 bg-white">
+              <div className="px-6 py-3 border-b border-gray-200 bg-gray-200">
                 <div className="flex flex-wrap gap-2">
                   {([
                     ["all", "All"],
@@ -624,7 +624,7 @@ export default function WorkspacePage() {
                       <button
                         key={itemKey}
                         onClick={() => setJournalClass(itemKey)}
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-[#8fff00] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-[#8fff00] text-white" : "bg-gray-300 text-gray-700 hover:bg-gray-400"
                           }`}
                       >
                         <span>{label}</span>
@@ -721,7 +721,7 @@ export default function WorkspacePage() {
                 </div>
                 <button
                   onClick={() => router.push("/accounting?newEntry=1")}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-400 bg-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-400 transition-colors whitespace-nowrap"
                   title="Post a new journal entry"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -827,7 +827,7 @@ export default function WorkspacePage() {
                           "CashOS Business"
                         );
                       }}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-300 border border-gray-400 rounded-lg hover:bg-gray-400 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1613,7 +1613,7 @@ export default function WorkspacePage() {
       < div className="flex flex-wrap gap-3" >
         <Link
           href="/accounting"
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-300 border border-gray-400 rounded-lg hover:bg-gray-400 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -1625,7 +1625,7 @@ export default function WorkspacePage() {
           onClick={() => {
             void handleDownloadYearlyStatement(selectedYear);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-300 border border-gray-400 rounded-lg hover:bg-gray-400 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1637,7 +1637,7 @@ export default function WorkspacePage() {
           onClick={() => {
             void handleDownloadJournals(selectedYear);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-300 border border-gray-400 rounded-lg hover:bg-gray-400 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

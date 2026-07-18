@@ -4,7 +4,7 @@
 :root {
   color-scheme: only light;
   /* Brand Colors */
-  --background: #fdfcfb;
+  --background: #ffffff;
   --foreground: #0a0a0a;
   --primary: #8fff00;
   --primary-light: #b4ff57;
@@ -27,7 +27,7 @@
   --error: #dc2626;
   --warning: #f59e0b;
   --success: #10b981;
-  --app-bg: #fdfcfb;
+  --app-bg: #ffffff;
   --border-color: #f0ece6;
 }
 
@@ -52,7 +52,7 @@
 }
 
 html {
-  background: var(--background);
+  background: #ffffff;
   color: var(--foreground);
 }
 
@@ -417,7 +417,7 @@ html.dark {
 }
 
 body {
-  background: var(--background);
+  background: #ffffff;
   color: var(--foreground);
   font-family: var(--font-glacial), system-ui, -apple-system, sans-serif;
   min-height: 100vh;
@@ -453,10 +453,16 @@ body {
 .app-shell-content-container:has(.reporting-workspace-page),
 .reporting-workspace-page,
 .reporting-period-panel,
-.reporting-period-card,
-.reporting-period-filters,
-.reporting-period-control {
+.reporting-period-card {
   background-color: #ffffff !important;
+}
+
+.reporting-period-filters {
+  background-color: #f3f4f6 !important;
+}
+
+.reporting-period-control {
+  background-color: #e5e7eb !important;
 }
 
 .reporting-period-panel,

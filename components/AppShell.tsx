@@ -517,15 +517,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                   {mobileActionsOpen && (
                     <div
-                      className="absolute right-0 top-full z-50 mt-3 max-h-[72vh] w-72 overflow-y-auto rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                      className="hide-scrollbar absolute right-0 top-full z-50 mt-3 max-h-[72vh] w-72 overflow-hidden rounded-3xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-3xl backdrop-saturate-200"
                       style={{
-                        background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
-                        borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                        background: isDark ? "rgba(20,20,20,0.35)" : "rgba(255,255,255,0.28)",
+                        borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.7)",
                       }}
                     >
                   <div className="space-y-1 p-2">
                     {mobileOverflowNavItems.length > 0 ? (
-                      <div className={`border-b pb-2 ${isDark ? "border-white/10" : "border-gray-100"}`}>
+                      <div className={`border-b pb-2 ${isDark ? "border-white/10" : "border-gray-200"}`}>
                         <p className={`px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] ${isDark ? "text-white/35" : "text-[#8a8680]"}`}>
                           More tools
                         </p>
@@ -536,12 +536,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                               key={item.href}
                               href={item.href}
                               onClick={() => setMobileActionsOpen(false)}
-                              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                              className={`flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
                                 isActive
-                                  ? "bg-[#8fff00] text-[#101010]"
+                                  ? "bg-[#8fff00]/15 text-[#365800]"
                                   : isDark
                                     ? "text-white hover:bg-white/5"
-                                    : "text-[#1f1f1f] hover:bg-[#f8f6f3]"
+                                    : "text-[#1f1f1f] hover:bg-white/40"
                               }`}
                               aria-current={isActive ? "page" : undefined}
                             >
@@ -564,7 +564,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Link
                       href="/profile"
                       onClick={() => setMobileActionsOpen(false)}
-                      className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
+                      className={`flex items-center gap-3 px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-white/40"}`}
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
                         <svg
@@ -583,7 +583,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       </span>
                     </Link>
 
-                    <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                    <div className={`flex items-center gap-3 px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75 9.75 9.75 0 018.25 6c0-1.33.266-2.596.748-3.752A9.753 9.753 0 1021.752 15.002z" />

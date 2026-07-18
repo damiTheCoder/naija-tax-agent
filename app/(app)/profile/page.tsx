@@ -298,8 +298,8 @@ export default function ProfilePage() {
                 disabled={isLoggingOut}
                 className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${
                   isDark
-                    ? "bg-white/10 text-white hover:bg-white/15"
-                    : "bg-gray-100 text-[#101010] hover:bg-gray-200"
+                    ? "bg-gray-700 text-white hover:bg-gray-600"
+                    : "bg-gray-300 text-[#101010] hover:bg-gray-400"
                 }`}
               >
                 {isLoggingOut ? "Logging out..." : "Logout"}
@@ -308,7 +308,7 @@ export default function ProfilePage() {
 
             <div
               className={`mt-5 flex overflow-hidden rounded-2xl border ${
-                isDark ? "border-white/10 bg-white/5" : "border-gray-200 bg-gray-100"
+                isDark ? "border-gray-700 bg-gray-800" : "border-gray-200 bg-gray-100"
               }`}
             >
               <MetricTile label="Completion" value={`${profileCompletion}%`} isDark={isDark} />
@@ -330,8 +330,8 @@ export default function ProfilePage() {
                   theme === "light"
                     ? "border-[#8fff00] text-[#446b00]"
                     : isDark
-                      ? "border-gray-700 text-gray-200 hover:border-gray-500"
-                      : "border-gray-200 text-gray-700 hover:border-gray-300"
+                      ? "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
+                      : "border-gray-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
                 }`}
               >
                 Daylight
@@ -342,8 +342,8 @@ export default function ProfilePage() {
                   theme === "dark"
                     ? "border-[#8fff00] text-[#446b00]"
                     : isDark
-                      ? "border-gray-700 text-gray-200 hover:border-gray-500"
-                      : "border-gray-200 text-gray-700 hover:border-gray-300"
+                      ? "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
+                      : "border-gray-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
                 }`}
               >
                 Night Shift

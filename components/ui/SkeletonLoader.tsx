@@ -10,7 +10,7 @@ import { APP_LOGO_SRC, APP_LOGO_ALT } from "@/lib/constants";
 export default function SkeletonLoader() {
   return (
     <div
-      className="flex min-h-[calc(100dvh-9.5rem)] w-full items-center justify-center"
+      className="flex min-h-[100dvh] w-full items-center justify-center"
       style={{ background: 'var(--app-bg)' }}
     >
       <div className="logo-loader-container" aria-label="Loading" role="status">

@@ -133,15 +133,15 @@ export default function ModuleButtonBar() {
 
             {isOpen ? (
                 <div
-                    className="absolute right-0 top-full z-50 mt-3 w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-lg border p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.14)] backdrop-blur-2xl"
+                    className="hide-scrollbar absolute right-0 top-full z-50 mt-3 w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.14)] backdrop-blur-3xl backdrop-saturate-200"
                     style={{
-                        background: isDark ? "rgba(0,0,0,0.78)" : "rgba(255,255,255,0.76)",
-                        borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(240,236,230,0.78)",
+                        background: isDark ? "rgba(20,20,20,0.35)" : "rgba(255,255,255,0.28)",
+                        borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.7)",
                     }}
                     role="menu"
                     aria-label="Modules"
                 >
-                {MODULES.map((module) => {
+                {MODULES.map((module, index) => {
                     const isActive = module.mode === currentMode;
                     return (
                         <button
@@ -151,8 +151,8 @@ export default function ModuleButtonBar() {
                             onFocus={() => prefetchTo(getModuleHref(module.mode))}
                             onClick={() => handleModeSwitch(module.mode)}
                             disabled={isNavigating}
-                            className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-semibold transition-colors ${
-                                isDark ? "hover:bg-white/10" : "hover:bg-[#f8f6f3]/90"
+                            className={`flex w-full items-center gap-3 px-2.5 py-2.5 text-left text-sm font-semibold transition-colors ${
+                                isDark ? "hover:bg-white/5" : "hover:bg-white/40"
                             } ${isNavigating ? "cursor-wait" : "cursor-pointer"}`}
                             style={{
                                 color: isActive ? module.activeColor : (isDark ? "#e5e7eb" : "#303030"),

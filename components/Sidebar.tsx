@@ -108,7 +108,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
     <nav
       className="sticky top-0 z-40 backdrop-blur-xl"
       style={{
-        background: isDark ? "rgba(0,0,0,0.88)" : "rgba(253,252,251,0.94)",
+        background: isDark ? "rgba(0,0,0,0.88)" : "#ffffff",
       }}
       aria-label="Primary module navigation"
     >
