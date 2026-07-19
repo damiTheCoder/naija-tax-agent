@@ -187,7 +187,9 @@ const TRANSACTION_KEYWORDS: { nature: TransactionNature; keywords: string[]; pri
         nature: 'capital_injection',
         priority: 88,
         keywords: ['capital injection', 'owner capital', 'additional capital', 'capital introduced',
-            'share capital', 'equity injection', 'investor capital', 'shareholder contribution']
+            'share capital', 'equity injection', 'investor capital', 'shareholder contribution',
+            'funding for capital', 'received funding', 'capital funding', 'owner contribution',
+            'capital investment', 'equity contribution', 'business funding', 'startup capital']
     },
 
     // HIGH PRIORITY: Purchase types (determines VAT treatment)

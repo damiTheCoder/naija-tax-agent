@@ -4609,9 +4609,15 @@ export function parseTransactionFromChat(message: string): Partial<TransactionIn
     {
       patterns: [
         /(?:owner|capital)\s+(?:contribution|investment|invested)/i,
-        /(?:invested|injected)\s+(?:capital|money)/i,
+        /(?:invested|injected)\s+(?:capital|money|funds)/i,
         /(?:started|start)\s+(?:business|company)\s+with/i,
         /business\s+capital/i,
+        /received\s+(?:funding|funds)\s+for\s+capital/i,
+        /funding\s+for\s+(?:capital|business|operations)/i,
+        /capital\s+(?:injection|contribution|funding|investment)/i,
+        /owner\s+(?:contribution|investment|funding)/i,
+        /shareholder\s+(?:contribution|investment|funding)/i,
+        /equity\s+(?:injection|contribution|funding|investment)/i,
       ],
       parsedType: 'equity',
       category: 'capital',

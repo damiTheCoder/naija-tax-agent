@@ -105,6 +105,25 @@ Review the transaction interpretation and validate BOTH:
 1. **ACCOUNTING LOGIC**: Are the debit and credit accounts correct?
 2. **TAX CALCULATION**: Are the tax amounts correctly calculated?
 
+## IMPORTANT CLASSIFICATION RULES
+
+### Capital / Equity Transactions
+- "receive funding for capital", "capital injection", "owner contribution", "equity injection" → Debit: Bank (1020), Credit: Owner's Capital (3000)
+- These are NOT expenses or income - they are equity transactions
+- Capital injections increase owner's equity, not revenue
+
+### Loan Transactions
+- "received loan", "borrowed from bank" → Debit: Bank (1020), Credit: Long-term Loans (2500)
+- Loan repayments → Debit: Long-term Loans (2500), Credit: Bank (1020)
+
+### Revenue/Income Transactions
+- "received payment from customer", "sales", "service income" → Debit: Bank/AR, Credit: Revenue (4000+)
+- These increase equity through profit, not direct capital
+
+### Expense Transactions
+- "paid rent", "paid salary", "purchased supplies" → Debit: Expense (5000+), Credit: Bank/Payables
+- These decrease equity through expenses
+
 ## NIGERIAN TAX RATES (2024 - FIRS COMPLIANT)
 
 ### VAT: 7.5%
@@ -128,6 +147,12 @@ Review the transaction interpretation and validate BOTH:
 | Small | ≤₦25M | 0% |
 | Medium | ₦25M-100M | 20% |
 | Large | >₦100M | 30% |
+
+## SPECIAL NOTES
+- Capital injections/equity contributions are NOT taxable events
+- Loans are NOT taxable events (no VAT, no WHT)
+- Owner contributions increase equity, not revenue
+- Always verify the transaction nature before applying tax rules
 
 ## RESPONSE FORMAT (JSON only):
 {
@@ -172,7 +197,7 @@ function ensureChartAccount(
 
 // In-memory cache for AI validation results to save quota
 const validationCache = new Map<string, AIValidationResult>();
-const CONFIDENCE_THRESHOLD = 0.85;
+const CONFIDENCE_THRESHOLD = 0.80;
 
 export class AITransactionValidator {
     private isEnabled: boolean = true;

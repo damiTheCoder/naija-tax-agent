@@ -494,6 +494,26 @@ function determineAccounts(
             }
         }
 
+        // Capital injection / equity funding (CHECK BEFORE LOANS)
+        const capitalIndicators = [
+            /\bcapital\b/i,
+            /\bequity\b/i,
+            /\bfunding\b/i,
+            /\binvestment\b/i,
+            /\bowner\s+(?:contribution|investment|funding)\b/i,
+            /\bshareholder\s+(?:contribution|investment|funding)\b/i,
+            /\bcontribution\b/i,
+        ];
+        const hasCapitalIndicator = capitalIndicators.some(pattern => pattern.test(text));
+        
+        if (hasCapitalIndicator && !text.includes("loan") && !text.includes("borrowed")) {
+            log.push(`Capital/Equity injection detected - DR Bank, CR Owner's Capital`);
+            return {
+                debitAccount: { ...defaultCash, confidence: 0.9 },
+                creditAccount: { code: "3000", name: "Owner's Capital", confidence: 0.9, matchedKeyword: "capital" },
+            };
+        }
+
         // Loan received
         if (text.includes("borrowed") || text.includes("loan")) {
             log.push(`Loan received - DR Bank, CR Loan`);
@@ -512,7 +532,7 @@ function determineAccounts(
             };
         }
 
-        // Owner investment
+        // Owner investment (fallback if not caught by capital indicators)
         if (equityMatches.length > 0 && equityMatches.some(m => m.account.code === "3000")) {
             log.push(`Owner investment - DR Bank, CR Capital`);
             return {
