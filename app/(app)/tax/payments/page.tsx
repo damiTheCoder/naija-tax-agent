@@ -474,7 +474,7 @@ export default function TaxPaymentsPage() {
   }, [history, outstandingRows.length, paidRows.length, rows]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tax Payments</h1>

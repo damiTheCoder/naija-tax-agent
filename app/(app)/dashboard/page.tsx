@@ -114,6 +114,7 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
 // Bar Chart Component
 function BarChart({ data, height = 250 }: { data: { month: string; value: number }[]; height?: number }) {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   if (data.every(d => d.value === 0)) {
     return (
@@ -129,23 +130,35 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
   const barColor = "#c8f06a";
 
   return (
-    <div className="flex items-end gap-3 h-full" style={{ height }}>
-      {data.map((item, index) => {
-        const barHeight = maxValue > 0 ? (item.value / maxValue) * (height - 50) : 0;
-        return (
-          <div key={index} className="flex flex-col items-center flex-1 gap-2">
+    <div className="overflow-x-auto -mx-2 px-2">
+      <div className="flex items-end gap-3 h-full min-w-[320px]" style={{ height }}>
+        {data.map((item, index) => {
+          const barHeight = maxValue > 0 ? (item.value / maxValue) * (height - 50) : 0;
+          const isSelected = selectedIndex === index;
+          return (
             <div
-              className="w-full rounded-2xl transition-all duration-500"
-              style={{
-                height: Math.max(barHeight, 8),
-                backgroundColor: barColor,
-                minWidth: "20px",
-              }}
-            ></div>
-            <span className="text-xs text-gray-500 font-medium">{item.month}</span>
-          </div>
-        );
-      })}
+              key={index}
+              className="flex flex-col items-center flex-1 gap-2 cursor-pointer"
+              onClick={() => setSelectedIndex(isSelected ? null : index)}
+            >
+              {isSelected && (
+                <div className="mb-1 rounded-lg bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white whitespace-nowrap shadow-lg">
+                  {formatCompactNaira(item.value)}
+                </div>
+              )}
+              <div
+                className="w-full rounded-2xl transition-all duration-300"
+                style={{
+                  height: Math.max(barHeight, 8),
+                  backgroundColor: barColor,
+                  minWidth: "24px",
+                }}
+              ></div>
+              <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap">{item.month}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

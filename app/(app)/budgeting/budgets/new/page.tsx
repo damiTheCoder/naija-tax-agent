@@ -70,7 +70,7 @@ export default function CreateEditBudgetPage() {
   const canSubmit = form.name.trim().length > 0 && form.totalAmount > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{editTarget ? "Edit Budget" : "Create Budget"}</h1>

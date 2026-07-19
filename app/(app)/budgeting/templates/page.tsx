@@ -14,7 +14,7 @@ export default function BudgetTemplatesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Budget Templates</h1>
         <p className="text-sm text-gray-500">Pre-built templates you can reuse for faster budget setup.</p>

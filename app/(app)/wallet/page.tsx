@@ -48,7 +48,6 @@ export default function WalletPage() {
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">₦2,450,000</h1>
             <p className="mt-2 text-sm text-gray-500">Available balance for payments and collections</p>
           </div>
-          <span className="rounded-full bg-[#8fff00] px-4 py-2 text-xs font-black text-[#101010]">Active</span>
         </div>
 
         <div className="mt-6 grid grid-cols-3 gap-3">

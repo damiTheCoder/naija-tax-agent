@@ -34,7 +34,7 @@ export default function VarianceAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Variance Analysis</h1>
         <p className="text-sm text-gray-500">Compare planned versus actual spending and identify overspending quickly.</p>

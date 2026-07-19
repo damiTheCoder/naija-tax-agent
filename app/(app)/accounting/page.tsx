@@ -1935,7 +1935,35 @@ export default function AccountingPage() {
                 </div>
 
                 {/* Action Buttons Grid - 2 columns on desktop */}
-                <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                      AI Transaction Table
+                    </h3>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Enter amount and transaction, then press Enter.
+                    </p>
+                  </div>
+                   {quickTransactionStatus ? (
+                     <span
+                       className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                         quickTransactionStatus === "Transaction successful."
+                           ? "bg-emerald-100 text-emerald-700"
+                           : quickTransactionStatus === "Analysing..."
+                           ? "bg-amber-100 text-amber-700"
+                           : "bg-red-100 text-red-700"
+                       }`}
+                     >
+                       {quickTransactionStatus === "Transaction successful." && (
+                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                         </svg>
+                       )}
+                       {quickTransactionStatus === "Transaction successful." ? "Successful" : quickTransactionStatus}
+                     </span>
+                   ) : null}
+                </div>
+                <div className="grid grid-cols-1 items-stretch gap-3 md:grid-cols-2">
                   {/* Post Journal Entry Button */}
                   <button
                     onClick={() => {
@@ -1946,63 +1974,44 @@ export default function AccountingPage() {
                     }}
                     data-agent-target="open-post-journal-entry"
                     className={`
-                      w-full rounded-2xl transition-all p-5 group md:min-h-[8.5rem]
+                      w-full rounded-2xl transition-all p-5 flex flex-col md:min-h-[8.5rem]
                       ${theme === 'dark'
                         ? 'bg-[#1a1a1a] hover:bg-[#222222]'
                         : 'bg-gray-100 hover:bg-gray-200'
-                      } flex items-center justify-center gap-3
-                    `}
-                  >
-                    <div className={`
-                      w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
-                      ${theme === 'dark'
-                        ? 'bg-gray-700 group-hover:bg-gray-600'
-                        : 'bg-purple-100 group-hover:bg-purple-200'
                       }
-                    `}>
-                      <svg
-                        className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-purple-600'}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                    </div>
-                    <div className="text-left">
-                      <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Post Journal Entry
-                      </h3>
-                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-                        Manual double-entry with DR/CR columns
-                      </p>
+                    `}
+                   >
+                     <div className="flex flex-row items-center justify-center gap-3 md:justify-start">
+                       <div className={`
+                         w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0
+                         ${theme === 'dark'
+                           ? 'bg-gray-700 group-hover:bg-gray-600'
+                           : 'bg-purple-100 group-hover:bg-purple-200'
+                        }
+                      `}>
+                        <svg
+                          className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-purple-600'}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Post Journal Entry
+                        </h3>
+                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                          Manual double-entry with DR/CR columns
+                        </p>
+                      </div>
                     </div>
                   </button>
 
-                  <div className="w-full rounded-2xl p-0">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-                          AI Transaction Table
-                        </h3>
-                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-                          Enter amount and transaction, then press Enter.
-                        </p>
-                      </div>
-                      {quickTransactionStatus ? (
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            quickTransactionStatus === "Transaction successful."
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          {quickTransactionStatus}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className={`overflow-hidden rounded-2xl ${theme === 'dark' ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+                  <div className="w-full rounded-2xl p-0 flex flex-col h-full">
+                    <div className={`flex-1 overflow-hidden rounded-2xl ${theme === 'dark' ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
                       <table className="w-full table-fixed text-left text-xs">
                         <thead className={theme === 'dark' ? 'bg-gray-900 text-gray-400' : 'bg-gray-50 text-gray-500'}>
                           <tr>
