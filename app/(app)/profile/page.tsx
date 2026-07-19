@@ -280,14 +280,14 @@ export default function ProfilePage() {
             </p>
             <div className="mt-3 flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
-                <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-bold ${isDark ? "bg-white/10 text-white" : "bg-gray-100 text-[#101010]"}`}>
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${isDark ? "bg-white/10 text-white" : "bg-gray-100 text-[#101010]"}`}>
                   {initials}
                 </div>
                 <div className="min-w-0">
-                  <h1 className={`truncate text-2xl font-bold sm:text-3xl ${isDark ? "text-white" : "text-[#0b1220]"}`}>
+                  <h1 className={`truncate text-lg font-bold sm:text-xl ${isDark ? "text-white" : "text-[#0b1220]"}`}>
                     {profile.name || "User"}
                   </h1>
-                  <p className={`truncate text-sm ${isDark ? "text-gray-300" : "text-gray-600"}`}>
+                  <p className={`truncate text-xs ${isDark ? "text-gray-300" : "text-gray-600"}`}>
                     {profile.email || "No email added yet"}
                   </p>
                 </div>
@@ -314,40 +314,6 @@ export default function ProfilePage() {
               <MetricTile label="Completion" value={`${profileCompletion}%`} isDark={isDark} />
               <MetricTile label="Workspaces" value={`${workspaces.length}`} isDark={isDark} />
               <MetricTile label="Account Age" value={`${accountAgeDays}d`} isDark={isDark} />
-            </div>
-          </div>
-
-          <div className={`rounded-2xl border p-4 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
-            <p className={`text-xs uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>Environment</p>
-            <p className={`mt-1 text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-              Active workspace: {currentWorkspace?.name || "None"}
-            </p>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setTheme("light")}
-                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
-                  theme === "light"
-                    ? "border-[#8fff00] text-[#446b00]"
-                    : isDark
-                      ? "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
-                      : "border-gray-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-              >
-                Daylight
-              </button>
-              <button
-                onClick={() => setTheme("dark")}
-                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
-                  theme === "dark"
-                    ? "border-[#8fff00] text-[#446b00]"
-                    : isDark
-                      ? "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
-                      : "border-gray-300 bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-              >
-                Night Shift
-              </button>
             </div>
           </div>
         </div>
@@ -679,12 +645,12 @@ export default function ProfilePage() {
 function MetricTile({ label, value, isDark }: { label: string; value: string; isDark: boolean }) {
   return (
     <div
-      className={`flex-1 px-3 py-3 text-center ${
+      className={`flex-1 px-2 py-2 text-center ${
         isDark ? "border-white/10" : "border-gray-200/80"
       } [&:not(:last-child)]:border-r`}
     >
-      <p className={`text-[11px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
-      <p className={`mt-1 text-lg font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
+      <p className={`text-[10px] uppercase tracking-wide ${isDark ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
+      <p className={`mt-0.5 text-sm font-bold ${isDark ? "text-white" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }

@@ -126,26 +126,22 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
     );
   }
 
+  const barColor = "#c8f06a";
+
   return (
-    <div className="flex items-end gap-2 h-full" style={{ height }}>
+    <div className="flex items-end gap-3 h-full" style={{ height }}>
       {data.map((item, index) => {
-        const barHeight = (item.value / maxValue) * (height - 40);
+        const barHeight = maxValue > 0 ? (item.value / maxValue) * (height - 50) : 0;
         return (
           <div key={index} className="flex flex-col items-center flex-1 gap-2">
             <div
-              className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 relative group"
+              className="w-full rounded-2xl transition-all duration-500"
               style={{
-                height: Math.max(barHeight, 4),
-                background: item.value > 0 ? `linear-gradient(180deg, #8fff00 0%, #6fcc00 100%)` : '#e5e7eb',
+                height: Math.max(barHeight, 8),
+                backgroundColor: barColor,
                 minWidth: "20px",
               }}
-            >
-              {item.value > 0 && (
-                <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                  {formatCompactNaira(item.value)}
-                </div>
-              )}
-            </div>
+            ></div>
             <span className="text-xs text-gray-500 font-medium">{item.month}</span>
           </div>
         );
@@ -155,9 +151,21 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
 }
 
 function KpiCard({ metric }: { metric: KpiMetric }) {
+  const accentMap: Record<string, { bg: string; text: string; border: string; pill: string }> = {
+    "text-blue-600": { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100", pill: "bg-blue-100" },
+    "text-rose-600": { bg: "bg-rose-50", text: "text-rose-600", border: "border-rose-100", pill: "bg-rose-100" },
+    "text-emerald-600": { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-100", pill: "bg-emerald-100" },
+    "text-indigo-600": { bg: "bg-indigo-50", text: "text-indigo-600", border: "border-indigo-100", pill: "bg-indigo-100" },
+  };
+
+  const colors = accentMap[metric.accent] || accentMap["text-blue-600"];
+
   return (
-    <div className="min-w-0 rounded-2xl border border-gray-100 bg-white p-3.5 sm:p-5">
-      <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${metric.accent}`}>{metric.label}</p>
+    <div className={`min-w-0 rounded-2xl border ${colors.border} ${colors.bg} p-3.5 sm:p-5 transition-shadow hover:shadow-sm`}>
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex h-2 w-2 rounded-full ${colors.pill} ${colors.text}`}></span>
+        <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${colors.text}`}>{metric.label}</p>
+      </div>
       <p className="mt-2 text-base font-semibold leading-tight break-words text-gray-900 sm:mt-3 sm:text-xl">{metric.value}</p>
       <p className="mt-1.5 text-[11px] leading-snug text-gray-500 sm:mt-2 sm:text-xs">{metric.hint}</p>
     </div>
@@ -525,7 +533,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={`space-y-6 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
+    <div className={`p-4 space-y-6 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
       {showMobileProjectionToggle ? (
         <div className="lg:hidden">
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
@@ -547,22 +555,9 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
-          <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#446b00] hover:text-[#446b00]">
-            Open Accounting Workspace
-          </Link>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/accounting"
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-          >
-            Add Transactions
-          </Link>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
       </div>
 
       {transactions.length === 0 ? (
@@ -585,10 +580,6 @@ export default function DashboardPage() {
                   <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
                   <p className="text-sm text-gray-500">Revenue trend by month</p>
                 </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-3 h-3 rounded-full bg-[#8fff00]"></span>
-                  <span className="text-gray-500">Revenue (₦)</span>
-                </div>
               </div>
               <BarChart data={calculatedData.monthlyRevenue} height={220} />
             </div>
@@ -605,9 +596,9 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-3 w-full mt-2">
                     {calculatedData.expenseCategories.map((item, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}></span>
+                        <span className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-offset-1" style={{ backgroundColor: item.color, boxShadow: `0 0 0 1px ${item.color}40` }}></span>
                         <span className="text-xs text-gray-600 truncate">{item.label}</span>
-                        <span className="text-xs font-semibold text-gray-900 ml-auto">{item.value}%</span>
+                        <span className="text-xs font-bold text-gray-900 ml-auto">{item.value}%</span>
                       </div>
                     ))}
                   </div>
@@ -625,12 +616,20 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-500">Revenue by category</p>
               </div>
               {calculatedData.incomeStreams.length > 0 ? (
-                <div className="flex items-center gap-8">
-                  <PieChart data={calculatedData.incomeStreams} size={140} />
+                <div className="flex items-center gap-6">
+                  <div className="relative">
+                    <PieChart data={calculatedData.incomeStreams} size={140} />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-gray-900">{calculatedData.incomeStreams.length}</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wide">Streams</p>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex flex-col gap-3 flex-1">
                     {calculatedData.incomeStreams.map((item, index) => (
                       <div key={index} className="flex items-center gap-3">
-                        <span className="w-4 h-4 rounded-lg flex-shrink-0" style={{ backgroundColor: item.color }}></span>
+                        <span className="w-4 h-4 rounded-lg flex-shrink-0 shadow-sm" style={{ backgroundColor: item.color }}></span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-700 truncate">{item.label}</span>
@@ -667,33 +666,37 @@ export default function DashboardPage() {
               </div>
               <div className="space-y-3">
                 {calculatedData.recentTransactions.length > 0 ? (
-                  calculatedData.recentTransactions.map((tx) => (
-                    <div key={tx.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === "income" ? "bg-emerald-100" : "bg-red-100"
-                          }`}
-                      >
-                        {tx.type === "income" ? (
-                          <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                          </svg>
-                        )}
+                  calculatedData.recentTransactions.map((tx) => {
+                    const txColor = tx.type === "income" ? CHART_COLORS[0] : CHART_COLORS[1];
+                    return (
+                      <div key={tx.id} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: `${txColor}20` }}
+                        >
+                          {tx.type === "income" ? (
+                            <svg className="w-5 h-5" style={{ color: txColor }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5" style={{ color: txColor }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{tx.description}</p>
+                          <p className="text-xs text-gray-500">{tx.date}</p>
+                        </div>
+                        <span
+                          className="text-sm font-bold flex-shrink-0 whitespace-nowrap"
+                          style={{ color: txColor }}
+                        >
+                          {tx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{tx.description}</p>
-                        <p className="text-xs text-gray-500">{tx.date}</p>
-                      </div>
-                      <span
-                        className={`text-sm font-bold flex-shrink-0 whitespace-nowrap ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}
-                      >
-                        {tx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
-                      </span>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-center py-8 text-gray-400">
                     <p className="text-sm">No transactions yet</p>
@@ -709,30 +712,46 @@ export default function DashboardPage() {
               {
                 label: "Profit Margin",
                 value: calculatedData.profitMargin > 0 ? `${calculatedData.profitMargin.toFixed(1)}%` : "—",
-                sublabel: calculatedData.netProfit > 0 ? "Profitable" : "No profit yet"
+                sublabel: calculatedData.netProfit > 0 ? "Profitable" : "No profit yet",
+                color: "violet"
               },
               {
                 label: "Avg. Transaction",
                 value: formatCurrency(calculatedData.avgTransaction),
-                sublabel: `${calculatedData.transactionCount} total`
+                sublabel: `${calculatedData.transactionCount} total`,
+                color: "amber"
               },
               {
                 label: "Income Entries",
                 value: transactions.filter(tx => tx.type === "income" || tx.amount > 0).length.toString(),
-                sublabel: "Revenue transactions"
+                sublabel: "Revenue transactions",
+                color: "emerald"
               },
               {
                 label: "Expense Entries",
                 value: transactions.filter(tx => tx.type === "expense" || tx.amount < 0).length.toString(),
-                sublabel: "Cost transactions"
+                sublabel: "Cost transactions",
+                color: "rose"
               },
-            ].map((stat, index) => (
-              <div key={index} className="bg-white rounded-2xl border border-gray-100 p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{stat.label}</p>
-                <p className="mt-3 text-lg sm:text-xl font-semibold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500 mt-2">{stat.sublabel}</p>
-              </div>
-            ))}
+            ].map((stat, index) => {
+              const colorMap: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+                violet: { bg: "bg-violet-50", border: "border-violet-100", text: "text-violet-600", dot: "bg-violet-400" },
+                amber: { bg: "bg-amber-50", border: "border-amber-100", text: "text-amber-600", dot: "bg-amber-400" },
+                emerald: { bg: "bg-emerald-50", border: "border-emerald-100", text: "text-emerald-600", dot: "bg-emerald-400" },
+                rose: { bg: "bg-rose-50", border: "border-rose-100", text: "text-rose-600", dot: "bg-rose-400" },
+              };
+              const c = colorMap[stat.color];
+              return (
+                <div key={index} className={`${c.bg} rounded-2xl border ${c.border} p-5 transition-shadow hover:shadow-sm`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex h-2 w-2 rounded-full ${c.dot}`}></span>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{stat.label}</p>
+                  </div>
+                  <p className={`mt-3 text-lg sm:text-xl font-semibold ${c.text}`}>{stat.value}</p>
+                  <p className="text-xs text-gray-500 mt-2">{stat.sublabel}</p>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

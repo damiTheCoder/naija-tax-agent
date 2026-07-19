@@ -536,7 +536,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                               key={item.href}
                               href={item.href}
                               onClick={() => setMobileActionsOpen(false)}
-                              className={`flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                              className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition-colors ${
                                 isActive
                                   ? "bg-[#8fff00]/15 text-[#365800]"
                                   : isDark
@@ -545,15 +545,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                               }`}
                               aria-current={isActive ? "page" : undefined}
                             >
-                              <span
-                                className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                                  isActive
-                                    ? "bg-[#101010] text-[#8fff00]"
-                                    : "bg-[#8fff00]/20 text-[#446b00]"
-                                }`}
-                              >
-                                <NavIconBadge icon={item.icon} className="h-4 w-4" />
-                              </span>
                               <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
                             </Link>
                           );

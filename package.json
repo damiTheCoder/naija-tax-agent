@@ -24,13 +24,13 @@
     "pb:oauth:google": "tsx scripts/pocketbase-configure-google-oauth.ts",
     "pb:auth:repair": "tsx scripts/pocketbase-repair-auth-oauth.ts",
     "prod:check": "tsx scripts/production-readiness.ts",
-    "db:migrate": "npx prisma migrate dev",
-    "db:generate": "PRISMA_HIDE_UPDATE_MESSAGE=1 npx prisma generate --no-hints",
-    "db:seed": "npx tsx prisma/seed.ts",
-    "db:studio": "npx prisma studio"
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "PRISMA_HIDE_UPDATE_MESSAGE=1 prisma generate --no-hints",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
   },
   "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "overrides": {
     "postcss": "^8.5.15"

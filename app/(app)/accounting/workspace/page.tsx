@@ -662,8 +662,8 @@ export default function WorkspacePage() {
                         <th className="px-2 py-3 text-right font-semibold">Total</th>
                         <th className="px-2 py-3 font-semibold">Status</th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
+                     </thead>
+                    <tbody className="divide-y divide-gray-200 bg-gray-100">
                       {classifiedJournalEntries
                         .slice()
                         .reverse()
@@ -1556,7 +1556,7 @@ export default function WorkspacePage() {
                               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-200 bg-gray-100">
                             {transactionsWithBalance.length > 0 ? (
                               transactionsWithBalance.map((tx, idx) => (
                                 <tr key={`${tx.entryId}-${idx}`} className="hover:bg-gray-50">
