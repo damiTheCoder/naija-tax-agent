@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { RawTransaction, StatementDraft } from "@/lib/accounting/types";
 import { accountingEngine } from "@/lib/accounting/transactionBridge";
@@ -49,11 +49,31 @@ function formatCompactNaira(amount: number): string {
 }
 
 // Pie Chart Component
-function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
+function PieChart({ data, size }: { data: ChartData[]; size?: number }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [dynamicSize, setDynamicSize] = useState(size || 200);
+
+  useEffect(() => {
+    const measure = () => {
+      if (containerRef.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+        const baseSize = size || 200;
+        if (clientWidth > 0 && clientHeight > 0) {
+          setDynamicSize(Math.max(baseSize, Math.min(clientWidth, clientHeight) - 20));
+        } else {
+          setDynamicSize(baseSize);
+        }
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [size]);
+
   const total = data.reduce((sum, item) => sum + item.value, 0);
   if (total === 0) {
     return (
-      <div className="flex items-center justify-center" style={{ width: size, height: size }}>
+      <div ref={containerRef} className="flex items-center justify-center w-full h-full">
         <div className="text-center text-gray-400">
           <p className="text-sm">No data</p>
         </div>
@@ -61,7 +81,9 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
     );
   }
 
-  const createArcPath = (startAngle: number, endAngle: number, radius: number) => {
+  const radius = dynamicSize / 2;
+  const innerRadius = dynamicSize / 3.5;
+  const createArcPath = (startAngle: number, endAngle: number) => {
     const start = {
       x: radius + radius * Math.cos((startAngle * Math.PI) / 180),
       y: radius + radius * Math.sin((startAngle * Math.PI) / 180),
@@ -85,7 +107,7 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
           ...acc.segments,
           {
             key: index,
-            path: createArcPath(startAngle - 90, endAngle - 90, size / 2),
+            path: createArcPath(startAngle - 90, endAngle - 90),
             color: item.color,
           },
         ],
@@ -95,30 +117,45 @@ function PieChart({ data, size = 200 }: { data: ChartData[]; size?: number }) {
   ).segments;
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
+      <svg width={dynamicSize} height={dynamicSize} viewBox={`0 0 ${dynamicSize} ${dynamicSize}`} className="max-w-full max-h-full" style={{ border: '1px solid #000', borderRadius: '50%' }}>
         {segments.map((segment) => (
           <path
             key={segment.key}
             d={segment.path}
             fill={segment.color}
+            stroke="#000"
+            strokeWidth="1"
             className="transition-all duration-300 hover:opacity-80"
           />
         ))}
-        <circle cx={size / 2} cy={size / 2} r={size / 3.5} fill="white" />
+        <circle cx={radius} cy={radius} r={innerRadius} fill="white" />
       </svg>
     </div>
   );
 }
 
 // Bar Chart Component
-function BarChart({ data, height = 250 }: { data: { month: string; value: number }[]; height?: number }) {
+function BarChart({ data }: { data: { month: string; value: number }[] }) {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const [chartHeight, setChartHeight] = useState(220);
+
+  useEffect(() => {
+    const measure = () => {
+      if (chartRef.current) {
+        setChartHeight(chartRef.current.clientHeight || 220);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   if (data.every(d => d.value === 0)) {
     return (
-      <div className="flex items-center justify-center" style={{ height }}>
+      <div className="flex items-center justify-center w-full h-full">
         <div className="text-center text-gray-400">
           <p className="text-sm">No transaction data yet</p>
           <p className="text-xs mt-1">Add transactions in the Accounting Studio</p>
@@ -127,18 +164,19 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
     );
   }
 
-  const barColor = "#c8f06a";
+  const barColors = ["#8fff00", "#1f7a1f", "#2563eb", "#4b5563", "#8fff00", "#1f7a1f"];
 
   return (
-    <div className="overflow-x-auto -mx-2 px-2">
-      <div className="flex items-end gap-3 h-full min-w-[320px]" style={{ height }}>
+    <div ref={chartRef} className="w-full h-full">
+      <div className="flex items-end gap-0 w-full h-full">
         {data.map((item, index) => {
-          const barHeight = maxValue > 0 ? (item.value / maxValue) * (height - 50) : 0;
+          const barHeight = maxValue > 0 ? (item.value / maxValue) * (chartHeight - 50) : 0;
           const isSelected = selectedIndex === index;
+          const barColor = barColors[index % barColors.length];
           return (
             <div
               key={index}
-              className="flex flex-col items-center flex-1 gap-2 cursor-pointer"
+              className="flex flex-col items-center flex-1 cursor-pointer"
               onClick={() => setSelectedIndex(isSelected ? null : index)}
             >
               {isSelected && (
@@ -147,10 +185,11 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
                 </div>
               )}
               <div
-                className="w-full rounded-2xl transition-all duration-300"
+                className="w-full rounded-t-md transition-all duration-300"
                 style={{
                   height: Math.max(barHeight, 8),
                   backgroundColor: barColor,
+                  border: '1px solid #000',
                   minWidth: "24px",
                 }}
               ></div>
@@ -164,22 +203,22 @@ function BarChart({ data, height = 250 }: { data: { month: string; value: number
 }
 
 function KpiCard({ metric }: { metric: KpiMetric }) {
-  const accentMap: Record<string, { bg: string; text: string; border: string; pill: string }> = {
-    "text-blue-600": { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100", pill: "bg-blue-100" },
-    "text-rose-600": { bg: "bg-rose-50", text: "text-rose-600", border: "border-rose-100", pill: "bg-rose-100" },
-    "text-emerald-600": { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-100", pill: "bg-emerald-100" },
-    "text-indigo-600": { bg: "bg-indigo-50", text: "text-indigo-600", border: "border-indigo-100", pill: "bg-indigo-100" },
+  const accentMap: Record<string, { text: string; border: string; pill: string }> = {
+    "text-blue-600": { text: "text-blue-600", border: "border-blue-100", pill: "bg-blue-100" },
+    "text-rose-600": { text: "text-rose-600", border: "border-rose-100", pill: "bg-rose-100" },
+    "text-emerald-600": { text: "text-emerald-600", border: "border-emerald-100", pill: "bg-emerald-100" },
+    "text-indigo-600": { text: "text-indigo-600", border: "border-indigo-100", pill: "bg-indigo-100" },
   };
 
   const colors = accentMap[metric.accent] || accentMap["text-blue-600"];
 
   return (
-    <div className={`min-w-0 rounded-2xl border ${colors.border} ${colors.bg} p-3.5 sm:p-5 transition-shadow hover:shadow-sm`}>
+    <div className={`min-w-0 rounded-2xl border ${colors.border} p-3.5 sm:p-5 transition-shadow hover:shadow-sm`}>
       <div className="flex items-center gap-2">
         <span className={`inline-flex h-2 w-2 rounded-full ${colors.pill} ${colors.text}`}></span>
         <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${colors.text}`}>{metric.label}</p>
       </div>
-      <p className="mt-2 text-base font-semibold leading-tight break-words text-gray-900 sm:mt-3 sm:text-xl">{metric.value}</p>
+      <p className={`mt-2 text-base font-semibold leading-tight break-words sm:mt-3 sm:text-xl ${colors.text}`}>{metric.value}</p>
       <p className="mt-1.5 text-[11px] leading-snug text-gray-500 sm:mt-2 sm:text-xs">{metric.hint}</p>
     </div>
   );
@@ -188,7 +227,7 @@ function KpiCard({ metric }: { metric: KpiMetric }) {
 // Empty State Component
 function EmptyState() {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+    <div className="p-12 text-center" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
         <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -546,7 +585,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={`p-4 space-y-6 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
+    <div className={`p-3 space-y-5 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
       {showMobileProjectionToggle ? (
         <div className="lg:hidden">
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
@@ -584,53 +623,57 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Revenue Bar Chart */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
-                  <p className="text-sm text-gray-500">Revenue trend by month</p>
-                </div>
-              </div>
-              <BarChart data={calculatedData.monthlyRevenue} height={220} />
-            </div>
+           {/* Charts Row */}
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             {/* Revenue Bar Chart */}
+             <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+               <div className="flex items-center justify-between mb-6">
+                 <div>
+                   <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
+                   <p className="text-sm text-gray-500">Revenue trend by month</p>
+                 </div>
+               </div>
+               <div className="flex-1 min-h-0">
+                 <BarChart data={calculatedData.monthlyRevenue} />
+               </div>
+             </div>
 
-            {/* Expense Pie Chart */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
-              <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
-                <p className="text-sm text-gray-500">Where your money goes</p>
-              </div>
-              <div className="flex flex-col items-center gap-4">
-                <PieChart data={calculatedData.expenseCategories} size={160} />
-                {calculatedData.expenseCategories.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 w-full mt-2">
-                    {calculatedData.expenseCategories.map((item, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-offset-1" style={{ backgroundColor: item.color, boxShadow: `0 0 0 1px ${item.color}40` }}></span>
-                        <span className="text-xs text-gray-600 truncate">{item.label}</span>
-                        <span className="text-xs font-bold text-gray-900 ml-auto">{item.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+             {/* Expense Pie Chart */}
+             <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+               <div className="mb-6">
+                 <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
+                 <p className="text-sm text-gray-500">Where your money goes</p>
+               </div>
+               <div className="flex flex-col items-center gap-4 flex-1 min-h-0">
+                 <div className="flex-1 min-h-0 flex items-center justify-center w-full">
+                   <PieChart data={calculatedData.expenseCategories} />
+                 </div>
+                 {calculatedData.expenseCategories.length > 0 && (
+                   <div className="grid grid-cols-2 gap-3 w-full mt-2">
+                     {calculatedData.expenseCategories.map((item, index) => (
+                       <div key={index} className="flex items-center gap-2">
+                         <span className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-offset-1" style={{ backgroundColor: item.color, boxShadow: `0 0 0 1px ${item.color}40` }}></span>
+                         <span className="text-xs text-gray-600 truncate">{item.label}</span>
+                         <span className="text-xs font-bold text-gray-900 ml-auto">{item.value}%</span>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
 
           {/* Second Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Income Streams */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+            <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
               <div className="mb-6">
                 <h3 className="text-base font-semibold text-gray-900">Income Streams</h3>
                 <p className="text-sm text-gray-500">Revenue by category</p>
               </div>
               {calculatedData.incomeStreams.length > 0 ? (
-                <div className="flex items-center gap-6">
-                  <div className="relative">
+                <div className="flex items-center gap-6 flex-1 min-h-0">
+                  <div className="relative flex-shrink-0">
                     <PieChart data={calculatedData.incomeStreams} size={140} />
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="text-center">
@@ -639,7 +682,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-3 flex-1">
+                  <div className="flex flex-col gap-3 flex-1 min-w-0">
                     {calculatedData.incomeStreams.map((item, index) => (
                       <div key={index} className="flex items-center gap-3">
                         <span className="w-4 h-4 rounded-lg flex-shrink-0 shadow-sm" style={{ backgroundColor: item.color }}></span>
@@ -667,7 +710,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Transactions */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+            <div className="p-5 sm:p-6" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">Recent Transactions</h3>
