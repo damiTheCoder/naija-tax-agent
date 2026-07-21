@@ -68,12 +68,12 @@ function PieChart({ data, size }: { data: ChartData[]; size?: number }) {
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [size]);
+  }, [size, data]);
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
   if (total === 0) {
     return (
-      <div ref={containerRef} className="flex items-center justify-center w-full h-full">
+      <div ref={containerRef} className="flex items-center justify-center w-full h-full min-h-[140px]">
         <div className="text-center text-gray-400">
           <p className="text-sm">No data</p>
         </div>
@@ -117,20 +117,21 @@ function PieChart({ data, size }: { data: ChartData[]; size?: number }) {
   ).segments;
 
   return (
-    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
-      <svg width={dynamicSize} height={dynamicSize} viewBox={`0 0 ${dynamicSize} ${dynamicSize}`} className="max-w-full max-h-full" style={{ border: '1px solid #000', borderRadius: '50%' }}>
-        {segments.map((segment) => (
-          <path
-            key={segment.key}
-            d={segment.path}
-            fill={segment.color}
-            stroke="#000"
-            strokeWidth="1"
-            className="transition-all duration-300 hover:opacity-80"
-          />
-        ))}
-        <circle cx={radius} cy={radius} r={innerRadius} fill="white" />
-      </svg>
+    <div ref={containerRef} className="relative inline-flex items-center justify-center">
+      <div className="relative rounded-full" style={{ border: '1px solid #000', width: `${dynamicSize}px`, height: `${dynamicSize}px`, maxWidth: '100%', maxHeight: '100%' }}>
+        <svg width={dynamicSize} height={dynamicSize} viewBox={`0 0 ${dynamicSize} ${dynamicSize}`} className="max-w-full max-h-full block">
+          {segments.map((segment) => (
+            <path
+              key={segment.key}
+              d={segment.path}
+              fill={segment.color}
+              stroke="none"
+              className="transition-all duration-300 hover:opacity-80"
+            />
+          ))}
+          <circle cx={radius} cy={radius} r={innerRadius} fill="white" />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -143,19 +144,29 @@ function BarChart({ data }: { data: { month: string; value: number }[] }) {
   const [chartHeight, setChartHeight] = useState(220);
 
   useEffect(() => {
+    const parent = chartRef.current?.parentElement;
+    if (!parent) return;
+
     const measure = () => {
-      if (chartRef.current) {
-        setChartHeight(chartRef.current.clientHeight || 220);
-      }
+      const height = parent.clientHeight;
+      setChartHeight(height > 0 ? Math.max(height - 20, 180) : 220);
     };
+
     measure();
+
+    const resizeObserver = new ResizeObserver(() => measure());
+    resizeObserver.observe(parent);
+
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
 
   if (data.every(d => d.value === 0)) {
     return (
-      <div className="flex items-center justify-center w-full h-full">
+      <div className="flex items-center justify-center w-full h-full min-h-[180px]">
         <div className="text-center text-gray-400">
           <p className="text-sm">No transaction data yet</p>
           <p className="text-xs mt-1">Add transactions in the Accounting Studio</p>
@@ -167,8 +178,8 @@ function BarChart({ data }: { data: { month: string; value: number }[] }) {
   const barColors = ["#8fff00", "#1f7a1f", "#2563eb", "#4b5563", "#8fff00", "#1f7a1f"];
 
   return (
-    <div ref={chartRef} className="w-full h-full">
-      <div className="flex items-end gap-0 w-full h-full">
+    <div ref={chartRef} className="w-full min-h-[180px]">
+      <div className="flex items-end gap-0 w-full" style={{ height: `${chartHeight}px` }}>
         {data.map((item, index) => {
           const barHeight = maxValue > 0 ? (item.value / maxValue) * (chartHeight - 50) : 0;
           const isSelected = selectedIndex === index;
@@ -193,7 +204,7 @@ function BarChart({ data }: { data: { month: string; value: number }[] }) {
                   minWidth: "24px",
                 }}
               ></div>
-              <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap">{item.month}</span>
+              <span className="text-[11px] text-gray-500 font-medium whitespace-nowrap mt-1">{item.month}</span>
             </div>
           );
         })}
@@ -795,9 +806,9 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-500">Revenue trend by month</p>
                   </div>
                 </div>
-                <div className="flex-1 min-h-0">
-                  <BarChart data={calculatedData.monthlyRevenue} />
-                </div>
+                 <div className="min-h-[220px]">
+                   <BarChart data={calculatedData.monthlyRevenue} />
+                 </div>
               </div>
 
               {/* Expense Pie Chart */}
@@ -806,10 +817,10 @@ export default function DashboardPage() {
                   <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
                   <p className="text-sm text-gray-500">Where your money goes</p>
                 </div>
-               <div className="flex flex-col items-center gap-4 flex-1 min-h-0">
-                 <div className="flex-1 min-h-0 flex items-center justify-center w-full">
-                   <PieChart data={calculatedData.expenseCategories} />
-                 </div>
+                <div className="flex flex-col items-center gap-4 min-h-[220px]">
+                  <div className="flex items-center justify-center w-full min-h-[140px]">
+                    <PieChart data={calculatedData.expenseCategories} />
+                  </div>
                  {calculatedData.expenseCategories.length > 0 && (
                    <div className="grid grid-cols-2 gap-3 w-full mt-2">
                      {calculatedData.expenseCategories.map((item, index) => (
@@ -833,18 +844,18 @@ export default function DashboardPage() {
                  <h3 className="text-base font-semibold text-gray-900">Income Streams</h3>
                  <p className="text-sm text-gray-500">Revenue by category</p>
                </div>
-              {calculatedData.incomeStreams.length > 0 ? (
-                <div className="flex items-center gap-6 flex-1 min-h-0">
-                  <div className="relative flex-shrink-0">
-                    <PieChart data={calculatedData.incomeStreams} size={140} />
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center">
-                        <p className="text-lg font-bold text-gray-900">{calculatedData.incomeStreams.length}</p>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wide">Streams</p>
+                {calculatedData.incomeStreams.length > 0 ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 min-h-[180px]">
+                    <div className="relative flex-shrink-0 w-[140px] h-[140px] mx-auto sm:mx-0">
+                      <PieChart data={calculatedData.incomeStreams} size={140} />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-gray-900">{calculatedData.incomeStreams.length}</p>
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wide">Streams</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-3 flex-1 min-w-0">
+                   <div className="flex flex-col gap-3 flex-1 min-w-0">
                     {calculatedData.incomeStreams.map((item, index) => (
                       <div key={index} className="flex items-center gap-3">
                         <span className="w-4 h-4 rounded-lg flex-shrink-0 shadow-sm" style={{ backgroundColor: item.color }}></span>
