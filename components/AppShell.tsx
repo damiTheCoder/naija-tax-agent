@@ -20,6 +20,7 @@ import {
   MARKETS_NAV_ITEMS,
   TAX_NAV_ITEMS,
   WALLET_NAV_ITEMS,
+  isNavItemActive,
   resolveModuleForPath,
   type TaxNavItem,
 } from "@/lib/navigation";
@@ -434,9 +435,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-shell-root min-h-screen transition-colors duration-300" style={{ background: 'var(--app-bg)' }}>
       <Sidebar isOpen={false} onClose={() => { }} />
 
-      <div className="min-h-screen lg:grid lg:grid-cols-12">
+      <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr] lg:gap-4">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex lg:col-span-2 lg:flex-col lg:gap-6 lg:py-0 lg:px-4 lg:w-[260px] lg:sticky lg:top-3 lg:h-screen lg:self-start z-50 overflow-hidden">
+        <aside className="hidden lg:flex lg:flex-col lg:gap-6 lg:py-0 lg:px-4 lg:w-[260px] lg:sticky lg:top-3 lg:h-screen lg:self-start z-50 overflow-hidden">
           <div className="flex items-center gap-2.5 px-2 pt-3 flex-shrink-0">
             <div className="relative h-9 w-9 overflow-hidden rounded-xl">
               <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
@@ -502,7 +503,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     </p>
                     <div className="space-y-0.5">
                       {sectionItems.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                        const isActive = isNavItemActive(pathname, item.href, items);
                         return (
                           <Link
                             key={item.href}
@@ -529,7 +530,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-10" : "lg:col-span-12"}`}>
+        <div className="min-w-0">
           <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-24 sm:pb-24 lg:pb-0">
             {/* Desktop Header */}
             <header
@@ -684,7 +685,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                           More tools
                         </p>
                         {mobileOverflowNavItems.map((item) => {
-                          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                          const isActive = isNavItemActive(pathname, item.href, mobileOverflowNavItems);
                           return (
                             <Link
                               key={item.href}

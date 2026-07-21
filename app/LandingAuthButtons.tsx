@@ -16,7 +16,7 @@ type AuthUser = {
   status: string;
 };
 
-const NEXT_PATH = "/profile";
+const NEXT_PATH = "/accounting";
 
 function saveAnonymousLocalProfile() {
   window.localStorage.removeItem(STORAGE_KEYS.TEMPORARY_ACCESS);
@@ -55,8 +55,8 @@ function syncUserToLocalProfile(user: Partial<AuthUser> | null | undefined) {
 }
 
 function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | undefined): string {
-  if (next.startsWith("/admin") && !isAdminRole(user?.role)) return "/profile";
-  return next || "/profile";
+  if (next.startsWith("/admin") && !isAdminRole(user?.role)) return "/accounting";
+  return next || "/accounting";
 }
 
 export default function LandingAuthButtons() {

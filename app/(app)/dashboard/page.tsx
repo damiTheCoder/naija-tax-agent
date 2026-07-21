@@ -254,6 +254,11 @@ export default function DashboardPage() {
   const [engineStatements, setEngineStatements] = useState<StatementDraft | null>(null);
   const [journalCount, setJournalCount] = useState(0);
   const [showMobileProjectionToggle, setShowMobileProjectionToggle] = useState(false);
+  const [periodType, setPeriodType] = useState<"month" | "year">("month");
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [isPeriodOpen, setIsPeriodOpen] = useState(false);
+  const [yearViewMode, setYearViewMode] = useState<"select" | "months">("select");
 
   // Helper to derive transactions from journal entries based on account codes
   const deriveTransactionsFromJournals = (journalEntries: {
@@ -438,36 +443,50 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Calculate metrics from transactions (prefer engine statements if available)
+  useEffect(() => {
+    if (!isPeriodOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const dropdown = document.querySelector('[data-period-dropdown]');
+      if (dropdown && !dropdown.contains(target)) {
+        setIsPeriodOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isPeriodOpen]);
+
+  // Filter transactions by selected period
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      const txDate = new Date(tx.date);
+      if (periodType === "month") {
+        return txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear;
+      } else if (periodType === "year") {
+        return txDate.getFullYear() === selectedYear;
+      }
+      return true;
+    });
+  }, [transactions, periodType, selectedMonth, selectedYear]);
+
+  // Calculate metrics from filtered transactions
   const calculatedData = useMemo(() => {
-    // Use engine statements for accurate double-entry figures
-    let totalRevenue: number;
-    let totalExpenses: number;
-    let netProfit: number;
+    const sourceTransactions = filteredTransactions;
+    const totalRevenue = sourceTransactions
+      .filter(tx => tx.type === "income" || tx.amount > 0)
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-    if (engineStatements && journalCount > 0) {
-      totalRevenue = engineStatements.revenue;
-      totalExpenses = engineStatements.costOfSales + engineStatements.operatingExpenses;
-      netProfit = engineStatements.netIncome;
-    } else {
-      // Fallback to simple transaction calculation
-      totalRevenue = transactions
-        .filter(tx => tx.type === "income" || tx.amount > 0)
-        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const totalExpenses = sourceTransactions
+      .filter(tx => tx.type === "expense" || tx.amount < 0)
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-      totalExpenses = transactions
-        .filter(tx => tx.type === "expense" || tx.amount < 0)
-        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-
-      netProfit = totalRevenue - totalExpenses;
-    }
-
+    const netProfit = totalRevenue - totalExpenses;
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-    const avgTransaction = transactions.length > 0 ? (totalRevenue + totalExpenses) / transactions.length : 0;
+    const avgTransaction = sourceTransactions.length > 0 ? (totalRevenue + totalExpenses) / sourceTransactions.length : 0;
 
     // Group expenses by category
     const expensesByCategory: Record<string, number> = {};
-    transactions
+    sourceTransactions
       .filter(tx => tx.type === "expense" || tx.amount < 0)
       .forEach(tx => {
         const category = tx.category || "Other";
@@ -485,7 +504,7 @@ export default function DashboardPage() {
 
     // Group income by category
     const incomeByCategory: Record<string, number> = {};
-    transactions
+    sourceTransactions
       .filter(tx => tx.type === "income" || tx.amount > 0)
       .forEach(tx => {
         const category = tx.category || "Other";
@@ -501,12 +520,12 @@ export default function DashboardPage() {
         color: CHART_COLORS[index % CHART_COLORS.length],
       }));
 
-    // Monthly revenue data (last 12 months)
+    // Monthly revenue data
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthlyRevenue = months.map((month, index) => {
-      const monthTransactions = transactions.filter(tx => {
+      const monthTransactions = sourceTransactions.filter(tx => {
         const txDate = new Date(tx.date);
-        return txDate.getMonth() === index && (tx.type === "income" || tx.amount > 0);
+        return txDate.getMonth() === index && txDate.getFullYear() === selectedYear && (tx.type === "income" || tx.amount > 0);
       });
       return {
         month,
@@ -515,7 +534,7 @@ export default function DashboardPage() {
     });
 
     // Recent transactions (last 5)
-    const recentTransactions = [...transactions]
+    const recentTransactions = [...sourceTransactions]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5)
       .map(tx => ({
@@ -532,7 +551,7 @@ export default function DashboardPage() {
       netProfit,
       profitMargin,
       avgTransaction,
-      transactionCount: transactions.length,
+      transactionCount: sourceTransactions.length,
       journalEntryCount: journalCount,
       expenseCategories,
       incomeStreams,
@@ -543,7 +562,7 @@ export default function DashboardPage() {
       liabilities: engineStatements?.liabilities || 0,
       equity: engineStatements?.equity || 0,
     };
-  }, [transactions, engineStatements, journalCount]);
+  }, [filteredTransactions, journalCount, engineStatements, selectedYear]);
 
   // Format currency as compact K/M/B
   const formatCurrency = (amount: number): string => {
@@ -555,7 +574,7 @@ export default function DashboardPage() {
       {
         label: "Total Revenue",
         value: formatCurrency(calculatedData.totalRevenue),
-        hint: transactions.length > 0 ? `${calculatedData.transactionCount} analyzed entries` : "No data yet",
+        hint: calculatedData.transactionCount > 0 ? `${calculatedData.transactionCount} analyzed entries` : "No data yet",
         accent: "text-blue-600",
       },
       {
@@ -614,22 +633,148 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-            <span>This Month</span>
-            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsPeriodOpen(!isPeriodOpen)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+              </svg>
+              <span>{periodType === "year" && yearViewMode === "select" ? `${selectedYear}` : `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][selectedMonth]} ${selectedYear}`}</span>
+              <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              </svg>
+            </button>
+            {isPeriodOpen && (
+              <div data-period-dropdown className="absolute top-full mt-2 w-[calc(100vw-2rem)] max-w-[18rem] rounded-2xl border border-gray-200 bg-white shadow-xl z-50 overflow-hidden left-0 right-0 mx-auto sm:left-auto sm:right-0 sm:mx-0">
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-gray-900 mb-3">Select period</p>
+                  <div className="flex gap-2 mb-4">
+                    {(["month", "year"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setPeriodType(type)}
+                        className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors capitalize ${
+                          periodType === type
+                            ? "bg-[#8fff00] text-[#365800] shadow-sm"
+                            : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        {type === "month" ? "Month" : "Year"}
+                      </button>
+                    ))}
+                  </div>
+                  {periodType === "month" ? (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Months</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((month, index) => (
+                          <button
+                            key={month}
+                            type="button"
+                            onClick={() => { setSelectedMonth(index); setIsPeriodOpen(false); }}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              selectedMonth === index && periodType === "month"
+                                ? "bg-[#8fff00]/15 text-[#365800]"
+                                : "hover:bg-gray-50 text-gray-600"
+                            }`}
+                          >
+                            {month}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : yearViewMode === "select" ? (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Years</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map(year => (
+                          <button
+                            key={year}
+                            type="button"
+                            onClick={() => { setSelectedYear(year); setYearViewMode("months"); }}
+                            className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
+                              selectedYear === year && periodType === "year"
+                                ? "bg-[#8fff00] text-[#365800] shadow-sm"
+                                : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                            }`}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <button
+                          type="button"
+                          onClick={() => setYearViewMode("select")}
+                          className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                          </svg>
+                        </button>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Select month for {selectedYear}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((month, index) => (
+                          <button
+                            key={month}
+                            type="button"
+                            onClick={() => { setSelectedMonth(index); setPeriodType("month"); setYearViewMode("select"); setIsPeriodOpen(false); }}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              selectedMonth === index && selectedYear === new Date().getFullYear()
+                                ? "bg-[#8fff00]/15 text-[#365800]"
+                                : "hover:bg-gray-50 text-gray-600"
+                            }`}
+                          >
+                            {month}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between bg-gray-50/50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      if (periodType === "month") {
+                        setSelectedMonth(d.getMonth());
+                        setSelectedYear(d.getFullYear());
+                      } else if (yearViewMode === "months") {
+                        setSelectedYear(d.getFullYear());
+                      } else {
+                        setSelectedYear(d.getFullYear());
+                        setYearViewMode("months");
+                      }
+                      setIsPeriodOpen(false);
+                    }}
+                    className="text-sm font-semibold text-[#446b00] hover:text-[#365800] transition-colors"
+                  >
+                    {periodType === "month" ? "This month" : yearViewMode === "months" ? `Back to ${new Date().getFullYear()} months` : "This year"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPeriodOpen(false)}
+                    className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {transactions.length === 0 ? (
+      {filteredTransactions.length === 0 ? (
         <EmptyState />
       ) : (
         <>

@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 import { useNavigation } from "@/lib/NavigationContext";
-import { resolveModuleForPath } from "@/lib/navigation";
+import { resolveModuleForPath, isNavItemActive } from "@/lib/navigation";
 import {
   Calculator,
   FileText,
@@ -78,10 +78,7 @@ export default function MobileBottomNav() {
       <div className="grid grid-cols-4 px-2 py-1.5">
         {items.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            item.href === "/accounting"
-              ? pathname === "/accounting"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = isNavItemActive(pathname, item.href, items);
 
           return (
             <button

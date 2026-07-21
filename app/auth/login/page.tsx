@@ -57,15 +57,15 @@ function saveAnonymousLocalProfile() {
 
 function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | undefined): string {
   if (next.startsWith("/admin") && !isAdminRole(user?.role)) {
-    return "/profile";
+    return "/accounting";
   }
-  return next || "/profile";
+  return next || "/accounting";
 }
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = useMemo(() => searchParams.get("next") || "/profile", [searchParams]);
+  const next = useMemo(() => searchParams.get("next") || "/accounting", [searchParams]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -192,7 +192,7 @@ export default function LoginPage() {
     } catch {
       // Continue anyway; the local profile enables client-side usage.
     }
-    router.replace(next.startsWith("/admin") ? "/profile" : next || "/profile");
+    router.replace(next.startsWith("/admin") ? "/accounting" : next || "/accounting");
   };
 
   return (

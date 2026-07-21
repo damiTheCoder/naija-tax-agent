@@ -652,7 +652,7 @@ export default function WorkspacePage() {
               ) : (
                 <div className="max-h-[560px] overflow-auto">
                   <table className="w-full min-w-[1040px]">
-                    <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+                    <thead className="sticky top-0 z-10 bg-gray-200 border-b border-gray-300">
                       <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
                         <th className="px-2 py-3 font-semibold">Date</th>
                         <th className="px-2 py-3 font-semibold">Number</th>
@@ -663,7 +663,7 @@ export default function WorkspacePage() {
                         <th className="px-2 py-3 font-semibold">Status</th>
                       </tr>
                      </thead>
-                    <tbody className="divide-y divide-gray-200 bg-gray-100">
+                     <tbody className="bg-gray-100 divide-y divide-gray-100">
                       {classifiedJournalEntries
                         .slice()
                         .reverse()

@@ -45,7 +45,7 @@ function syncUserToLocalProfile(user: Partial<AuthUser> | null | undefined) {
 export default function UserRegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = useMemo(() => searchParams.get("next") || "/profile", [searchParams]);
+  const next = useMemo(() => searchParams.get("next") || "/accounting", [searchParams]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

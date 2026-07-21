@@ -65,12 +65,13 @@ export function resolveModuleForPath(pathname: string, projectionsOwner: Project
     pathname.startsWith("/personal") ||
     pathname.startsWith("/marketplace") ||
     pathname.startsWith("/supersheet") ||
-    pathname.startsWith("/cashflow-intelligence")
+    pathname.startsWith("/cashflow-intelligence") ||
+    pathname.startsWith("/profile")
   ) return "accounting";
   return "tax";
 }
 
-export function isNavItemActive(pathname: string, href: string): boolean {
+export function isNavItemActive(pathname: string, href: string, allItems?: { href: string }[]): boolean {
   if (pathname === href) return true;
 
   if (href === "/accounting/projections/modelling") {
@@ -79,6 +80,13 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 
   if (href === "/accounting/projections") {
     return pathname.startsWith("/accounting/projections") && !pathname.startsWith("/accounting/projections/modelling");
+  }
+
+  if (allItems && pathname.startsWith(`${href}/`)) {
+    const hasMoreSpecificMatch = allItems.some(
+      (other) => other.href !== href && other.href.length > href.length && (pathname === other.href || pathname.startsWith(`${other.href}/`))
+    );
+    return !hasMoreSpecificMatch;
   }
 
   return false;
@@ -298,6 +306,13 @@ export const ACCOUNTING_NAV_ITEMS: TaxNavItem[] = [
     href: "/support",
     icon: "message-square",
     description: "Report issues and track support resolution",
+    mode: "accounting",
+  },
+  {
+    label: "Profile",
+    href: "/profile",
+    icon: "users",
+    description: "Account settings and preferences",
     mode: "accounting",
   },
 ];

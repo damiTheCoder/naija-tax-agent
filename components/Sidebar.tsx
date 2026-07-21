@@ -126,7 +126,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
         <div className="sidebar-subnav-row sidebar-nav-scrollbar -mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 transition-all duration-200 sm:-mx-6 sm:px-6 lg:hidden">
           {currentModule.items.map((item) => {
-            const isActive = isNavItemActive(pathname, item.href);
+            const isActive = isNavItemActive(pathname, item.href, currentModule.items);
             const isNavigating = navigatingTo === item.href && pathname !== item.href;
 
             return (
