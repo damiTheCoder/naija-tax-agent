@@ -113,7 +113,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       aria-label="Primary module navigation"
     >
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-2 px-4 py-2.5 sm:px-6 lg:px-8">
-        <div className="sidebar-logo-row flex min-w-0 items-center pr-12 sm:pr-14 lg:pr-16">
+        <div className="sidebar-logo-row flex min-w-0 items-center pr-12 sm:pr-14 lg:pr-16 lg:hidden">
           <Link href="/" className="flex shrink-0 items-center gap-2" onClick={onClose}>
             <div className="relative h-8 w-8 overflow-hidden rounded-xl sm:h-9 sm:w-9">
               <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
@@ -124,7 +124,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
           </Link>
         </div>
 
-        <div className="sidebar-subnav-row sidebar-nav-scrollbar -mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 transition-all duration-200 sm:-mx-6 sm:px-6 lg:-mx-8 lg:flex lg:px-8">
+        <div className="sidebar-subnav-row sidebar-nav-scrollbar -mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 transition-all duration-200 sm:-mx-6 sm:px-6 lg:hidden">
           {currentModule.items.map((item) => {
             const isActive = isNavItemActive(pathname, item.href);
             const isNavigating = navigatingTo === item.href && pathname !== item.href;

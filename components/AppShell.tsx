@@ -22,6 +22,7 @@ import {
   resolveModuleForPath,
   type TaxNavItem,
 } from "@/lib/navigation";
+import { APP_LOGO_ALT, SIDEBAR_LOGO_SRC } from "@/lib/constants";
 
 const ACCOUNTING_MIGRATION_MARKER_KEY = "ql::accounting::migration-v1";
 const ACCOUNTING_ENGINE_STORAGE_KEY = "insight::accounting-engine";
@@ -88,9 +89,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [desktopActionsOpen, setDesktopActionsOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
+  const [isDesktopChatOpen, setIsDesktopChatOpen] = useState(false);
   const [isChatWaveAnimating, setIsChatWaveAnimating] = useState(false);
   const desktopActionsRef = useRef<HTMLDivElement | null>(null);
   const mobileActionsRef = useRef<HTMLDivElement | null>(null);
+  const desktopChatRef = useRef<HTMLDivElement | null>(null);
   const chatWaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -152,6 +155,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       chatWaveTimeoutRef.current = null;
     }, 1120);
   }, []);
+
+  useEffect(() => {
+    if (!isDesktopChatOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (desktopChatRef.current && !desktopChatRef.current.contains(event.target as Node)) {
+        setIsDesktopChatOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsDesktopChatOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDesktopChatOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -407,7 +432,101 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar isOpen={false} onClose={() => { }} />
 
       <div className="min-h-screen lg:grid lg:grid-cols-12">
-        <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-8" : "lg:col-span-12"}`}>
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:flex lg:col-span-2 lg:flex-col lg:gap-6 lg:py-0 lg:px-4 lg:w-[260px] lg:sticky lg:top-3 lg:h-screen lg:self-start z-50 overflow-hidden">
+          <div className="flex items-center gap-2.5 px-2 pt-3 flex-shrink-0">
+            <div className="relative h-9 w-9 overflow-hidden rounded-xl">
+              <Image src={SIDEBAR_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="36px" priority />
+            </div>
+            <span className={`text-lg font-semibold tracking-tight ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+              Bace
+            </span>
+          </div>
+
+          <nav className="flex-1 space-y-6 overflow-y-auto hide-scrollbar">
+            {(() => {
+              const activeModule = resolveModuleForPath(pathname);
+              const items =
+                activeModule === "tax"
+                  ? TAX_NAV_ITEMS
+                  : activeModule === "budgeting"
+                    ? BUDGETING_NAV_ITEMS
+                    : activeModule === "markets"
+                      ? MARKETS_NAV_ITEMS
+                      : activeModule === "wallet"
+                        ? WALLET_NAV_ITEMS
+                        : ACCOUNTING_NAV_ITEMS;
+
+              const sectionMap: Record<string, { label: string; keys: string[] }[]> = {
+                accounting: [
+                  { label: "Overview", keys: ["Dashboard"] },
+                  { label: "Accounting", keys: ["Accounting Chat", "Financial Reporting", "Financial Projections", "Financial Modelling"] },
+                  { label: "Banking", keys: ["Bank Connections", "Bank Reconciliation"] },
+                  { label: "Vendors", keys: ["Vendors", "Bills (AP)", "Approvals"] },
+                  { label: "Settings", keys: ["Period Locks", "Recurring", "Exchange Rates", "Dimensions", "Action Logs", "Receipts Management"] },
+                ],
+                tax: [
+                  { label: "Overview", keys: ["Tax Workspace"] },
+                  { label: "Tax Filing", keys: ["Tax Computation", "Tax Returns", "File Taxes"] },
+                  { label: "Payments", keys: ["Tax Payments", "Tax Calendar"] },
+                  { label: "Management", keys: ["Tax Adjustments", "Tax Settings", "Tax Transactions"] },
+                ],
+                budgeting: [
+                  { label: "Overview", keys: ["Budget Dashboard"] },
+                  { label: "Budgeting", keys: ["Budgets", "Create / Edit Budget", "Categories Budget", "Department Budgets"] },
+                  { label: "Planning", keys: ["Forecasting", "Scenario Planning", "Variance Analysis", "Budget vs Actual"] },
+                  { label: "Settings", keys: ["Budget Templates", "AI Budget Assistant"] },
+                ],
+                markets: [
+                  { label: "Overview", keys: ["Market"] },
+                  { label: "SME", keys: ["SME Profile"] },
+                ],
+                wallet: [
+                  { label: "Overview", keys: ["Wallet"] },
+                ],
+              };
+
+              const sections = sectionMap[activeModule] || sectionMap.accounting;
+
+              return sections.map((section) => {
+                const sectionItems = items.filter((item) => section.keys.includes(item.label));
+                if (sectionItems.length === 0) return null;
+
+                return (
+                  <div key={section.label} className="space-y-1">
+                    <p className={`px-3 text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-white/40" : "text-[#8a8680]"}`}>
+                      {section.label}
+                    </p>
+                    <div className="space-y-0.5">
+                      {sectionItems.map((item) => {
+                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                              isActive
+                                ? "bg-[#8fff00]/15 text-[#365800]"
+                                : isDark
+                                  ? "text-white/72 hover:text-white hover:bg-white/5"
+                                  : "text-[#5f5a54] hover:text-[#1f1f1f] hover:bg-black/5"
+                            }`}
+                            aria-current={isActive ? "page" : undefined}
+                          >
+                            <NavIconBadge icon={item.icon} className="w-4 h-4 mr-2.5 shrink-0" />
+                            <span className="whitespace-nowrap">{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </nav>
+        </aside>
+
+        <div className={`min-w-0 ${!isPersonalRoute ? "lg:col-span-10" : "lg:col-span-12"}`}>
           <div className="app-shell-content-wrapper min-h-screen flex w-full flex-col pb-24 sm:pb-24 lg:pb-0">
             {/* Desktop Header */}
             <header
@@ -419,6 +538,38 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="pointer-events-auto">
                 <ModuleButtonBar />
               </div>
+
+              {/* Desktop Chat Popup */}
+              <div className="pointer-events-auto relative" ref={desktopChatRef}>
+                <button
+                  onClick={() => setIsDesktopChatOpen((prev) => !prev)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+                  style={{
+                    color: isDark ? "#f5f5f5" : "#444444",
+                    background: isDark ? "#000000" : "rgba(0,0,0,0.03)",
+                  }}
+                  aria-label="Open chat"
+                  aria-expanded={isDesktopChatOpen}
+                >
+                  <Image src="/chatgpt.jpg" alt="" width={34} height={34} className="h-8 w-8 rounded-full object-cover" aria-hidden="true" />
+                </button>
+                {isDesktopChatOpen && (
+                  <div className="absolute right-0 top-full mt-3 w-[420px] z-50">
+                    <div className="rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-3xl backdrop-saturate-200 overflow-hidden"
+                      style={{
+                        background: isDark ? "rgba(20,20,20,0.35)" : "rgba(255,255,255,0.96)",
+                        borderColor: isDark ? "rgba(255,255,255,0.18)" : "#f0ece6",
+                        maxHeight: "calc(100vh - 120px)",
+                      }}
+                    >
+                      <div className="p-4 overflow-y-auto" style={{ maxHeight: "calc(100vh - 120px)" }}>
+                        <DeferredFloatingChat />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div ref={desktopActionsRef} className="pointer-events-auto relative">
                 <button
                   onClick={() => setDesktopActionsOpen((prev) => !prev)}
@@ -438,14 +589,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
                 {desktopActionsOpen && (
                   <div
-                    className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+                    className="absolute right-0 top-full z-50 mt-3 w-72 overflow-hidden rounded-2xl border shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-3xl backdrop-saturate-200"
                     style={{
-                      background: isDark ? "#000000" : "rgba(255,255,255,0.96)",
-                      borderColor: isDark ? "rgba(255,255,255,0.08)" : "#f0ece6",
+                      background: isDark ? "rgba(20,20,20,0.35)" : "rgba(255,255,255,0.28)",
+                      borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.7)",
                     }}
                   >
                     <div className="space-y-1 p-2">
-                      <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
+                      <div className={`flex items-center gap-3 px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
@@ -628,23 +779,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </main>
           </div>
         </div>
-
-        {!isPersonalRoute ? (
-          <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-[9.5rem] lg:col-span-4 lg:h-[calc(100vh-9.5rem)] lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:pb-4 lg:pt-0" aria-label="AI assistant">
-            <button
-              type="button"
-              onClick={closeMobileChat}
-              className="mobile-chat-modal-close"
-              aria-label="Close chat"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </svg>
-            </button>
-            <DeferredFloatingChat />
-          </aside>
-        ) : null}
       </div>
 
       {!isPersonalRoute ? (

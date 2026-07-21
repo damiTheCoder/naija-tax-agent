@@ -203,19 +203,19 @@ function BarChart({ data }: { data: { month: string; value: number }[] }) {
 }
 
 function KpiCard({ metric }: { metric: KpiMetric }) {
-  const accentMap: Record<string, { text: string; border: string; pill: string }> = {
-    "text-blue-600": { text: "text-blue-600", border: "border-blue-100", pill: "bg-blue-100" },
-    "text-rose-600": { text: "text-rose-600", border: "border-rose-100", pill: "bg-rose-100" },
-    "text-emerald-600": { text: "text-emerald-600", border: "border-emerald-100", pill: "bg-emerald-100" },
-    "text-indigo-600": { text: "text-indigo-600", border: "border-indigo-100", pill: "bg-indigo-100" },
+  const accentMap: Record<string, { text: string; border: string }> = {
+    "text-blue-600": { text: "text-blue-600", border: "border-blue-100" },
+    "text-rose-600": { text: "text-rose-600", border: "border-rose-100" },
+    "text-emerald-600": { text: "text-emerald-600", border: "border-emerald-100" },
+    "text-indigo-600": { text: "text-indigo-600", border: "border-indigo-100" },
   };
 
   const colors = accentMap[metric.accent] || accentMap["text-blue-600"];
 
   return (
-    <div className={`min-w-0 rounded-2xl border ${colors.border} p-3.5 sm:p-5 transition-shadow hover:shadow-sm`}>
+    <div className={`min-w-0 rounded-2xl border ${colors.border} p-3 sm:p-4 transition-shadow hover:shadow-sm`}>
       <div className="flex items-center gap-2">
-        <span className={`inline-flex h-2 w-2 rounded-full ${colors.pill} ${colors.text}`}></span>
+        <span className={`inline-flex h-2 w-2 rounded-full bg-black text-black`}></span>
         <p className={`text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${colors.text}`}>{metric.label}</p>
       </div>
       <p className={`mt-2 text-base font-semibold leading-tight break-words sm:mt-3 sm:text-xl ${colors.text}`}>{metric.value}</p>
@@ -227,7 +227,7 @@ function KpiCard({ metric }: { metric: KpiMetric }) {
 // Empty State Component
 function EmptyState() {
   return (
-    <div className="p-12 text-center" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+    <div className="p-6 sm:p-8 text-center" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
         <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -585,7 +585,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className={`p-3 space-y-5 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
+    <div className={`px-4 sm:px-6 lg:px-8 py-6 space-y-8 transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}>
       {showMobileProjectionToggle ? (
         <div className="lg:hidden">
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
@@ -607,9 +607,26 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Accounting Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Accounting Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Decision-focused performance view from your posted accounting records.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            <span>This Month</span>
+            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {transactions.length === 0 ? (
@@ -626,24 +643,24 @@ export default function DashboardPage() {
            {/* Charts Row */}
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
              {/* Revenue Bar Chart */}
-             <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
-               <div className="flex items-center justify-between mb-6">
-                 <div>
-                   <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
-                   <p className="text-sm text-gray-500">Revenue trend by month</p>
-                 </div>
-               </div>
-               <div className="flex-1 min-h-0">
-                 <BarChart data={calculatedData.monthlyRevenue} />
-               </div>
-             </div>
+               <div className="p-4 sm:p-5 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+                 <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Monthly Revenue</h3>
+                    <p className="text-sm text-gray-500">Revenue trend by month</p>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <BarChart data={calculatedData.monthlyRevenue} />
+                </div>
+              </div>
 
-             {/* Expense Pie Chart */}
-             <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
-               <div className="mb-6">
-                 <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
-                 <p className="text-sm text-gray-500">Where your money goes</p>
-               </div>
+              {/* Expense Pie Chart */}
+               <div className="p-4 sm:p-5 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+                 <div className="mb-4">
+                  <h3 className="text-base font-semibold text-gray-900">Expense Breakdown</h3>
+                  <p className="text-sm text-gray-500">Where your money goes</p>
+                </div>
                <div className="flex flex-col items-center gap-4 flex-1 min-h-0">
                  <div className="flex-1 min-h-0 flex items-center justify-center w-full">
                    <PieChart data={calculatedData.expenseCategories} />
@@ -663,14 +680,14 @@ export default function DashboardPage() {
              </div>
            </div>
 
-          {/* Second Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Income Streams */}
-            <div className="p-5 sm:p-6 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
-              <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900">Income Streams</h3>
-                <p className="text-sm text-gray-500">Revenue by category</p>
-              </div>
+           {/* Second Charts Row */}
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             {/* Income Streams */}
+              <div className="p-4 sm:p-5 flex flex-col" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+                <div className="mb-4">
+                 <h3 className="text-base font-semibold text-gray-900">Income Streams</h3>
+                 <p className="text-sm text-gray-500">Revenue by category</p>
+               </div>
               {calculatedData.incomeStreams.length > 0 ? (
                 <div className="flex items-center gap-6 flex-1 min-h-0">
                   <div className="relative flex-shrink-0">
@@ -710,8 +727,8 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Transactions */}
-            <div className="p-5 sm:p-6" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
-              <div className="flex items-center justify-between mb-6">
+            <div className="p-4 sm:p-5" style={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid transparent' }}>
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">Recent Transactions</h3>
                   <p className="text-sm text-gray-500">Latest financial activity</p>
@@ -798,7 +815,7 @@ export default function DashboardPage() {
               };
               const c = colorMap[stat.color];
               return (
-                <div key={index} className={`${c.bg} rounded-2xl border ${c.border} p-5 transition-shadow hover:shadow-sm`}>
+                 <div key={index} className={`${c.bg} rounded-2xl border ${c.border} p-3 sm:p-4 transition-shadow hover:shadow-sm`}>
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex h-2 w-2 rounded-full ${c.dot}`}></span>
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{stat.label}</p>
