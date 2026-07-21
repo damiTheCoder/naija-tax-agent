@@ -19,6 +19,7 @@ import {
   BUDGETING_NAV_ITEMS,
   MARKETS_NAV_ITEMS,
   TAX_NAV_ITEMS,
+  WALLET_NAV_ITEMS,
   resolveModuleForPath,
   type TaxNavItem,
 } from "@/lib/navigation";
@@ -40,7 +41,9 @@ function getMobileOverflowNavItems(pathname: string): TaxNavItem[] {
         ? BUDGETING_NAV_ITEMS
         : activeModule === "markets"
           ? MARKETS_NAV_ITEMS
-          : ACCOUNTING_NAV_ITEMS;
+          : activeModule === "wallet"
+            ? WALLET_NAV_ITEMS
+            : ACCOUNTING_NAV_ITEMS;
 
   return items.filter((item) => !MOBILE_PRIMARY_NAV_HREFS.has(item.href));
 }
