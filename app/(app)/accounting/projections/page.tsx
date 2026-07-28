@@ -1123,6 +1123,11 @@ export default function AccountingProjectionsPage() {
     return average(expectedSixMonth.map((point) => point.grossMarginPct));
   }, [expectedSixMonth]);
 
+  const projectedNetMargin = useMemo(() => {
+    if (!expectedSixMonth.length) return 0;
+    return average(expectedSixMonth.map((point) => point.netMarginPct));
+  }, [expectedSixMonth]);
+
   const burnRate = useMemo(() => expectedSixMonthResult.output.burn_rate, [expectedSixMonthResult]);
 
   const projectionValidationIssues = useMemo(() => {
@@ -1389,6 +1394,7 @@ export default function AccountingProjectionsPage() {
         projectedRevenueSixMonth={projectedRevenueSixMonth}
         projectedNetProfitSixMonth={projectedNetProfitSixMonth}
         projectedGrossMargin={projectedGrossMargin}
+        projectedNetMargin={projectedNetMargin}
         burnRate={burnRate}
         hasCashDeficit={hasCashDeficit}
         projectedCashBalance={projectedCashBalance}

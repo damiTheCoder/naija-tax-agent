@@ -650,7 +650,7 @@ export default function WorkspacePage() {
                   </div>
                 </div>
               ) : (
-                <div className="max-h-[560px] overflow-auto">
+                <div className="max-h-[560px] overflow-auto hide-scrollbar">
                   <table className="w-full min-w-[1040px]">
                     <thead className="sticky top-0 z-10 bg-gray-200 border-b border-gray-300">
                       <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
@@ -736,7 +736,7 @@ export default function WorkspacePage() {
                   <p className="text-xs mt-1">Post journal entries to see ledger activity</p>
                 </div>
               ) : (
-                <div className="max-h-[560px] overflow-auto">
+                <div className="max-h-[560px] overflow-auto hide-scrollbar">
                   <table className="w-full min-w-[1220px]">
                     <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
                       <tr className="text-left text-xs uppercase tracking-wider text-gray-500">

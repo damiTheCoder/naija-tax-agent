@@ -101,6 +101,7 @@ type ProjectionsDashboardProps = {
   projectedRevenueSixMonth: number;
   projectedNetProfitSixMonth: number;
   projectedGrossMargin: number;
+  projectedNetMargin: number;
   burnRate: number;
   hasCashDeficit: boolean;
   projectedCashBalance: number;
@@ -604,6 +605,7 @@ export default function ProjectionsDashboard({
   projectedRevenueSixMonth,
   projectedNetProfitSixMonth,
   projectedGrossMargin,
+  projectedNetMargin,
   burnRate,
   hasCashDeficit,
   projectedCashBalance,
@@ -770,11 +772,11 @@ export default function ProjectionsDashboard({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-sm">
           <div className="rounded-xl bg-gray-50 px-3 py-2">
             <p className="text-xs text-gray-500">Avg Gross Margin</p>
-            <p className="font-semibold text-gray-900">{formatPercent(average(expenseStackData.slice(-6).map((point) => point.grossMarginPct)))}</p>
+            <p className="font-semibold text-gray-900">{formatPercent(projectedGrossMargin)}</p>
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-2">
             <p className="text-xs text-gray-500">Avg Net Margin</p>
-            <p className="font-semibold text-gray-900">{formatPercent(average(expenseStackData.slice(-6).map((point) => point.netMarginPct)))}</p>
+            <p className="font-semibold text-gray-900">{formatPercent(projectedNetMargin)}</p>
           </div>
           <div className="rounded-xl bg-gray-50 px-3 py-2">
             <p className="text-xs text-gray-500">Projected EBITDA (6M)</p>
