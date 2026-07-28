@@ -510,7 +510,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                             href={item.href}
                             className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                               isActive
-                                ? "bg-[#8fff00]/15 text-[#365800]"
+                                ? "bg-[#9080ee]/15 text-[#362780]"
                                 : isDark
                                   ? "text-white/72 hover:text-white hover:bg-white/5"
                                   : "text-[#5f5a54] hover:text-[#1f1f1f] hover:bg-black/5"
@@ -601,7 +601,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   >
                     <div className="space-y-1 p-2">
                       <div className={`flex items-center gap-3 px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee]/20 text-[#4a3880]">
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />
@@ -619,7 +619,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         onClick={() => setDesktopActionsOpen(false)}
                         className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-[#f8f6f3]"}`}
                       >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee]/20 text-[#4a3880]">
                           <svg
                             className="h-4 w-4"
                             fill="none"
@@ -693,7 +693,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                               onClick={() => setMobileActionsOpen(false)}
                               className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition-colors ${
                                 isActive
-                                  ? "bg-[#8fff00]/15 text-[#365800]"
+                                  ? "bg-[#9080ee]/15 text-[#362780]"
                                   : isDark
                                     ? "text-white hover:bg-white/5"
                                     : "text-[#1f1f1f] hover:bg-white/40"
@@ -712,7 +712,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       onClick={() => setMobileActionsOpen(false)}
                       className={`flex items-center gap-3 px-3 py-3 text-sm transition-colors ${isDark ? "text-white hover:bg-white/5" : "text-[#1f1f1f] hover:bg-white/40"}`}
                     >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee]/20 text-[#4a3880]">
                         <svg
                           className="h-4 w-4"
                           fill="none"
@@ -730,7 +730,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     </Link>
 
                     <div className={`flex items-center gap-3 px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee]/20 text-[#4a3880]">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75 9.75 9.75 0 018.25 6c0-1.33.266-2.596.748-3.752A9.753 9.753 0 1021.752 15.002z" />
                         </svg>
@@ -744,7 +744,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         role="switch"
                         aria-checked={isDark}
                         className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors"
-                        style={{ background: isDark ? "#8fff00" : "#d9d4cd" }}
+                        style={{ background: isDark ? "#9080ee" : "#d9d4cd" }}
                         aria-label="Toggle theme"
                       >
                         <span
@@ -754,7 +754,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     </div>
 
                     <div className={`flex items-center gap-3 rounded-xl px-3 py-3 ${isDark ? "text-white" : "text-[#1f1f1f]"}`}>
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8fff00]/20 text-[#446b00]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee]/20 text-[#4a3880]">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0012.56 5.56M19.5 12A7.5 7.5 0 016.94 6.44" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5H19.5v3.75M8.25 19.5H4.5v-3.75" />

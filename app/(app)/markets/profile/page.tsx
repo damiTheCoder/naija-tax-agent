@@ -76,7 +76,7 @@ export default function MarketsProfilePage() {
                 Funding cold-chain storage and last-mile delivery for fresh grocery orders. Supporters join fixed batches and receive the SME-selected reward mix.
               </p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#d8efb9] px-2.5 py-1 text-xs font-semibold text-[#446b00]">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#d8efb9] px-2.5 py-1 text-xs font-semibold text-[#4a3880]">
               <ArrowUpRight className="h-3.5 w-3.5" />
               68% funded
             </span>

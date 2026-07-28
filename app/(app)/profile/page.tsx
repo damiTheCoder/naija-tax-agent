@@ -355,7 +355,7 @@ export default function ProfilePage() {
                   }
                 }}
                 disabled={isSavingProfile}
-                className="rounded-lg bg-[#8fff00] px-3.5 py-1.5 text-xs font-semibold text-[#101010] hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-[#9080ee] px-3.5 py-1.5 text-xs font-semibold text-[#101010] hover:bg-[#6f5ce0] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSavingProfile ? "Saving..." : isEditing ? "Save Changes" : "Edit Profile"}
               </button>
@@ -412,7 +412,7 @@ export default function ProfilePage() {
             <button
               onClick={handleCreateWorkspace}
               disabled={!newWorkspaceName.trim()}
-              className="rounded-xl bg-[#8fff00] px-3 py-2 text-xs font-semibold text-[#101010] hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-[#9080ee] px-3 py-2 text-xs font-semibold text-[#101010] hover:bg-[#6f5ce0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create
             </button>
@@ -427,8 +427,8 @@ export default function ProfilePage() {
                   className={`rounded-2xl border p-3 transition ${
                     isCurrent
                       ? isDark
-                        ? "border-[#8fff00]"
-                        : "border-[#8fff00]"
+                        ? "border-[#9080ee]"
+                        : "border-[#9080ee]"
                       : isDark
                         ? "border-gray-700 hover:border-gray-500"
                         : "border-gray-200 hover:border-gray-300"
@@ -456,7 +456,7 @@ export default function ProfilePage() {
                           />
                           <button
                             onClick={() => handleRenameWorkspace(workspace.id)}
-                            className="rounded-lg bg-[#8fff00] px-2.5 py-1.5 text-[11px] font-semibold text-[#101010]"
+                            className="rounded-lg bg-[#9080ee] px-2.5 py-1.5 text-[11px] font-semibold text-[#101010]"
                           >
                             Save
                           </button>
@@ -474,7 +474,7 @@ export default function ProfilePage() {
                     </div>
 
                     {isCurrent ? (
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${isDark ? "border-gray-700 text-gray-200" : "border-gray-200 text-[#446b00]"}`}>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${isDark ? "border-gray-700 text-gray-200" : "border-gray-200 text-[#4a3880]"}`}>
                         Active
                       </span>
                     ) : (
@@ -620,7 +620,7 @@ export default function ProfilePage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href="/auth/login?next=%2Fsupport"
-                className="rounded-xl bg-[#8fff00] px-3 py-2 text-sm font-semibold text-[#101010] hover:bg-[#7be600]"
+                className="rounded-xl bg-[#9080ee] px-3 py-2 text-sm font-semibold text-[#101010] hover:bg-[#6f5ce0]"
               >
                 Sign In
               </Link>

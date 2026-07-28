@@ -28,7 +28,7 @@ export default function TaxTimelineTab({
       {timelineGroups.length === 0 ? (
         <div className="px-6 py-12 text-center text-gray-400">
           <p>No tax ledger activity found for this period</p>
-          <button onClick={onOpenDocuments} className="text-xs mt-2 text-[#446b00] hover:underline">
+          <button onClick={onOpenDocuments} className="text-xs mt-2 text-[#4a3880] hover:underline">
             Upload documents to start
           </button>
         </div>

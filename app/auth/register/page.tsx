@@ -162,7 +162,7 @@ export default function UserRegisterPage() {
     <div className="min-h-screen bg-white px-4 py-4 text-slate-950">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md items-center justify-center">
       <section className="w-full rounded-[24px] border border-transparent bg-white p-5 shadow-none sm:p-6">
-        <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#446b00]">Get started</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#4a3880]">Get started</p>
         <div className="mt-3 flex items-center gap-2.5">
           <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl sm:h-10 sm:w-10">
             <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="40px" priority />
@@ -223,7 +223,7 @@ export default function UserRegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-[15px] bg-[#8fff00] px-4 py-3 text-sm font-black text-[#101010] transition hover:bg-[#7be600] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[15px] bg-[#9080ee] px-4 py-3 text-sm font-black text-[#101010] transition hover:bg-[#6f5ce0] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? "Creating account..." : "Create account"}
           </button>
@@ -258,7 +258,7 @@ export default function UserRegisterPage() {
 
         <p className="mt-5 text-sm text-slate-500">
           Already have an account?{" "}
-          <Link href={`/auth/login?next=${encodeURIComponent(next)}`} className="font-black text-[#446b00]">
+          <Link href={`/auth/login?next=${encodeURIComponent(next)}`} className="font-black text-[#4a3880]">
             Sign in
           </Link>
         </p>

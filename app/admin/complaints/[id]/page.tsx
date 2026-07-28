@@ -188,7 +188,7 @@ export default function ComplaintDetailPage() {
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
             >
               <option value="new">New</option>
               <option value="triaged">Triaged</option>
@@ -203,7 +203,7 @@ export default function ComplaintDetailPage() {
             <select
               value={priority}
               onChange={(event) => setPriority(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -217,7 +217,7 @@ export default function ComplaintDetailPage() {
               value={resolution}
               onChange={(event) => setResolution(event.target.value)}
               placeholder="Optional resolution note"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
             />
           </div>
         </div>
@@ -229,7 +229,7 @@ export default function ComplaintDetailPage() {
             onChange={(event) => setInternalNote(event.target.value)}
             rows={3}
             placeholder="Add investigation details or steps taken"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
           />
         </div>
 
@@ -237,7 +237,7 @@ export default function ComplaintDetailPage() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="mt-4 rounded-lg bg-[#8fff00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6fcc00] disabled:opacity-60"
+          className="mt-4 rounded-lg bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f5ce0] disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>
@@ -291,7 +291,7 @@ export default function ComplaintDetailPage() {
             onChange={(event) => setReplyMessage(event.target.value)}
             rows={3}
             placeholder="Write a response or progress update"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#8fff00] focus:outline-none focus:ring-2 focus:ring-[#8fff00]/20"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
           />
           <button
             type="button"

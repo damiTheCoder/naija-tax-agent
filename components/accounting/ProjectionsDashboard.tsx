@@ -407,7 +407,7 @@ function RevenueStreamBars({ streams }: { streams: RevenueBreakdown[] }) {
               <span>{formatNaira(item.amount)}</span>
             </div>
             <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#8fff00] to-[#6fcc00] rounded-full" style={{ width: `${width}%` }} />
+              <div className="h-full bg-gradient-to-r from-[#9080ee] to-[#6f5ce0] rounded-full" style={{ width: `${width}%` }} />
             </div>
           </div>
         );
@@ -708,7 +708,7 @@ export default function ProjectionsDashboard({
           </div>
           <MultiLineChart
             data={revenueData}
-            series={[{ key: "revenue", color: "#8fff00", label: "Revenue" }]}
+            series={[{ key: "revenue", color: "#9080ee", label: "Revenue" }]}
             projectedStartIndex={projectedStartIndex}
           />
         </div>
@@ -813,7 +813,7 @@ export default function ProjectionsDashboard({
           <MultiLineChart
             data={breakEvenChartData}
             series={[
-              { key: "revenue", color: "#8fff00", label: "Revenue" },
+              { key: "revenue", color: "#9080ee", label: "Revenue" },
               { key: "expenses", color: "#ef4444", label: "Expenses" },
             ]}
             allowNegative={false}
@@ -839,7 +839,7 @@ export default function ProjectionsDashboard({
             data={scenarioComparisonData}
             series={[
               { key: "conservative", color: "#f43f5e", label: "Conservative" },
-              { key: "expected", color: "#8fff00", label: "Expected" },
+              { key: "expected", color: "#9080ee", label: "Expected" },
               { key: "aggressive", color: "#10b981", dashed: true, label: "Aggressive" },
             ]}
             allowNegative
@@ -851,7 +851,7 @@ export default function ProjectionsDashboard({
       <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4 gap-3">
           <h2 className="text-base font-semibold text-gray-900">Key Assumptions</h2>
-          <button type="button" onClick={onResetAssumptions} className="print-hidden text-xs font-medium text-[#446b00] hover:underline">
+          <button type="button" onClick={onResetAssumptions} className="print-hidden text-xs font-medium text-[#4a3880] hover:underline">
             Reset to Auto
           </button>
         </div>

@@ -67,7 +67,7 @@ export default function TaxSchedulesTab({
                     <button
                       type="button"
                       onClick={() => onGenerateRemittance(schedule)}
-                      className="text-xs text-[#446b00] hover:underline font-medium mt-1"
+                      className="text-xs text-[#4a3880] hover:underline font-medium mt-1"
                     >
                       Generate Remittance
                     </button>
@@ -119,7 +119,7 @@ export default function TaxSchedulesTab({
               <button
                 type="button"
                 onClick={onRefreshRemittanceHistory}
-                className="text-xs text-[#446b00] hover:underline font-medium"
+                className="text-xs text-[#4a3880] hover:underline font-medium"
               >
                 Refresh
               </button>

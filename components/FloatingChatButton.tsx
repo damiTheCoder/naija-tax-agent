@@ -882,7 +882,7 @@ function ProjectionChartCard({ payload }: { payload: RichChatPayload }) {
                         <p
                             className={`mt-1 text-sm font-semibold ${
                                 metric.tone === "positive"
-                                    ? "text-[#446b00]"
+                                    ? "text-[#4a3880]"
                                     : metric.tone === "negative"
                                         ? "text-red-600"
                                         : "text-[#1f2328]"
@@ -930,7 +930,7 @@ function ProjectionChartCard({ payload }: { payload: RichChatPayload }) {
                     <a
                         key={link.href}
                         href={link.href}
-                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-[#8fff00] hover:text-[#446b00]"
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-[#9080ee] hover:text-[#4a3880]"
                         title={link.description}
                     >
                         {link.label}
@@ -1825,7 +1825,7 @@ export default function FloatingChatButton() {
                                 setMobileConversationMenuPosition(null);
                                 setIsHistoryDropdownOpen((current) => !current);
                             }}
-                            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-transparent px-1 py-1 text-xs font-semibold text-[#101010] transition-colors hover:text-[#446b00]"
+                            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-transparent px-1 py-1 text-xs font-semibold text-[#101010] transition-colors hover:text-[#4a3880]"
                             aria-expanded={isHistoryDropdownOpen}
                             aria-haspopup="menu"
                         >
@@ -1897,7 +1897,7 @@ export default function FloatingChatButton() {
                                             key={conversation.id}
                                             className={`flex items-center transition-colors ${
                                                 activeConversationId === conversation.id
-                                                    ? "bg-[#eefbd9] text-[#446b00]"
+                                                    ? "bg-[#f3f0ff] text-[#4a3880]"
                                                     : "text-gray-700 hover:bg-gray-50"
                                             }`}
                                         >
@@ -1985,7 +1985,7 @@ export default function FloatingChatButton() {
                                                         <a
                                                             href={msg.attachment.url}
                                                             download={msg.attachment.fileName}
-                                                            className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#d7f4a6] bg-[#eefbd9] px-4 py-2 text-xs font-semibold text-[#446b00] transition-colors hover:bg-[#e6f7c5]"
+                                                            className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#e2daff] bg-[#f3f0ff] px-4 py-2 text-xs font-semibold text-[#4a3880] transition-colors hover:bg-[#e6f7c5]"
                                                         >
                                                             <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                                                 <path d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z" />
@@ -2001,7 +2001,7 @@ export default function FloatingChatButton() {
                                                                     key={suggestion}
                                                                     type="button"
                                                                     onClick={() => handleSuggestionClick(suggestion)}
-                                                                    className="rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-[#8fff00] hover:bg-[#f4ffe6] hover:text-[#446b00]"
+                                                                    className="rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-[#9080ee] hover:bg-[#f4ffe6] hover:text-[#4a3880]"
                                                                 >
                                                                     {suggestion}
                                                                 </button>
@@ -2069,7 +2069,7 @@ export default function FloatingChatButton() {
                                             role="switch"
                                             aria-checked={agentChatMode === "full-agentic"}
                                             className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors sm:h-6 sm:w-10"
-                                            style={{ background: agentChatMode === "full-agentic" ? "#8fff00" : "#d1d5db" }}
+                                            style={{ background: agentChatMode === "full-agentic" ? "#9080ee" : "#d1d5db" }}
                                             aria-label="Toggle assistant mode"
                                             title="Toggle assistant mode"
                                         >
@@ -2085,7 +2085,7 @@ export default function FloatingChatButton() {
                                         className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all sm:h-11 sm:w-11 ${
                                             isAgentPerforming
                                                 ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                                : "bg-[#8fff00] text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] hover:bg-[#7fe000] disabled:cursor-not-allowed disabled:bg-[#d8d3cb] disabled:text-white/75 disabled:shadow-none"
+                                                : "bg-[#9080ee] text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] hover:bg-[#7fe000] disabled:cursor-not-allowed disabled:bg-[#d8d3cb] disabled:text-white/75 disabled:shadow-none"
                                         }`}
                                         title={isAgentPerforming ? "Stop agent" : "Send"}
                                     >

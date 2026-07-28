@@ -119,7 +119,7 @@ export default function DeferredFloatingChat() {
                 pendingOpenRef.current = { newChat: true };
                 void loadFloatingChat();
               }}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#8fff00] px-4 py-2.5 text-sm font-semibold text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] transition-colors hover:bg-[#7fe000]"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#9080ee] px-4 py-2.5 text-sm font-semibold text-[#101010] shadow-[0_14px_35px_rgba(143,255,0,0.22)] transition-colors hover:bg-[#7fe000]"
             >
               {isLoading ? (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
