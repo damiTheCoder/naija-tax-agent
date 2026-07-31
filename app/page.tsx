@@ -6,7 +6,7 @@ export default function LandingPage() {
   return (
     <main className="single-landing-page">
       <Image
-        src="/L1.png"
+        src="/L1.png?v=2"
         alt=""
         fill
         priority
@@ -25,7 +25,7 @@ export default function LandingPage() {
         </div>
 
         <div className="single-landing-copy">
-          <h1 id="landing-title">Your Business Finances, Simplified.</h1>
+          <h2 id="landing-title">Your Business Finances, Simplified.</h2>
           <p>Know your numbers. Control your cash. Run your business with confidence.</p>
         </div>
 

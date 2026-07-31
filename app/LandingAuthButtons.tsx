@@ -59,6 +59,22 @@ function resolvePostLoginPath(next: string, user: Partial<AuthUser> | null | und
   return next || "/accounting";
 }
 
+function QrCodeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M14 14h3v3h-3z" />
+      <path d="M17.5 14h.5v.5h-.5z" />
+      <path d="M14 17.5h.5v.5h-.5z" />
+      <path d="M17.5 17.5h.5v.5h-.5z" />
+      <path d="M20 14h.5v7h-.5z" />
+      <path d="M14 20.5h6v.5h-6z" />
+    </svg>
+  );
+}
+
 export default function LandingAuthButtons() {
   const router = useRouter();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -131,20 +147,37 @@ export default function LandingAuthButtons() {
         className="single-landing-primary"
         onClick={handleUseApp}
       >
-        Use app
+        <span className="single-landing-qr" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <path d="M14 14h3v3h-3z" />
+            <path d="M17.5 14h.5v.5h-.5z" />
+            <path d="M14 17.5h.5v.5h-.5z" />
+            <path d="M17.5 17.5h.5v.5h-.5z" />
+            <path d="M20 14h.5v7h-.5z" />
+            <path d="M14 20.5h6v.5h-6z" />
+          </svg>
+        </span>
+        <span className="single-landing-primary-text">Use app</span>
       </button>
-      <Link href={`/auth/login?next=${encodeURIComponent(NEXT_PATH)}`} className="single-landing-secondary">
-        Login / signup
-      </Link>
-      <button
-        type="button"
-        className="single-landing-temporary"
-        onClick={handleGoogleLogin}
-        disabled={isGoogleLoading}
-      >
-        <GoogleMark className="h-5 w-5" />
-        <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
-      </button>
+
+      <div className="single-landing-row">
+        <Link href={`/auth/login?next=${encodeURIComponent(NEXT_PATH)}`} className="single-landing-secondary">
+          Login / signup
+        </Link>
+        <button
+          type="button"
+          className="single-landing-temporary"
+          onClick={handleGoogleLogin}
+          disabled={isGoogleLoading}
+        >
+          <GoogleMark className="h-5 w-5" />
+          <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
+        </button>
+      </div>
+
       {error ? <p className="single-landing-error">{error}</p> : null}
     </div>
   );
