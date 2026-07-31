@@ -30,7 +30,7 @@ export default function TermsPage() {
       </section>
 
       <div className="mt-8">
-        <Link href="/privacy" className="text-sm font-semibold text-[#4a3880]">
+        <Link href="/privacy" className="text-sm font-semibold text-[#1e3a8a]">
           Read Privacy Policy
         </Link>
       </div>

@@ -126,7 +126,7 @@ export default function UserSignInPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -137,7 +137,7 @@ export default function UserSignInPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               placeholder="••••••••"
               autoComplete="current-password"
             />
@@ -145,7 +145,7 @@ export default function UserSignInPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-lg bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f5ce0] disabled:opacity-60"
+            className="w-full rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
           >
             {isLoading ? "Signing in..." : "Sign In"}
           </button>
@@ -180,7 +180,7 @@ export default function UserSignInPage() {
 
         <p className="mt-5 text-sm text-slate-600">
           New here?{" "}
-          <Link href={`/auth/register?next=${encodeURIComponent(next)}`} className="font-semibold text-[#4a3880]">
+          <Link href={`/auth/register?next=${encodeURIComponent(next)}`} className="font-semibold text-[#1e3a8a]">
             Create account
           </Link>
         </p>

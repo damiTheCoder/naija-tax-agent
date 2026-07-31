@@ -89,7 +89,7 @@ export default function MobileBottomNav() {
                 if (pathname !== item.href) navigateTo(item.href);
               }}
               className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors ${
-                isActive ? "text-[#4a3880]" : "text-[#8f8f8f]"
+                isActive ? "text-[#1e3a8a]" : "text-[#8f8f8f]"
               }`}
               aria-current={isActive ? "page" : undefined}
               aria-label={item.label}

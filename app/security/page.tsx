@@ -30,7 +30,7 @@ export default function SecurityPage() {
       </section>
 
       <div className="mt-8">
-        <Link href="/contact" className="text-sm font-semibold text-[#4a3880]">
+        <Link href="/contact" className="text-sm font-semibold text-[#1e3a8a]">
           Report a Security Concern
         </Link>
       </div>

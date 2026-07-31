@@ -83,12 +83,12 @@ export default function AdminComplaintsPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search subject/description"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           >
             <option value="">All statuses</option>
             <option value="new">New</option>
@@ -101,7 +101,7 @@ export default function AdminComplaintsPage() {
           <select
             value={priority}
             onChange={(event) => setPriority(event.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           >
             <option value="">All priorities</option>
             <option value="low">Low</option>
@@ -147,7 +147,7 @@ export default function AdminComplaintsPage() {
                       {item.created ? new Date(item.created).toLocaleString() : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/admin/complaints/${item.id}`} className="font-medium text-[#4a3880] hover:text-[#4a3880]">
+                      <Link href={`/admin/complaints/${item.id}`} className="font-medium text-[#1e3a8a] hover:text-[#1e3a8a]">
                         Open
                       </Link>
                     </td>

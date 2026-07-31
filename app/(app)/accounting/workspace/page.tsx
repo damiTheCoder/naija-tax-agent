@@ -465,7 +465,7 @@ export default function WorkspacePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[#9080ee] px-2.5 py-1 text-[11px] font-semibold text-[#101010]">
+            <span className="rounded-full bg-[#2563eb] px-2.5 py-1 text-[11px] font-semibold text-white">
                 Active
             </span>
             <span className="hidden text-sm text-gray-400 sm:inline">
@@ -484,7 +484,7 @@ export default function WorkspacePage() {
               </p>
             </div>
             <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-white">
-              <span className="w-2/3 rounded-full bg-[#9080ee]" />
+              <span className="w-2/3 rounded-full bg-[#2563eb]" />
               <span className="w-1/6 bg-[#101010]" />
             </div>
             <p className="mt-3 text-xs text-gray-500">
@@ -506,7 +506,7 @@ export default function WorkspacePage() {
                 </svg>
               </span>
             </div>
-            <div className="mt-4 h-8 rounded-lg bg-[repeating-linear-gradient(90deg,#9080ee_0_3px,transparent_3px_8px)] opacity-80" />
+            <div className="mt-4 h-8 rounded-lg bg-[repeating-linear-gradient(90deg,#2563eb_0_3px,transparent_3px_8px)] opacity-80" />
             <p className="mt-3 text-xs text-gray-500">
               Net income from posted accounting records
             </p>
@@ -624,7 +624,7 @@ export default function WorkspacePage() {
                       <button
                         key={itemKey}
                         onClick={() => setJournalClass(itemKey)}
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-[#9080ee] text-white" : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-[#2563eb] text-white" : "bg-gray-300 text-gray-700 hover:bg-gray-400"
                           }`}
                       >
                         <span>{label}</span>
@@ -644,7 +644,7 @@ export default function WorkspacePage() {
                     </svg>
                     <p>No journal entries for {selectedYear}</p>
                     <p className="text-xs">Add transactions in the Accounting Studio to create journal entries</p>
-                    <Link href="/accounting" className="mt-2 text-[#4a3880] text-sm font-medium hover:underline">
+                    <Link href="/accounting" className="mt-2 text-[#1e3a8a] text-sm font-medium hover:underline">
                       Go to Accounting Studio →
                     </Link>
                   </div>
@@ -901,7 +901,7 @@ export default function WorkspacePage() {
                     onClick={() => {
                       void handleDownloadYearlyStatement(selectedYear);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#9080ee] rounded-lg hover:bg-[#6f5ce0] transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2563eb] rounded-lg hover:bg-[#1d4ed8] transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1164,7 +1164,7 @@ export default function WorkspacePage() {
                             void handleDownloadYearlyStatement(year);
                           }}
                           disabled={!yearlyStatements[year]}
-                          className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#9080ee] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-[#2563eb] hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="text-left">
                             <p className="text-sm font-semibold text-gray-900">{year}</p>
@@ -1224,7 +1224,7 @@ export default function WorkspacePage() {
                             alert("Failed to generate PDF. Please try again or check console for details.");
                           }
                         }}
-                          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#9080ee] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#6f5ce0] sm:w-auto"
+                          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1d4ed8] sm:w-auto"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />

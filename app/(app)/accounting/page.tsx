@@ -1758,7 +1758,7 @@ export default function AccountingPage() {
                       {activeCashHeadlineMetric.label}
                     </p>
                     <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold" style={{ color: "#4a3880" }} title={formatFullNaira(cashHeadlineValue)}>
+                      <p className="text-2xl font-bold" style={{ color: "#1e3a8a" }} title={formatFullNaira(cashHeadlineValue)}>
                         ₦{formatCompactNaira(cashHeadlineValue)}
                       </p>
                       <div className="relative" ref={cashDatePickerRef}>
@@ -1789,7 +1789,7 @@ export default function AccountingPage() {
                                       onClick={() => setCashHeadlineSection(section.key)}
                                       className={`rounded-full border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
                                         isActive
-                                          ? "border-[#9080ee] bg-[#9080ee] text-white"
+                                          ? "border-[#2563eb] bg-[#2563eb] text-white"
                                           : theme === "dark"
                                             ? "border-gray-700 text-gray-300 hover:bg-gray-800"
                                             : "border-gray-300 text-gray-600 hover:bg-gray-100"
@@ -1805,7 +1805,7 @@ export default function AccountingPage() {
                               type="month"
                               value={cashHeadlineMonth}
                               onChange={(event) => setCashHeadlineMonth(event.target.value || getCurrentMonthKey())}
-                              className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#9080ee]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
+                              className={`w-full rounded-lg border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[#2563eb]/30 ${theme === "dark" ? "border-gray-700 bg-gray-800 text-gray-100" : "border-gray-300 bg-white text-gray-900"}`}
                             />
                             <div className="mt-3 flex items-center justify-between">
                               <button
@@ -1834,7 +1834,7 @@ export default function AccountingPage() {
                   <button
                     type="button"
                     onClick={cycleCashHeadlineMetric}
-                    className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee] text-white shadow-sm transition hover:bg-[#6f5ce0] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/40"
+                    className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2563eb] text-white shadow-sm transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/40"
                     aria-label={`Toggle ${activeCashHeadlineSection.label} metric`}
                     title={`Switch ${activeCashHeadlineSection.label} metrics`}
                   >
@@ -2031,8 +2031,8 @@ export default function AccountingPage() {
                                 placeholder="50000"
                                 className={`w-full rounded-lg px-2 py-2 outline-none ${
                                   theme === 'dark'
-                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#9080ee]'
-                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#9080ee]'
+                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#2563eb]'
+                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#2563eb]'
                                 }`}
                               />
                             </td>
@@ -2044,8 +2044,8 @@ export default function AccountingPage() {
                                 placeholder="Paid rent"
                                 className={`w-full rounded-lg px-2 py-2 outline-none ${
                                   theme === 'dark'
-                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#9080ee]'
-                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#9080ee]'
+                                    ? 'bg-gray-900 text-white placeholder:text-gray-600 focus:ring-1 focus:ring-[#2563eb]'
+                                    : 'bg-gray-50 text-gray-900 placeholder:text-gray-400 focus:ring-1 focus:ring-[#2563eb]'
                                 }`}
                               />
                             </td>
@@ -2054,7 +2054,7 @@ export default function AccountingPage() {
                                 type="button"
                                 onClick={handleQuickTransactionSubmit}
                                 disabled={isQuickTransactionProcessing}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#9080ee] text-[#101010] transition-colors hover:bg-[#7be000] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/40 disabled:cursor-wait disabled:opacity-60"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2563eb] text-[#101010] transition-colors hover:bg-[#7be000] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/40 disabled:cursor-wait disabled:opacity-60"
                                 aria-label="Post transaction"
                               >
                                 {isQuickTransactionProcessing ? (

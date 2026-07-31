@@ -252,7 +252,7 @@ export default function AdminUserDetailPage() {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               />
             </div>
             <div>
@@ -260,7 +260,7 @@ export default function AdminUserDetailPage() {
               <select
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 <option value="user">User</option>
                 <option value="read_only">Read only</option>
@@ -274,7 +274,7 @@ export default function AdminUserDetailPage() {
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
@@ -290,7 +290,7 @@ export default function AdminUserDetailPage() {
               onChange={(event) => setReason(event.target.value)}
               rows={3}
               placeholder="Why are you changing this account?"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </div>
 
@@ -299,7 +299,7 @@ export default function AdminUserDetailPage() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="rounded-lg bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f5ce0] disabled:opacity-60"
+              className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save changes"}
             </button>
@@ -363,7 +363,7 @@ export default function AdminUserDetailPage() {
                 <h2 className="text-base font-semibold text-slate-900">Recent Complaints</h2>
                 <p className="mt-1 text-sm text-slate-600">Use complaint history to understand what support already investigated.</p>
               </div>
-              <Link href="/admin/complaints" className="text-sm font-medium text-[#4a3880] hover:text-[#4a3880]">
+              <Link href="/admin/complaints" className="text-sm font-medium text-[#1e3a8a] hover:text-[#1e3a8a]">
                 Open queue
               </Link>
             </div>

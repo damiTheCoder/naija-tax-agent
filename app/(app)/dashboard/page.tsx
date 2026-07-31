@@ -28,7 +28,7 @@ const icons = {
 };
 
 // Color palette for charts
-const CHART_COLORS = ["#9080ee", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
+const CHART_COLORS = ["#2563eb", "#818cf8", "#34d399", "#f472b6", "#fbbf24", "#94a3b8"];
 const MOBILE_PROJECTIONS_ENTRY_STORAGE_KEY = "ql::mobile-projections-entry";
 const MOBILE_PROJECTIONS_ENTRY_EVENT = "ql:mobile-projections-entry-change";
 
@@ -175,7 +175,7 @@ function BarChart({ data }: { data: { month: string; value: number }[] }) {
     );
   }
 
-  const barColors = ["#9080ee", "#1f7a1f", "#2563eb", "#4b5563", "#9080ee", "#1f7a1f"];
+  const barColors = ["#2563eb", "#1f7a1f", "#2563eb", "#4b5563", "#2563eb", "#1f7a1f"];
 
   return (
     <div ref={chartRef} className="w-full min-h-[180px]">
@@ -250,7 +250,7 @@ function EmptyState() {
       </p>
       <Link
         href="/accounting"
-        className="inline-flex items-center gap-2 bg-[#9080ee] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#6f5ce0] transition-colors"
+        className="inline-flex items-center gap-2 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1d4ed8] transition-colors"
       >
         Go to Accounting Studio
         {icons.arrowRight}
@@ -621,7 +621,7 @@ export default function DashboardPage() {
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
             <button
               type="button"
-              className="rounded-full bg-[#9080ee] px-3 py-1.5 text-xs font-semibold text-white"
+              className="rounded-full bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white"
               aria-label="Accounting dashboard view"
             >
               Accounting Dashboard
@@ -670,7 +670,7 @@ export default function DashboardPage() {
                         onClick={() => setPeriodType(type)}
                         className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors capitalize ${
                           periodType === type
-                            ? "bg-[#9080ee] text-[#362780] shadow-sm"
+                            ? "bg-[#2563eb] text-[#1e40af] shadow-sm"
                             : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                         }`}
                       >
@@ -689,7 +689,7 @@ export default function DashboardPage() {
                             onClick={() => { setSelectedMonth(index); setIsPeriodOpen(false); }}
                             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                               selectedMonth === index && periodType === "month"
-                                ? "bg-[#9080ee]/15 text-[#362780]"
+                                ? "bg-[#2563eb]/15 text-[#1e40af]"
                                 : "hover:bg-gray-50 text-gray-600"
                             }`}
                           >
@@ -709,7 +709,7 @@ export default function DashboardPage() {
                             onClick={() => { setSelectedYear(year); setYearViewMode("months"); }}
                             className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
                               selectedYear === year && periodType === "year"
-                                ? "bg-[#9080ee] text-[#362780] shadow-sm"
+                                ? "bg-[#2563eb] text-[#1e40af] shadow-sm"
                                 : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                             }`}
                           >
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                             onClick={() => { setSelectedMonth(index); setPeriodType("month"); setYearViewMode("select"); setIsPeriodOpen(false); }}
                             className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                               selectedMonth === index && selectedYear === new Date().getFullYear()
-                                ? "bg-[#9080ee]/15 text-[#362780]"
+                                ? "bg-[#2563eb]/15 text-[#1e40af]"
                                 : "hover:bg-gray-50 text-gray-600"
                             }`}
                           >
@@ -767,7 +767,7 @@ export default function DashboardPage() {
                       }
                       setIsPeriodOpen(false);
                     }}
-                    className="text-sm font-semibold text-[#4a3880] hover:text-[#362780] transition-colors"
+                    className="text-sm font-semibold text-[#1e3a8a] hover:text-[#1e40af] transition-colors"
                   >
                     {periodType === "month" ? "This month" : yearViewMode === "months" ? `Back to ${new Date().getFullYear()} months` : "This year"}
                   </button>

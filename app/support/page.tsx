@@ -410,7 +410,7 @@ export default function SupportPage() {
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href="/auth/login?next=%2Fsupport"
-                  className="rounded-xl bg-[#9080ee] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6f5ce0]"
+                  className="rounded-xl bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
                 >
                   Sign in
                 </Link>
@@ -498,7 +498,7 @@ export default function SupportPage() {
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
                   placeholder="Brief title for the issue"
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
                 />
               </div>
 
@@ -508,7 +508,7 @@ export default function SupportPage() {
                   <select
                     value={category}
                     onChange={(event) => setCategory(event.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
                   >
                     <option value="general">General</option>
                     <option value="billing">Billing</option>
@@ -523,7 +523,7 @@ export default function SupportPage() {
                   <select
                     value={priority}
                     onChange={(event) => setPriority(event.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -540,14 +540,14 @@ export default function SupportPage() {
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe what happened, what you expected, and any error text you saw."
                   rows={6}
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submitLoading || !subject.trim() || !description.trim()}
-                className="rounded-xl bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f5ce0] disabled:opacity-60"
+                className="rounded-xl bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
               >
                 {submitLoading ? "Submitting..." : "Submit complaint"}
               </button>
@@ -575,12 +575,12 @@ export default function SupportPage() {
                 value={queryInput}
                 onChange={(event) => setQueryInput(event.target.value)}
                 placeholder="Search complaints"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               />
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 <option value="">All statuses</option>
                 <option value="new">New</option>
@@ -744,13 +744,13 @@ export default function SupportPage() {
                   onChange={(event) => setReplyMessage(event.target.value)}
                   rows={4}
                   placeholder="Write your reply or add additional details"
-                  className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+                  className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
                 />
 
                 <button
                   type="submit"
                   disabled={replyLoading || !replyMessage.trim()}
-                  className="mt-3 rounded-xl bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f5ce0] disabled:opacity-60"
+                  className="mt-3 rounded-xl bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
                 >
                   {replyLoading ? "Sending..." : selectedComplaint.status === "closed" ? "Reply and reopen" : "Send reply"}
                 </button>

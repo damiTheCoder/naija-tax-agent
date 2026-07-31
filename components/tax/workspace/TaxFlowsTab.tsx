@@ -126,7 +126,7 @@ export default function TaxFlowsTab({
                 <div key={point.monthKey} className="h-full flex flex-col items-center justify-end gap-1">
                   <div className="w-full flex-1 flex items-end">
                     <div
-                      className="w-full rounded-t-md bg-[#9080ee]"
+                      className="w-full rounded-t-md bg-[#2563eb]"
                       style={{ height: `${Math.max(4, Math.round((point.total / workspaceInsights.maxMonthlyTrend) * 100))}%` }}
                       title={`${point.monthLabel}: ${formatCurrencyFull(point.total)}`}
                     />

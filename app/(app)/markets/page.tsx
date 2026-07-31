@@ -47,12 +47,12 @@ const campaigns = [
     batch: "₦50K",
     funders: 286,
     reward: "Discount vouchers",
-    color: "#9080ee",
+    color: "#2563eb",
   },
 ];
 
 const rewardMix = [
-  { label: "Free products", value: 38, icon: Gift, color: "#4a3880" },
+  { label: "Free products", value: 38, icon: Gift, color: "#1e3a8a" },
   { label: "Thank-you fees", value: 24, icon: WalletCards, color: "#0f766e" },
   { label: "Early access", value: 21, icon: Sparkles, color: "#c2410c" },
   { label: "Discounts", value: 17, icon: TicketPercent, color: "#101010" },
@@ -140,7 +140,7 @@ export default function MarketsPage() {
                 <p className="text-xs font-semibold uppercase text-[#6b675f]">Funding velocity</p>
                 <p className="mt-1 text-2xl font-semibold">₦7.8M</p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#d8efb9] px-2.5 py-1 text-xs font-semibold text-[#4a3880]">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#d8efb9] px-2.5 py-1 text-xs font-semibold text-[#1e3a8a]">
                 <ArrowUpRight className="h-3.5 w-3.5" />
                 +18.6%
               </span>

@@ -80,19 +80,19 @@ export default function AdminUsagePage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search path, IP, or user-agent"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <input
             value={eventType}
             onChange={(event) => setEventType(event.target.value)}
             placeholder="Event type (e.g. page_view)"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <input
             value={moduleName}
             onChange={(event) => setModuleName(event.target.value)}
             placeholder="Module (e.g. accounting)"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </div>
       </section>

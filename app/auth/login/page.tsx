@@ -199,7 +199,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white px-4 py-4 text-slate-950">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md items-center justify-center">
         <section className="w-full rounded-[24px] border border-transparent bg-white p-5 shadow-none sm:p-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#4a3880]">Welcome back</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-[#1e3a8a]">Welcome back</p>
           <div className="mt-3 flex items-center gap-2.5">
             <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl sm:h-10 sm:w-10">
               <Image src={APP_LOGO_SRC} alt={APP_LOGO_ALT} fill className="object-contain" sizes="40px" priority />
@@ -238,7 +238,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full rounded-[15px] bg-[#9080ee] px-4 py-3 text-sm font-black text-[#101010] transition hover:bg-[#6f5ce0] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-[15px] bg-[#2563eb] px-4 py-3 text-sm font-black text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
@@ -282,7 +282,7 @@ export default function LoginPage() {
 
           <p className="mt-5 text-sm text-slate-500">
             New here?{" "}
-            <Link href={`/auth/register?next=${encodeURIComponent(next)}`} className="font-black text-[#4a3880]">
+            <Link href={`/auth/register?next=${encodeURIComponent(next)}`} className="font-black text-[#1e3a8a]">
               Create account
             </Link>
           </p>

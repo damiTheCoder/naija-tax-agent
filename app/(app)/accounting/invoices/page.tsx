@@ -305,7 +305,7 @@ export default function InvoiceManagementPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="w-8 h-8 border-2 border-[#9080ee] border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -317,7 +317,7 @@ export default function InvoiceManagementPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Invoice Management</h1>
                     <p className="text-sm text-gray-500 mt-1">Create and manage sales invoices in one place.</p>
-                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#4a3880] hover:text-[#4a3880]">
+                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#1e3a8a] hover:text-[#1e3a8a]">
                         Open Accounting Workspace
                     </Link>
                 </div>
@@ -366,7 +366,7 @@ export default function InvoiceManagementPage() {
                             key={status}
                             onClick={() => setFilterStatus(status)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === status
-                                ? "bg-[#9080ee] text-white"
+                                ? "bg-[#2563eb] text-white"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                 }`}
                         >
@@ -410,7 +410,7 @@ export default function InvoiceManagementPage() {
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center gap-2 bg-[#9080ee] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#6f5ce0] transition-colors"
+                            className="inline-flex items-center gap-2 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1d4ed8] transition-colors"
                         >
                             {icons.plus}
                             Create Your First Invoice
@@ -430,7 +430,7 @@ export default function InvoiceManagementPage() {
                                             <div className="flex items-center gap-3 mb-2">
                                                 <span
                                                     className="font-mono font-semibold text-sm"
-                                                    style={{ color: theme === "dark" ? "#c9f58a" : "#4a3880" }}
+                                                    style={{ color: theme === "dark" ? "#c9f58a" : "#1e3a8a" }}
                                                 >
                                                     {invoice.invoiceNumber}
                                                 </span>
@@ -706,7 +706,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <button
                                     onClick={addLineItem}
-                                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#4a3880] hover:text-[#4a3880] transition-colors"
+                                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#1e3a8a] hover:text-[#1e3a8a] transition-colors"
                                 >
                                     {icons.plus}
                                     Add Line Item
@@ -750,7 +750,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <div className="flex justify-between text-lg font-bold pt-2 border-t" style={{ borderColor: theme === "dark" ? "#333" : "#e5e7eb" }}>
                                     <span style={{ color: theme === "dark" ? "#fff" : "#111827" }}>Total</span>
-                                    <span style={{ color: "#4a3880" }}>{formatCurrency(invoiceTotals.total)}</span>
+                                    <span style={{ color: "#1e3a8a" }}>{formatCurrency(invoiceTotals.total)}</span>
                                 </div>
                             </div>
                         </div>
@@ -776,7 +776,7 @@ export default function InvoiceManagementPage() {
                             <button
                                 onClick={handleCreateInvoice}
                                 disabled={!formData.customerName || !formData.dueDate || invoiceTotals.subtotal <= 0}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#9080ee] text-white hover:bg-[#6f5ce0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2563eb] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Create Invoice
                             </button>
@@ -869,7 +869,7 @@ export default function InvoiceManagementPage() {
                                 </div>
                                 <div className="flex justify-between text-lg font-bold pt-2">
                                     <span style={{ color: theme === "dark" ? "#fff" : "#111827" }}>Total</span>
-                                    <span style={{ color: "#4a3880" }}>{formatCurrency(selectedInvoice.total)}</span>
+                                    <span style={{ color: "#1e3a8a" }}>{formatCurrency(selectedInvoice.total)}</span>
                                 </div>
                             </div>
 

@@ -620,7 +620,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       title: "Revenue Projection (Actual + Projected)",
       subtitle: "Monthly revenue trend",
       labels: revenueTrend.map((point) => point.label),
-      series: [{ label: "Revenue", color: "#9080ee", values: revenueTrend.map((point) => point.revenue) }],
+      series: [{ label: "Revenue", color: "#2563eb", values: revenueTrend.map((point) => point.revenue) }],
     });
 
     drawLineChart(doc, {
@@ -653,7 +653,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       series: [
         { label: "Inflow", color: "#10b981", values: cashflow.map((point) => point.cashInflow) },
         { label: "Outflow", color: "#ef4444", values: cashflow.map((point) => point.cashOutflow) },
-        { label: "Net", color: "#9080ee", values: cashflow.map((point) => point.netCashflow) },
+        { label: "Net", color: "#2563eb", values: cashflow.map((point) => point.netCashflow) },
       ],
     });
 
@@ -671,7 +671,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       subtitle: "Revenue vs Total Expenses",
       labels: breakEven.map((point) => point.label),
       series: [
-        { label: "Revenue", color: "#9080ee", values: breakEven.map((point) => point.revenue) },
+        { label: "Revenue", color: "#2563eb", values: breakEven.map((point) => point.revenue) },
         { label: "Expenses", color: "#ef4444", values: breakEven.map((point) => point.expenses) },
       ],
     });
@@ -682,7 +682,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       labels: scenarioComparison.map((point) => point.label),
       series: [
         { label: "Conservative", color: "#f43f5e", values: scenarioComparison.map((point) => point.conservative) },
-        { label: "Expected", color: "#9080ee", values: scenarioComparison.map((point) => point.expected) },
+        { label: "Expected", color: "#2563eb", values: scenarioComparison.map((point) => point.expected) },
         { label: "Aggressive", color: "#10b981", values: scenarioComparison.map((point) => point.aggressive) },
       ],
     });

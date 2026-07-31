@@ -31,7 +31,7 @@ export default function PrivacyPage() {
       </section>
 
       <div className="mt-8">
-        <Link href="/terms" className="text-sm font-semibold text-[#4a3880]">
+        <Link href="/terms" className="text-sm font-semibold text-[#1e3a8a]">
           Read Terms of Use
         </Link>
       </div>

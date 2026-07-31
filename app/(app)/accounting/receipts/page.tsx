@@ -360,7 +360,7 @@ export default function ReceiptsManagementPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="w-8 h-8 border-2 border-[#9080ee] border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
@@ -372,7 +372,7 @@ export default function ReceiptsManagementPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Receipts Management</h1>
                     <p className="text-sm text-gray-500 mt-1">Track and organize expense receipts from one workspace.</p>
-                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#4a3880] hover:text-[#4a3880]">
+                    <Link href="/accounting/workspace" className="mt-2 inline-flex text-sm font-medium text-[#1e3a8a] hover:text-[#1e3a8a]">
                         Open Accounting Workspace
                     </Link>
                 </div>
@@ -429,13 +429,13 @@ export default function ReceiptsManagementPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-all ${isDragging
-                    ? "border-[#9080ee] bg-blue-50"
+                    ? "border-[#2563eb] bg-blue-50"
                     : "border-gray-300 hover:border-gray-400 bg-white"
                     }`}
             >
                 {isProcessing ? (
                     <div className="flex flex-col items-center gap-3">
-                        <div className="w-10 h-10 border-2 border-[#9080ee] border-t-transparent rounded-full animate-spin" />
+                        <div className="w-10 h-10 border-2 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
                         <p className="font-medium text-gray-900">
                             Processing receipt...
                         </p>
@@ -464,7 +464,7 @@ export default function ReceiptsManagementPage() {
                     <button
                         onClick={() => setFilterCategory("all")}
                         className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === "all"
-                            ? "bg-[#9080ee] text-white"
+                            ? "bg-[#2563eb] text-white"
                             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                             }`}
                     >
@@ -475,7 +475,7 @@ export default function ReceiptsManagementPage() {
                             key={key}
                             onClick={() => setFilterCategory(key as ReceiptCategory)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterCategory === key
-                                ? "bg-[#9080ee] text-white"
+                                ? "bg-[#2563eb] text-white"
                                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                 }`}
                         >
@@ -522,7 +522,7 @@ export default function ReceiptsManagementPage() {
                         </p>
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="inline-flex items-center gap-2 bg-[#9080ee] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#6f5ce0] transition-colors"
+                            className="inline-flex items-center gap-2 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-[#1d4ed8] transition-colors"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -708,7 +708,7 @@ export default function ReceiptsManagementPage() {
                                     </p>
                                     <p
                                         className="text-xs"
-                                        style={{ color: theme === "dark" ? "#6b7280" : "#4a3880" }}
+                                        style={{ color: theme === "dark" ? "#6b7280" : "#1e3a8a" }}
                                     >
                                         Please verify and correct any details below
                                     </p>
@@ -847,7 +847,7 @@ export default function ReceiptsManagementPage() {
                             <button
                                 onClick={handleSaveReceipt}
                                 disabled={!uploadForm.vendor || !uploadForm.amount}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#9080ee] text-white hover:bg-[#6f5ce0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2563eb] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Save Receipt
                             </button>
@@ -1015,7 +1015,7 @@ export default function ReceiptsManagementPage() {
                             <button
                                 onClick={handleSaveEdit}
                                 disabled={!editForm.vendor || !editForm.amount}
-                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#9080ee] text-white hover:bg-[#6f5ce0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-4 py-2.5 rounded-lg font-semibold text-sm bg-[#2563eb] text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Save Changes
                             </button>

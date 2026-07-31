@@ -363,7 +363,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           title: "Cash Flow Components",
           subtitle: "Operating, investing, financing and total change",
           items: [
-            { label: "CFO", value: cfo, color: "#9080ee" },
+            { label: "CFO", value: cfo, color: "#2563eb" },
             { label: "CFI", value: cfi, color: "#8b5cf6" },
             { label: "CFF", value: cff, color: "#f59e0b" },
             { label: "Net", value: netCashChange, color: netCashChange >= 0 ? "#10b981" : "#ef4444" },
@@ -533,7 +533,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
         bars: {
           title: "Discounted Free Cash Flow by Year",
           subtitle: "PV of each projected cash flow",
-          items: pvCashFlows.map((value, index) => ({ label: `Y${index + 1}`, value, color: "#9080ee" })),
+          items: pvCashFlows.map((value, index) => ({ label: `Y${index + 1}`, value, color: "#2563eb" })),
         },
         tables: [
           {
@@ -718,7 +718,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
             { label: "Operating", value: operatingNet, color: operatingNet >= 0 ? "#10b981" : "#ef4444" },
             { label: "Investing", value: investingNet, color: investingNet >= 0 ? "#10b981" : "#ef4444" },
             { label: "Financing", value: financingNet, color: financingNet >= 0 ? "#10b981" : "#ef4444" },
-            { label: "Total", value: netCashMovement, color: netCashMovement >= 0 ? "#9080ee" : "#ef4444" },
+            { label: "Total", value: netCashMovement, color: netCashMovement >= 0 ? "#2563eb" : "#ef4444" },
           ],
         },
         tables: [
@@ -767,7 +767,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           title: "Unit Economics to Break-even",
           subtitle: "Price, variable cost, and contribution per unit",
           items: [
-            { label: "Price", value: inputs.pricePerUnit, color: "#9080ee" },
+            { label: "Price", value: inputs.pricePerUnit, color: "#2563eb" },
             { label: "Variable Cost", value: inputs.variableCostPerUnit, color: "#ef4444" },
             { label: "Contribution", value: contributionPerUnit, color: contributionPerUnit >= 0 ? "#10b981" : "#ef4444" },
           ],
@@ -829,7 +829,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           subtitle: "Risk planning view across scenarios",
           items: [
             { label: "Best", value: bestProfit, color: "#10b981" },
-            { label: "Base", value: baseProfit, color: "#9080ee" },
+            { label: "Base", value: baseProfit, color: "#2563eb" },
             { label: "Worst", value: worstProfit, color: "#ef4444" },
             { label: "Upside vs Base", value: upsideVsBase, color: "#22c55e" },
           ],
@@ -881,7 +881,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           title: "Valuation by Method",
           subtitle: "Enterprise value before net debt adjustment",
           items: [
-            { label: "Revenue", value: revenueBasedEV, color: "#9080ee" },
+            { label: "Revenue", value: revenueBasedEV, color: "#2563eb" },
             { label: "EBITDA", value: ebitdaBasedEV, color: "#8b5cf6" },
             { label: "Earnings", value: earningsBasedEV, color: "#10b981" },
           ],
@@ -936,7 +936,7 @@ const MODEL_TEMPLATES: Record<FinancialModelId, ModelTemplate> = {
           title: "Unit Economics Components",
           subtitle: "Monthly customer-level economics",
           items: [
-            { label: "ARPU", value: inputs.arpu, color: "#9080ee" },
+            { label: "ARPU", value: inputs.arpu, color: "#2563eb" },
             { label: "Gross Profit", value: grossProfitPerCustomer, color: "#10b981" },
             { label: "Contribution", value: contributionPerCustomer, color: contributionPerCustomer >= 0 ? "#10b981" : "#ef4444" },
             { label: "CAC", value: inputs.cac, color: "#f59e0b" },
@@ -989,7 +989,7 @@ function InputField({
             const next = clamp(nextRaw, definition.min, definition.max);
             onValueChange(next);
           }}
-          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#9080ee] focus:outline-none focus:ring-2 focus:ring-[#9080ee]/20"
+          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
         />
         {definition.kind === "percent" ? <span className="shrink-0 text-sm text-gray-500">%</span> : null}
       </div>
@@ -1080,7 +1080,7 @@ function ModelSwitcher({ activeId }: { activeId: FinancialModelId }) {
           key={model.id}
           href={`/accounting/projections/modelling/${model.id}`}
           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeId === model.id
-            ? "border-[#9080ee] bg-[#9080ee]/10 text-[#4a3880]"
+            ? "border-[#2563eb] bg-[#2563eb]/10 text-[#1e3a8a]"
             : "border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
         >
@@ -1185,7 +1185,7 @@ export default function ModelDetailClient({ modelId }: { modelId: string }) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
         <p className="text-lg font-semibold text-gray-900">Model not found</p>
-        <Link href="/accounting/projections/modelling" className="mt-4 inline-flex text-sm font-medium text-[#4a3880] hover:text-[#4a3880]">
+        <Link href="/accounting/projections/modelling" className="mt-4 inline-flex text-sm font-medium text-[#1e3a8a] hover:text-[#1e3a8a]">
           Back to Model Hub
         </Link>
       </div>

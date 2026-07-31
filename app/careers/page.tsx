@@ -41,7 +41,7 @@ export default function CareersPage() {
       </section>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link href="/contact" className="rounded-lg bg-[#9080ee] px-4 py-2 text-sm font-semibold text-white">
+        <Link href="/contact" className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white">
           Contact Hiring Team
         </Link>
         <Link href="/" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">

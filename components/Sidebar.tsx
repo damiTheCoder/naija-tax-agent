@@ -33,7 +33,7 @@ const MODULES: { id: AppMode; label: string; iconSrc: string; activeColor: strin
   {
     id: "accounting",
     label: "Accounting",
-    iconSrc: "/accounting.jpeg?v=20260713-0015",
+    iconSrc: "/accounting.png?v=20260713-0015",
     activeColor: "#4f8f00",
     href: "/accounting",
     items: ACCOUNTING_NAV_ITEMS,
@@ -140,7 +140,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 className={`flex h-8 shrink-0 items-center rounded-full px-2.5 text-xs font-medium transition-colors sm:h-9 sm:px-3 sm:text-sm ${
                   isActive
                     ? isDark
-                      ? "text-[#9080ee]"
+                      ? "text-[#2563eb]"
                       : "text-[#4f8f00]"
                     : isDark
                       ? "text-white/72 hover:text-white"

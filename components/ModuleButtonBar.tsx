@@ -18,7 +18,7 @@ const MODULES: {
         {
             mode: "accounting",
             label: "Accounting",
-            iconSrc: "/accounting.jpeg?v=20260713-0015",
+            iconSrc: "/accounting.png?v=20260713-0015",
             activeColor: "#4f8f00",
         },
         {

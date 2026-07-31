@@ -6,7 +6,7 @@ export function DesktopModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
   const activeModeLabel = isUser ? "Personal" : "Enterprise";
-  const brandAccent = "#9080ee";
+  const brandAccent = "#2563eb";
 
   return (
     <div className="flex h-8 items-center gap-2">
@@ -42,7 +42,7 @@ export function DesktopModeToggle() {
 export function MobileModeToggle() {
   const { mode, toggleMode } = useMode();
   const isUser = mode === "user";
-  const brandAccent = "#9080ee";
+  const brandAccent = "#2563eb";
 
   return (
     <button

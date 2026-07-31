@@ -67,7 +67,7 @@ export default function WalletPage() {
                   isActive ? "text-[#101010]" : "text-gray-600 hover:text-gray-950"
                 }`}
               >
-                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${isActive ? "bg-[#9080ee] text-[#101010]" : "bg-transparent text-gray-700"}`}>
+                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${isActive ? "bg-[#2563eb] text-white" : "bg-transparent text-gray-700"}`}>
                   <Icon className="h-5 w-5" strokeWidth={2.3} />
                 </span>
                 <span className="text-xs font-black sm:text-sm">{label}</span>
@@ -84,7 +84,7 @@ export default function WalletPage() {
               <h2 className="text-xl font-black text-gray-950">{selected.title}</h2>
               <p className="mt-1 text-sm text-gray-500">{selected.detail}</p>
             </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#9080ee] text-xl font-black text-[#101010]">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb] text-xl font-black text-white">
               <ActiveActionIcon className="h-6 w-6" strokeWidth={2.4} />
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function WalletPage() {
                 onChange={(event) => setAmount(event.target.value)}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="mt-2 h-14 w-full rounded-2xl border border-gray-100 bg-transparent px-4 text-lg font-bold text-gray-950 outline-none focus:border-[#9080ee]"
+                className="mt-2 h-14 w-full rounded-2xl border border-gray-100 bg-transparent px-4 text-lg font-bold text-gray-950 outline-none focus:border-[#2563eb]"
               />
             </label>
             <label className="block">
@@ -108,14 +108,14 @@ export default function WalletPage() {
                 value={recipient}
                 onChange={(event) => setRecipient(event.target.value)}
                 placeholder={activeAction === "receive" ? "Invoice payment" : "Name, phone, or bank"}
-                className="mt-2 h-14 w-full rounded-2xl border border-gray-100 bg-transparent px-4 text-sm font-semibold text-gray-950 outline-none focus:border-[#9080ee]"
+                className="mt-2 h-14 w-full rounded-2xl border border-gray-100 bg-transparent px-4 text-sm font-semibold text-gray-950 outline-none focus:border-[#2563eb]"
               />
             </label>
           </div>
 
           <button
             type="button"
-            className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-[#9080ee] text-sm font-black text-[#101010] transition-colors hover:bg-[#7be000]"
+            className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-[#2563eb] text-sm font-black text-white transition-colors hover:bg-[#7be000]"
           >
             {selected.title}
           </button>
