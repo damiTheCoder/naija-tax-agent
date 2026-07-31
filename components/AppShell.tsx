@@ -786,6 +786,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {!isPersonalRoute ? (
+        <aside className="app-shell-floating-chat min-w-0 px-3 pb-5 sm:px-4 lg:sticky lg:top-[9.5rem] lg:col-span-4 lg:h-[calc(100vh-9.5rem)] lg:self-start lg:border-l lg:border-gray-200/70 lg:px-4 lg:pb-4 lg:pt-0" aria-label="AI assistant">
+          <button
+            type="button"
+            onClick={closeMobileChat}
+            className="mobile-chat-modal-close"
+            aria-label="Close chat"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+          <DeferredFloatingChat />
+        </aside>
+      ) : null}
+
+      {!isPersonalRoute ? (
         <>
           <MobileBottomNav />
           {isChatWaveAnimating ? <div className="mobile-chat-wave" aria-hidden="true" /> : null}

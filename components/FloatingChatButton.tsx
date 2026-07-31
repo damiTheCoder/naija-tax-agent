@@ -1841,7 +1841,7 @@ export default function FloatingChatButton() {
                     </div>
 
                     {isHistoryDropdownOpen ? (
-                        <div className="chat-history-sidebar absolute left-0 top-full z-[150] mt-1 w-[min(21rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                            <div className="chat-history-sidebar absolute left-0 top-full z-[150] mt-1 w-[min(24rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
                             <div className="chat-history-sidebar-header flex items-center justify-between px-4 py-4">
                                 <div className="chat-history-sidebar-brand flex min-w-0 items-center gap-2">
                                     <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
