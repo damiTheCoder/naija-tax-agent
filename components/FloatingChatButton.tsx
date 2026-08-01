@@ -949,6 +949,8 @@ export default function FloatingChatButton() {
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isAgentPerforming, setIsAgentPerforming] = useState(false);
+    const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+    const [typingContent, setTypingContent] = useState("");
     const [, setPlanSource] = useState<AgentPlanSource>("fallback");
     const [agentChatMode, setAgentChatMode] = useState<AgentChatMode>("response-only");
     const [clarificationData, setClarificationData] = useState<ClarificationData | null>(null);
@@ -967,6 +969,20 @@ export default function FloatingChatButton() {
     const touchLastYRef = useRef<number | null>(null);
     const chatExitPullDistanceRef = useRef(0);
     const chatVisibilitySuppressedUntilRef = useRef(0);
+
+    useEffect(() => {
+        if (!typingMessageId) return;
+        const fullContent = messages.find((m) => m.id === typingMessageId)?.content ?? "";
+        if (typingContent.length >= fullContent.length) {
+            setTypingMessageId(null);
+            setTypingContent("");
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            setTypingContent(fullContent.slice(0, typingContent.length + 1));
+        }, 18);
+        return () => window.clearTimeout(timer);
+    }, [typingMessageId, typingContent, messages]);
 
     const revokeBlobUrls = useCallback(() => {
         for (const url of blobUrlsRef.current) {
@@ -1643,6 +1659,9 @@ export default function FloatingChatButton() {
         const trimmed = inputValue.trim();
         if (!trimmed || isLoading || isAgentPerforming) return;
 
+        setTypingMessageId(null);
+        setTypingContent("");
+
         let activeRoute = pathname;
         let activeModuleId = currentModule.id;
         let workingConversationId: string | null = activeConversationId;
@@ -1661,7 +1680,7 @@ export default function FloatingChatButton() {
             workingConversationId = savedAfterUser;
         }
 
-        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload, suggestions?: string[]) => {
+        const appendAssistantAndPersist = async (content: string, attachment?: ChatAttachmentDownload, rich?: RichChatPayload, suggestions?: string[], skipTyping = false) => {
             if (attachment?.url && attachment.url.startsWith("blob:")) {
                 blobUrlsRef.current.push(attachment.url);
             }
@@ -1669,6 +1688,10 @@ export default function FloatingChatButton() {
             const assistantMessage = buildChatMessage("assistant", cleanContent, attachment, rich, suggestions);
             workingMessages = [...workingMessages, assistantMessage];
             setMessages(workingMessages);
+            if (!skipTyping && cleanContent.trim()) {
+                setTypingMessageId(assistantMessage.id);
+                setTypingContent("");
+            }
             const savedConversationId = await persistConversation(workingMessages, activeModuleId, activeRoute, workingConversationId);
             if (savedConversationId) {
                 workingConversationId = savedConversationId;
@@ -1682,7 +1705,7 @@ export default function FloatingChatButton() {
 
             const localProjectionCard = await buildAccountingProjectionCard(trimmed);
             if (localProjectionCard) {
-                await appendAssistantAndPersist(localProjectionCard.content, localProjectionCard.attachment, localProjectionCard.rich);
+                await appendAssistantAndPersist(localProjectionCard.content, localProjectionCard.attachment, localProjectionCard.rich, undefined, true);
                 setPlanSource("fast-path");
                 return;
             }
@@ -1707,7 +1730,7 @@ export default function FloatingChatButton() {
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
                 for (const attachment of downloadAttachments) {
-                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
+                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment, undefined, undefined, true);
                 }
             } else {
                 setIsAgentPerforming(true);
@@ -1757,7 +1780,7 @@ export default function FloatingChatButton() {
                     .map((step) => extractDownloadAttachment(step.data))
                     .filter((attachment): attachment is ChatAttachmentDownload => Boolean(attachment));
                 for (const attachment of downloadAttachments) {
-                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment);
+                    await appendAssistantAndPersist(`Report ready: ${attachment.fileName}`, attachment, undefined, undefined, true);
                 }
 
             }
@@ -1960,7 +1983,8 @@ export default function FloatingChatButton() {
                         ) : (
                             <div className="mx-auto -mt-2 w-full max-w-4xl space-y-5 px-0.5 sm:mt-0 sm:space-y-8 sm:px-0">
                                 {visibleMessages.map((msg) => {
-                                    const displayContent = msg.role === "assistant" ? toPlainChatText(msg.content) : msg.content;
+                                    const isTyping = msg.id === typingMessageId && msg.role === "assistant";
+                                    const displayContent = isTyping ? typingContent : (msg.role === "assistant" ? toPlainChatText(msg.content) : msg.content);
                                     return (
                                         <div
                                             key={msg.id}
@@ -1977,6 +2001,9 @@ export default function FloatingChatButton() {
                                                     </div>
                                                     <div className="whitespace-pre-wrap break-words text-[14px] leading-6 text-[#1f2328] sm:leading-7">
                                                         {displayContent}
+                                                        {isTyping ? (
+                                                            <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-[1px] animate-pulse bg-[#1f2328] align-middle" />
+                                                        ) : null}
                                                     </div>
                                                     {msg.rich?.kind === "projection_chart" && (
                                                         <ProjectionChartCard payload={msg.rich} />
@@ -2016,7 +2043,7 @@ export default function FloatingChatButton() {
                             </div>
                         )}
 
-                        {isLoading && (
+                        {isLoading && !typingMessageId && (
                             <div className="mx-auto mt-6 flex max-w-4xl justify-start">
                                 <div className="flex items-center gap-1 rounded-full border border-gray-300/50 bg-gray-100 px-4 py-2">
                                     <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "0ms" }} />

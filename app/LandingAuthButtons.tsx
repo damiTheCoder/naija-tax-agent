@@ -174,7 +174,7 @@ export default function LandingAuthButtons() {
           disabled={isGoogleLoading}
         >
           <GoogleMark className="h-5 w-5" />
-          <span>{isGoogleLoading ? "Connecting..." : "Continue with Google"}</span>
+          <span>{isGoogleLoading ? "Connecting..." : "Google"}</span>
         </button>
       </div>
 
